@@ -89,7 +89,6 @@ async def health_check():
     return {"status": "ok"}
 
 
-@app.on_event("startup")
 async def bootstrap_teacher_account():
     """
     Ensures exactly one teacher account exists on first run, using the
@@ -117,3 +116,29 @@ async def bootstrap_teacher_account():
         db.add(TeacherProfile(user_id=teacher_user.id, full_name=settings.BOOTSTRAP_TEACHER_NAME))
         await db.commit()
         logger.info("Bootstrapped initial teacher account: %s", settings.BOOTSTRAP_TEACHER_EMAIL)
+
+
+@app.on_event("startup")
+async def startup_event():
+    # 1. Ensure database schema is migrated before application queries tables
+    try:
+        import asyncio
+        from pathlib import Path
+        from alembic.config import Config
+        from alembic import command
+
+        def _run_migrations():
+            backend_dir = Path(__file__).resolve().parents[1]
+            alembic_ini_path = backend_dir / "alembic.ini"
+            alembic_cfg = Config(str(alembic_ini_path))
+            alembic_cfg.set_main_option("script_location", str(backend_dir / "alembic"))
+            command.upgrade(alembic_cfg, "head")
+
+        await asyncio.to_thread(_run_migrations)
+        logger.info("Database schema is up to date (alembic upgrade head).")
+    except Exception as exc:
+        logger.warning("Startup database migration check note: %s", exc)
+
+    # 2. Bootstrap initial teacher account
+    await bootstrap_teacher_account()
+

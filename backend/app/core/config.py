@@ -8,6 +8,7 @@ hardcoded here.
 from functools import lru_cache
 from typing import List
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,8 +16,36 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # Database
-    DATABASE_URL: str
-    ASYNC_DATABASE_URL: str
+    DATABASE_URL: str = ""
+    ASYNC_DATABASE_URL: str = ""
+
+    @model_validator(mode="after")
+    def sync_database_urls(self) -> "Settings":
+        db_url = self.DATABASE_URL.strip() if self.DATABASE_URL else ""
+        async_db_url = self.ASYNC_DATABASE_URL.strip() if self.ASYNC_DATABASE_URL else ""
+
+        if not async_db_url and db_url:
+            async_db_url = db_url
+        elif not db_url and async_db_url:
+            db_url = async_db_url
+
+        if async_db_url.startswith("postgres://"):
+            async_db_url = "postgresql+asyncpg://" + async_db_url[len("postgres://"):]
+        elif async_db_url.startswith("postgresql+psycopg2://"):
+            async_db_url = "postgresql+asyncpg://" + async_db_url[len("postgresql+psycopg2://"):]
+        elif async_db_url.startswith("postgresql://") and not async_db_url.startswith("postgresql+"):
+            async_db_url = "postgresql+asyncpg://" + async_db_url[len("postgresql://"):]
+
+        if db_url.startswith("postgres://"):
+            db_url = "postgresql+psycopg2://" + db_url[len("postgres://"):]
+        elif db_url.startswith("postgresql+asyncpg://"):
+            db_url = "postgresql+psycopg2://" + db_url[len("postgresql+asyncpg://"):]
+        elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+"):
+            db_url = "postgresql+psycopg2://" + db_url[len("postgresql://"):]
+
+        self.DATABASE_URL = db_url
+        self.ASYNC_DATABASE_URL = async_db_url
+        return self
 
     # JWT
     JWT_SECRET_KEY: str

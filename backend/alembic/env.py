@@ -3,7 +3,7 @@ from logging.config import fileConfig
 from pathlib import Path
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import create_engine, pool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -11,7 +11,6 @@ from app.core.config import settings  # noqa: E402
 from app.models import Base  # noqa: E402
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -19,8 +18,19 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _get_sync_url() -> str:
+    url = settings.DATABASE_URL or settings.ASYNC_DATABASE_URL
+    if url.startswith("postgres://"):
+        url = "postgresql+psycopg2://" + url[len("postgres://"):]
+    elif url.startswith("postgresql+asyncpg://"):
+        url = "postgresql+psycopg2://" + url[len("postgresql+asyncpg://"):]
+    elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
+        url = "postgresql+psycopg2://" + url[len("postgresql://"):]
+    return url
+
+
 def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
+    url = _get_sync_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -32,9 +42,9 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    sync_url = _get_sync_url()
+    connectable = create_engine(
+        sync_url,
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
@@ -47,3 +57,4 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
+
