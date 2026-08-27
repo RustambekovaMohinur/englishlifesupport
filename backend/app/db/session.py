@@ -15,17 +15,16 @@ def _build_async_engine_url(raw_url: str) -> tuple[URL, dict]:
     query_params = urllib.parse.parse_qs(parsed.query)
 
     ssl_required = False
-    if "sslmode" in query_params:
+    if "sslmode" in query_params or "channel_binding" in query_params or (parsed.hostname and "neon.tech" in parsed.hostname):
         ssl_required = True
-        # strip the unsupported parameters
         query_params.pop("sslmode", None)
         query_params.pop("channel_binding", None)
 
     # Re‑encode remaining query parameters (if any)
     clean_query = urllib.parse.urlencode({k: v[0] for k, v in query_params.items()}, doseq=True)
-    # Build a new URL using SQLAlchemy's URL helper to ensure the dialect sees a clean URL
+    # Build a new URL using SQLAlchemy's URL helper with asyncpg driver
     clean_url = URL.create(
-        drivername=parsed.scheme,
+        drivername="postgresql+asyncpg",
         username=parsed.username,
         password=parsed.password,
         host=parsed.hostname,

@@ -89,33 +89,45 @@ async def health_check():
     return {"status": "ok"}
 
 
-async def bootstrap_teacher_account():
+async def bootstrap_teacher_account(max_retries: int = 5, retry_delay: float = 2.0):
     """
     Ensures exactly one teacher account exists on first run, using the
     credentials from environment variables. This is the ONLY way a teacher
     account is created - there is no public "register as teacher" endpoint.
     Safe to run on every startup: it's a no-op once a teacher exists.
     """
-    async with AsyncSessionLocal() as db:
-        existing = await db.execute(select(User).where(User.role == UserRole.TEACHER))
-        teacher = existing.scalar_one_or_none()
-        if teacher is not None:
-            teacher.email = settings.BOOTSTRAP_TEACHER_EMAIL
-            teacher.password_hash = hash_password(settings.BOOTSTRAP_TEACHER_PASSWORD)
-            await db.commit()
-            return
+    import asyncio
 
-        teacher_user = User(
-            email=settings.BOOTSTRAP_TEACHER_EMAIL,
-            password_hash=hash_password(settings.BOOTSTRAP_TEACHER_PASSWORD),
-            role=UserRole.TEACHER,
-        )
-        db.add(teacher_user)
-        await db.flush()
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with AsyncSessionLocal() as db:
+                existing = await db.execute(select(User).where(User.role == UserRole.TEACHER))
+                teacher = existing.scalar_one_or_none()
+                if teacher is not None:
+                    teacher.email = settings.BOOTSTRAP_TEACHER_EMAIL
+                    teacher.password_hash = hash_password(settings.BOOTSTRAP_TEACHER_PASSWORD)
+                    await db.commit()
+                    logger.info("Teacher account verified: %s", settings.BOOTSTRAP_TEACHER_EMAIL)
+                    return
 
-        db.add(TeacherProfile(user_id=teacher_user.id, full_name=settings.BOOTSTRAP_TEACHER_NAME))
-        await db.commit()
-        logger.info("Bootstrapped initial teacher account: %s", settings.BOOTSTRAP_TEACHER_EMAIL)
+                teacher_user = User(
+                    email=settings.BOOTSTRAP_TEACHER_EMAIL,
+                    password_hash=hash_password(settings.BOOTSTRAP_TEACHER_PASSWORD),
+                    role=UserRole.TEACHER,
+                )
+                db.add(teacher_user)
+                await db.flush()
+
+                db.add(TeacherProfile(user_id=teacher_user.id, full_name=settings.BOOTSTRAP_TEACHER_NAME))
+                await db.commit()
+                logger.info("Bootstrapped initial teacher account: %s", settings.BOOTSTRAP_TEACHER_EMAIL)
+                return
+        except Exception as exc:
+            logger.warning("Attempt %d/%d to bootstrap teacher account: %s", attempt, max_retries, exc)
+            if attempt < max_retries:
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.exception("Could not bootstrap teacher account after %d attempts: %s", max_retries, exc)
 
 
 @app.on_event("startup")
@@ -140,5 +152,8 @@ async def startup_event():
         logger.warning("Startup database migration check note: %s", exc)
 
     # 2. Bootstrap initial teacher account
-    await bootstrap_teacher_account()
+    try:
+        await bootstrap_teacher_account()
+    except Exception as exc:
+        logger.exception("Error during bootstrap_teacher_account execution: %s", exc)
 
