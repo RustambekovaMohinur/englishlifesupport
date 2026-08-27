@@ -54,7 +54,14 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 14
 
     # CORS
-    CORS_ORIGINS: str = "http://localhost:5173"
+    CORS_ORIGINS: str = (
+        "http://localhost:5173,"
+        "http://127.0.0.1:5173,"
+        "http://localhost:3000,"
+        "https://englishlifesupport-git-main-rustambekovamohinur.vercel.app,"
+        "https://englishlifesupport.vercel.app"
+    )
+    CORS_ORIGIN_REGEX: str = r"^https:\/\/(.*\.)?vercel\.app$"
 
     # Uploads
     UPLOAD_DIR: str = "uploads"

@@ -38,8 +38,11 @@ def _build_async_engine_url(raw_url: str) -> tuple[URL, dict]:
         connect_args["ssl"] = True
     return clean_url, connect_args
 
+import os
+
 # Build the engine once at import time
-_clean_url, _connect_args = _build_async_engine_url(settings.ASYNC_DATABASE_URL)
+_async_url = os.environ.get("ASYNC_DATABASE_URL") or settings.ASYNC_DATABASE_URL
+_clean_url, _connect_args = _build_async_engine_url(_async_url)
 
 engine = create_async_engine(
     _clean_url,
