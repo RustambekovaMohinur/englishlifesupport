@@ -17,8 +17,13 @@ export const tokenStorage = {
   },
 };
 
+const RAW_API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, "");
+const API_BASE_URL = RAW_API_URL
+  ? (RAW_API_URL.startsWith("http") && !RAW_API_URL.endsWith("/api") ? `${RAW_API_URL}/api` : RAW_API_URL)
+  : "/api";
+
 export const api = axios.create({
-  baseURL: "/api",
+  baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -102,7 +107,7 @@ api.interceptors.response.use(
 
     isRefreshing = true;
     try {
-      const { data } = await axios.post("/api/auth/refresh", { refresh_token: refreshToken });
+      const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken });
       tokenStorage.setAccess(data.access_token);
       onRefreshed(data.access_token);
       isRefreshing = false;
