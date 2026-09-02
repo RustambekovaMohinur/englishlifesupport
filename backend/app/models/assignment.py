@@ -33,8 +33,13 @@ class Assignment(UUIDPKMixin, TimestampMixin, Base):
     file_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    order_index: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    prerequisite_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assignments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     group: Mapped["Group"] = relationship(back_populates="assignments")
+    prerequisite: Mapped["Assignment | None"] = relationship(remote_side="Assignment.id")
     submissions: Mapped[list["Submission"]] = relationship(
         back_populates="assignment", cascade="all, delete-orphan"
     )

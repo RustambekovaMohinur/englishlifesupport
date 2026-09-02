@@ -81,6 +81,8 @@ export interface AssignmentOut {
   vocab_words: VocabWordItem[];
   created_at: string;
   submission_count: number;
+  order_index?: number;
+  prerequisite_id?: string | null;
 }
 
 export interface AssignmentForStudent {
@@ -96,6 +98,10 @@ export interface AssignmentForStudent {
   submission_status: "submitted" | "late" | "graded" | null;
   score: number | null;
   submission_id?: string | null;
+  order_index?: number;
+  prerequisite_id?: string | null;
+  is_locked?: boolean;
+  lock_reason?: string | null;
 }
 
 export interface GradeOut {
@@ -126,6 +132,10 @@ export interface TeacherDashboard {
   total_groups: number;
   total_assignments: number;
   pending_submissions: number;
+  completion_rate?: number;
+  late_students?: number;
+  locked_students?: number;
+  inactive_students?: number;
   recent_submissions: {
     id: string;
     student_name: string;
@@ -140,9 +150,91 @@ export interface StudentDashboard {
   group_name: string | null;
   teacher_name: string | null;
   total_stars: number;
+  streak?: number;
+  total_xp?: number;
+  level?: number;
+  level_title?: string;
+  free_pass_available?: boolean;
   average_score: number | null;
   total_assignments: number;
   completed_assignments: number;
   upcoming_deadlines: { id: string; title: string; deadline: string; submitted: boolean }[];
   recent_grades: { assignment_title: string; score: number; stars: number; graded_at: string }[];
+}
+
+export interface StarTransactionOut {
+  id: string;
+  amount: number;
+  reason: string;
+  description: string | null;
+  reference_id: string | null;
+  created_at: string;
+}
+
+export interface AchievementOut {
+  id: string;
+  badge_key: string;
+  title: string;
+  description: string;
+  icon: string;
+  unlocked_at: string;
+}
+
+export interface FreePassStatus {
+  month_key: string;
+  has_free_pass: boolean;
+  is_used: boolean;
+  used_at: string | null;
+}
+
+export interface StudentGamificationSummary {
+  total_stars: number;
+  streak: number;
+  longest_streak: number;
+  last_activity_date: string | null;
+  total_xp: number;
+  level: number;
+  level_title: string;
+  next_level_xp: number;
+  free_pass: FreePassStatus;
+  achievements: AchievementOut[];
+  recent_transactions: StarTransactionOut[];
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  student_id: string;
+  student_name: string;
+  weekly_xp: number;
+  weekly_stars: number;
+  streak: number;
+  completion_rate: number;
+  is_current_user: boolean;
+}
+
+export interface WeeklyLeaderboardOut {
+  group_name: string | null;
+  week_key: string;
+  current_student_rank: number | null;
+  entries: LeaderboardEntry[];
+}
+
+export interface TeacherGroupReport {
+  group_id: string;
+  group_name: string;
+  week_key: string;
+  total_students: number;
+  total_assignments: number;
+  completion_rate: number;
+  average_score: number | null;
+  late_submissions: number;
+  perfect_week_students: number;
+  top_performer: string | null;
+  locked_students: { id: string; name: string }[];
+  student_of_the_week: {
+    student_id: string;
+    student_name: string;
+    stars_awarded: number;
+    reason: string | null;
+  } | null;
 }

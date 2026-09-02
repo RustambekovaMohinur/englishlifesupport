@@ -22,6 +22,10 @@ from app.schemas.dashboard import (
     UpcomingAssignmentItem,
 )
 
+from app.models.gamification import FreePass, StudentStreak, StudentXP, TaskLockOverride
+from app.services.gamification_service import calculate_level, get_or_create_monthly_free_pass
+from app.utils.datetimes import utcnow
+
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
@@ -36,6 +40,8 @@ async def teacher_dashboard(db: AsyncSession = Depends(get_db)):
             .where(User.is_active.is_(True))
         )
     ).scalar_one()
+    inactive_students = total_students - active_students
+
     total_groups = (
         await db.execute(select(func.count()).select_from(Group).where(Group.is_active.is_(True)))
     ).scalar_one()
@@ -45,6 +51,54 @@ async def teacher_dashboard(db: AsyncSession = Depends(get_db)):
             select(func.count()).select_from(Submission).where(Submission.status != SubmissionStatus.GRADED)
         )
     ).scalar_one()
+
+    # Calculate real overall completion rate and late students
+    total_submissions = (await db.execute(select(func.count()).select_from(Submission))).scalar_one()
+    published_assignments = (
+        await db.execute(select(func.count()).select_from(Assignment).where(Assignment.status == AssignmentStatus.PUBLISHED))
+    ).scalar_one()
+    potential_total = total_students * published_assignments
+    completion_rate = int(round((total_submissions / potential_total) * 100)) if potential_total > 0 else 100
+
+    late_students = (
+        await db.execute(
+            select(func.count(func.distinct(Submission.student_id))).where(Submission.status == SubmissionStatus.LATE)
+        )
+    ).scalar_one()
+
+    # Find locked students count
+    # A student is locked if there's an assignment with a prerequisite they haven't submitted (and no override)
+    all_students = (await db.execute(select(StudentProfile.id, StudentProfile.group_id))).all()
+    assignments_with_prereqs = (
+        (await db.execute(select(Assignment.id, Assignment.group_id, Assignment.prerequisite_id).where(Assignment.prerequisite_id.isnot(None), Assignment.status == AssignmentStatus.PUBLISHED)))
+        .all()
+    )
+
+    locked_students_count = 0
+    if assignments_with_prereqs:
+        for s_id, s_grp in all_students:
+            if not s_grp:
+                continue
+            grp_prereqs = [a for a in assignments_with_prereqs if a[1] == s_grp]
+            if not grp_prereqs:
+                continue
+            # check student submissions
+            sub_assign_ids = set(
+                (await db.execute(select(Submission.assignment_id).where(Submission.student_id == s_id))).scalars().all()
+            )
+            # check overrides
+            overrides = set(
+                (await db.execute(select(TaskLockOverride.assignment_id).where(TaskLockOverride.student_id == s_id, TaskLockOverride.is_unlocked.is_(True)))).scalars().all()
+            )
+            is_locked = False
+            for a_id, _, prereq_id in grp_prereqs:
+                if a_id in overrides:
+                    continue
+                if prereq_id not in sub_assign_ids:
+                    is_locked = True
+                    break
+            if is_locked:
+                locked_students_count += 1
 
     recent = (
         await db.execute(
@@ -61,6 +115,10 @@ async def teacher_dashboard(db: AsyncSession = Depends(get_db)):
         total_groups=total_groups,
         total_assignments=total_assignments,
         pending_submissions=pending_submissions,
+        completion_rate=completion_rate,
+        late_students=late_students,
+        locked_students=locked_students_count,
+        inactive_students=inactive_students,
         recent_submissions=[
             RecentSubmissionItem(
                 id=s.id,
@@ -88,6 +146,17 @@ async def student_dashboard(
     # Single-teacher system: show the (only) teacher's name.
     teacher = (await db.execute(select(TeacherProfile).limit(1))).scalar_one_or_none()
     teacher_name = teacher.full_name if teacher else None
+
+    # Gamification stats
+    strk = (await db.execute(select(StudentStreak).where(StudentStreak.student_id == profile.id))).scalar_one_or_none()
+    streak_val = strk.current_streak if strk else 0
+
+    xp_row = (await db.execute(select(StudentXP).where(StudentXP.student_id == profile.id))).scalar_one_or_none()
+    total_xp = xp_row.total_xp if xp_row else 0
+    level, level_title = calculate_level(total_xp)
+
+    month_key = utcnow().strftime("%Y-%m")
+    fp = await get_or_create_monthly_free_pass(db, profile.id, month_key)
 
     submissions = (
         (
@@ -168,6 +237,11 @@ async def student_dashboard(
         group_name=group_name,
         teacher_name=teacher_name,
         total_stars=profile.total_stars,
+        streak=streak_val,
+        total_xp=total_xp,
+        level=level,
+        level_title=level_title,
+        free_pass_available=not fp.is_used,
         average_score=average_score,
         total_assignments=total_assignments,
         completed_assignments=len(submissions),

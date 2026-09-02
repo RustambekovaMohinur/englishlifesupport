@@ -14,7 +14,17 @@ from app.models.grade import Grade
 from app.models.student import StudentProfile
 from app.models.submission import Submission, SubmissionStatus
 from app.models.user import User, UserRole
+from app.models.gamification import StarTransactionReason
 from app.schemas.submission import GradeCreate, GradeOut, PaginatedSubmissions, SubmissionOut
+from app.services.gamification_service import (
+    award_stars,
+    award_xp,
+    check_and_award_perfect_week,
+    check_comeback_achievement,
+    is_assignment_locked_for_student,
+    unlock_achievement,
+    update_student_streak,
+)
 from app.utils.datetimes import as_utc, utcnow
 from app.utils.files import resolve_submission_file, save_submission_file
 
@@ -78,6 +88,14 @@ async def submit_homework(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This assignment is not for your group")
 
 
+    # Enforce sequential task lock strictly on backend
+    is_locked, lock_reason = await is_assignment_locked_for_student(db, assignment_id, profile.id)
+    if is_locked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Task is locked: {lock_reason}",
+        )
+
     if not text_answer and not file:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide a text answer and/or a file")
 
@@ -105,7 +123,8 @@ async def submit_homework(
     if file is not None:
         file_path, file_original_name, file_content_type, file_size = await save_submission_file(file, profile.id)
 
-    submission_status = SubmissionStatus.LATE if as_utc(assignment.deadline) < now else SubmissionStatus.SUBMITTED
+    is_late = as_utc(assignment.deadline) < now
+    submission_status = SubmissionStatus.LATE if is_late else SubmissionStatus.SUBMITTED
 
     if existing is not None:
         existing.text_answer = text_answer
@@ -129,6 +148,77 @@ async def submit_homework(
             submitted_at=now,
         )
         db.add(submission)
+
+    await db.flush()
+
+    # Gamification calculations
+    if is_late:
+        # -20 ⭐ late/missed deadline (idempotent, only applied once per assignment)
+        await award_stars(
+            db,
+            student_id=profile.id,
+            amount=-20,
+            reason=StarTransactionReason.LATE_PENALTY,
+            reference_id=str(assignment_id),
+            description=f"Late submission penalty for '{assignment.title}'",
+        )
+        # Check comeback achievement if student completed a previously late task
+        await check_comeback_achievement(db, profile.id, assignment_id)
+    else:
+        # +10 ⭐ on-time assignment completion
+        await award_stars(
+            db,
+            student_id=profile.id,
+            amount=10,
+            reason=StarTransactionReason.ON_TIME_SUBMISSION,
+            reference_id=str(assignment_id),
+            description=f"On-time completion for '{assignment.title}'",
+        )
+        # +25 XP for assignment completion
+        await award_xp(
+            db,
+            student_id=profile.id,
+            amount=25,
+            activity_type="assignment_completed",
+            reference_id=str(assignment_id),
+            description=f"XP for completing '{assignment.title}'",
+        )
+        # Unlock assignment completion achievement
+        await unlock_achievement(
+            db,
+            student_id=profile.id,
+            badge_key="first_assignment",
+            title="Homework Hero",
+            description="Completed and submitted an assignment on time!",
+            icon="📝",
+        )
+
+        # Early submission check: submitted at least 24 hours before deadline gives +5 ⭐ and Early Bird
+        if as_utc(assignment.deadline) - now >= timedelta(hours=24):
+            awarded_early = await award_stars(
+                db,
+                student_id=profile.id,
+                amount=5,
+                reason=StarTransactionReason.EARLY_SUBMISSION,
+                reference_id=str(assignment_id),
+                description=f"Early bird bonus for '{assignment.title}'",
+            )
+            if awarded_early:
+                await unlock_achievement(
+                    db,
+                    student_id=profile.id,
+                    badge_key="early_bird",
+                    title="Early Bird",
+                    description="Submitted homework at least 24 hours before deadline!",
+                    icon="🚀",
+                )
+
+        # Update ⚡ streak
+        await update_student_streak(db, profile.id, now.strftime("%Y-%m-%d"))
+
+        # Check Perfect Week
+        if profile.group_id:
+            await check_and_award_perfect_week(db, profile.id, profile.group_id)
 
     await db.commit()
     result = await db.execute(

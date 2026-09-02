@@ -31,6 +31,7 @@ export default function AssignmentsPage() {
   const [groupId, setGroupId] = useState("");
   const [title, setTitle] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [prerequisiteId, setPrerequisiteId] = useState<string>("");
   const [tasks, setTasks] = useState<TaskBlock[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -152,6 +153,7 @@ export default function AssignmentsPage() {
       formData.append("description", descriptionPayload);
       formData.append("deadline", new Date(deadline).toISOString());
       formData.append("status", "published");
+      if (prerequisiteId) formData.append("prerequisite_id", prerequisiteId);
       if (primaryFile) formData.append("file", primaryFile);
       if (vocabFile) formData.append("vocab_file", vocabFile);
 
@@ -159,6 +161,7 @@ export default function AssignmentsPage() {
       toast.success("Assignment created successfully!");
       setTitle("");
       setDeadline("");
+      setPrerequisiteId("");
       setTasks([]);
       setShowBuilder(false);
       refresh();
@@ -244,6 +247,27 @@ export default function AssignmentsPage() {
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
               />
+            </div>
+
+            <div>
+              <label className="label">Prerequisite Task (Sequential Lock)</label>
+              <select
+                className="input"
+                value={prerequisiteId}
+                onChange={(e) => setPrerequisiteId(e.target.value)}
+              >
+                <option value="">None (Available immediately)</option>
+                {assignments
+                  .filter((a) => !groupId || a.group_id === groupId)
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      Task: {a.title}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-[11px] text-neutral-400 mt-0.5">
+                Students must finish this task before unlocking this assignment.
+              </p>
             </div>
           </div>
 

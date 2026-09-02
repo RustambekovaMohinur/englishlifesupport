@@ -10,6 +10,10 @@ class TeacherDashboard(BaseModel):
     total_groups: int
     total_assignments: int
     pending_submissions: int
+    completion_rate: int = 0
+    late_students: int = 0
+    locked_students: int = 0
+    inactive_students: int = 0
     recent_submissions: list["RecentSubmissionItem"]
 
 
@@ -28,6 +32,11 @@ class StudentDashboard(BaseModel):
     group_name: str | None
     teacher_name: str | None
     total_stars: int
+    streak: int = 0
+    total_xp: int = 0
+    level: int = 1
+    level_title: str = "Beginner"
+    free_pass_available: bool = True
     average_score: float | None
     total_assignments: int
     completed_assignments: int

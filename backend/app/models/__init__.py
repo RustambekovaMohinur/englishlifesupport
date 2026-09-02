@@ -19,6 +19,17 @@ from app.models.vocabulary import (  # noqa: F401
     VocabularyAttempt,
     VocabularyWord,
 )
+from app.models.gamification import (  # noqa: F401
+    Achievement,
+    FreePass,
+    StarTransaction,
+    StarTransactionReason,
+    StudentOfTheWeek,
+    StudentStreak,
+    StudentXP,
+    TaskLockOverride,
+    XPTransaction,
+)
 
 __all__ = [
     "Base",
@@ -37,4 +48,13 @@ __all__ = [
     "VocabularyWord",
     "VocabularyAttempt",
     "VocabularyAnswer",
+    "StarTransaction",
+    "StarTransactionReason",
+    "FreePass",
+    "StudentStreak",
+    "StudentXP",
+    "XPTransaction",
+    "Achievement",
+    "TaskLockOverride",
+    "StudentOfTheWeek",
 ]

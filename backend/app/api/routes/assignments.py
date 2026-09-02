@@ -22,6 +22,7 @@ from app.schemas.assignment import (
     AssignmentUpdate,
     VocabWordItem,
 )
+from app.services.gamification_service import is_assignment_locked_for_student
 from app.utils.datetimes import as_utc, utcnow
 from app.utils.files import (
     parse_vocab_csv,
@@ -55,6 +56,8 @@ def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, 
         vocab_words=vocab_items,
         created_at=assignment.created_at,
         submission_count=sub_count,
+        order_index=getattr(assignment, "order_index", 0) or 0,
+        prerequisite_id=getattr(assignment, "prerequisite_id", None),
     )
 
 
@@ -100,6 +103,8 @@ async def create_assignment(
     description: str = Form(...),
     deadline: datetime = Form(...),
     status_val: str = Form(default="published", alias="status"),
+    order_index: int = Form(default=0),
+    prerequisite_id: uuid.UUID | None = Form(default=None),
     file: UploadFile | None = File(default=None),
     vocab_file: UploadFile | None = File(default=None),
     db: AsyncSession = Depends(get_db),
@@ -137,6 +142,8 @@ async def create_assignment(
         description=description.strip(),
         deadline=deadline,
         status=assign_status,
+        order_index=order_index,
+        prerequisite_id=prerequisite_id,
         file_path=file_path,
         file_original_name=file_orig_name,
         file_content_type=file_content_type,
@@ -242,6 +249,8 @@ async def list_my_assignments(
             for w in vocab_words
         ]
 
+        is_locked, lock_reason = await is_assignment_locked_for_student(db, assignment.id, profile.id)
+
         result.append(
             AssignmentForStudent(
                 id=assignment.id,
@@ -256,6 +265,10 @@ async def list_my_assignments(
                 submission_status=submission.status.value if submission else None,
                 score=score,
                 submission_id=submission_id,
+                order_index=getattr(assignment, "order_index", 0) or 0,
+                prerequisite_id=getattr(assignment, "prerequisite_id", None),
+                is_locked=is_locked,
+                lock_reason=lock_reason,
             )
         )
     return result

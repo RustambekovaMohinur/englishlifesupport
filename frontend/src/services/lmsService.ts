@@ -84,3 +84,33 @@ export const submitHomework = (assignment_id: string, text_answer: string, file:
 
 export const gradeSubmission = (id: string, body: { score: number; feedback?: string; stars: number }) =>
   api.post(`/submissions/${id}/grade`, body).then((r) => r.data);
+
+// --- Gamification & Sequential Tasks ---
+import {
+  StudentGamificationSummary,
+  WeeklyLeaderboardOut,
+  TeacherGroupReport,
+} from "@/types";
+
+export const getGamificationSummary = () =>
+  api.get<StudentGamificationSummary>("/gamification/summary").then((r) => r.data);
+
+export const useFreePass = (assignment_id: string) =>
+  api.post<{ status: string; message: string }>("/gamification/free-pass/use", null, {
+    params: { assignment_id },
+  }).then((r) => r.data);
+
+export const getWeeklyLeaderboard = (group_id?: string) =>
+  api.get<WeeklyLeaderboardOut>("/gamification/leaderboard", { params: { group_id } }).then((r) => r.data);
+
+export const recordVocabPractice = (body: { assignment_id?: string; total_words: number; correct_words: number }) =>
+  api.post<{ status: string; xp_earned: number; stars_earned: number; accuracy: number }>("/gamification/vocabulary/practice", body).then((r) => r.data);
+
+export const overrideTaskLock = (body: { student_id: string; assignment_id: string; is_unlocked: boolean }) =>
+  api.post<{ status: string; is_unlocked: boolean }>("/gamification/teacher/override-lock", body).then((r) => r.data);
+
+export const nominateStudentOfTheWeek = (group_id: string, body: { student_id: string; stars_awarded: number; reason?: string }) =>
+  api.post(`/gamification/teacher/student-of-the-week/${group_id}`, body).then((r) => r.data);
+
+export const getTeacherGroupReport = (group_id: string) =>
+  api.get<TeacherGroupReport>(`/gamification/teacher/group-report/${group_id}`).then((r) => r.data);
