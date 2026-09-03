@@ -262,3 +262,66 @@ def resolve_submission_file(relative_path: str) -> Path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
     return candidate
 
+
+ALLOWED_AVATAR_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+
+
+async def save_avatar_file(file: UploadFile, user_id: uuid.UUID) -> tuple[str, str, int]:
+    """
+    Validates and saves a profile picture to uploads/profiles/<user_id>/avatar.<ext>.
+    Only allows JPEG, PNG, WEBP up to 5MB.
+    Returns (relative_path, content_type, size_bytes).
+    """
+    _assert_safe_extension(file.filename or "")
+
+    content_type = file.content_type or ""
+    extension = ALLOWED_AVATAR_TYPES.get(content_type)
+    if not extension:
+        ext = Path(file.filename or "").suffix.lower()
+        if ext in set(ALLOWED_AVATAR_TYPES.values()):
+            extension = ext
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Invalid image format. Allowed formats: JPG, PNG, WEBP",
+            )
+
+    profile_dir = get_upload_root() / "profiles" / str(user_id)
+    profile_dir.mkdir(parents=True, exist_ok=True)
+
+    # Clean up any existing avatar in this directory
+    for existing in profile_dir.glob("avatar.*"):
+        existing.unlink(missing_ok=True)
+
+    destination = profile_dir / f"avatar{extension}"
+
+    max_bytes = 5 * 1024 * 1024  # 5MB max for avatars
+    total_size = 0
+    chunk_size = 256 * 1024  # 256KB
+
+    with destination.open("wb") as out_file:
+        while chunk := await file.read(chunk_size):
+            total_size += len(chunk)
+            if total_size > max_bytes:
+                out_file.close()
+                destination.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="Avatar image exceeds the 5MB limit",
+                )
+            out_file.write(chunk)
+
+    relative_path = str(destination.relative_to(get_upload_root()))
+    return relative_path, content_type, total_size
+
+
+def resolve_profile_avatar(relative_path: str) -> Path:
+    """Resolves profile avatar safely from uploads."""
+    return resolve_submission_file(relative_path)
+
+

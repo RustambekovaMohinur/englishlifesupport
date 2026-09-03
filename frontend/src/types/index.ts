@@ -3,6 +3,7 @@ export type UserRole = "teacher" | "student";
 export interface CurrentUser {
   id: string;
   email: string;
+  username?: string;
   role: UserRole;
   is_active: boolean;
 }
@@ -37,12 +38,42 @@ export interface StudentOut {
   id: string;
   user_id: string;
   email: string;
+  username?: string;
   full_name: string;
   phone: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
   is_active: boolean;
   total_stars: number;
   group: GroupBrief | null;
   created_at: string;
+}
+
+export interface UserProfileOut {
+  id: string;
+  user_id: string;
+  role: "teacher" | "student";
+  username: string;
+  email: string;
+  full_name: string;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  telegram_username: string | null;
+  bio: string | null;
+  avatar_url: string | null;
+  stats: Record<string, any>;
+  group_name?: string | null;
+  english_level?: string | null;
+}
+
+export interface UserProfileUpdate {
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  telegram_username?: string;
+  phone?: string;
+  bio?: string;
 }
 
 export interface Paginated<T> {
@@ -63,8 +94,11 @@ export interface TeacherProfileOut {
   id: string;
   user_id: string;
   email: string;
+  username?: string;
   full_name: string;
   phone: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
   created_at: string;
 }
 

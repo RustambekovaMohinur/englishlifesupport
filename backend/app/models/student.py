@@ -19,6 +19,8 @@ class StudentProfile(UUIDPKMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("groups.id", ondelete="SET NULL"), nullable=True, index=True
     )
     total_stars: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    bio: Mapped[str | None] = mapped_column(String, nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="student_profile")
     group: Mapped["Group | None"] = relationship(back_populates="students")

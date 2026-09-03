@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from jose import JWTError
-from sqlalchemy import select
+from sqlalchemy import select, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -64,31 +64,45 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
     """
     Public self-registration for STUDENTS. Requires valid existing group_id.
     """
-    username = body.effective_username.strip().lower()
+    # Validate required fields
+    username = body.username.strip()
+    email = (body.email or f"{username.lower()}@englishlife.local").strip().lower()
     if not username:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username is required")
-    
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is required")
+
     # Verify group exists
     if not body.group_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Group selection is required")
-        
     group = (await db.execute(select(Group).where(Group.id == body.group_id))).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selected group does not exist")
 
-    existing = await db.execute(select(User).where(User.email == username))
-    if existing.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already registered")
+    # Check case‑insensitive uniqueness for username
+    existing_user = await db.execute(select(User).where(func.lower(User.username) == username.lower()))
+    if existing_user.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
 
-    user = User(email=username, password_hash=hash_password(body.password), role=UserRole.STUDENT)
+    # Ensure email is unique (existing constraint)
+    existing_email = await db.execute(select(User).where(User.email == email))
+    if existing_email.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+
+    user = User(username=username, email=email, password_hash=hash_password(body.password), role=UserRole.STUDENT)
     db.add(user)
     try:
         await db.flush()
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already registered")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username or email already registered")
 
-    profile = StudentProfile(user_id=user.id, full_name=body.full_name, phone=body.phone, group_id=body.group_id)
+    profile = StudentProfile(
+        user_id=user.id,
+        full_name=body.effective_full_name,
+        phone=body.effective_telegram or None,
+        group_id=body.group_id,
+    )
     db.add(profile)
     await db.commit()
 
@@ -98,8 +112,10 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("10/minute")
 async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
-    username = (body.username or body.email or "").strip().lower()
-    result = await db.execute(select(User).where(User.email == username))
+    login_input = (body.username or body.email or "").strip().lower()
+    result = await db.execute(
+        select(User).where(or_(func.lower(User.username) == login_input, func.lower(User.email) == login_input))
+    )
     user = result.scalar_one_or_none()
 
     if user is None or not verify_password(body.password, user.password_hash):

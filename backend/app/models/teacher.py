@@ -15,5 +15,7 @@ class TeacherProfile(UUIDPKMixin, TimestampMixin, Base):
     )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    bio: Mapped[str | None] = mapped_column(String, nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="teacher_profile")

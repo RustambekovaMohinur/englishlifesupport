@@ -23,6 +23,10 @@ class User(UUIDPKMixin, TimestampMixin, Base):
         index=True,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Global unique username (case‑insensitive)
+    username: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+
+
 
     student_profile: Mapped["StudentProfile | None"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"

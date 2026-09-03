@@ -10,6 +10,8 @@ import {
   SubmissionOut,
   TeacherDashboard,
   TeacherProfileOut,
+  UserProfileOut,
+  UserProfileUpdate,
 } from "@/types";
 
 // --- Dashboard ---
@@ -45,10 +47,22 @@ export const deleteGroup = (id: string) => api.delete(`/groups/${id}`);
 
 // --- Teacher Profile ---
 export const getMyTeacherProfile = () => api.get<TeacherProfileOut>("/teachers/me").then((r) => r.data);
-export const updateTeacherProfile = (body: Partial<{ full_name: string; phone: string; email: string; current_password?: string }>) =>
+export const updateTeacherProfile = (body: Partial<{ full_name: string; phone: string; bio: string; email: string; current_password?: string }>) =>
   api.patch("/teachers/me", body).then((r) => r.data);
 export const changeTeacherPassword = (body: { current_password: string; new_password: string; confirm_password: string }) =>
   api.post("/teachers/me/password", body).then((r) => r.data);
+
+// --- Unified User Profile (Students & Teachers) ---
+export const getMyUnifiedProfile = () => api.get<UserProfileOut>("/profile/me").then((r) => r.data);
+export const updateMyUnifiedProfile = (body: UserProfileUpdate) => api.patch<UserProfileOut>("/profile/me", body).then((r) => r.data);
+export const uploadMyAvatar = (file: File) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return api.post<UserProfileOut>("/profile/me/avatar", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  }).then((r) => r.data);
+};
+export const removeMyAvatar = () => api.delete<UserProfileOut>("/profile/me/avatar").then((r) => r.data);
 
 // --- Assignments ---
 export const listAssignments = (group_id?: string) =>

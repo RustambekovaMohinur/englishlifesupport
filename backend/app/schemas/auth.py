@@ -8,12 +8,35 @@ from app.models.user import UserRole
 
 
 class RegisterRequest(BaseModel):
-    username: str | None = Field(default=None, min_length=3, max_length=255)
+    username: str = Field(..., min_length=3, max_length=30, pattern=r"^[A-Za-z0-9_]{3,30}$")
     email: str | None = Field(default=None)
     password: str = Field(min_length=8, max_length=128)
-    full_name: str = Field(min_length=2, max_length=255)
+    first_name: str | None = Field(default=None, min_length=1, max_length=128)
+    last_name: str | None = Field(default=None, min_length=1, max_length=128)
+    full_name: str | None = Field(default=None, min_length=2, max_length=255)
     phone: str | None = Field(default=None, max_length=64, description="Telegram username or phone number")
+    telegram_username: str | None = Field(default=None, max_length=64, description="Telegram username")
     group_id: uuid.UUID = Field(description="Group the student joins during registration")
+
+    @property
+    def effective_full_name(self) -> str:
+        if self.first_name and self.last_name:
+            return f"{self.first_name.strip()} {self.last_name.strip()}"
+        if self.full_name:
+            return self.full_name.strip()
+        if self.first_name:
+            return self.first_name.strip()
+        return "Student"
+
+    @property
+    def effective_telegram(self) -> str:
+        raw = self.telegram_username or self.phone or ""
+        raw = raw.strip()
+        if not raw:
+            return ""
+        if not raw.startswith("@") and not raw.startswith("+"):
+            return f"@{raw}"
+        return raw
 
     @property
     def effective_username(self) -> str:

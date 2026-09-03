@@ -36,20 +36,20 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center">
           <Logo className="h-14 w-14 text-xl" />
-          <h1 className="mt-4 text-xl font-bold text-neutral-900">English Life</h1>
+          <h1 className="mt-4 text-xl font-bold text-neutral-900">Asadbek Khasanov</h1>
           <p className="text-sm text-neutral-500">Sign in to your account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="card space-y-4">
           <div>
-            <label className="label">Username</label>
+            <label className="label">Username or Email</label>
             <input
               type="text"
               required
               className="input"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Username"
+              placeholder="Username or email"
             />
           </div>
           <div>

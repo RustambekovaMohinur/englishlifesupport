@@ -17,17 +17,33 @@ export async function login(username: string, password: string) {
 export async function register(
   username: string,
   password: string,
-  full_name: string,
-  phone: string | undefined,
-  group_id: string
+  full_name_or_data: string | { firstName: string; lastName: string; telegram: string; groupId: string },
+  phone?: string,
+  group_id?: string
 ) {
-  const { data } = await api.post("/auth/register", {
-    username,
-    password,
-    full_name,
-    phone,
-    group_id,
-  });
+  let payload: any;
+  if (typeof full_name_or_data === "object") {
+    payload = {
+      username,
+      password,
+      first_name: full_name_or_data.firstName,
+      last_name: full_name_or_data.lastName,
+      full_name: `${full_name_or_data.firstName} ${full_name_or_data.lastName}`.trim(),
+      telegram_username: full_name_or_data.telegram,
+      phone: full_name_or_data.telegram,
+      group_id: full_name_or_data.groupId,
+    };
+  } else {
+    payload = {
+      username,
+      password,
+      full_name: full_name_or_data,
+      phone,
+      group_id,
+    };
+  }
+
+  const { data } = await api.post("/auth/register", payload);
   tokenStorage.setTokens(data.access_token, data.refresh_token);
   return data;
 }

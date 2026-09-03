@@ -5,7 +5,7 @@ import { downloadAuthenticatedFile, fetchAuthenticatedBlobUrl } from "@/services
 export function Logo({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <div className={`flex ${className} items-center justify-center rounded-xl bg-brand-500 font-extrabold text-white`}>
-      EL
+      AK
     </div>
   );
 }

@@ -23,7 +23,7 @@ export default function TeacherLayout() {
         <div className="mb-8 flex items-center gap-3 px-2">
           <Logo />
           <div>
-            <p className="text-sm font-bold leading-tight text-neutral-900">English Life</p>
+            <p className="text-sm font-bold leading-tight text-neutral-900">Asadbek Khasanov</p>
             <p className="text-xs text-neutral-400">Teacher Panel</p>
           </div>
         </div>
@@ -62,7 +62,7 @@ export default function TeacherLayout() {
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Logo />
-                <span className="font-bold text-neutral-900">English Life</span>
+                <span className="font-bold text-neutral-900">Asadbek Khasanov</span>
               </div>
               <button
                 type="button"
@@ -123,7 +123,7 @@ export default function TeacherLayout() {
             </button>
             <div className="flex items-center gap-2">
               <Logo className="h-7 w-7 text-xs" />
-              <span className="font-bold text-neutral-900">English Life</span>
+              <span className="font-bold text-neutral-900">Asadbek Khasanov</span>
             </div>
           </div>
           <button

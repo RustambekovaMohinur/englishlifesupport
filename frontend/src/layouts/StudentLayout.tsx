@@ -23,7 +23,7 @@ export default function StudentLayout() {
         <div className="mb-8 flex items-center gap-3 px-2">
           <Logo />
           <div>
-            <p className="text-sm font-bold leading-tight text-neutral-900">English Life</p>
+            <p className="text-sm font-bold leading-tight text-neutral-900">Asadbek Khasanov</p>
             <p className="text-xs text-neutral-400">Student Panel</p>
           </div>
         </div>
@@ -62,7 +62,7 @@ export default function StudentLayout() {
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Logo />
-                <span className="font-bold text-neutral-900">English Life</span>
+                <span className="font-bold text-neutral-900">Asadbek Khasanov</span>
               </div>
               <button
                 type="button"
@@ -109,7 +109,7 @@ export default function StudentLayout() {
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
         {/* Mobile Header */}
-        <header className="flex items-center justify-between border-b border-neutral-100 bg-white px-4 py-3 md:hidden">
+        <header className="flex h-16 items-center justify-between border-b border-neutral-100 bg-white px-4 md:hidden">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -123,7 +123,7 @@ export default function StudentLayout() {
             </button>
             <div className="flex items-center gap-2">
               <Logo className="h-7 w-7 text-xs" />
-              <span className="font-bold text-neutral-900">English Life</span>
+              <span className="font-bold text-neutral-900">Asadbek Khasanov</span>
             </div>
           </div>
           <button

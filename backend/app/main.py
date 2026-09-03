@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
 
-from app.api.routes import assignments, auth, dashboard, gamification, groups, students, submissions, teachers
+from app.api.routes import assignments, auth, dashboard, gamification, groups, profile, students, submissions, teachers
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.security import hash_password
@@ -84,6 +84,7 @@ app.include_router(assignments.router)
 app.include_router(submissions.router)
 app.include_router(dashboard.router)
 app.include_router(gamification.router)
+app.include_router(profile.router)
 
 
 @app.get("/api/health")
@@ -107,6 +108,8 @@ async def bootstrap_teacher_account(max_retries: int = 5, retry_delay: float = 2
                 teacher = existing.scalar_one_or_none()
                 if teacher is not None:
                     teacher.email = settings.BOOTSTRAP_TEACHER_EMAIL
+                    if not teacher.username:
+                        teacher.username = "teacher"
                     teacher.password_hash = hash_password(settings.BOOTSTRAP_TEACHER_PASSWORD)
                     await db.commit()
                     logger.info("Teacher account verified: %s", settings.BOOTSTRAP_TEACHER_EMAIL)
@@ -114,6 +117,7 @@ async def bootstrap_teacher_account(max_retries: int = 5, retry_delay: float = 2
 
                 teacher_user = User(
                     email=settings.BOOTSTRAP_TEACHER_EMAIL,
+                    username="teacher",
                     password_hash=hash_password(settings.BOOTSTRAP_TEACHER_PASSWORD),
                     role=UserRole.TEACHER,
                 )
@@ -134,12 +138,21 @@ async def bootstrap_teacher_account(max_retries: int = 5, retry_delay: float = 2
 
 @app.on_event("startup")
 async def startup_event():
+    # In test environment, ensure a fresh SQLite database file
+    if settings.ENVIRONMENT == "test":
+        # Extract file path from DATABASE_URL (expects sqlite:///./<filename>)
+        db_path_str = settings.DATABASE_URL.split('/')[-1]
+        db_path = pathlib.Path(db_path_str)
+        if db_path.exists():
+            db_path.unlink()
+            logger.info("Deleted existing test SQLite DB to ensure clean state")
     # 1. Ensure database schema is migrated before application queries tables
     try:
         import asyncio
         from pathlib import Path
         from alembic.config import Config
         from alembic import command
+
 
         def _run_migrations():
             backend_dir = Path(__file__).resolve().parents[1]

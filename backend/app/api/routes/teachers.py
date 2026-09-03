@@ -29,8 +29,11 @@ async def get_my_teacher_profile(
         id=profile.id,
         user_id=profile.user_id,
         email=user.email,
+        username=user.username,
         full_name=profile.full_name,
         phone=profile.phone,
+        bio=profile.bio,
+        avatar_url=profile.avatar_url,
         created_at=profile.created_at,
     )
 
@@ -55,6 +58,8 @@ async def update_my_teacher_profile(
         profile.full_name = body.full_name
     if body.phone is not None:
         profile.phone = body.phone
+    if body.bio is not None:
+        profile.bio = body.bio
 
     if body.email is not None and body.email.strip().lower() != current_user.email.lower():
         new_email = body.email.strip().lower()

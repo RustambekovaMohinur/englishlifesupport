@@ -82,8 +82,54 @@ async def get_my_profile(
         id=full_profile.id,
         user_id=full_profile.user_id,
         email=full_profile.user.email,
+        username=full_profile.user.username,
         full_name=full_profile.full_name,
         phone=full_profile.phone,
+        bio=full_profile.bio,
+        avatar_url=full_profile.avatar_url,
+        is_active=full_profile.user.is_active,
+        total_stars=full_profile.total_stars,
+        group=full_profile.group,
+        created_at=full_profile.created_at,
+    )
+
+
+@router.patch("/me", response_model=StudentOut)
+async def update_my_student_profile(
+    body: StudentUpdate,
+    profile: StudentProfile = Depends(get_current_student_profile),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(StudentProfile)
+        .options(selectinload(StudentProfile.group), selectinload(StudentProfile.user))
+        .where(StudentProfile.id == profile.id)
+    )
+    full_profile = result.scalar_one()
+
+    # Students cannot change their own group or active status
+    if body.full_name is not None:
+        full_profile.full_name = body.full_name
+    if body.phone is not None:
+        raw_phone = body.phone.strip()
+        if raw_phone and not raw_phone.startswith("@") and not raw_phone.startswith("+"):
+            raw_phone = f"@{raw_phone}"
+        full_profile.phone = raw_phone or None
+    if body.bio is not None:
+        full_profile.bio = body.bio
+
+    await db.commit()
+    await db.refresh(full_profile, attribute_names=["group", "user"])
+
+    return StudentOut(
+        id=full_profile.id,
+        user_id=full_profile.user_id,
+        email=full_profile.user.email,
+        username=full_profile.user.username,
+        full_name=full_profile.full_name,
+        phone=full_profile.phone,
+        bio=full_profile.bio,
+        avatar_url=full_profile.avatar_url,
         is_active=full_profile.user.is_active,
         total_stars=full_profile.total_stars,
         group=full_profile.group,
@@ -105,8 +151,11 @@ async def get_student(student_id: uuid.UUID, db: AsyncSession = Depends(get_db))
         id=profile.id,
         user_id=profile.user_id,
         email=profile.user.email,
+        username=profile.user.username,
         full_name=profile.full_name,
         phone=profile.phone,
+        bio=profile.bio,
+        avatar_url=profile.avatar_url,
         is_active=profile.user.is_active,
         total_stars=profile.total_stars,
         group=profile.group,

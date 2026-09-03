@@ -10,9 +10,9 @@ interface AuthContextValue {
   register: (
     username: string,
     password: string,
-    fullName: string,
-    phone: string | undefined,
-    groupId: string
+    fullNameOrData: string | { firstName: string; lastName: string; telegram: string; groupId: string },
+    phone?: string,
+    groupId?: string
   ) => Promise<CurrentUser>;
   logout: () => Promise<void>;
 }
@@ -48,11 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (
     username: string,
     password: string,
-    fullName: string,
-    phone: string | undefined,
-    groupId: string
+    fullNameOrData: string | { firstName: string; lastName: string; telegram: string; groupId: string },
+    phone?: string,
+    groupId?: string
   ) => {
-    await authService.register(username, password, fullName, phone, groupId);
+    await authService.register(username, password, fullNameOrData, phone, groupId);
     const me = await authService.fetchCurrentUser();
     setUser(me);
     return me;

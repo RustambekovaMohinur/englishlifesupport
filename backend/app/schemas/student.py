@@ -16,8 +16,11 @@ class StudentOut(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
     email: str
+    username: str = ""
     full_name: str
     phone: str | None = None
+    bio: str | None = None
+    avatar_url: str | None = None
     is_active: bool
     total_stars: int
     group: StudentGroupBrief | None = None
@@ -41,6 +44,7 @@ class StudentListItem(BaseModel):
 class StudentUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=2, max_length=255)
     phone: str | None = Field(default=None, max_length=32)
+    bio: str | None = Field(default=None, max_length=2000)
     group_id: uuid.UUID | None = None
 
 
