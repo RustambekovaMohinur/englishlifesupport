@@ -26,3 +26,12 @@ class StudentProfile(UUIDPKMixin, TimestampMixin, Base):
     user: Mapped["User"] = relationship(back_populates="student_profile")
     group: Mapped["Group | None"] = relationship(back_populates="students")
     submissions: Mapped[list["Submission"]] = relationship(back_populates="student", cascade="all, delete-orphan")
+
+    @property
+    def telegram_username(self) -> str | None:
+        return self.phone
+
+    @telegram_username.setter
+    def telegram_username(self, value: str | None) -> None:
+        self.phone = value
+

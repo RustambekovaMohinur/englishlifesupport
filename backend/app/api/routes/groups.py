@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +13,7 @@ from app.models.assignment import Assignment, AssignmentStatus
 from app.models.group import Group
 from app.models.student import StudentProfile
 from app.models.submission import Submission
-from app.models.user import User
+from app.models.user import ApprovalStatus, User
 from app.schemas.group import (
     AssignmentItemOverview,
     GroupAssignmentHeader,
@@ -29,7 +29,16 @@ router = APIRouter(prefix="/api/groups", tags=["groups"], dependencies=[Depends(
 
 async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
     count = (
-        await db.execute(select(func.count()).select_from(StudentProfile).where(StudentProfile.group_id == group.id))
+        await db.execute(
+            select(func.count())
+            .select_from(StudentProfile)
+            .join(User, StudentProfile.user_id == User.id)
+            .where(
+                StudentProfile.group_id == group.id,
+                or_(User.approval_status == ApprovalStatus.APPROVED, User.approval_status.is_(None)),
+                User.is_active == True,
+            )
+        )
     ).scalar_one()
     return GroupOut(
         id=group.id,
@@ -49,9 +58,13 @@ async def list_groups(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Returns all groups for the teacher panel.
+    Returns all groups for the teacher panel belonging to this teacher.
     """
-    query = select(Group).order_by(Group.name)
+    teacher_filter = or_(
+        Group.created_by == current_user.id,
+        and_(Group.created_by.is_(None), current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL),
+    )
+    query = select(Group).where(teacher_filter).order_by(Group.name)
     if not include_archived:
         query = query.where(Group.is_active.is_(True))
     groups = (await db.execute(query)).scalars().all()
@@ -95,7 +108,11 @@ async def get_group_detail(
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
-    if group.created_by and group.created_by != current_user.id:
+    is_owner = (
+        group.created_by == current_user.id
+        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+    )
+    if not is_owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this group")
 
     # Fetch published assignments for this group ordered by deadline/order_index
@@ -106,11 +123,15 @@ async def get_group_detail(
     )
     assignments = assignments_res.scalars().all()
 
-    # Fetch all students in this group with user details
+    # Fetch all approved, active students in this group with user details (preserving legacy records)
     students_res = await db.execute(
         select(StudentProfile, User)
         .join(User, StudentProfile.user_id == User.id)
-        .where(StudentProfile.group_id == group_id)
+        .where(
+            StudentProfile.group_id == group_id,
+            or_(User.approval_status == ApprovalStatus.APPROVED, User.approval_status.is_(None)),
+            User.is_active == True,
+        )
         .order_by(StudentProfile.full_name.asc())
     )
     student_rows = students_res.all()

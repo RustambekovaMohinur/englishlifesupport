@@ -100,7 +100,10 @@ export default function StudentsPage() {
         setStudents(res.items);
         setTotal(res.total);
       })
-      .catch(() => toast.error("Failed to load students"))
+      .catch((err: any) => {
+        const msg = err?.response?.data?.detail;
+        toast.error(typeof msg === "string" ? msg : "Failed to load students");
+      })
       .finally(() => setIsLoading(false));
   }
 

@@ -47,9 +47,17 @@ async def list_students(
     """Teacher-only. Server-side paginated/searchable/filterable list.
     Correctly scopes students to groups created by this teacher if created_by is populated.
     """
-    teacher_groups_subq = select(Group.id).where(Group.created_by == current_user.id)
-    # Check if teacher has specific groups created
+    teacher_groups_subq = select(Group.id).where(
+        or_(
+            Group.created_by == current_user.id,
+            and_(Group.created_by.is_(None), current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL),
+        )
+    )
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
+
+    if not teacher_group_ids:
+        # Teacher has no groups, return empty roster
+        return PaginatedStudents(items=[], total=0, page=page, page_size=page_size)
 
     query = select(
         StudentProfile,
@@ -65,9 +73,8 @@ async def list_students(
         User, StudentProfile.user_id == User.id
     ).outerjoin(Group, StudentProfile.group_id == Group.id)
 
-    # If teacher has groups, scope to teacher groups or unassigned; if legacy single teacher, allow access
-    if teacher_group_ids:
-        query = query.where(or_(StudentProfile.group_id.in_(teacher_group_ids), StudentProfile.group_id.is_(None)))
+    # Scoped strictly to groups owned by this teacher
+    query = query.where(StudentProfile.group_id.in_(teacher_group_ids))
 
     if search:
         like = f"%{search.strip()}%"
@@ -76,12 +83,32 @@ async def list_students(
             User.email.ilike(like),
             User.username.ilike(like),
         ))
+
     if group_id:
+        if group_id not in teacher_group_ids:
+            return PaginatedStudents(items=[], total=0, page=page, page_size=page_size)
         query = query.where(StudentProfile.group_id == group_id)
+
+    if approval_status is not None and approval_status.strip():
+        appr_val = approval_status.strip().lower()
+        if appr_val == "all":
+            pass
+        elif appr_val == "approved":
+            query = query.where(or_(User.approval_status == ApprovalStatus.APPROVED, User.approval_status.is_(None)))
+        elif appr_val == "pending":
+            query = query.where(User.approval_status == ApprovalStatus.PENDING)
+        elif appr_val == "rejected":
+            query = query.where(User.approval_status == ApprovalStatus.REJECTED)
+        else:
+            query = query.where(User.approval_status == approval_status)
+    else:
+        # Default for normal student roster: only approved (or legacy NULL) students
+        query = query.where(or_(User.approval_status == ApprovalStatus.APPROVED, User.approval_status.is_(None)))
+
     if is_active is not None:
         query = query.where(User.is_active == is_active)
-    if approval_status is not None:
-        query = query.where(User.approval_status == approval_status)
+    elif approval_status is None or (isinstance(approval_status, str) and approval_status.strip().lower() == "approved"):
+        query = query.where(User.is_active == True)
 
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar_one()
@@ -97,11 +124,11 @@ async def list_students(
             email=email,
             username=username or "",
             phone=profile.phone,
-            telegram_username=profile.telegram_username,
-            is_active=is_active,
-            approval_status=appr_status.value if hasattr(appr_status, "value") else str(appr_status),
+            telegram_username=profile.phone,
+            is_active=is_active if is_active is not None else True,
+            approval_status=appr_status.value if hasattr(appr_status, "value") else str(appr_status) if appr_status else "approved",
             total_stars=profile.total_stars,
-            total_lightning=getattr(profile, "total_lightning", 0),
+            total_lightning=getattr(profile, "total_lightning", 0) or 0,
             group_id=grp_id,
             group_name=grp_name,
             level=grp_level.value if hasattr(grp_level, "value") else str(grp_level) if grp_level else None,
@@ -524,7 +551,8 @@ async def get_student(
 
     # Scope check: if group belongs to another teacher, deny
     if profile.group and profile.group.created_by and profile.group.created_by != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this student")
+        if not (profile.group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this student")
 
     return StudentOut(
         id=profile.id,
@@ -539,7 +567,7 @@ async def get_student(
         is_active=profile.user.is_active,
         approval_status=profile.user.approval_status.value if hasattr(profile.user.approval_status, "value") else str(profile.user.approval_status),
         total_stars=profile.total_stars,
-        total_lightning=getattr(profile, "total_lightning", 0),
+        total_lightning=getattr(profile, "total_lightning", 0) or 0,
         group=profile.group,
         created_at=profile.created_at,
     )
@@ -564,7 +592,8 @@ async def get_student_history(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
 
     if profile.group and profile.group.created_by and profile.group.created_by != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this student")
+        if not (profile.group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this student")
 
     history_items: list[StudentHistoryItem] = []
     if profile.group_id:
