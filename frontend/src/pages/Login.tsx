@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { Logo } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { AxiosError } from "axios";
+import { FaInstagram, FaTelegramPlane } from "react-icons/fa";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -19,9 +20,24 @@ export default function LoginPage() {
       const user = await login(username, password);
       navigate(user.role === "teacher" ? "/teacher" : "/student");
     } catch (err) {
-      const message =
-        err instanceof AxiosError ? err.response?.data?.detail ?? "Login failed" : "Something went wrong";
-      toast.error(typeof message === "string" ? message : "Invalid username or password");
+      if (err instanceof AxiosError && err.response?.data) {
+        const data = err.response.data;
+        const errObj = data.error;
+        if (errObj && errObj.code) {
+          if (errObj.code === "ACCOUNT_PENDING_APPROVAL") {
+            toast.error(errObj.message || "Your account is waiting for teacher approval.");
+            return;
+          }
+          if (errObj.code === "ACCOUNT_REJECTED") {
+            toast.error(errObj.message || "Your account has been rejected.");
+            return;
+          }
+        }
+        const message = data.detail ?? "Invalid username or password";
+        toast.error(typeof message === "string" ? message : "Invalid username or password");
+      } else {
+        toast.error("Something went wrong");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -77,12 +93,38 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-neutral-500">
-          New student?{" "}
-          <Link to="/register" className="font-medium text-brand-600 hover:underline">
-            Create an account
-          </Link>
-        </p>
+          <p className="mt-4 text-center text-sm text-neutral-500">
+            New student?{" "}
+            <Link to="/register" className="font-medium text-brand-600 hover:underline">
+              Create an account
+            </Link>
+          </p>
+        {/* Social media follow section */}
+        <div className="mt-6 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm text-center">
+          <p className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-3">
+            Follow Asadbek Khasanov
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <a
+              href={import.meta.env.VITE_INSTAGRAM_URL || "https://instagram.com/teacher_khasanov"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 px-3.5 py-2.5 text-xs font-bold text-pink-700 bg-pink-50 hover:bg-pink-100 border border-pink-200 rounded-xl transition shadow-xs"
+            >
+              <FaInstagram className="text-pink-600 text-base" />
+              <span>Follow on Instagram</span>
+            </a>
+            <a
+              href={import.meta.env.VITE_TELEGRAM_URL || "https://t.me/Khasanov_SK"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 px-3.5 py-2.5 text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl transition shadow-xs"
+            >
+              <FaTelegramPlane className="text-sky-600 text-base" />
+              <span>Join Telegram Channel</span>
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import TeacherLayout from "@/layouts/TeacherLayout";
 import TeacherDashboardPage from "@/pages/teacher/Dashboard";
 import StudentsPage from "@/pages/teacher/Students";
 import GroupsPage from "@/pages/teacher/Groups";
+import GroupDetailPage from "@/pages/teacher/GroupDetail";
 import AssignmentsPage from "@/pages/teacher/Assignments";
 import SubmissionsPage from "@/pages/teacher/Submissions";
 import TeacherProfilePage from "@/pages/teacher/Profile";
@@ -43,6 +44,7 @@ export default function App() {
             <Route index element={<TeacherDashboardPage />} />
             <Route path="students" element={<StudentsPage />} />
             <Route path="groups" element={<GroupsPage />} />
+            <Route path="groups/:groupId" element={<GroupDetailPage />} />
             <Route path="assignments" element={<AssignmentsPage />} />
             <Route path="submissions" element={<SubmissionsPage />} />
             <Route path="profile" element={<TeacherProfilePage />} />

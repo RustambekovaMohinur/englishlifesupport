@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.assignment import Assignment, AssignmentStatus
+from app.models.file_blob import FileBlob
 from app.models.group import Group
 from app.models.student import StudentProfile
 from app.models.submission import Submission, SubmissionStatus
@@ -124,7 +125,10 @@ async def get_my_profile(
             avatar_url=profile.avatar_url,
             stats=stats,
             group_name=profile.group.name if profile.group else None,
-            english_level=profile.group.english_level if profile.group else None,
+            english_level=profile.group.english_level.value if profile.group and hasattr(profile.group.english_level, "value") else (str(profile.group.english_level) if profile.group and profile.group.english_level else None),
+            approval_status=current_user.approval_status.value if hasattr(current_user.approval_status, "value") else str(current_user.approval_status),
+            total_stars=getattr(profile, "total_stars", 0),
+            total_lightning=getattr(profile, "total_lightning", 0),
         )
 
     # Teacher
@@ -149,6 +153,7 @@ async def get_my_profile(
         bio=profile.bio,
         avatar_url=profile.avatar_url,
         stats=stats,
+        approval_status=current_user.approval_status.value if hasattr(current_user.approval_status, "value") else str(current_user.approval_status),
     )
 
 
@@ -216,7 +221,10 @@ async def update_my_profile(
             avatar_url=profile.avatar_url,
             stats=stats,
             group_name=profile.group.name if profile.group else None,
-            english_level=profile.group.english_level if profile.group else None,
+            english_level=profile.group.english_level.value if profile.group and hasattr(profile.group.english_level, "value") else (str(profile.group.english_level) if profile.group and profile.group.english_level else None),
+            approval_status=current_user.approval_status.value if hasattr(current_user.approval_status, "value") else str(current_user.approval_status),
+            total_stars=getattr(profile, "total_stars", 0),
+            total_lightning=getattr(profile, "total_lightning", 0),
         )
 
     # Teacher
@@ -269,6 +277,7 @@ async def update_my_profile(
         bio=profile.bio,
         avatar_url=profile.avatar_url,
         stats=stats,
+        approval_status=current_user.approval_status.value if hasattr(current_user.approval_status, "value") else str(current_user.approval_status),
     )
 
 
@@ -279,7 +288,7 @@ async def upload_my_avatar(
     db: AsyncSession = Depends(get_db),
 ):
     """Upload or replace current user's profile photo."""
-    relative_path, content_type, size_bytes = await save_avatar_file(file, current_user.id)
+    relative_path, content_type, size_bytes = await save_avatar_file(file, current_user.id, db=db)
     avatar_url = f"/api/profile/{current_user.id}/avatar"
 
     if current_user.role == UserRole.STUDENT:
@@ -437,4 +446,18 @@ async def get_user_avatar(
                     media_type=media_type,
                     headers={"Cache-Control": "public, max-age=86400"},
                 )
+
+    # If missing from ephemeral container disk, restore from FileBlob database
+    res = await db.execute(select(FileBlob).where(FileBlob.file_path.like(f"profiles/{user_id}/avatar%")))
+    blob = res.scalar_one_or_none()
+    if blob and blob.file_data:
+        dest = get_upload_root() / blob.file_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(blob.file_data)
+        return FileResponse(
+            path=str(dest),
+            media_type=blob.content_type or "image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")

@@ -67,6 +67,8 @@ def test_registration_and_profiles():
 
     # 6. Student Registration with new format
     st_username = f"std_{uuid.uuid4().hex[:6]}"
+    import time
+    time.sleep(5)
     st_reg_res = requests.post(
         f"{BASE_URL}/api/auth/register",
         json={
@@ -93,8 +95,25 @@ def test_registration_and_profiles():
             },
         )
     assert st_reg_res.status_code == 201, f"Student registration failed: {st_reg_res.text}"
-    st_token = st_reg_res.json()["access_token"]
-    st_headers = {"Authorization": f"Bearer {st_token}"}
+    assert st_reg_res.json()["status"] == "pending"
+
+    # Verify pending student cannot login yet
+    pending_login = requests.post(
+        f"{BASE_URL}/api/auth/login",
+        json={"username": st_username, "password": "Stud3ntPass!"},
+    )
+    assert pending_login.status_code == 403
+
+    # Teacher approves student
+    pending_res = requests.get(f"{BASE_URL}/api/students/pending", headers=teacher_headers).json()
+    pending_students = pending_res["items"] if isinstance(pending_res, dict) and "items" in pending_res else pending_res
+    bob_pending = next(p for p in pending_students if p["username"] == st_username)
+    appr_res = requests.post(
+        f"{BASE_URL}/api/students/{bob_pending['id']}/approval",
+        headers=teacher_headers,
+        json={"action": "approve"},
+    )
+    assert appr_res.status_code == 200
 
     # 7. Student Duplicate Username Check (Case-insensitive)
     dup_res = requests.post(
@@ -124,12 +143,14 @@ def test_registration_and_profiles():
         )
     assert dup_res.status_code == 409
 
-    # 8. Student Login
+    # 8. Student Login (now approved)
     login_res = requests.post(
         f"{BASE_URL}/api/auth/login",
         json={"username": st_username, "password": "Stud3ntPass!"},
     )
     assert login_res.status_code == 200
+    st_token = login_res.json()["access_token"]
+    st_headers = {"Authorization": f"Bearer {st_token}"}
 
     # 9. Student Profile
     s_prof_res = requests.get(f"{BASE_URL}/api/profile/me", headers=st_headers)

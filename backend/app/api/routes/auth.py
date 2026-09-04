@@ -21,13 +21,14 @@ from app.db.session import get_db
 from app.models.group import Group
 from app.models.refresh_token import RefreshToken
 from app.models.student import StudentProfile
-from app.models.user import User, UserRole
+from app.models.user import ApprovalStatus, User, UserRole
 from app.schemas.auth import (
     AccessTokenResponse,
     CurrentUser,
     GroupPublicOut,
     LoginRequest,
     RegisterRequest,
+    RegisterResponse,
     TokenResponse,
 )
 
@@ -58,8 +59,8 @@ async def list_public_groups(db: AsyncSession = Depends(get_db)):
     return groups
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-@limiter.limit("5/minute")
+@router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("60/minute")
 async def register(request: Request, body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     """
     Public self-registration for STUDENTS. Requires valid existing group_id.
@@ -89,7 +90,13 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
     if existing_email.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
-    user = User(username=username, email=email, password_hash=hash_password(body.password), role=UserRole.STUDENT)
+    user = User(
+        username=username,
+        email=email,
+        password_hash=hash_password(body.password),
+        role=UserRole.STUDENT,
+        approval_status=ApprovalStatus.PENDING,
+    )
     db.add(user)
     try:
         await db.flush()
@@ -106,11 +113,16 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
     db.add(profile)
     await db.commit()
 
-    return await _issue_tokens(db, user, request.headers.get("user-agent"))
+    return {
+        "status": "pending",
+        "message": "Your request has been sent to your teacher. Access will be granted once approved.",
+        "access_token": "",
+        "refresh_token": "",
+    }
 
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("10/minute")
+@limiter.limit("60/minute")
 async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
     login_input = (body.username or body.email or "").strip().lower()
     result = await db.execute(
@@ -121,6 +133,18 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
     if user is None or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
+    if user.approval_status != ApprovalStatus.APPROVED:
+        if user.approval_status == ApprovalStatus.PENDING:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "ACCOUNT_PENDING_APPROVAL", "message": "Your account is waiting for teacher approval."},
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "ACCOUNT_REJECTED", "message": "Your account has been rejected."},
+            )
+
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
 
@@ -128,7 +152,7 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
 
 
 @router.post("/refresh", response_model=AccessTokenResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def refresh(request: Request, body: dict, db: AsyncSession = Depends(get_db)):
     """
     Accepts {"refresh_token": "..."}. Validates the token signature/expiry,

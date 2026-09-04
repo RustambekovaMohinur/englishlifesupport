@@ -44,17 +44,56 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+export function getFileUrl(path: string | null | undefined): string {
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  if (RAW_API_URL && RAW_API_URL.startsWith("http")) {
+    const origin = new URL(RAW_API_URL).origin;
+    return `${origin}${path.startsWith("/") ? "" : "/"}${path}`;
+  }
+  return path;
+}
+
 function toApiPath(fileUrl: string): string {
+  if (!fileUrl) return "";
+  try {
+    if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
+      const parsed = new URL(fileUrl);
+      fileUrl = parsed.pathname;
+    }
+  } catch {}
   if (fileUrl.startsWith("/api/")) return fileUrl.slice(4);
-  return fileUrl;
+  if (fileUrl.startsWith("/")) return fileUrl;
+  return `/${fileUrl}`;
 }
 
 export async function downloadAuthenticatedFile(fileUrl: string, filename?: string) {
-  const { data } = await api.get<Blob>(toApiPath(fileUrl), { responseType: "blob" });
-  const objectUrl = URL.createObjectURL(data);
+  const path = toApiPath(fileUrl);
+  const response = await api.get<Blob>(path, { responseType: "blob" });
+
+  if (response.data.type?.includes("application/json")) {
+    const text = await response.data.text();
+    try {
+      const err = JSON.parse(text);
+      throw new Error(err?.detail || err?.message || "Failed to download file");
+    } catch (e: any) {
+      throw new Error(e?.message || "Failed to download file");
+    }
+  }
+
+  let downloadFilename = filename;
+  const disposition = response.headers?.["content-disposition"] || response.headers?.["Content-Disposition"];
+  if (!downloadFilename && disposition) {
+    const match = String(disposition).match(/filename[^;=\\n]*=((['"]).*?\\2|[^;\\n]*)/);
+    if (match && match[1]) {
+      downloadFilename = match[1].replace(/['"]/g, "");
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(response.data);
   const link = document.createElement("a");
   link.href = objectUrl;
-  link.download = filename || "download";
+  link.download = downloadFilename || "download";
   document.body.appendChild(link);
   link.click();
   link.remove();

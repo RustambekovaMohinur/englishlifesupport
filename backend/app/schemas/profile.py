@@ -19,6 +19,9 @@ class UserProfileOut(BaseModel):
     stats: dict[str, Any] = Field(default_factory=dict)
     group_name: str | None = None
     english_level: str | None = None
+    approval_status: str | None = None
+    total_stars: int = 0
+    total_lightning: int = 0
 
 
 class UserProfileUpdate(BaseModel):

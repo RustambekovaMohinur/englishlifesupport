@@ -26,12 +26,95 @@ export interface Group {
 
 export interface StudentListItem {
   id: string;
+  user_id?: string;
   full_name: string;
   email: string;
+  username?: string;
   phone: string | null;
+  telegram_username?: string | null;
   is_active: boolean;
+  approval_status?: string;
   total_stars: number;
+  total_lightning?: number;
+  group_id?: string | null;
   group_name: string | null;
+  level?: string | null;
+  created_at?: string | null;
+}
+
+export interface AssignmentItemOverview {
+  assignment_id: string;
+  title: string;
+  deadline: string;
+  status: string;
+  completion_percentage: number;
+  score: number | null;
+  stars: number | null;
+  has_submission: boolean;
+  submitted_at: string | null;
+}
+
+export interface GroupStudentDetail {
+  student_id: string;
+  user_id: string;
+  full_name: string;
+  username: string;
+  telegram_username: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+  total_stars: number;
+  total_lightning: number;
+  completed_assignments_count?: number;
+  total_assignments_count?: number;
+  overall_completion_percentage: number;
+  assignments: AssignmentItemOverview[];
+}
+
+export interface GroupAssignmentHeader {
+  id: string;
+  title: string;
+  deadline: string;
+  status: string;
+}
+
+export interface GroupDetailOut {
+  id: string;
+  name: string;
+  english_level: string;
+  schedule: string | null;
+  is_active: boolean;
+  student_count: number;
+  assignments: GroupAssignmentHeader[];
+  students: GroupStudentDetail[];
+}
+
+export interface StudentHistoryItem {
+  assignment_id: string;
+  title: string;
+  assignment_type: string;
+  assigned_date: string;
+  deadline: string;
+  completion_percentage: number;
+  submission_id: string | null;
+  submission_status: string | null;
+  submitted_at: string | null;
+  score: number | null;
+  feedback: string | null;
+  stars_earned: number;
+  text_answer: string | null;
+  file_original_name: string | null;
+}
+
+export interface StudentHistoryOut {
+  student_id: string;
+  full_name: string;
+  username: string;
+  telegram_username: string | null;
+  level: string | null;
+  group_name: string | null;
+  total_stars: number;
+  total_lightning: number;
+  history: StudentHistoryItem[];
 }
 
 export interface StudentOut {
@@ -81,6 +164,28 @@ export interface Paginated<T> {
   total: number;
   page: number;
   page_size: number;
+  total_pages?: number;
+}
+
+export interface PendingStudentItem {
+  id: string;
+  first_name: string;
+  last_name: string;
+  username: string;
+  telegram_username?: string | null;
+  group_id?: string | null;
+  group_name?: string | null;
+  english_level?: string | null;
+  approval_status: string;
+  created_at?: string | null;
+}
+
+export interface PaginatedPendingStudents {
+  items: PendingStudentItem[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
 }
 
 export interface VocabWordItem {
@@ -146,6 +251,25 @@ export interface GradeOut {
   graded_at: string;
 }
 
+export interface SubmissionCorrectionOut {
+  id: string;
+  submission_id: string;
+  teacher_id: string;
+  selected_text: string;
+  correction: string;
+  comment?: string | null;
+  error_type?: string | null;
+  created_at: string;
+}
+
+export interface SubmissionCommentOut {
+  id: string;
+  submission_id: string;
+  teacher_id: string;
+  comment: string;
+  created_at: string;
+}
+
 export interface SubmissionOut {
   id: string;
   assignment_id: string;
@@ -158,6 +282,8 @@ export interface SubmissionOut {
   status: "submitted" | "late" | "graded";
   submitted_at: string;
   grade: GradeOut | null;
+  corrections?: SubmissionCorrectionOut[];
+  comments?: SubmissionCommentOut[];
 }
 
 export interface TeacherDashboard {

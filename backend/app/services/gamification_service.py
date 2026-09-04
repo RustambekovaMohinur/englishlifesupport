@@ -152,6 +152,42 @@ async def award_xp(
     return True
 
 
+async def award_lightning(
+    db: AsyncSession,
+    student_id: uuid.UUID,
+    assignment_id: uuid.UUID,
+) -> bool:
+    """
+    Idempotently awards exactly 1 ⚡ lightning when a student reaches 100% completion on an assignment.
+    Records an Achievement with badge_key 'lightning_<assignment_id>' to guarantee idempotency across re-submissions, refreshes, or retries.
+    """
+    badge_key = f"lightning_{assignment_id}"
+    existing = await db.execute(
+        select(Achievement).where(
+            Achievement.student_id == student_id,
+            Achievement.badge_key == badge_key,
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        return False
+
+    ach = Achievement(
+        student_id=student_id,
+        badge_key=badge_key,
+        title="Lightning Strike",
+        description=f"Completed assignment 100%!",
+        icon="⚡",
+        unlocked_at=utcnow(),
+    )
+    db.add(ach)
+
+    # Increment student's total_lightning count
+    student = (await db.execute(select(StudentProfile).where(StudentProfile.id == student_id))).scalar_one()
+    student.total_lightning = (getattr(student, "total_lightning", 0) or 0) + 1
+    await db.flush()
+    return True
+
+
 async def unlock_achievement(
     db: AsyncSession,
     student_id: uuid.UUID,

@@ -13,7 +13,7 @@ interface AuthContextValue {
     fullNameOrData: string | { firstName: string; lastName: string; telegram: string; groupId: string },
     phone?: string,
     groupId?: string
-  ) => Promise<CurrentUser>;
+  ) => Promise<CurrentUser | null>;
   logout: () => Promise<void>;
 }
 
@@ -52,10 +52,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     phone?: string,
     groupId?: string
   ) => {
-    await authService.register(username, password, fullNameOrData, phone, groupId);
-    const me = await authService.fetchCurrentUser();
-    setUser(me);
-    return me;
+    const res = await authService.register(username, password, fullNameOrData, phone, groupId);
+    if (res.access_token) {
+      const me = await authService.fetchCurrentUser();
+      setUser(me);
+      return me;
+    }
+    return null;
   };
 
   const logout = async () => {

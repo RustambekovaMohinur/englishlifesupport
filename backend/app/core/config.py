@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     # Uploads
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE_MB: int = 10
+    AUDIO_MAX_SIZE_MB: int = 20
 
     # App
     ENVIRONMENT: str = "development"

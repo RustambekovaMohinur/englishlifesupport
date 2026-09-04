@@ -8,6 +8,7 @@ import {
   updateMyUnifiedProfile,
   uploadMyAvatar,
 } from "@/services/lmsService";
+import { getFileUrl } from "@/services/api";
 import { LoadingRows, StatCard } from "@/components/ui";
 import { UserProfileOut } from "@/types";
 
@@ -173,7 +174,7 @@ export default function TeacherProfilePage() {
             <div className="relative">
               {profile.avatar_url ? (
                 <img
-                  src={profile.avatar_url}
+                  src={getFileUrl(profile.avatar_url)}
                   alt={profile.full_name}
                   className="h-24 w-24 rounded-full border-2 border-brand-100 object-cover shadow-sm"
                 />

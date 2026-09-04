@@ -12,6 +12,12 @@ class UserRole(str, enum.Enum):
     STUDENT = "student"
 
 
+class ApprovalStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 class User(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
@@ -23,6 +29,12 @@ class User(UUIDPKMixin, TimestampMixin, Base):
         index=True,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    approval_status: Mapped[ApprovalStatus] = mapped_column(
+        Enum(ApprovalStatus, name="approval_status", values_callable=lambda x: [e.value for e in x]),
+        default=ApprovalStatus.APPROVED,
+        nullable=False,
+        index=True,
+    )
     # Global unique username (case‑insensitive)
     username: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
 

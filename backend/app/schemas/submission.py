@@ -14,6 +14,40 @@ class GradeOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SubmissionCorrectionCreate(BaseModel):
+    selected_text: str = Field(min_length=1)
+    correction: str = Field(min_length=1)
+    comment: str | None = None
+    error_type: str | None = Field(default=None, max_length=50)
+
+
+class SubmissionCorrectionOut(BaseModel):
+    id: uuid.UUID
+    submission_id: uuid.UUID
+    teacher_id: uuid.UUID
+    selected_text: str
+    correction: str
+    comment: str | None = None
+    error_type: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SubmissionCommentCreate(BaseModel):
+    comment: str = Field(min_length=1, max_length=2000)
+
+
+class SubmissionCommentOut(BaseModel):
+    id: uuid.UUID
+    submission_id: uuid.UUID
+    teacher_id: uuid.UUID
+    comment: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class SubmissionOut(BaseModel):
     id: uuid.UUID
     assignment_id: uuid.UUID
@@ -26,6 +60,8 @@ class SubmissionOut(BaseModel):
     status: str
     submitted_at: datetime
     grade: GradeOut | None = None
+    corrections: list[SubmissionCorrectionOut] = []
+    comments: list[SubmissionCommentOut] = []
 
     model_config = {"from_attributes": True}
 
@@ -40,4 +76,5 @@ class PaginatedSubmissions(BaseModel):
 class GradeCreate(BaseModel):
     score: int = Field(ge=0, le=10)
     feedback: str | None = Field(default=None, max_length=2000)
-    stars: int = Field(ge=2, le=5)
+    stars: int = Field(ge=0, le=100, default=5)
+

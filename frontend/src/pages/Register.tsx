@@ -29,6 +29,10 @@ export default function RegisterPage() {
       .finally(() => setIsLoadingGroups(false));
   }, []);
 
+  const [isSubmittedPending, setIsSubmittedPending] = useState(false);
+
+  const selectedGroup = groups.find((g) => g.id === groupId);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!groupId) {
@@ -56,15 +60,53 @@ export default function RegisterPage() {
         telegram: telegram.trim(),
         groupId,
       });
-      toast.success("Student account created!");
-      navigate("/student");
-    } catch (err) {
+      setIsSubmittedPending(true);
+      toast.success("Request sent to your teacher!");
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
       const message =
-        err instanceof AxiosError ? err.response?.data?.detail ?? "Registration failed" : "Something went wrong";
-      toast.error(typeof message === "string" ? message : "Please check your details and try again");
+        typeof detail === "string"
+          ? detail
+          : Array.isArray(detail) && detail[0]?.msg
+          ? detail[0].msg
+          : "Registration failed. Please check your details.";
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  if (isSubmittedPending) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4 py-10">
+        <div className="w-full max-w-md card text-center space-y-4 p-8">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-3xl text-amber-600">
+            ⏳
+          </div>
+          <h2 className="text-xl font-bold text-neutral-900">Registration Submitted</h2>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
+            Status: 🟡 Pending approval
+          </div>
+          <p className="text-sm text-neutral-700 font-medium">
+            Registration submitted. Your teacher needs to approve your account before you can access English Life.
+          </p>
+          <div className="rounded-xl bg-neutral-50 p-4 text-xs text-neutral-600 border border-neutral-200 text-left space-y-1">
+            <p>
+              Selected Group: <span className="font-semibold text-neutral-900">{selectedGroup?.name}</span>
+            </p>
+            <p>
+              Level: <span className="font-semibold text-brand-600 capitalize">{selectedGroup?.english_level.replace("_", " ")}</span>
+            </p>
+            <p className="pt-1 text-neutral-500 text-[11px]">
+              Once your teacher approves your registration, you can sign in to view your dashboard, tasks, and start earning stars and lightning.
+            </p>
+          </div>
+          <Link to="/login" className="btn-primary inline-block w-full text-center">
+            Back to Sign In
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -162,6 +204,14 @@ export default function RegisterPage() {
                 ))
               )}
             </select>
+            {selectedGroup && (
+              <div className="mt-2 rounded-md bg-brand-50 border border-brand-200 px-3 py-2 text-xs flex items-center justify-between">
+                <span className="text-neutral-600">Assigned English Level:</span>
+                <span className="font-semibold text-brand-700 capitalize">
+                  {selectedGroup.english_level.replace("_", " ")}
+                </span>
+              </div>
+            )}
           </div>
 
           <button type="submit" disabled={isSubmitting || !groupId} className="btn-primary w-full">

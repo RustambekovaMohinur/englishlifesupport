@@ -3,10 +3,16 @@ import {
   AssignmentForStudent,
   AssignmentOut,
   Group,
+  GroupDetailOut,
   Paginated,
+  PaginatedPendingStudents,
+  PendingStudentItem,
   StudentDashboard,
+  StudentHistoryOut,
   StudentListItem,
   StudentOut,
+  SubmissionCommentOut,
+  SubmissionCorrectionOut,
   SubmissionOut,
   TeacherDashboard,
   TeacherProfileOut,
@@ -23,12 +29,23 @@ export interface StudentQuery {
   search?: string;
   group_id?: string;
   is_active?: boolean;
+  approval_status?: string;
   page?: number;
   page_size?: number;
 }
 export const listStudents = (params: StudentQuery) =>
   api.get<Paginated<StudentListItem>>("/students", { params }).then((r) => r.data);
+export const listPendingStudents = (params?: { page?: number; page_size?: number }) =>
+  api.get<PaginatedPendingStudents>("/students/pending", { params }).then((r) => r.data);
+export const approveStudent = (student_id: string) =>
+  api.post<{ success: boolean; message: string; student: any }>(`/students/${student_id}/approve`).then((r) => r.data);
+export const rejectStudent = (student_id: string) =>
+  api.post<{ success: boolean; message: string; student: any }>(`/students/${student_id}/reject`).then((r) => r.data);
+export const handleStudentApproval = (student_id: string, action: "approve" | "reject") =>
+  action === "approve" ? approveStudent(student_id) : rejectStudent(student_id);
 export const getStudent = (id: string) => api.get<StudentOut>(`/students/${id}`).then((r) => r.data);
+export const getStudentHistory = (student_id: string) =>
+  api.get<StudentHistoryOut>(`/students/${student_id}/history`).then((r) => r.data);
 export const getMyStudentProfile = () => api.get<StudentOut>("/students/me").then((r) => r.data);
 export const updateStudent = (id: string, body: Partial<{ full_name: string; phone: string; group_id: string | null }>) =>
   api.patch<StudentOut>(`/students/${id}`, body).then((r) => r.data);
@@ -39,6 +56,8 @@ export const setStudentStatus = (id: string, is_active: boolean) =>
 // --- Groups ---
 export const listGroups = (include_archived: boolean = false) =>
   api.get<Group[]>("/groups", { params: { include_archived } }).then((r) => r.data);
+export const getGroupDetail = (group_id: string) =>
+  api.get<GroupDetailOut>(`/groups/${group_id}/detail`).then((r) => r.data);
 export const createGroup = (body: { name: string; english_level: string; schedule?: string }) =>
   api.post<Group>("/groups", body).then((r) => r.data);
 export const updateGroup = (id: string, body: Partial<{ name: string; english_level: string; schedule: string; is_active: boolean }>) =>
@@ -58,9 +77,7 @@ export const updateMyUnifiedProfile = (body: UserProfileUpdate) => api.patch<Use
 export const uploadMyAvatar = (file: File) => {
   const formData = new FormData();
   formData.append("file", file);
-  return api.post<UserProfileOut>("/profile/me/avatar", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  }).then((r) => r.data);
+  return api.post<UserProfileOut>("/profile/me/avatar", formData).then((r) => r.data);
 };
 export const removeMyAvatar = () => api.delete<UserProfileOut>("/profile/me/avatar").then((r) => r.data);
 
@@ -98,6 +115,20 @@ export const submitHomework = (assignment_id: string, text_answer: string, file:
 
 export const gradeSubmission = (id: string, body: { score: number; feedback?: string; stars: number }) =>
   api.post(`/submissions/${id}/grade`, body).then((r) => r.data);
+
+export const addSubmissionCorrection = (
+  id: string,
+  body: { selected_text: string; correction: string; comment?: string; error_type?: string }
+) => api.post<SubmissionCorrectionOut>(`/submissions/${id}/corrections`, body).then((r) => r.data);
+
+export const deleteSubmissionCorrection = (submissionId: string, correctionId: string) =>
+  api.delete(`/submissions/${submissionId}/corrections/${correctionId}`).then((r) => r.data);
+
+export const addSubmissionComment = (id: string, body: { comment: string }) =>
+  api.post<SubmissionCommentOut>(`/submissions/${id}/comments`, body).then((r) => r.data);
+
+export const deleteSubmissionComment = (submissionId: string, commentId: string) =>
+  api.delete(`/submissions/${submissionId}/comments/${commentId}`).then((r) => r.data);
 
 // --- Gamification & Sequential Tasks ---
 import {

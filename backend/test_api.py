@@ -110,8 +110,6 @@ def test_full_workflow():
             "group_id": group_a_id
         })
     assert res.status_code == 201, f"Student A registration failed: {res.text}"
-    student_a_tokens = res.json()
-    student_a_headers = {"Authorization": f"Bearer {student_a_tokens['access_token']}"}
 
     student_b_user = f"student_b_{uuid.uuid4().hex[:4]}"
     res = requests.post(f"{BASE_URL}/api/auth/register", json={
@@ -131,10 +129,24 @@ def test_full_workflow():
             "group_id": group_b_id
         })
     assert res.status_code == 201, f"Student B registration failed: {res.text}"
-    student_b_tokens = res.json()
+
+    # Teacher approves both students
+    pending_res = requests.get(f"{BASE_URL}/api/students/pending", headers=teacher_headers).json()
+    pending = pending_res.get("items", pending_res) if isinstance(pending_res, dict) else pending_res
+    for p in pending:
+        if p["username"] in (student_a_user, student_b_user):
+            requests.post(f"{BASE_URL}/api/students/{p['id']}/approval", headers=teacher_headers, json={"action": "approve"})
+
+    # Login approved students to get active tokens
+    log_a = requests.post(f"{BASE_URL}/api/auth/login", json={"username": student_a_user, "password": "Stud3ntPass!"})
+    student_a_tokens = log_a.json()
+    student_a_headers = {"Authorization": f"Bearer {student_a_tokens['access_token']}"}
+
+    log_b = requests.post(f"{BASE_URL}/api/auth/login", json={"username": student_b_user, "password": "Stud3ntPass!"})
+    student_b_tokens = log_b.json()
     student_b_headers = {"Authorization": f"Bearer {student_b_tokens['access_token']}"}
 
-    print("[OK] Student A (Group A) and Student B (Group B) registered successfully.")
+    print("[OK] Student A (Group A) and Student B (Group B) registered and approved successfully.")
 
     # 5. Create Assignments with Homework File and Vocabulary CSV
     print("\n5. Testing Assignment Creation (Draft, Published, Files, Vocab CSV)...")

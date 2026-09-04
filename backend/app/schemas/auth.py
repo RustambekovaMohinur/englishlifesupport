@@ -72,6 +72,13 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class RegisterResponse(BaseModel):
+    status: str = "pending"
+    message: str = "Your request has been sent to your teacher. Access will be granted once approved."
+    access_token: str | None = None
+    refresh_token: str | None = None
+
+
 class AccessTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

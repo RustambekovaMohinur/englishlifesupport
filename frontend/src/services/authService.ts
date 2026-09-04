@@ -44,7 +44,9 @@ export async function register(
   }
 
   const { data } = await api.post("/auth/register", payload);
-  tokenStorage.setTokens(data.access_token, data.refresh_token);
+  if (data.access_token) {
+    tokenStorage.setTokens(data.access_token, data.refresh_token);
+  }
   return data;
 }
 

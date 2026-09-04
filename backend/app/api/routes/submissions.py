@@ -12,11 +12,26 @@ from app.db.session import get_db
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.grade import Grade
 from app.models.student import StudentProfile
-from app.models.submission import Submission, SubmissionStatus
+from app.models.submission import (
+    Submission,
+    SubmissionComment,
+    SubmissionCorrection,
+    SubmissionStatus,
+)
 from app.models.user import User, UserRole
 from app.models.gamification import StarTransactionReason
-from app.schemas.submission import GradeCreate, GradeOut, PaginatedSubmissions, SubmissionOut
+from app.schemas.submission import (
+    GradeCreate,
+    GradeOut,
+    PaginatedSubmissions,
+    SubmissionCommentCreate,
+    SubmissionCommentOut,
+    SubmissionCorrectionCreate,
+    SubmissionCorrectionOut,
+    SubmissionOut,
+)
 from app.services.gamification_service import (
+    award_lightning,
     award_stars,
     award_xp,
     check_and_award_perfect_week,
@@ -26,7 +41,7 @@ from app.services.gamification_service import (
     update_student_streak,
 )
 from app.utils.datetimes import as_utc, utcnow
-from app.utils.files import resolve_submission_file, save_submission_file
+from app.utils.files import resolve_submission_file, resolve_submission_file_async, save_submission_file
 
 router = APIRouter(prefix="/api/submissions", tags=["submissions"])
 
@@ -53,6 +68,29 @@ def _submission_to_out(sub: Submission) -> SubmissionOut:
             stars=sub.grade.stars,
             graded_at=sub.grade.graded_at,
         )
+    corrections_out = [
+        SubmissionCorrectionOut(
+            id=c.id,
+            submission_id=c.submission_id,
+            teacher_id=c.teacher_id,
+            selected_text=c.selected_text,
+            correction=c.correction,
+            comment=c.comment,
+            error_type=c.error_type,
+            created_at=c.created_at,
+        )
+        for c in (getattr(sub, "corrections", None) or [])
+    ]
+    comments_out = [
+        SubmissionCommentOut(
+            id=c.id,
+            submission_id=c.submission_id,
+            teacher_id=c.teacher_id,
+            comment=c.comment,
+            created_at=c.created_at,
+        )
+        for c in (getattr(sub, "comments", None) or [])
+    ]
     return SubmissionOut(
         id=sub.id,
         assignment_id=sub.assignment_id,
@@ -65,6 +103,8 @@ def _submission_to_out(sub: Submission) -> SubmissionOut:
         status=sub.status.value,
         submitted_at=sub.submitted_at,
         grade=grade_out,
+        corrections=corrections_out,
+        comments=comments_out,
     )
 
 
@@ -121,7 +161,7 @@ async def submit_homework(
     file_size = existing.file_size_bytes if existing else None
 
     if file is not None:
-        file_path, file_original_name, file_content_type, file_size = await save_submission_file(file, profile.id)
+        file_path, file_original_name, file_content_type, file_size = await save_submission_file(file, profile.id, db=db)
 
     is_late = as_utc(assignment.deadline) < now
     submission_status = SubmissionStatus.LATE if is_late else SubmissionStatus.SUBMITTED
@@ -183,6 +223,12 @@ async def submit_homework(
             reference_id=str(assignment_id),
             description=f"XP for completing '{assignment.title}'",
         )
+        # 100% completion awards 1 ⚡ lightning (idempotent, never duplicates)
+        await award_lightning(
+            db,
+            student_id=profile.id,
+            assignment_id=assignment_id,
+        )
         # Unlock assignment completion achievement
         await unlock_achievement(
             db,
@@ -223,7 +269,13 @@ async def submit_homework(
     await db.commit()
     result = await db.execute(
         select(Submission)
-        .options(selectinload(Submission.grade), selectinload(Submission.assignment), selectinload(Submission.student))
+        .options(
+            selectinload(Submission.grade),
+            selectinload(Submission.assignment),
+            selectinload(Submission.student),
+            selectinload(Submission.corrections),
+            selectinload(Submission.comments),
+        )
         .where(Submission.id == submission.id)
     )
     return _submission_to_out(result.scalar_one())
@@ -240,7 +292,13 @@ async def list_submissions(
 ):
     query = (
         select(Submission)
-        .options(selectinload(Submission.grade), selectinload(Submission.assignment), selectinload(Submission.student))
+        .options(
+            selectinload(Submission.grade),
+            selectinload(Submission.assignment),
+            selectinload(Submission.student),
+            selectinload(Submission.corrections),
+            selectinload(Submission.comments),
+        )
         .join(Assignment, Submission.assignment_id == Assignment.id)
     )
     if group_id:
@@ -268,7 +326,13 @@ async def list_my_submissions(
 ):
     query = (
         select(Submission)
-        .options(selectinload(Submission.grade), selectinload(Submission.assignment), selectinload(Submission.student))
+        .options(
+            selectinload(Submission.grade),
+            selectinload(Submission.assignment),
+            selectinload(Submission.student),
+            selectinload(Submission.corrections),
+            selectinload(Submission.comments),
+        )
         .where(Submission.student_id == profile.id)
         .order_by(Submission.submitted_at.desc())
     )
@@ -279,7 +343,13 @@ async def list_my_submissions(
 async def _get_submission_or_404(submission_id: uuid.UUID, db: AsyncSession) -> Submission:
     result = await db.execute(
         select(Submission)
-        .options(selectinload(Submission.grade), selectinload(Submission.assignment), selectinload(Submission.student))
+        .options(
+            selectinload(Submission.grade),
+            selectinload(Submission.assignment),
+            selectinload(Submission.student),
+            selectinload(Submission.corrections),
+            selectinload(Submission.comments),
+        )
         .where(Submission.id == submission_id)
     )
     submission = result.scalar_one_or_none()
@@ -316,7 +386,7 @@ async def download_submission_file(
     if not submission.file_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This submission has no file")
 
-    absolute_path = resolve_submission_file(submission.file_path)
+    absolute_path = await resolve_submission_file_async(submission.file_path, db=db, fallback_name=submission.file_original_name)
     return FileResponse(
         path=absolute_path,
         media_type=submission.file_content_type or "application/octet-stream",
@@ -373,6 +443,113 @@ async def grade_submission(
     ).scalar_one()
     student.total_stars = int(total_stars)
 
+    # If grade score is 10/10 (100%), ensure lightning is awarded idempotently
+    if grade.score >= 10:
+        await award_lightning(
+            db,
+            student_id=submission.student_id,
+            assignment_id=submission.assignment_id,
+        )
+
     await db.commit()
     await db.refresh(grade)
     return GradeOut(id=grade.id, score=grade.score, feedback=grade.feedback, stars=grade.stars, graded_at=grade.graded_at)
+
+
+@router.post("/{submission_id}/corrections", response_model=SubmissionCorrectionOut, dependencies=[Depends(require_teacher)])
+async def add_submission_correction(
+    submission_id: uuid.UUID,
+    body: SubmissionCorrectionCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    submission = await _get_submission_or_404(submission_id, db)
+    corr = SubmissionCorrection(
+        submission_id=submission.id,
+        teacher_id=current_user.id,
+        selected_text=body.selected_text,
+        correction=body.correction,
+        comment=body.comment,
+        error_type=body.error_type,
+    )
+    db.add(corr)
+    await db.commit()
+    await db.refresh(corr)
+    return SubmissionCorrectionOut(
+        id=corr.id,
+        submission_id=corr.submission_id,
+        teacher_id=corr.teacher_id,
+        selected_text=corr.selected_text,
+        correction=corr.correction,
+        comment=corr.comment,
+        error_type=corr.error_type,
+        created_at=corr.created_at,
+    )
+
+
+@router.delete("/{submission_id}/corrections/{correction_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_teacher)])
+async def delete_submission_correction(
+    submission_id: uuid.UUID,
+    correction_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    corr = (
+        await db.execute(
+            select(SubmissionCorrection).where(
+                SubmissionCorrection.id == correction_id,
+                SubmissionCorrection.submission_id == submission_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not corr:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Correction not found")
+    await db.delete(corr)
+    await db.commit()
+
+
+@router.post("/{submission_id}/comments", response_model=SubmissionCommentOut, dependencies=[Depends(require_teacher)])
+async def add_submission_comment(
+    submission_id: uuid.UUID,
+    body: SubmissionCommentCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    submission = await _get_submission_or_404(submission_id, db)
+    comm = SubmissionComment(
+        submission_id=submission.id,
+        teacher_id=current_user.id,
+        comment=body.comment,
+    )
+    db.add(comm)
+    await db.commit()
+    await db.refresh(comm)
+    return SubmissionCommentOut(
+        id=comm.id,
+        submission_id=comm.submission_id,
+        teacher_id=comm.teacher_id,
+        comment=comm.comment,
+        created_at=comm.created_at,
+    )
+
+
+@router.delete("/{submission_id}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_teacher)])
+async def delete_submission_comment(
+    submission_id: uuid.UUID,
+    comment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    comm = (
+        await db.execute(
+            select(SubmissionComment).where(
+                SubmissionComment.id == comment_id,
+                SubmissionComment.submission_id == submission_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not comm:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
+    await db.delete(comm)
+    await db.commit()
+

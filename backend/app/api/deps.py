@@ -19,13 +19,13 @@ from app.core.security import decode_token
 from app.db.session import get_db
 from app.models.student import StudentProfile
 from app.models.teacher import TeacherProfile
-from app.models.user import User, UserRole
+from app.models.user import ApprovalStatus, User, UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 CREDENTIALS_EXCEPTION = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Could not validate credentials",
+    detail={"code": "AUTHENTICATION_REQUIRED", "message": "Authentication required."},
     headers={"WWW-Authenticate": "Bearer"},
 )
 
@@ -60,13 +60,27 @@ async def get_current_user(
         raise CREDENTIALS_EXCEPTION
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
+    if hasattr(user, "approval_status") and user.approval_status != ApprovalStatus.APPROVED:
+        if user.approval_status == ApprovalStatus.PENDING:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "ACCOUNT_PENDING_APPROVAL", "message": "Your account is waiting for teacher approval."},
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "ACCOUNT_REJECTED", "message": "Your account has been rejected."},
+            )
 
     return user
 
 
 async def require_teacher(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != UserRole.TEACHER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teacher access required")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "TEACHER_REQUIRED", "message": "Teacher access required."},
+        )
     return current_user
 
 

@@ -42,12 +42,12 @@ export default function StudentDashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* English Life Header Banner */}
+      {/* Asadbek Khasanov Header Banner */}
       <div className="card bg-gradient-to-r from-blue-700 via-indigo-700 to-brand-600 text-white shadow-lg">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider bg-white/15 px-2.5 py-1 rounded-full text-blue-100">
-              English Life LMS
+              Asadbek Khasanov Learning Center
             </span>
             <h1 className="text-2xl md:text-3xl font-bold mt-2">{getGreeting(data.full_name)}</h1>
             <p className="mt-1 text-sm text-blue-100">

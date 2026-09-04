@@ -27,6 +27,7 @@ from app.utils.datetimes import as_utc, utcnow
 from app.utils.files import (
     parse_vocab_csv,
     resolve_submission_file,
+    resolve_submission_file_async,
     save_assignment_file,
 )
 
@@ -134,7 +135,7 @@ async def create_assignment(
     file_size = None
 
     if file is not None and file.filename:
-        file_path, file_orig_name, file_content_type, file_size = await save_assignment_file(file, group_id)
+        file_path, file_orig_name, file_content_type, file_size = await save_assignment_file(file, group_id, db=db)
 
     assignment = Assignment(
         group_id=group_id,
@@ -336,7 +337,7 @@ async def download_assignment_file(
         if assignment.status != AssignmentStatus.PUBLISHED:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
 
-    path = resolve_submission_file(assignment.file_path)
+    path = await resolve_submission_file_async(assignment.file_path, db=db, fallback_name=assignment.file_original_name)
     return FileResponse(
         path=path,
         media_type=assignment.file_content_type or "application/octet-stream",

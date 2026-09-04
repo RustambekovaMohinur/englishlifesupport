@@ -27,7 +27,7 @@ from app.models.gamification import (
 from app.models.group import Group
 from app.models.student import StudentProfile
 from app.models.submission import Submission
-from app.models.user import User, UserRole
+from app.models.user import ApprovalStatus, User, UserRole
 from app.schemas.gamification import (
     AchievementOut,
     FreePassStatus,
@@ -168,59 +168,67 @@ async def use_student_free_pass(
 @router.get("/leaderboard", response_model=WeeklyLeaderboardOut)
 async def get_weekly_leaderboard(
     group_id: uuid.UUID | None = Query(default=None),
+    scope: str | None = Query(default=None, description="group or global"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Returns weekly leaderboard for the group from real PostgreSQL data.
+    Returns weekly leaderboard for the group or global from real PostgreSQL data.
     Computes weekly XP, weekly stars, streaks, and completion %.
     Shows current student's own rank even outside top 3.
+    Pending and rejected students are strictly excluded.
     """
+    is_global = scope == "global"
     target_group_id = group_id
     current_student_id = None
     if current_user.role == UserRole.STUDENT:
         student_profile = (
             await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
         ).scalar_one_or_none()
-        if not student_profile or not student_profile.group_id:
-            return WeeklyLeaderboardOut(week_key=f"{utcnow().year}-W{utcnow().isocalendar()[1]}", entries=[])
-        target_group_id = student_profile.group_id
-        current_student_id = student_profile.id
+        if student_profile:
+            current_student_id = student_profile.id
+            if not is_global and not target_group_id:
+                if not student_profile.group_id:
+                    return WeeklyLeaderboardOut(week_key=f"{utcnow().year}-W{utcnow().isocalendar()[1]}", entries=[])
+                target_group_id = student_profile.group_id
 
-    if not target_group_id:
-        first_group = (await db.execute(select(Group).where(Group.is_active.is_(True)).limit(1))).scalar_one_or_none()
-        if not first_group:
-            return WeeklyLeaderboardOut(week_key=f"{utcnow().year}-W{utcnow().isocalendar()[1]}", entries=[])
-        target_group_id = first_group.id
+    group_name = "Global Leaderboard" if is_global else None
+    if not is_global:
+        if not target_group_id:
+            first_group = (await db.execute(select(Group).where(Group.is_active.is_(True)).limit(1))).scalar_one_or_none()
+            if not first_group:
+                return WeeklyLeaderboardOut(week_key=f"{utcnow().year}-W{utcnow().isocalendar()[1]}", entries=[])
+            target_group_id = first_group.id
 
-    group = (await db.execute(select(Group).where(Group.id == target_group_id))).scalar_one_or_none()
-    group_name = group.name if group else None
+        group = (await db.execute(select(Group).where(Group.id == target_group_id))).scalar_one_or_none()
+        group_name = group.name if group else None
 
     now = utcnow()
     week_start = now - timedelta(days=now.weekday())
     week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
     week_key = f"{now.year}-W{now.isocalendar()[1]}"
 
-    # Fetch all students in group
-    students = (
-        (
-            await db.execute(
-                select(StudentProfile)
-                .where(StudentProfile.group_id == target_group_id)
-            )
+    # Fetch all APPROVED students in group or globally
+    students_query = (
+        select(StudentProfile)
+        .join(User, StudentProfile.user_id == User.id)
+        .where(
+            User.approval_status == ApprovalStatus.APPROVED,
+            User.role == UserRole.STUDENT,
+            User.is_active.is_(True),
         )
-        .scalars()
-        .all()
     )
+    if not is_global and target_group_id:
+        students_query = students_query.where(StudentProfile.group_id == target_group_id)
 
-    # Published assignments for group
-    total_assignments = (
-        await db.execute(
-            select(func.count())
-            .select_from(Assignment)
-            .where(Assignment.group_id == target_group_id, Assignment.status == AssignmentStatus.PUBLISHED)
-        )
-    ).scalar_one()
+    students = (await db.execute(students_query)).scalars().all()
+
+    # Published assignments for group or global
+    total_assign_query = select(func.count()).select_from(Assignment).where(Assignment.status == AssignmentStatus.PUBLISHED)
+    if not is_global and target_group_id:
+        total_assign_query = total_assign_query.where(Assignment.group_id == target_group_id)
+
+    total_assignments = (await db.execute(total_assign_query)).scalar_one()
 
     entries_data = []
     for s in students:

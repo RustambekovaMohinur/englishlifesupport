@@ -12,7 +12,7 @@ class Grade(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "grades"
     __table_args__ = (
         CheckConstraint("score >= 0 AND score <= 10", name="ck_grade_score_range"),
-        CheckConstraint("stars >= 2 AND stars <= 5", name="ck_grade_stars_range"),
+        CheckConstraint("stars >= 0 AND stars <= 100", name="ck_grade_stars_range"),
     )
 
     submission_id: Mapped[uuid.UUID] = mapped_column(

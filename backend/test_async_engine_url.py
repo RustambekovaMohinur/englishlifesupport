@@ -1,27 +1,19 @@
-import importlib
-import os
+from app.db.session import _build_async_engine_url
 
-def _reload_session():
-    """Reload the session module after changing environment vars."""
-    import app.db.session as sess
-    importlib.reload(sess)
-    return sess
 
-def test_engine_strips_sslmode_and_enables_ssl(monkeypatch):
+def test_engine_strips_sslmode_and_enables_ssl():
     url = "postgresql+asyncpg://user:pass@host:5432/db?sslmode=require&channel_binding=require"
-    monkeypatch.setenv("ASYNC_DATABASE_URL", url)
-    sess = _reload_session()
-    engine_url = str(sess.engine.url)
+    clean_url, connect_args = _build_async_engine_url(url)
+    engine_url = str(clean_url)
     assert "sslmode" not in engine_url
     assert "channel_binding" not in engine_url
-    # ensure connect_args contain ssl=True
-    assert getattr(sess, "connect_args", {}) == {"ssl": True}
+    assert connect_args == {"ssl": True}
 
-def test_engine_without_sslmode_does_not_enable_ssl(monkeypatch):
+
+def test_engine_without_sslmode_does_not_enable_ssl():
     url = "postgresql+asyncpg://user:pass@host:5432/db"
-    monkeypatch.setenv("ASYNC_DATABASE_URL", url)
-    sess = _reload_session()
-    engine_url = str(sess.engine.url)
+    clean_url, connect_args = _build_async_engine_url(url)
+    engine_url = str(clean_url)
     assert "sslmode" not in engine_url
-    # no connect_args set
-    assert getattr(sess, "connect_args", {}) == {}
+    assert connect_args == {}
+

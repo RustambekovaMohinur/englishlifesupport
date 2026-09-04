@@ -11,7 +11,12 @@ from app.models.teacher import TeacherProfile  # noqa: F401
 from app.models.group import Group, EnglishLevel  # noqa: F401
 from app.models.student import StudentProfile  # noqa: F401
 from app.models.assignment import Assignment  # noqa: F401
-from app.models.submission import Submission, SubmissionStatus  # noqa: F401
+from app.models.submission import (  # noqa: F401
+    Submission,
+    SubmissionComment,
+    SubmissionCorrection,
+    SubmissionStatus,
+)
 from app.models.grade import Grade  # noqa: F401
 from app.models.vocabulary import (  # noqa: F401
     VocabularyAnswer,
@@ -43,6 +48,8 @@ __all__ = [
     "Assignment",
     "Submission",
     "SubmissionStatus",
+    "SubmissionCorrection",
+    "SubmissionComment",
     "Grade",
     "VocabularyAssignment",
     "VocabularyWord",

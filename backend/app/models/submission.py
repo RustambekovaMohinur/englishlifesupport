@@ -50,3 +50,48 @@ class Submission(UUIDPKMixin, TimestampMixin, Base):
     grade: Mapped["Grade | None"] = relationship(
         back_populates="submission", uselist=False, cascade="all, delete-orphan"
     )
+    corrections: Mapped[list["SubmissionCorrection"]] = relationship(
+        back_populates="submission",
+        cascade="all, delete-orphan",
+        order_by="SubmissionCorrection.created_at",
+        lazy="selectin",
+    )
+    comments: Mapped[list["SubmissionComment"]] = relationship(
+        back_populates="submission",
+        cascade="all, delete-orphan",
+        order_by="SubmissionComment.created_at",
+        lazy="selectin",
+    )
+
+
+class SubmissionCorrection(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "submission_corrections"
+
+    submission_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    teacher_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    selected_text: Mapped[str] = mapped_column(Text, nullable=False)
+    correction: Mapped[str] = mapped_column(Text, nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    submission: Mapped["Submission"] = relationship(back_populates="corrections")
+    teacher: Mapped["User"] = relationship()
+
+
+class SubmissionComment(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "submission_comments"
+
+    submission_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    teacher_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    comment: Mapped[str] = mapped_column(Text, nullable=False)
+
+    submission: Mapped["Submission"] = relationship(back_populates="comments")
+    teacher: Mapped["User"] = relationship()
