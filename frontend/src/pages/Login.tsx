@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Logo } from "@/components/ui";
+import { Logo, Modal } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { AxiosError } from "axios";
 import { FaInstagram, FaTelegramPlane } from "react-icons/fa";
@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [forgotModalOpen, setForgotModalOpen] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -44,7 +45,7 @@ export default function LoginPage() {
   }
 
   function handleForgotPassword() {
-    toast("Password recovery via Telegram will be available soon.", { icon: "ℹ️" });
+    setForgotModalOpen(true);
   }
 
   return (
@@ -125,6 +126,39 @@ export default function LoginPage() {
             </a>
           </div>
         </div>
+
+        {/* Forgot Password Dialog */}
+        <Modal open={forgotModalOpen} onClose={() => setForgotModalOpen(false)} title="Forgot Password?">
+          <div className="space-y-4 text-sm text-neutral-600">
+            <p>
+              To protect student accounts and avoid lost passwords, account passwords are managed directly by your teacher.
+            </p>
+            <div className="rounded-xl border border-brand-200 bg-brand-50/70 p-4">
+              <h4 className="font-bold text-brand-900 text-sm">How to reset your password:</h4>
+              <p className="mt-1 text-xs text-brand-800 leading-relaxed">
+                Please contact your teacher <strong className="text-neutral-900">Asadbek Khasanov</strong> directly on Telegram or in your class. Your teacher will immediately set a new temporary password for your account.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2">
+              <a
+                href={import.meta.env.VITE_TELEGRAM_URL || "https://t.me/Khasanov_SK"}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition shadow-xs"
+              >
+                <FaTelegramPlane />
+                <span>Contact on Telegram (@Khasanov_SK)</span>
+              </a>
+              <button
+                type="button"
+                className="btn-secondary text-xs w-full sm:w-auto"
+                onClick={() => setForgotModalOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </div>
   );

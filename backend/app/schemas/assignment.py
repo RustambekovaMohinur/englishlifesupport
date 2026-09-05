@@ -35,6 +35,17 @@ class AssignmentUpdate(BaseModel):
     prerequisite_id: uuid.UUID | None = None
 
 
+class AssignmentImageOut(BaseModel):
+    id: uuid.UUID
+    file_path: str
+    original_name: str
+    file_size: int
+    order_index: int = 0
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class AssignmentOut(BaseModel):
     id: uuid.UUID
     group_id: uuid.UUID
@@ -46,6 +57,7 @@ class AssignmentOut(BaseModel):
     file_url: str | None = None
     file_original_name: str | None = None
     vocab_words: list[VocabWordItem] = []
+    images: list[AssignmentImageOut] = []
     created_at: datetime
     submission_count: int = 0
     order_index: int = 0
@@ -63,6 +75,7 @@ class AssignmentForStudent(BaseModel):
     file_url: str | None = None
     file_original_name: str | None = None
     vocab_words: list[VocabWordItem] = []
+    images: list[AssignmentImageOut] = []
     is_past_deadline: bool
     submission_status: str | None = None  # None if not yet submitted
     score: int | None = None

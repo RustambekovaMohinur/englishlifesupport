@@ -1,13 +1,24 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
-import { EmptyState, LoadingRows, StatusBadge, FileDownloadButton, AuthenticatedAudio } from "@/components/ui";
+import {
+  EmptyState,
+  LoadingRows,
+  StatusBadge,
+  FileDownloadButton,
+  AuthenticatedAudio,
+  AuthenticatedImage,
+  ImageLightbox,
+} from "@/components/ui";
 import { listMySubmissions } from "@/services/lmsService";
 import { SubmissionOut } from "@/types";
 
 export default function StudentSubmissionsPage() {
   const [submissions, setSubmissions] = useState<SubmissionOut[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [selectedImages, setSelectedImages] = useState<{ url: string; name?: string }[]>([]);
 
   useEffect(() => {
     listMySubmissions()
@@ -83,6 +94,44 @@ export default function StudentSubmissionsPage() {
                 </div>
               )}
 
+              {/* Attached images from student */}
+              {s.images && s.images.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+                    Attached Photos ({s.images.length})
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                    {s.images.map((img, idx) => (
+                      <div
+                        key={img.id}
+                        onClick={() => {
+                          setSelectedImages(
+                            (s.images || []).map((item) => ({
+                              url: `/api/submissions/${s.id}/images/${item.id}`,
+                              name: item.original_name,
+                            }))
+                          );
+                          setLightboxIndex(idx);
+                          setLightboxOpen(true);
+                        }}
+                        className="group relative cursor-pointer overflow-hidden rounded border border-neutral-200 aspect-square bg-white hover:shadow-md transition"
+                      >
+                        <AuthenticatedImage
+                          url={`/api/submissions/${s.id}/images/${img.id}`}
+                          alt={img.original_name}
+                          className="h-full w-full object-cover transition group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="text-[10px] font-semibold text-white bg-black/60 px-1.5 py-0.5 rounded">
+                            🔍 View
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Attached file & audio preview */}
               {s.file_url && (
                 <div className="space-y-1 pt-1">
@@ -93,8 +142,9 @@ export default function StudentSubmissionsPage() {
                   >
                     📎 {s.file_original_name ?? "Download submission file"}
                   </FileDownloadButton>
-                  {s.file_original_name && /\.(mp3|wav|ogg|webm)$/i.test(s.file_original_name) && (
-                    <div className="mt-1">
+                  {s.file_original_name && /\.(mp3|wav|ogg|webm|m4a)$/i.test(s.file_original_name) && (
+                    <div className="mt-1 p-2 bg-purple-50 rounded-lg border border-purple-200">
+                      <p className="text-xs font-semibold text-purple-900 mb-1">🎙️ Speaking Voice Recording</p>
                       <AuthenticatedAudio url={s.file_url} className="w-full h-8" />
                     </div>
                   )}
@@ -143,6 +193,13 @@ export default function StudentSubmissionsPage() {
           ))}
         </div>
       )}
+
+      <ImageLightbox
+        isOpen={lightboxOpen}
+        images={selectedImages}
+        initialIndex={lightboxIndex}
+        onClose={() => setLightboxOpen(false)}
+      />
     </div>
   );
 }

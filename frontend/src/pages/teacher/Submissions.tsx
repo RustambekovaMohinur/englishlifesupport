@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
-import { EmptyState, LoadingRows, Modal, StatusBadge, FileDownloadButton, AuthenticatedAudio } from "@/components/ui";
+import {
+  EmptyState,
+  LoadingRows,
+  Modal,
+  StatusBadge,
+  FileDownloadButton,
+  AuthenticatedAudio,
+  AuthenticatedImage,
+  ImageLightbox,
+} from "@/components/ui";
 import {
   addSubmissionComment,
   addSubmissionCorrection,
@@ -167,6 +176,8 @@ function GradeModal({
   const [score, setScore] = useState(8);
   const [stars, setStars] = useState(5);
   const [feedback, setFeedback] = useState("");
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
   // Corrections state
@@ -422,10 +433,45 @@ function GradeModal({
           </div>
         )}
 
+        {/* Attached images from student */}
+        {submission.images && submission.images.length > 0 && (
+          <div className="space-y-2 rounded-lg border border-neutral-200 p-3 bg-neutral-50/50">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-neutral-800 flex items-center gap-1">
+                📸 Submitted Images / Notebook Scans ({submission.images.length})
+              </span>
+              <span className="text-[11px] text-neutral-500">Click to enlarge</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
+              {submission.images.map((img, idx) => (
+                <div
+                  key={img.id}
+                  onClick={() => {
+                    setLightboxIndex(idx);
+                    setLightboxOpen(true);
+                  }}
+                  className="group relative cursor-pointer overflow-hidden rounded-lg border border-neutral-200 bg-white aspect-square hover:shadow-md transition-shadow"
+                >
+                  <AuthenticatedImage
+                    url={`/api/submissions/${submission.id}/images/${img.id}`}
+                    alt={img.original_name}
+                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <span className="text-[11px] font-semibold text-white bg-black/60 px-1.5 py-0.5 rounded">
+                      🔍 View
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Attached file & audio */}
         {submission.file_url && (
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-neutral-800">Attached File</p>
+            <p className="text-sm font-semibold text-neutral-800">Attached File / Voice Recording</p>
             <FileDownloadButton
               url={submission.file_url}
               filename={submission.file_original_name}
@@ -433,8 +479,9 @@ function GradeModal({
             >
               📎 {submission.file_original_name ?? "Download attached file"}
             </FileDownloadButton>
-            {submission.file_original_name && /\.(mp3|wav|ogg|webm)$/i.test(submission.file_original_name) && (
-              <div className="mt-2">
+            {submission.file_original_name && /\.(mp3|wav|ogg|webm|m4a)$/i.test(submission.file_original_name) && (
+              <div className="mt-2 p-2 bg-purple-50 rounded-lg border border-purple-200">
+                <p className="text-xs font-semibold text-purple-900 mb-1">🎙️ Student Voice Audio Recording</p>
                 <AuthenticatedAudio url={submission.file_url} className="w-full h-9" />
               </div>
             )}
@@ -507,27 +554,49 @@ function GradeModal({
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-neutral-700">Stars Awarded (custom)</label>
+                <label className="text-xs font-medium text-neutral-700">Stars Awarded (0–100 ⭐)</label>
                 <span className="text-xs font-bold text-amber-500">{stars} ⭐</span>
               </div>
-              <div className="flex gap-1.5 items-center">
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  className="input flex-1"
-                  value={stars}
-                  onChange={(e) => setStars(Number(e.target.value))}
-                />
-                <div className="flex gap-1">
-                  {[1, 3, 5, 8, 10].map((starPreset) => (
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-1.5 items-center">
+                  <button
+                    type="button"
+                    onClick={() => setStars((s) => Math.max(0, s - 1))}
+                    className="h-9 w-9 rounded-lg border border-neutral-300 bg-white font-bold text-neutral-700 hover:bg-neutral-100 flex items-center justify-center transition"
+                    title="Decrease 1 star"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="input text-center font-semibold"
+                    value={stars}
+                    onChange={(e) => {
+                      const val = Math.min(100, Math.max(0, parseInt(e.target.value || "0", 10)));
+                      setStars(val);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setStars((s) => Math.min(100, s + 1))}
+                    className="h-9 w-9 rounded-lg border border-neutral-300 bg-white font-bold text-neutral-700 hover:bg-neutral-100 flex items-center justify-center transition"
+                    title="Increase 1 star"
+                  >
+                    +
+                  </button>
+                </div>
+                {/* Preset Chips */}
+                <div className="flex flex-wrap gap-1">
+                  {[0, 1, 2, 5, 10, 20].map((starPreset) => (
                     <button
                       key={starPreset}
                       type="button"
                       onClick={() => setStars(starPreset)}
-                      className={`text-xs px-2 py-1.5 rounded border transition ${
+                      className={`text-xs px-2.5 py-1 rounded-md border transition ${
                         stars === starPreset
-                          ? "bg-amber-500 text-white border-amber-600 font-semibold"
+                          ? "bg-amber-500 text-white border-amber-600 font-bold shadow-sm"
                           : "bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100"
                       }`}
                     >
@@ -560,6 +629,16 @@ function GradeModal({
           </button>
         </div>
       </div>
+
+      <ImageLightbox
+        isOpen={lightboxOpen}
+        images={(submission.images || []).map((img) => ({
+          url: `/api/submissions/${submission.id}/images/${img.id}`,
+          name: img.original_name,
+        }))}
+        initialIndex={lightboxIndex}
+        onClose={() => setLightboxOpen(false)}
+      />
     </Modal>
   );
 }

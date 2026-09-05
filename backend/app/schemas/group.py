@@ -10,12 +10,14 @@ class GroupCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     english_level: EnglishLevel
     schedule: str | None = Field(default=None, max_length=255)
+    default_homework_time: str | None = Field(default="20:00", max_length=10)
 
 
 class GroupUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
     english_level: EnglishLevel | None = None
     schedule: str | None = Field(default=None, max_length=255)
+    default_homework_time: str | None = Field(default=None, max_length=10)
     is_active: bool | None = None
 
 
@@ -24,6 +26,7 @@ class GroupOut(BaseModel):
     name: str
     english_level: EnglishLevel
     schedule: str | None
+    default_homework_time: str | None = "20:00"
     is_active: bool
     student_count: int = 0
     created_at: datetime
@@ -72,6 +75,7 @@ class GroupDetailOut(BaseModel):
     name: str
     english_level: EnglishLevel
     schedule: str | None
+    default_homework_time: str | None = "20:00"
     is_active: bool
     student_count: int = 0
     assignments: list[GroupAssignmentHeader] = []

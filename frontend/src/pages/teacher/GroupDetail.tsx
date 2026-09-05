@@ -144,6 +144,10 @@ export default function GroupDetailPage() {
                 <span>{groupDetail.schedule}</span>
               </p>
             )}
+            <p className="mt-1 text-xs text-neutral-500 flex items-center gap-1.5">
+              <span>⏰</span>
+              <span>Default homework due time: <strong className="text-neutral-700">{groupDetail.default_homework_time || "20:00"}</strong></span>
+            </p>
           </div>
 
           {/* Group Progress Summary Pill */}
@@ -481,19 +485,26 @@ function EditGroupModal({
   const [name, setName] = useState(group.name);
   const [level, setLevel] = useState(group.english_level);
   const [schedule, setSchedule] = useState(group.schedule ?? "");
+  const [defaultHomeworkTime, setDefaultHomeworkTime] = useState(group.default_homework_time ?? "20:00");
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setName(group.name);
     setLevel(group.english_level);
     setSchedule(group.schedule ?? "");
+    setDefaultHomeworkTime(group.default_homework_time ?? "20:00");
   }, [group, open]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setIsSaving(true);
     try {
-      await updateGroup(group.id, { name, english_level: level, schedule });
+      await updateGroup(group.id, {
+        name,
+        english_level: level,
+        schedule,
+        default_homework_time: defaultHomeworkTime || "20:00",
+      });
       toast.success("Group updated");
       onSaved();
     } catch (err: any) {
@@ -533,6 +544,18 @@ function EditGroupModal({
             onChange={(e) => setSchedule(e.target.value)}
             placeholder="Mon/Wed/Fri 16:00-17:30"
           />
+        </div>
+        <div>
+          <label className="label">Default Homework Due Time</label>
+          <input
+            type="time"
+            className="input"
+            value={defaultHomeworkTime}
+            onChange={(e) => setDefaultHomeworkTime(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-neutral-400">
+            Auto-fills due time when creating assignments for this group (e.g. 20:00).
+          </p>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-secondary" onClick={onClose}>

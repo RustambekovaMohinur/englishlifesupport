@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { FileDownloadButton, LoadingRows, Modal } from "@/components/ui";
-import { getStudent, getStudentHistory, listSubmissions } from "@/services/lmsService";
+import { getStudent, getStudentHistory, listSubmissions, resetStudentPassword } from "@/services/lmsService";
 import { StudentHistoryOut, StudentOut, SubmissionOut } from "@/types";
 
 interface StudentDetailModalProps {
@@ -14,6 +14,36 @@ export default function StudentDetailModal({ studentId, onClose }: StudentDetail
   const [history, setHistory] = useState<StudentHistoryOut | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionOut[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
+
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!studentId) return;
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      const res = await resetStudentPassword(studentId, newPassword);
+      toast.success(res.message || "Password reset successfully!");
+      setResetModalOpen(false);
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Failed to reset password");
+    } finally {
+      setIsResetting(false);
+    }
+  }
 
   useEffect(() => {
     if (!studentId) {
@@ -89,18 +119,33 @@ export default function StudentDetailModal({ studentId, onClose }: StudentDetail
               </div>
 
               <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-lg font-bold text-neutral-900 truncate">{fullName}</h3>
-                  {username && <span className="text-xs text-neutral-500 font-mono">@{username}</span>}
-                  {profile && (
-                    <span
-                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                        profile.is_active ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
-                      }`}
-                    >
-                      {profile.is_active ? "Active" : "Inactive"}
-                    </span>
-                  )}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg font-bold text-neutral-900 truncate">{fullName}</h3>
+                    {username && <span className="text-xs text-neutral-500 font-mono">@{username}</span>}
+                    {profile && (
+                      <span
+                        className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                          profile.is_active ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                        }`}
+                      >
+                        {profile.is_active ? "Active" : "Inactive"}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewPassword("");
+                      setConfirmPassword("");
+                      setResetModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-xs font-semibold hover:bg-amber-100 transition shadow-xs"
+                    title="Set temporary password for student"
+                  >
+                    <span>🔑</span>
+                    <span>Reset Password</span>
+                  </button>
                 </div>
 
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-600">
@@ -320,6 +365,60 @@ export default function StudentDetailModal({ studentId, onClose }: StudentDetail
           </div>
         </div>
       )}
+
+      {/* Embedded Reset Password Dialog */}
+      <Modal
+        open={resetModalOpen}
+        onClose={() => setResetModalOpen(false)}
+        title={`Reset Password: ${fullName}`}
+      >
+        <form onSubmit={handleResetPassword} className="space-y-4 text-sm">
+          <p className="text-xs text-neutral-500">
+            Enter a temporary password for <strong className="text-neutral-800">{fullName}</strong> (@{username}).
+            Their active sessions will be invalidated and they can login with this password immediately.
+          </p>
+          <div>
+            <label className="label">New Temporary Password *</label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              className="input"
+              placeholder="Minimum 6 characters"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="label">Confirm New Password *</label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              className="input"
+              placeholder="Confirm new password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-3 border-t">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setResetModalOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isResetting}
+              className="btn-primary"
+            >
+              {isResetting ? "Resetting..." : "Set Password"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </Modal>
   );
 }

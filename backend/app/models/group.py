@@ -30,6 +30,7 @@ class Group(UUIDPKMixin, TimestampMixin, Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    default_homework_time: Mapped[str | None] = mapped_column(String(10), nullable=True, default="20:00")
 
     students: Mapped[list["StudentProfile"]] = relationship(back_populates="group")
     assignments: Mapped[list["Assignment"]] = relationship(back_populates="group", cascade="all, delete-orphan")

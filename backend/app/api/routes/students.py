@@ -30,7 +30,21 @@ from app.schemas.student import (
     StudentUpdate,
 )
 
+from pydantic import BaseModel, Field
+from app.core.security import hash_password
+from app.models.refresh_token import RefreshToken
+
 router = APIRouter(prefix="/api/students", tags=["students"])
+
+
+class StudentResetPasswordRequest(BaseModel):
+    new_password: str = Field(min_length=6, max_length=128)
+
+
+class StudentResetPasswordResponse(BaseModel):
+    success: bool = True
+    message: str = "Password reset successfully."
+
 
 
 @router.get("", response_model=PaginatedStudents)
@@ -726,3 +740,55 @@ async def delete_student(student_id: uuid.UUID, db: AsyncSession = Depends(get_d
         await db.delete(profile)
     await db.commit()
     return None
+
+
+@router.post("/{student_id}/reset-password", response_model=StudentResetPasswordResponse, dependencies=[Depends(require_teacher)])
+async def reset_student_password(
+    student_id: uuid.UUID,
+    body: StudentResetPasswordRequest,
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Teacher resets student password directly.
+    Scoped to teacher's group.
+    Hashes new temporary password with Argon2id/bcrypt.
+    Revokes any active refresh tokens for the student.
+    Never exposes or logs plain text passwords.
+    """
+    res = await db.execute(
+        select(StudentProfile, User, Group)
+        .join(User, StudentProfile.user_id == User.id)
+        .outerjoin(Group, StudentProfile.group_id == Group.id)
+        .where(or_(StudentProfile.id == student_id, StudentProfile.user_id == student_id, User.id == student_id))
+    )
+    row = res.first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
+    profile, user, group = row
+
+    is_authorized = group is not None and (
+        group.created_by == current_user.id
+        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+    )
+    if not is_authorized:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this student")
+
+    # Hash new password
+    user.password_hash = hash_password(body.new_password)
+
+    # Invalidate existing refresh tokens for security
+    tokens = (
+        await db.execute(select(RefreshToken).where(RefreshToken.user_id == user.id))
+    ).scalars().all()
+    for t in tokens:
+        t.revoked = True
+
+    await db.commit()
+
+    return StudentResetPasswordResponse(
+        success=True,
+        message="Password reset successfully. Student can now log in with the new password.",
+    )
+

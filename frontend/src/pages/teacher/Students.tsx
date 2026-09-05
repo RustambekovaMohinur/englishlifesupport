@@ -10,6 +10,7 @@ import {
   listPendingStudents,
   listStudents,
   rejectStudent,
+  resetStudentPassword,
   updateStudent,
 } from "@/services/lmsService";
 import { Group, PendingStudentItem, StudentListItem, StudentOut } from "@/types";
@@ -34,6 +35,7 @@ export default function StudentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [editing, setEditing] = useState<StudentListItem | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [resettingStudent, setResettingStudent] = useState<StudentListItem | null>(null);
   const { confirm, ConfirmDialog } = useConfirm();
 
   useEffect(() => {
@@ -370,9 +372,15 @@ export default function StudentsPage() {
                       <td className="py-3 pr-4 text-neutral-500 capitalize">{s.level?.replace("_", " ") ?? "—"}</td>
                       <td className="py-3 pr-4 text-center font-medium text-amber-500">⭐ {s.total_stars}</td>
                       <td className="py-3 pr-4 text-center font-medium text-yellow-500">⚡ {s.total_lightning ?? 0}</td>
-                      <td className="py-3 space-x-3">
+                      <td className="py-3 space-x-2 whitespace-nowrap">
                         <button className="text-sm font-medium text-brand-600 hover:underline" onClick={() => setEditing(s)}>
                           Edit
+                        </button>
+                        <button
+                          className="text-sm font-medium text-amber-600 hover:underline"
+                          onClick={() => setResettingStudent(s)}
+                        >
+                          Reset Pass
                         </button>
                         <button
                           className="text-sm font-medium text-red-600 hover:underline"
@@ -419,8 +427,102 @@ export default function StudentsPage() {
           refresh();
         }}
       />
+
+      <ResetStudentPasswordModal
+        student={resettingStudent}
+        onClose={() => setResettingStudent(null)}
+      />
+
       <ConfirmDialog />
     </div>
+  );
+}
+
+function ResetStudentPasswordModal({
+  student,
+  onClose,
+}: {
+  student: StudentListItem | null;
+  onClose: () => void;
+}) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setNewPassword("");
+    setConfirmPassword("");
+  }, [student]);
+
+  if (!student) return null;
+
+  async function handleReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await resetStudentPassword(student!.id, newPassword);
+      toast.success(res.message || "Password reset successfully!");
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Failed to reset password");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal open={!!student} onClose={onClose} title={`Reset Password: ${student.full_name}`}>
+      <form onSubmit={handleReset} className="space-y-4 text-sm">
+        <p className="text-xs text-neutral-500">
+          Set a new password for <strong className="text-neutral-800">{student.full_name}</strong> (@{student.username || student.email}).
+          Their active sessions will be invalidated and they can immediately login with this password.
+        </p>
+
+        <div>
+          <label className="label">New Temporary Password *</label>
+          <input
+            type="password"
+            required
+            minLength={6}
+            className="input"
+            placeholder="At least 6 characters"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="label">Confirm New Password *</label>
+          <input
+            type="password"
+            required
+            minLength={6}
+            className="input"
+            placeholder="Confirm new password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
+        </div>
+
+        <div className="flex justify-end gap-2 pt-3 border-t">
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" disabled={isSubmitting} className="btn-primary">
+            {isSubmitting ? "Resetting..." : "Set Password"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

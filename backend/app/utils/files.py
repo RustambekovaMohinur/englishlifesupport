@@ -444,3 +444,131 @@ async def save_avatar_file(
 def resolve_profile_avatar(relative_path: str) -> Path:
     """Resolves profile avatar safely from uploads."""
     return resolve_submission_file(relative_path)
+
+
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/heic": ".heic",
+}
+
+
+async def save_assignment_image(
+    file: UploadFile,
+    assignment_id: uuid.UUID,
+    db: AsyncSession | None = None,
+) -> tuple[str, str, str, int]:
+    """
+    Validates and saves an assignment image (up to 10MB).
+    Mirrors to file_blobs.
+    Returns (relative_path, original_name, content_type, size_bytes).
+    """
+    _assert_safe_extension(file.filename or "")
+
+    content_type = file.content_type or ""
+    extension = ALLOWED_IMAGE_TYPES.get(content_type)
+    if not extension:
+        ext = Path(file.filename or "").suffix.lower()
+        if ext in set(ALLOWED_IMAGE_TYPES.values()):
+            extension = ext
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid image format. Allowed formats: JPG, PNG, WEBP, HEIC",
+            )
+
+    img_dir = get_upload_root() / "assignments" / str(assignment_id) / "images"
+    img_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_filename = f"{uuid.uuid4().hex}{extension}"
+    destination = img_dir / safe_filename
+
+    max_bytes = 10 * 1024 * 1024  # 10MB
+    total_size = 0
+    chunk_size = 512 * 1024
+
+    with destination.open("wb") as out_file:
+        while chunk := await file.read(chunk_size):
+            total_size += len(chunk)
+            if total_size > max_bytes:
+                out_file.close()
+                destination.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="Image exceeds the 10MB limit",
+                )
+            out_file.write(chunk)
+
+    relative_path = str(destination.relative_to(get_upload_root())).replace("\\", "/")
+    original_name = Path(file.filename or "assignment_image").name
+
+    if db is not None:
+        try:
+            data = destination.read_bytes()
+            await save_file_blob(db, relative_path, data, content_type, original_name)
+        except Exception:
+            pass
+
+    return relative_path, original_name, content_type, total_size
+
+
+async def save_submission_image(
+    file: UploadFile,
+    submission_id: uuid.UUID,
+    db: AsyncSession | None = None,
+) -> tuple[str, str, str, int]:
+    """
+    Validates and saves a submission image (up to 10MB).
+    Mirrors to file_blobs.
+    Returns (relative_path, original_name, content_type, size_bytes).
+    """
+    _assert_safe_extension(file.filename or "")
+
+    content_type = file.content_type or ""
+    extension = ALLOWED_IMAGE_TYPES.get(content_type)
+    if not extension:
+        ext = Path(file.filename or "").suffix.lower()
+        if ext in set(ALLOWED_IMAGE_TYPES.values()):
+            extension = ext
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid image format. Allowed formats: JPG, PNG, WEBP, HEIC",
+            )
+
+    img_dir = get_upload_root() / "submissions" / str(submission_id) / "images"
+    img_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_filename = f"{uuid.uuid4().hex}{extension}"
+    destination = img_dir / safe_filename
+
+    max_bytes = 10 * 1024 * 1024  # 10MB
+    total_size = 0
+    chunk_size = 512 * 1024
+
+    with destination.open("wb") as out_file:
+        while chunk := await file.read(chunk_size):
+            total_size += len(chunk)
+            if total_size > max_bytes:
+                out_file.close()
+                destination.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="Image exceeds the 10MB limit",
+                )
+            out_file.write(chunk)
+
+    relative_path = str(destination.relative_to(get_upload_root())).replace("\\", "/")
+    original_name = Path(file.filename or "submission_image").name
+
+    if db is not None:
+        try:
+            data = destination.read_bytes()
+            await save_file_blob(db, relative_path, data, content_type, original_name)
+        except Exception:
+            pass
+
+    return relative_path, original_name, content_type, total_size
+

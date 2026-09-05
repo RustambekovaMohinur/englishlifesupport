@@ -19,8 +19,27 @@ export interface Group {
   name: string;
   english_level: string;
   schedule: string | null;
+  default_homework_time?: string | null;
   is_active: boolean;
   student_count: number;
+  created_at: string;
+}
+
+export interface AssignmentImageOut {
+  id: string;
+  file_path: string;
+  original_name: string;
+  file_size: number;
+  order_index: number;
+  created_at: string;
+}
+
+export interface SubmissionImageOut {
+  id: string;
+  file_path: string;
+  original_name: string;
+  file_size: number;
+  order_index: number;
   created_at: string;
 }
 
@@ -82,6 +101,7 @@ export interface GroupDetailOut {
   name: string;
   english_level: string;
   schedule: string | null;
+  default_homework_time?: string | null;
   is_active: boolean;
   student_count: number;
   assignments: GroupAssignmentHeader[];
@@ -218,6 +238,7 @@ export interface AssignmentOut {
   file_url: string | null;
   file_original_name: string | null;
   vocab_words: VocabWordItem[];
+  images?: AssignmentImageOut[];
   created_at: string;
   submission_count: number;
   order_index?: number;
@@ -233,6 +254,7 @@ export interface AssignmentForStudent {
   file_url: string | null;
   file_original_name: string | null;
   vocab_words: VocabWordItem[];
+  images?: AssignmentImageOut[];
   is_past_deadline: boolean;
   submission_status: "submitted" | "late" | "graded" | null;
   score: number | null;
@@ -279,6 +301,7 @@ export interface SubmissionOut {
   text_answer: string | null;
   file_url: string | null;
   file_original_name: string | null;
+  images?: SubmissionImageOut[];
   status: "submitted" | "late" | "graded";
   submitted_at: string;
   grade: GradeOut | null;

@@ -34,6 +34,16 @@ from app.utils.files import (
 router = APIRouter(prefix="/api/assignments", tags=["assignments"])
 
 
+from app.schemas.assignment import (
+    AssignmentCreate,
+    AssignmentForStudent,
+    AssignmentImageOut,
+    AssignmentOut,
+    AssignmentUpdate,
+    VocabWordItem,
+)
+
+
 def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, vocab_words: list[VocabularyWord] | None = None) -> AssignmentOut:
     vocab_items = [
         VocabWordItem(
@@ -43,6 +53,17 @@ def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, 
             example_sentence=w.example_sentence,
         )
         for w in (vocab_words or [])
+    ]
+    images_out = [
+        AssignmentImageOut(
+            id=img.id,
+            file_path=img.file_path,
+            original_name=img.file_original_name,
+            file_size=img.file_size_bytes,
+            order_index=img.order_index,
+            created_at=img.created_at,
+        )
+        for img in (getattr(assignment, "images", None) or [])
     ]
     return AssignmentOut(
         id=assignment.id,
@@ -55,6 +76,7 @@ def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, 
         file_url=f"/api/assignments/{assignment.id}/file" if assignment.file_path else None,
         file_original_name=assignment.file_original_name,
         vocab_words=vocab_items,
+        images=images_out,
         created_at=assignment.created_at,
         submission_count=sub_count,
         order_index=getattr(assignment, "order_index", 0) or 0,
@@ -67,7 +89,11 @@ async def list_assignments(
     db: AsyncSession = Depends(get_db),
     group_id: uuid.UUID | None = Query(default=None),
 ):
-    query = select(Assignment, Group.name).join(Group, Assignment.group_id == Group.id)
+    query = (
+        select(Assignment, Group.name)
+        .options(selectinload(Assignment.images))
+        .join(Group, Assignment.group_id == Group.id)
+    )
     if group_id:
         query = query.where(Assignment.group_id == group_id)
     query = query.order_by(Assignment.deadline.desc())
@@ -108,6 +134,7 @@ async def create_assignment(
     prerequisite_id: uuid.UUID | None = Form(default=None),
     file: UploadFile | None = File(default=None),
     vocab_file: UploadFile | None = File(default=None),
+    images: list[UploadFile] | None = File(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_teacher),
 ):
@@ -117,6 +144,7 @@ async def create_assignment(
     - Rejects creating assignments for archived groups.
     - Accepts optional homework attachment file (up to 10MB).
     - Accepts optional vocabulary CSV file (word,translation format).
+    - Accepts up to 10 assignment images (up to 10MB each). Image #11 is rejected with 400.
     """
     group = (await db.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
     if group is None:
@@ -125,6 +153,13 @@ async def create_assignment(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot create assignments for an archived group",
+        )
+
+    valid_images = [img for img in (images or []) if img.filename]
+    if len(valid_images) > 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 10 images allowed per assignment",
         )
 
     assign_status = AssignmentStatus.DRAFT if status_val.lower() == "draft" else AssignmentStatus.PUBLISHED
@@ -154,6 +189,22 @@ async def create_assignment(
     db.add(assignment)
     await db.flush()
 
+    # Save images if provided
+    from app.models.assignment import AssignmentImage
+    from app.utils.files import save_assignment_image
+
+    for idx, img_file in enumerate(valid_images):
+        img_path, img_orig_name, img_content_type, img_size = await save_assignment_image(img_file, assignment.id, db=db)
+        assign_img = AssignmentImage(
+            assignment_id=assignment.id,
+            file_path=img_path,
+            file_original_name=img_orig_name,
+            file_content_type=img_content_type,
+            file_size_bytes=img_size,
+            order_index=idx,
+        )
+        db.add(assign_img)
+
     vocab_words = []
     if vocab_file is not None and vocab_file.filename:
         content_bytes = await vocab_file.read()
@@ -182,9 +233,10 @@ async def create_assignment(
             vocab_words.append(vw)
 
     await db.commit()
-    await db.refresh(assignment)
+    await db.refresh(assignment, attribute_names=["images"])
 
     return _assignment_to_out(assignment, group.name, 0, vocab_words)
+
 
 
 @router.get("/mine", response_model=list[AssignmentForStudent])
@@ -203,6 +255,7 @@ async def list_my_assignments(
     assignments = (
         await db.execute(
             select(Assignment)
+            .options(selectinload(Assignment.images))
             .where(
                 Assignment.group_id == profile.group_id,
                 Assignment.status == AssignmentStatus.PUBLISHED,
@@ -250,6 +303,18 @@ async def list_my_assignments(
             for w in vocab_words
         ]
 
+        images_out = [
+            AssignmentImageOut(
+                id=img.id,
+                file_path=img.file_path,
+                original_name=img.file_original_name,
+                file_size=img.file_size_bytes,
+                order_index=img.order_index,
+                created_at=img.created_at,
+            )
+            for img in (getattr(assignment, "images", None) or [])
+        ]
+
         is_locked, lock_reason = await is_assignment_locked_for_student(db, assignment.id, profile.id)
 
         result.append(
@@ -262,6 +327,7 @@ async def list_my_assignments(
                 file_url=f"/api/assignments/{assignment.id}/file" if assignment.file_path else None,
                 file_original_name=assignment.file_original_name,
                 vocab_words=vocab_items,
+                images=images_out,
                 is_past_deadline=as_utc(assignment.deadline) < now,
                 submission_status=submission.status.value if submission else None,
                 score=score,
@@ -281,7 +347,13 @@ async def get_assignment(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    assignment = (await db.execute(select(Assignment).where(Assignment.id == assignment_id))).scalar_one_or_none()
+    assignment = (
+        await db.execute(
+            select(Assignment)
+            .options(selectinload(Assignment.images))
+            .where(Assignment.id == assignment_id)
+        )
+    ).scalar_one_or_none()
     if assignment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
 
@@ -394,3 +466,116 @@ async def delete_assignment(assignment_id: uuid.UUID, db: AsyncSession = Depends
     await db.delete(assignment)
     await db.commit()
     return None
+
+
+@router.post("/{assignment_id}/images", response_model=AssignmentImageOut, dependencies=[Depends(require_teacher)])
+async def upload_assignment_image(
+    assignment_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.assignment import AssignmentImage
+    from app.utils.files import save_assignment_image
+
+    assignment = (await db.execute(select(Assignment).where(Assignment.id == assignment_id))).scalar_one_or_none()
+    if assignment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+
+    current_count = (
+        await db.execute(
+            select(func.count()).select_from(AssignmentImage).where(AssignmentImage.assignment_id == assignment_id)
+        )
+    ).scalar_one()
+    if current_count >= 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 10 images allowed per assignment",
+        )
+
+    img_path, img_orig_name, img_content_type, img_size = await save_assignment_image(file, assignment_id, db=db)
+    assign_img = AssignmentImage(
+        assignment_id=assignment_id,
+        file_path=img_path,
+        file_original_name=img_orig_name,
+        file_content_type=img_content_type,
+        file_size_bytes=img_size,
+        order_index=current_count,
+    )
+    db.add(assign_img)
+    await db.commit()
+    await db.refresh(assign_img)
+
+    return AssignmentImageOut(
+        id=assign_img.id,
+        file_path=assign_img.file_path,
+        original_name=assign_img.file_original_name,
+        file_size=assign_img.file_size_bytes,
+        order_index=assign_img.order_index,
+        created_at=assign_img.created_at,
+    )
+
+
+@router.delete("/{assignment_id}/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_teacher)])
+async def delete_assignment_image(
+    assignment_id: uuid.UUID,
+    image_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.assignment import AssignmentImage
+
+    img = (
+        await db.execute(
+            select(AssignmentImage).where(
+                AssignmentImage.id == image_id,
+                AssignmentImage.assignment_id == assignment_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not img:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+    await db.delete(img)
+    await db.commit()
+    return None
+
+
+@router.get("/{assignment_id}/images/{image_id}")
+async def get_assignment_image(
+    assignment_id: uuid.UUID,
+    image_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.assignment import AssignmentImage
+
+    assignment = (await db.execute(select(Assignment).where(Assignment.id == assignment_id))).scalar_one_or_none()
+    if assignment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+
+    if current_user.role == UserRole.STUDENT:
+        student_profile = (
+            await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
+        ).scalar_one_or_none()
+        if student_profile is None or student_profile.group_id != assignment.group_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        if assignment.status != AssignmentStatus.PUBLISHED:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+
+    img = (
+        await db.execute(
+            select(AssignmentImage).where(
+                AssignmentImage.id == image_id,
+                AssignmentImage.assignment_id == assignment_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not img:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+    path = await resolve_submission_file_async(img.file_path, db=db, fallback_name=img.file_original_name)
+    return FileResponse(
+        path=path,
+        media_type=img.file_content_type or "image/jpeg",
+        filename=img.file_original_name,
+    )
+

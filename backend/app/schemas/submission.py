@@ -48,6 +48,17 @@ class SubmissionCommentOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SubmissionImageOut(BaseModel):
+    id: uuid.UUID
+    file_path: str
+    original_name: str
+    file_size: int
+    order_index: int = 0
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class SubmissionOut(BaseModel):
     id: uuid.UUID
     assignment_id: uuid.UUID
@@ -57,6 +68,7 @@ class SubmissionOut(BaseModel):
     text_answer: str | None
     file_url: str | None
     file_original_name: str | None
+    images: list[SubmissionImageOut] = []
     status: str
     submitted_at: datetime
     grade: GradeOut | None = None

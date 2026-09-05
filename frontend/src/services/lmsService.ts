@@ -53,14 +53,17 @@ export const deleteStudent = (id: string) => api.delete(`/students/${id}`);
 export const setStudentStatus = (id: string, is_active: boolean) =>
   api.patch<StudentOut>(`/students/${id}/status`, { is_active }).then((r) => r.data);
 
+export const resetStudentPassword = (student_id: string, new_password: string) =>
+  api.post<{ success: boolean; message: string }>(`/students/${student_id}/reset-password`, { new_password }).then((r) => r.data);
+
 // --- Groups ---
 export const listGroups = (include_archived: boolean = false) =>
   api.get<Group[]>("/groups", { params: { include_archived } }).then((r) => r.data);
 export const getGroupDetail = (group_id: string) =>
   api.get<GroupDetailOut>(`/groups/${group_id}/detail`).then((r) => r.data);
-export const createGroup = (body: { name: string; english_level: string; schedule?: string }) =>
+export const createGroup = (body: { name: string; english_level: string; schedule?: string; default_homework_time?: string }) =>
   api.post<Group>("/groups", body).then((r) => r.data);
-export const updateGroup = (id: string, body: Partial<{ name: string; english_level: string; schedule: string; is_active: boolean }>) =>
+export const updateGroup = (id: string, body: Partial<{ name: string; english_level: string; schedule: string; default_homework_time?: string; is_active: boolean }>) =>
   api.patch<Group>(`/groups/${id}`, body).then((r) => r.data);
 export const deleteGroup = (id: string) => api.delete(`/groups/${id}`);
 
@@ -105,11 +108,14 @@ export const listSubmissions = (params: SubmissionQuery) =>
 export const listMySubmissions = () => api.get<SubmissionOut[]>("/submissions/mine").then((r) => r.data);
 export const getSubmission = (id: string) => api.get<SubmissionOut>(`/submissions/${id}`).then((r) => r.data);
 
-export const submitHomework = (assignment_id: string, text_answer: string, file: File | null) => {
+export const submitHomework = (assignment_id: string, text_answer: string, file: File | null, images?: File[]) => {
   const form = new FormData();
   form.append("assignment_id", assignment_id);
   if (text_answer) form.append("text_answer", text_answer);
   if (file) form.append("file", file);
+  if (images && images.length > 0) {
+    images.forEach((img) => form.append("images", img));
+  }
   return api.post<SubmissionOut>("/submissions", form).then((r) => r.data);
 };
 

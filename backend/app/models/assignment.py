@@ -46,4 +46,26 @@ class Assignment(UUIDPKMixin, TimestampMixin, Base):
     vocabulary_assignment: Mapped["VocabularyAssignment | None"] = relationship(
         back_populates="assignment", uselist=False, cascade="all, delete-orphan"
     )
+    images: Mapped[list["AssignmentImage"]] = relationship(
+        back_populates="assignment",
+        cascade="all, delete-orphan",
+        order_by="AssignmentImage.order_index",
+        lazy="selectin",
+    )
+
+
+class AssignmentImage(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "assignment_images"
+
+    assignment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    file_original_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    file_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    order_index: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+
+    assignment: Mapped["Assignment"] = relationship(back_populates="images")
+
 

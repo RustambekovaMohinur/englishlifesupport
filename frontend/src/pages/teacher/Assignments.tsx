@@ -33,14 +33,35 @@ export default function AssignmentsPage() {
   const [deadline, setDeadline] = useState("");
   const [prerequisiteId, setPrerequisiteId] = useState<string>("");
   const [tasks, setTasks] = useState<TaskBlock[]>([]);
+  const [assignmentImages, setAssignmentImages] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     listGroups(false).then((data) => {
       setGroups(data);
-      if (data.length > 0) setGroupId(data[0].id);
+      if (data.length > 0) {
+        setGroupId(data[0].id);
+        applyGroupDefaultTime(data[0]);
+      }
     }).catch(() => {});
   }, []);
+
+  function applyGroupDefaultTime(group?: Group) {
+    if (!group) return;
+    const timeStr = group.default_homework_time || "20:00";
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const [hours, mins] = timeStr.split(":");
+    tomorrow.setHours(parseInt(hours || "20", 10), parseInt(mins || "0", 10), 0, 0);
+    const formatted = format(tomorrow, "yyyy-MM-dd'T'HH:mm");
+    setDeadline(formatted);
+  }
+
+  function handleGroupChange(newGroupId: string) {
+    setGroupId(newGroupId);
+    const g = groups.find((grp) => grp.id === newGroupId);
+    if (g) applyGroupDefaultTime(g);
+  }
 
   function refresh() {
     setIsLoading(true);
@@ -156,6 +177,9 @@ export default function AssignmentsPage() {
       if (prerequisiteId) formData.append("prerequisite_id", prerequisiteId);
       if (primaryFile) formData.append("file", primaryFile);
       if (vocabFile) formData.append("vocab_file", vocabFile);
+      if (assignmentImages.length > 0) {
+        assignmentImages.forEach((img) => formData.append("images", img));
+      }
 
       await createAssignment(formData);
       toast.success("Assignment created successfully!");
@@ -163,6 +187,7 @@ export default function AssignmentsPage() {
       setDeadline("");
       setPrerequisiteId("");
       setTasks([]);
+      setAssignmentImages([]);
       setShowBuilder(false);
       refresh();
     } catch (err: any) {
@@ -227,7 +252,7 @@ export default function AssignmentsPage() {
                 required
                 className="input"
                 value={groupId}
-                onChange={(e) => setGroupId(e.target.value)}
+                onChange={(e) => handleGroupChange(e.target.value)}
               >
                 <option value="" disabled>Select group</option>
                 {groups.map((g) => (
@@ -270,6 +295,95 @@ export default function AssignmentsPage() {
               </p>
             </div>
           </div>
+
+          {/* Multi-Image Uploader (Max 10 Images) */}
+          <div className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-neutral-900">🖼️ Assignment Images</h3>
+                <p className="text-xs text-neutral-500">
+                  Add up to 10 images (charts, book scans, diagrams, infographics). Max 10MB per image.
+                </p>
+              </div>
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                assignmentImages.length >= 10
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-brand-50 text-brand-700"
+              }`}>
+                {assignmentImages.length} / 10 images
+              </span>
+            </div>
+
+            {assignmentImages.length < 10 && (
+              <div>
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-neutral-300 hover:border-brand-400 bg-white rounded-xl p-4 cursor-pointer transition-colors">
+                  <span className="text-2xl mb-1">📸</span>
+                  <span className="text-xs font-semibold text-neutral-700">Click to upload images</span>
+                  <span className="text-[11px] text-neutral-400">JPG, PNG, WEBP, HEIC up to 10MB</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic"
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (!files.length) return;
+                      const validFiles: File[] = [];
+                      for (const f of files) {
+                        if (f.size > 10 * 1024 * 1024) {
+                          toast.error(`"${f.name}" exceeds 10MB limit`);
+                          continue;
+                        }
+                        validFiles.push(f);
+                      }
+                      if (assignmentImages.length + validFiles.length > 10) {
+                        toast.error(`Maximum 10 images allowed per assignment (${assignmentImages.length} already uploaded)`);
+                        const remainingSlots = 10 - assignmentImages.length;
+                        if (remainingSlots > 0) {
+                          setAssignmentImages([...assignmentImages, ...validFiles.slice(0, remainingSlots)]);
+                        }
+                      } else {
+                        setAssignmentImages([...assignmentImages, ...validFiles]);
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+            )}
+
+            {assignmentImages.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 pt-1">
+                {assignmentImages.map((file, idx) => {
+                  const previewUrl = URL.createObjectURL(file);
+                  return (
+                    <div key={idx} className="relative group rounded-lg overflow-hidden border border-neutral-200 bg-white aspect-square shadow-sm">
+                      <img
+                        src={previewUrl}
+                        alt={file.name}
+                        className="w-full h-full object-cover"
+                        onLoad={() => URL.revokeObjectURL(previewUrl)}
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-1.5">
+                        <span className="text-[10px] text-white font-medium truncate bg-black/60 px-1 py-0.5 rounded">
+                          #{idx + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setAssignmentImages(assignmentImages.filter((_, i) => i !== idx))}
+                          className="self-end rounded-full bg-red-600 text-white p-1 hover:bg-red-700 transition"
+                          title="Remove image"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
 
           {/* Homework Tasks Section */}
           <div className="space-y-4 pt-2">

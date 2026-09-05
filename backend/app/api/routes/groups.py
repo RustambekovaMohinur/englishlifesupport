@@ -45,6 +45,7 @@ async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
         name=group.name,
         english_level=group.english_level,
         schedule=group.schedule,
+        default_homework_time=group.default_homework_time or "20:00",
         is_active=group.is_active,
         student_count=count,
         created_at=group.created_at,
@@ -77,6 +78,7 @@ async def create_group(body: GroupCreate, current_user: User = Depends(require_t
         name=body.name,
         english_level=body.english_level,
         schedule=body.schedule,
+        default_homework_time=body.default_homework_time or "20:00",
         created_by=current_user.id,
     )
     db.add(group)
@@ -233,6 +235,7 @@ async def get_group_detail(
         name=group.name,
         english_level=group.english_level,
         schedule=group.schedule,
+        default_homework_time=group.default_homework_time or "20:00",
         is_active=group.is_active,
         student_count=len(student_rows),
         assignments=headers,

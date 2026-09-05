@@ -58,6 +58,26 @@ async def _authorize_submission_access(submission: Submission, current_user: Use
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You may only access your own submissions")
 
 
+from app.models.submission import (
+    Submission,
+    SubmissionComment,
+    SubmissionCorrection,
+    SubmissionImage,
+    SubmissionStatus,
+)
+from app.schemas.submission import (
+    GradeCreate,
+    GradeOut,
+    PaginatedSubmissions,
+    SubmissionCommentCreate,
+    SubmissionCommentOut,
+    SubmissionCorrectionCreate,
+    SubmissionCorrectionOut,
+    SubmissionImageOut,
+    SubmissionOut,
+)
+
+
 def _submission_to_out(sub: Submission) -> SubmissionOut:
     grade_out = None
     if sub.grade:
@@ -91,6 +111,17 @@ def _submission_to_out(sub: Submission) -> SubmissionOut:
         )
         for c in (getattr(sub, "comments", None) or [])
     ]
+    images_out = [
+        SubmissionImageOut(
+            id=img.id,
+            file_path=img.file_path,
+            original_name=img.file_original_name,
+            file_size=img.file_size_bytes,
+            order_index=img.order_index,
+            created_at=img.created_at,
+        )
+        for img in (getattr(sub, "images", None) or [])
+    ]
     return SubmissionOut(
         id=sub.id,
         assignment_id=sub.assignment_id,
@@ -100,6 +131,7 @@ def _submission_to_out(sub: Submission) -> SubmissionOut:
         text_answer=sub.text_answer,
         file_url=f"/api/submissions/{sub.id}/file" if sub.file_path else None,
         file_original_name=sub.file_original_name,
+        images=images_out,
         status=sub.status.value,
         submitted_at=sub.submitted_at,
         grade=grade_out,
@@ -113,12 +145,14 @@ async def submit_homework(
     assignment_id: uuid.UUID = Form(...),
     text_answer: str | None = Form(default=None),
     file: UploadFile | None = File(default=None),
+    images: list[UploadFile] | None = File(default=None),
     profile: StudentProfile = Depends(get_current_student_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Student submits (or resubmits, before the deadline) homework for an
-    assignment belonging to their own group. Text and/or file accepted.
+    assignment belonging to their own group. Text, file, audio, and/or up to 10 images accepted.
+    Image #11 rejected with 400.
     """
     assignment = (await db.execute(select(Assignment).where(Assignment.id == assignment_id))).scalar_one_or_none()
     if assignment is None or assignment.status != AssignmentStatus.PUBLISHED:
@@ -126,7 +160,6 @@ async def submit_homework(
     if assignment.group_id != profile.group_id:
         # A student may only submit to assignments for their own group.
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This assignment is not for your group")
-
 
     # Enforce sequential task lock strictly on backend
     is_locked, lock_reason = await is_assignment_locked_for_student(db, assignment_id, profile.id)
@@ -136,8 +169,16 @@ async def submit_homework(
             detail=f"Task is locked: {lock_reason}",
         )
 
-    if not text_answer and not file:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide a text answer and/or a file")
+    valid_images = [img for img in (images or []) if img.filename]
+    if len(valid_images) > 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 10 images allowed per submission",
+        )
+
+    if not text_answer and not file and not valid_images:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide a text answer, file, voice audio, or images")
+
 
     now = utcnow()
     existing = (
@@ -188,8 +229,24 @@ async def submit_homework(
             submitted_at=now,
         )
         db.add(submission)
-
     await db.flush()
+
+    if valid_images:
+        from app.models.submission import SubmissionImage
+        from app.utils.files import save_submission_image
+
+        for idx, img_file in enumerate(valid_images):
+            img_path, img_orig_name, img_content_type, img_size = await save_submission_image(img_file, submission.id, db=db)
+            sub_img = SubmissionImage(
+                submission_id=submission.id,
+                file_path=img_path,
+                file_original_name=img_orig_name,
+                file_content_type=img_content_type,
+                file_size_bytes=img_size,
+                order_index=idx,
+            )
+            db.add(sub_img)
+
 
     # Gamification calculations
     if is_late:
@@ -275,6 +332,7 @@ async def submit_homework(
             selectinload(Submission.student),
             selectinload(Submission.corrections),
             selectinload(Submission.comments),
+            selectinload(Submission.images),
         )
         .where(Submission.id == submission.id)
     )
@@ -298,6 +356,7 @@ async def list_submissions(
             selectinload(Submission.student),
             selectinload(Submission.corrections),
             selectinload(Submission.comments),
+            selectinload(Submission.images),
         )
         .join(Assignment, Submission.assignment_id == Assignment.id)
     )
@@ -332,6 +391,7 @@ async def list_my_submissions(
             selectinload(Submission.student),
             selectinload(Submission.corrections),
             selectinload(Submission.comments),
+            selectinload(Submission.images),
         )
         .where(Submission.student_id == profile.id)
         .order_by(Submission.submitted_at.desc())
@@ -349,6 +409,7 @@ async def _get_submission_or_404(submission_id: uuid.UUID, db: AsyncSession) -> 
             selectinload(Submission.student),
             selectinload(Submission.corrections),
             selectinload(Submission.comments),
+            selectinload(Submission.images),
         )
         .where(Submission.id == submission_id)
     )
@@ -552,4 +613,111 @@ async def delete_submission_comment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
     await db.delete(comm)
     await db.commit()
+
+
+@router.post("/{submission_id}/images", response_model=SubmissionImageOut)
+async def upload_submission_image(
+    submission_id: uuid.UUID,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.submission import SubmissionImage
+    from app.utils.files import save_submission_image
+
+    submission = await _get_submission_or_404(submission_id, db)
+    await _authorize_submission_access(submission, current_user, db)
+
+    current_count = (
+        await db.execute(
+            select(func.count()).select_from(SubmissionImage).where(SubmissionImage.submission_id == submission_id)
+        )
+    ).scalar_one()
+    if current_count >= 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 10 images allowed per submission",
+        )
+
+    img_path, img_orig_name, img_content_type, img_size = await save_submission_image(file, submission_id, db=db)
+    sub_img = SubmissionImage(
+        submission_id=submission_id,
+        file_path=img_path,
+        file_original_name=img_orig_name,
+        file_content_type=img_content_type,
+        file_size_bytes=img_size,
+        order_index=current_count,
+    )
+    db.add(sub_img)
+    await db.commit()
+    await db.refresh(sub_img)
+
+    return SubmissionImageOut(
+        id=sub_img.id,
+        file_path=sub_img.file_path,
+        original_name=sub_img.file_original_name,
+        file_size=sub_img.file_size_bytes,
+        order_index=sub_img.order_index,
+        created_at=sub_img.created_at,
+    )
+
+
+@router.delete("/{submission_id}/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_submission_image(
+    submission_id: uuid.UUID,
+    image_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.submission import SubmissionImage
+
+    submission = await _get_submission_or_404(submission_id, db)
+    await _authorize_submission_access(submission, current_user, db)
+
+    img = (
+        await db.execute(
+            select(SubmissionImage).where(
+                SubmissionImage.id == image_id,
+                SubmissionImage.submission_id == submission_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not img:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+    await db.delete(img)
+    await db.commit()
+    return None
+
+
+@router.get("/{submission_id}/images/{image_id}")
+async def get_submission_image(
+    submission_id: uuid.UUID,
+    image_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.submission import SubmissionImage
+
+    submission = await _get_submission_or_404(submission_id, db)
+    await _authorize_submission_access(submission, current_user, db)
+
+    img = (
+        await db.execute(
+            select(SubmissionImage).where(
+                SubmissionImage.id == image_id,
+                SubmissionImage.submission_id == submission_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not img:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+    path = await resolve_submission_file_async(img.file_path, db=db, fallback_name=img.file_original_name)
+    return FileResponse(
+        path=path,
+        media_type=img.file_content_type or "image/jpeg",
+        filename=img.file_original_name,
+    )
+
 

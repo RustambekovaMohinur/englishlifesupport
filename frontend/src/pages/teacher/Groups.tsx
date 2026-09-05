@@ -135,10 +135,12 @@ export default function GroupsPage() {
                   </div>
                 </div>
                 {g.schedule && <p className="mt-2 text-sm text-neutral-600">{g.schedule}</p>}
+                <div className="mt-1.5 flex items-center gap-3 text-xs text-neutral-500">
+                  <span>👥 {g.student_count} {g.student_count === 1 ? "student" : "students"}</span>
+                  <span>•</span>
+                  <span>⏰ Due time: {g.default_homework_time || "20:00"}</span>
+                </div>
                 <div className="mt-2 flex items-center justify-between">
-                  <p className="text-sm text-neutral-500 font-medium">
-                    👥 {g.student_count} {g.student_count === 1 ? "student" : "students"}
-                  </p>
                   <span className="text-xs text-brand-600 font-semibold group-hover:underline">View Group Details →</span>
                 </div>
                 <div className="mt-4 flex gap-4 border-t border-neutral-100 pt-3">
@@ -408,12 +410,14 @@ function GroupModal({
   const [name, setName] = useState("");
   const [level, setLevel] = useState(LEVELS[0]);
   const [schedule, setSchedule] = useState("");
+  const [defaultHomeworkTime, setDefaultHomeworkTime] = useState("20:00");
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setName(group?.name ?? "");
     setLevel(group?.english_level ?? LEVELS[0]);
     setSchedule(group?.schedule ?? "");
+    setDefaultHomeworkTime(group?.default_homework_time ?? "20:00");
   }, [group, open]);
 
   async function handleSubmit(e: FormEvent) {
@@ -421,9 +425,19 @@ function GroupModal({
     setIsSaving(true);
     try {
       if (group) {
-        await updateGroup(group.id, { name, english_level: level, schedule });
+        await updateGroup(group.id, {
+          name,
+          english_level: level,
+          schedule,
+          default_homework_time: defaultHomeworkTime || "20:00",
+        });
       } else {
-        await createGroup({ name, english_level: level, schedule });
+        await createGroup({
+          name,
+          english_level: level,
+          schedule,
+          default_homework_time: defaultHomeworkTime || "20:00",
+        });
       }
       toast.success(group ? "Group updated" : "Group created");
       onSaved();
@@ -454,6 +468,18 @@ function GroupModal({
         <div>
           <label className="label">Schedule</label>
           <input className="input" value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="Mon/Wed/Fri 16:00-17:30" />
+        </div>
+        <div>
+          <label className="label">Default Homework Due Time</label>
+          <input
+            type="time"
+            className="input"
+            value={defaultHomeworkTime}
+            onChange={(e) => setDefaultHomeworkTime(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-neutral-400">
+            Auto-fills due time when creating assignments for this group (e.g. 20:00).
+          </p>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-secondary" onClick={onClose}>
