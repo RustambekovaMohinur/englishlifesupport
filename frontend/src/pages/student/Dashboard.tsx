@@ -13,6 +13,18 @@ function getGreeting(name: string): string {
   return `${timeStr}, ${name}`;
 }
 
+export function formatEnglishLevel(level?: string | null): string {
+  if (!level || !level.trim()) return "Level not set";
+  const formatted = level.trim().replace(/_/g, " ");
+  const lower = formatted.toLowerCase();
+  if (lower === "pre intermediate" || lower === "pre-intermediate") return "Pre-Intermediate";
+  if (lower === "upper intermediate" || lower === "upper-intermediate") return "Upper-Intermediate";
+  return formatted
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
 export default function StudentDashboardPage() {
   const [data, setData] = useState<StudentDashboard | null>(null);
   const [gamify, setGamify] = useState<StudentGamificationSummary | null>(null);
@@ -36,9 +48,10 @@ export default function StudentDashboardPage() {
   const streakVal = gamify?.streak ?? data.streak ?? 0;
   const xpVal = gamify?.total_xp ?? data.total_xp ?? 0;
   const levelVal = gamify?.level ?? data.level ?? 1;
-  const levelTitle = gamify?.level_title ?? data.level_title ?? "Beginner";
+  const levelTitle = gamify?.level_title ?? data.level_title ?? "Learner";
   const nextXp = gamify?.next_level_xp ?? 100;
   const hasFreePass = gamify?.free_pass ? !gamify.free_pass.is_used : (data.free_pass_available ?? true);
+  const displayLevel = formatEnglishLevel(data.english_level);
 
   return (
     <div className="space-y-6">
@@ -57,8 +70,8 @@ export default function StudentDashboardPage() {
           </div>
           <div className="flex items-center gap-3 self-start md:self-auto bg-black/20 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-white/10">
             <div className="text-center px-2">
-              <p className="text-xs text-blue-200">Level {levelVal}</p>
-              <p className="text-base font-bold text-white">{levelTitle}</p>
+              <p className="text-xs text-blue-200">English Level</p>
+              <p className="text-base font-bold text-white" data-testid="student-english-level">{displayLevel}</p>
             </div>
             <div className="h-8 w-px bg-white/20" />
             <div className="text-center px-2">

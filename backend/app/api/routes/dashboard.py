@@ -139,9 +139,17 @@ async def student_dashboard(
 ):
     group_name = None
     teacher_name = None
+    english_level = None
     if profile.group_id:
         group = (await db.execute(select(Group).where(Group.id == profile.group_id))).scalar_one_or_none()
-        group_name = group.name if group else None
+        if group:
+            group_name = group.name
+            if group.english_level:
+                english_level = (
+                    group.english_level.value
+                    if hasattr(group.english_level, "value")
+                    else str(group.english_level)
+                )
 
     # Single-teacher system: show the (only) teacher's name.
     teacher = (await db.execute(select(TeacherProfile).limit(1))).scalar_one_or_none()
@@ -236,6 +244,7 @@ async def student_dashboard(
         full_name=profile.full_name,
         group_name=group_name,
         teacher_name=teacher_name,
+        english_level=english_level,
         total_stars=profile.total_stars,
         streak=streak_val,
         total_xp=total_xp,

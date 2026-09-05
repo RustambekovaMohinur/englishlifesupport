@@ -31,6 +31,7 @@ class StudentDashboard(BaseModel):
     full_name: str
     group_name: str | None
     teacher_name: str | None
+    english_level: str | None = None
     total_stars: int
     streak: int = 0
     total_xp: int = 0

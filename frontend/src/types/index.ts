@@ -332,6 +332,7 @@ export interface StudentDashboard {
   full_name: string;
   group_name: string | null;
   teacher_name: string | null;
+  english_level?: string | null;
   total_stars: number;
   streak?: number;
   total_xp?: number;
