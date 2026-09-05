@@ -8,6 +8,7 @@ import {
   PaginatedPendingStudents,
   PendingStudentItem,
   StudentDashboard,
+  StudentGamificationSummary,
   StudentHistoryOut,
   StudentListItem,
   StudentOut,
@@ -15,9 +16,11 @@ import {
   SubmissionCorrectionOut,
   SubmissionOut,
   TeacherDashboard,
+  TeacherGroupReport,
   TeacherProfileOut,
   UserProfileOut,
   UserProfileUpdate,
+  WeeklyLeaderboardOut,
 } from "@/types";
 
 // --- Dashboard ---
@@ -137,12 +140,6 @@ export const deleteSubmissionComment = (submissionId: string, commentId: string)
   api.delete(`/submissions/${submissionId}/comments/${commentId}`).then((r) => r.data);
 
 // --- Gamification & Sequential Tasks ---
-import {
-  StudentGamificationSummary,
-  WeeklyLeaderboardOut,
-  TeacherGroupReport,
-} from "@/types";
-
 export const getGamificationSummary = () =>
   api.get<StudentGamificationSummary>("/gamification/summary").then((r) => r.data);
 

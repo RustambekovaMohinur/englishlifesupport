@@ -33,13 +33,13 @@ export default function StudentDashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      getStudentDashboard().then(setData),
-      getGamificationSummary().then(setGamify).catch(() => null),
-      getWeeklyLeaderboard().then(setLeaderboard).catch(() => null),
-    ])
+    getStudentDashboard()
+      .then(setData)
       .catch(() => setError("Could not load your dashboard."))
       .finally(() => setIsLoading(false));
+
+    getGamificationSummary().then(setGamify).catch(() => null);
+    getWeeklyLeaderboard().then(setLeaderboard).catch(() => null);
   }, []);
 
   if (isLoading) return <LoadingRows rows={4} />;

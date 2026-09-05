@@ -230,42 +230,53 @@ async def get_weekly_leaderboard(
 
     total_assignments = (await db.execute(total_assign_query)).scalar_one()
 
+    student_ids = [s.id for s in students]
+    if not student_ids:
+        return WeeklyLeaderboardOut(group_name=group_name, week_key=week_key, current_student_rank=None, entries=[])
+
+    # 1. Weekly XP batch
+    xp_res = await db.execute(
+        select(XPTransaction.student_id, func.coalesce(func.sum(XPTransaction.amount), 0))
+        .where(
+            XPTransaction.student_id.in_(student_ids),
+            XPTransaction.created_at >= week_start,
+        )
+        .group_by(XPTransaction.student_id)
+    )
+    weekly_xp_map = {row[0]: row[1] for row in xp_res.all()}
+
+    # 2. Weekly Stars batch
+    stars_res = await db.execute(
+        select(StarTransaction.student_id, func.coalesce(func.sum(StarTransaction.amount), 0))
+        .where(
+            StarTransaction.student_id.in_(student_ids),
+            StarTransaction.created_at >= week_start,
+        )
+        .group_by(StarTransaction.student_id)
+    )
+    weekly_stars_map = {row[0]: row[1] for row in stars_res.all()}
+
+    # 3. Streaks batch
+    streak_res = await db.execute(
+        select(StudentStreak.student_id, StudentStreak.current_streak)
+        .where(StudentStreak.student_id.in_(student_ids))
+    )
+    streak_map = {row[0]: row[1] for row in streak_res.all()}
+
+    # 4. Completed submissions batch
+    sub_res = await db.execute(
+        select(Submission.student_id, func.count())
+        .where(Submission.student_id.in_(student_ids))
+        .group_by(Submission.student_id)
+    )
+    sub_map = {row[0]: row[1] for row in sub_res.all()}
+
     entries_data = []
     for s in students:
-        # Weekly XP
-        w_xp = (
-            await db.execute(
-                select(func.coalesce(func.sum(XPTransaction.amount), 0)).where(
-                    XPTransaction.student_id == s.id,
-                    XPTransaction.created_at >= week_start,
-                )
-            )
-        ).scalar_one()
-
-        # Weekly Stars
-        w_stars = (
-            await db.execute(
-                select(func.coalesce(func.sum(StarTransaction.amount), 0)).where(
-                    StarTransaction.student_id == s.id,
-                    StarTransaction.created_at >= week_start,
-                )
-            )
-        ).scalar_one()
-
-        # Streak
-        strk = (
-            await db.execute(select(StudentStreak).where(StudentStreak.student_id == s.id))
-        ).scalar_one_or_none()
-        streak_val = strk.current_streak if strk else 0
-
-        # Completed submissions
-        sub_count = (
-            await db.execute(
-                select(func.count())
-                .select_from(Submission)
-                .where(Submission.student_id == s.id)
-            )
-        ).scalar_one()
+        w_xp = weekly_xp_map.get(s.id, 0)
+        w_stars = weekly_stars_map.get(s.id, 0)
+        streak_val = streak_map.get(s.id, 0)
+        sub_count = sub_map.get(s.id, 0)
         comp_rate = int(round((sub_count / total_assignments) * 100)) if total_assignments > 0 else 100
 
         entries_data.append({
