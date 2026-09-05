@@ -1,9 +1,9 @@
-import uuid
-from datetime import datetime
-
-from pydantic import BaseModel, Field
+import re
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.group import EnglishLevel
+
+TIME_REGEX = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
 
 class GroupCreate(BaseModel):
@@ -12,6 +12,13 @@ class GroupCreate(BaseModel):
     schedule: str | None = Field(default=None, max_length=255)
     default_homework_time: str | None = Field(default="20:00", max_length=10)
 
+    @field_validator("default_homework_time")
+    @classmethod
+    def validate_time(cls, v: str | None) -> str | None:
+        if v is not None and not TIME_REGEX.match(v):
+            raise ValueError("Invalid time format. Must be HH:MM (00:00 to 23:59)")
+        return v
+
 
 class GroupUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
@@ -19,6 +26,13 @@ class GroupUpdate(BaseModel):
     schedule: str | None = Field(default=None, max_length=255)
     default_homework_time: str | None = Field(default=None, max_length=10)
     is_active: bool | None = None
+
+    @field_validator("default_homework_time")
+    @classmethod
+    def validate_time(cls, v: str | None) -> str | None:
+        if v is not None and not TIME_REGEX.match(v):
+            raise ValueError("Invalid time format. Must be HH:MM (00:00 to 23:59)")
+        return v
 
 
 class GroupOut(BaseModel):

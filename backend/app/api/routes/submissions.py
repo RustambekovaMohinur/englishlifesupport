@@ -19,7 +19,7 @@ from app.models.submission import (
     SubmissionStatus,
 )
 from app.models.user import User, UserRole
-from app.models.gamification import StarTransactionReason
+from app.models.gamification import StarTransaction, StarTransactionReason
 from app.schemas.submission import (
     GradeCreate,
     GradeOut,
@@ -485,24 +485,47 @@ async def grade_submission(
 
     submission.status = SubmissionStatus.GRADED
 
-    # Recompute the student's total_stars as the sum of stars across all of
-    # their graded submissions, inside the same transaction, so the number
-    # shown on the dashboard is always consistent with the grade rows.
     student = (
         await db.execute(select(StudentProfile).where(StudentProfile.id == submission.student_id))
     ).scalar_one()
 
+    # Track / update StarTransaction for this grade idempotently
+    ref_id = f"grade_{submission.id}"
+    existing_tx = (
+        await db.execute(
+            select(StarTransaction).where(
+                StarTransaction.student_id == submission.student_id,
+                StarTransaction.reason == StarTransactionReason.TEACHER_ADJUSTMENT,
+                StarTransaction.reference_id == ref_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+    assignment_title = submission.assignment.title if submission.assignment else "homework"
+    if existing_tx:
+        existing_tx.amount = body.stars
+        existing_tx.description = f"Teacher grade stars for '{assignment_title}'"
+    elif body.stars > 0:
+        tx = StarTransaction(
+            student_id=submission.student_id,
+            amount=body.stars,
+            reason=StarTransactionReason.TEACHER_ADJUSTMENT,
+            reference_id=ref_id,
+            description=f"Teacher grade stars for '{assignment_title}'",
+        )
+        db.add(tx)
+
     await db.flush()
 
-    total_stars = (
+    # Recompute student's total_stars safely from all transactions
+    total = (
         await db.execute(
-            select(func.coalesce(func.sum(Grade.stars), 0))
-            .select_from(Grade)
-            .join(Submission, Grade.submission_id == Submission.id)
-            .where(Submission.student_id == submission.student_id)
+            select(func.coalesce(func.sum(StarTransaction.amount), 0)).where(
+                StarTransaction.student_id == submission.student_id
+            )
         )
     ).scalar_one()
-    student.total_stars = int(total_stars)
+    student.total_stars = max(0, int(total))
 
     # If grade score is 10/10 (100%), ensure lightning is awarded idempotently
     if grade.score >= 10:
