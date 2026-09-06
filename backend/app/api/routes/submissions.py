@@ -708,6 +708,18 @@ async def delete_submission_image(
     if not img:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
 
+    # Clean up FileBlob and B2 object
+    if img.file_path:
+        blob = (await db.execute(select(FileBlob).where(FileBlob.file_path == img.file_path))).scalar_one_or_none()
+        if blob:
+            if blob.storage_backend == "b2" or blob.storage_key:
+                try:
+                    from app.services.storage import get_storage_service
+                    await get_storage_service().delete_file(blob.storage_key or blob.file_path)
+                except Exception:
+                    pass
+            await db.delete(blob)
+
     await db.delete(img)
     await db.commit()
     return None

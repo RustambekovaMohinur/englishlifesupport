@@ -45,6 +45,36 @@ class Settings(BaseSettings):
 
         self.DATABASE_URL = db_url
         self.ASYNC_DATABASE_URL = async_db_url
+
+        # Flexible resolution of B2 / S3 environment variable aliases
+        import os
+        if not self.B2_KEY_ID:
+            self.B2_KEY_ID = (
+                os.getenv("B2_KEY_ID") or
+                os.getenv("B2_APPLICATION_KEY_ID") or
+                os.getenv("AWS_ACCESS_KEY_ID") or
+                ""
+            ).strip()
+
+        if not self.B2_APPLICATION_KEY:
+            self.B2_APPLICATION_KEY = (
+                os.getenv("B2_APPLICATION_KEY") or
+                os.getenv("B2_APPLICATION_KEY_SECRET") or
+                os.getenv("B2_SECRET_ACCESS_KEY") or
+                os.getenv("AWS_SECRET_ACCESS_KEY") or
+                ""
+            ).strip()
+
+        if not self.B2_BUCKET_NAME or self.B2_BUCKET_NAME == "english-life-files":
+            env_bucket = os.getenv("B2_BUCKET_NAME") or os.getenv("B2_BUCKET") or os.getenv("S3_BUCKET_NAME")
+            if env_bucket:
+                self.B2_BUCKET_NAME = env_bucket.strip()
+
+        if not self.B2_ENDPOINT or self.B2_ENDPOINT == "https://s3.us-east-005.backblazeb2.com":
+            env_endpoint = os.getenv("B2_ENDPOINT") or os.getenv("B2_ENDPOINT_URL") or os.getenv("S3_ENDPOINT_URL")
+            if env_endpoint:
+                self.B2_ENDPOINT = env_endpoint.strip()
+
         return self
 
     # JWT
@@ -63,13 +93,21 @@ class Settings(BaseSettings):
     )
     CORS_ORIGIN_REGEX: str = r"^https:\/\/(.*\.)?vercel\.app$"
 
-    # Uploads
+    # Uploads & Storage
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE_MB: int = 10
     AUDIO_MAX_SIZE_MB: int = 20
 
+    # Storage Backend (b2, database, or local)
+    STORAGE_BACKEND: str = "b2"
+    B2_ENDPOINT: str = "https://s3.us-east-005.backblazeb2.com"
+    B2_BUCKET_NAME: str = "english-life-files"
+    B2_KEY_ID: str = ""
+    B2_APPLICATION_KEY: str = ""
+
     # App
     ENVIRONMENT: str = "development"
+    OVERDUE_STAR_PENALTY: int = 20
 
     # Bootstrap teacher account (created on first startup if no teacher exists)
     BOOTSTRAP_TEACHER_EMAIL: str = "teacher@englishlife.uz"

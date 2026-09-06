@@ -1,4 +1,4 @@
-﻿services:
+services:
   - type: web
     name: english-life-lms-backend
     runtime: python
@@ -22,3 +22,13 @@
         sync: false
       - key: ENVIRONMENT
         value: production
+      - key: STORAGE_BACKEND
+        value: b2
+      - key: B2_ENDPOINT
+        sync: false
+      - key: B2_BUCKET_NAME
+        sync: false
+      - key: B2_KEY_ID
+        sync: false
+      - key: B2_APPLICATION_KEY
+        sync: false

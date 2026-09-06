@@ -89,6 +89,9 @@ def get_upload_root() -> Path:
     return root
 
 
+from app.services.storage import StorageError, get_storage_service
+
+
 async def save_file_blob(
     db: AsyncSession,
     relative_path: str,
@@ -96,29 +99,57 @@ async def save_file_blob(
     content_type: str | None,
     file_name: str | None,
 ) -> None:
-    """Persists file content into database so it survives container restarts."""
+    """
+    Persists file to persistent storage (Backblaze B2) and creates/updates
+    metadata in the PostgreSQL file_blobs table.
+
+    CRITICAL RULES:
+    1. Upload to B2 MUST succeed before the database record is written/committed.
+    2. In production (STORAGE_BACKEND=b2), if B2 upload fails, do not write to DB.
+    3. New files store raw bytes ONLY in B2; file_blobs.file_data is set to NULL.
+    4. Database contains only metadata: storage_backend='b2', storage_key, file_size, etc.
+    """
+    norm_path = relative_path.replace("\\", "/").lstrip("/")
+    storage_service = get_storage_service()
+
+    # Step 1: Upload to B2 first if configured
+    if storage_service.backend == "b2":
+        try:
+            await storage_service.upload_file(norm_path, data, content_type)
+        except Exception as e:
+            # Re-raise so upload flow fails explicitly; never silently write binary to Neon in production
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to upload file to cloud storage.",
+            ) from e
+
+    # Step 2: Only after storage upload succeeds, record metadata in PostgreSQL
     try:
-        norm_path = relative_path.replace("\\", "/")
         existing = (
             await db.execute(select(FileBlob).where(FileBlob.file_path == norm_path))
         ).scalar_one_or_none()
         if existing:
-            existing.file_data = data
+            existing.file_data = None  # Never store binary payload in Neon
+            existing.storage_backend = storage_service.backend
+            existing.storage_key = norm_path
             existing.content_type = content_type
             existing.file_name = file_name
             existing.file_size = len(data)
         else:
             blob = FileBlob(
                 file_path=norm_path,
-                file_data=data,
+                file_data=None,  # Never store binary payload in Neon
+                storage_backend=storage_service.backend,
+                storage_key=norm_path,
                 content_type=content_type,
                 file_name=file_name,
                 file_size=len(data),
             )
             db.add(blob)
         await db.commit()
-    except Exception:
+    except Exception as e:
         await db.rollback()
+        raise e
 
 
 async def save_submission_file(
@@ -172,11 +203,8 @@ async def save_submission_file(
     original_name = Path(file.filename or "upload").name
 
     if db is not None:
-        try:
-            data = destination.read_bytes()
-            await save_file_blob(db, relative_path, data, content_type, original_name)
-        except Exception:
-            pass
+        data = destination.read_bytes()
+        await save_file_blob(db, relative_path, data, content_type, original_name)
 
     return relative_path, original_name, content_type, total_size
 
@@ -256,11 +284,8 @@ async def save_assignment_file(
     original_name = Path(file.filename or "assignment_file").name
 
     if db is not None:
-        try:
-            data = destination.read_bytes()
-            await save_file_blob(db, relative_path, data, content_type, original_name)
-        except Exception:
-            pass
+        data = destination.read_bytes()
+        await save_file_blob(db, relative_path, data, content_type, original_name)
 
     return relative_path, original_name, content_type, total_size
 
@@ -327,19 +352,30 @@ async def resolve_submission_file_async(
     if root not in candidate.parents and candidate != root:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file reference")
 
+    # Check local ephemeral disk cache first
     if candidate.is_file() and candidate.stat().st_size > 0:
         return candidate
 
-    # Restore from FileBlob if available in database
+    # Restore from StorageService (B2) or legacy FileBlob if available
     if db is not None:
         try:
             blob = (
                 await db.execute(select(FileBlob).where(FileBlob.file_path == norm_path))
             ).scalar_one_or_none()
-            if blob and blob.file_data:
-                candidate.parent.mkdir(parents=True, exist_ok=True)
-                candidate.write_bytes(blob.file_data)
-                return candidate
+            if blob:
+                # 1. Primary: Download from Backblaze B2
+                if blob.storage_backend == "b2" or (blob.storage_key and not blob.file_data):
+                    storage_service = get_storage_service()
+                    key = blob.storage_key or norm_path
+                    data, _ = await storage_service.download_file(key)
+                    candidate.parent.mkdir(parents=True, exist_ok=True)
+                    candidate.write_bytes(data)
+                    return candidate
+                # 2. Legacy fallback: Restore from database file_data if present
+                elif blob.file_data:
+                    candidate.parent.mkdir(parents=True, exist_ok=True)
+                    candidate.write_bytes(blob.file_data)
+                    return candidate
         except Exception:
             pass
 
@@ -432,11 +468,8 @@ async def save_avatar_file(
     relative_path = str(destination.relative_to(get_upload_root())).replace("\\", "/")
 
     if db is not None:
-        try:
-            data = destination.read_bytes()
-            await save_file_blob(db, relative_path, data, content_type, f"avatar{extension}")
-        except Exception:
-            pass
+        data = destination.read_bytes()
+        await save_file_blob(db, relative_path, data, content_type, f"avatar{extension}")
 
     return relative_path, content_type, total_size
 
@@ -505,11 +538,8 @@ async def save_assignment_image(
     original_name = Path(file.filename or "assignment_image").name
 
     if db is not None:
-        try:
-            data = destination.read_bytes()
-            await save_file_blob(db, relative_path, data, content_type, original_name)
-        except Exception:
-            pass
+        data = destination.read_bytes()
+        await save_file_blob(db, relative_path, data, content_type, original_name)
 
     return relative_path, original_name, content_type, total_size
 
@@ -564,11 +594,8 @@ async def save_submission_image(
     original_name = Path(file.filename or "submission_image").name
 
     if db is not None:
-        try:
-            data = destination.read_bytes()
-            await save_file_blob(db, relative_path, data, content_type, original_name)
-        except Exception:
-            pass
+        data = destination.read_bytes()
+        await save_file_blob(db, relative_path, data, content_type, original_name)
 
     return relative_path, original_name, content_type, total_size
 

@@ -12,7 +12,9 @@ class FileBlob(UUIDPKMixin, Base):
     __tablename__ = 'file_blobs'
 
     file_path: Mapped[str] = mapped_column(String(500), unique=True, nullable=False, index=True)
-    file_data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    file_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    storage_backend: Mapped[str] = mapped_column(String(32), server_default="b2", nullable=False)
+    storage_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
