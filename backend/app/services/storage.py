@@ -74,7 +74,7 @@ class StorageService:
 
                 boto_config = Config(
                     signature_version="s3v4",
-                    s3={"addressing_style": "virtual"},
+                    s3={"addressing_style": "path"},
                     retries={"max_attempts": 3, "mode": "standard"},
                     connect_timeout=15,
                     read_timeout=30,
