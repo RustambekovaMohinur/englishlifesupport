@@ -134,7 +134,6 @@ async def save_file_blob(
             await db.execute(select(FileBlob).where(FileBlob.file_path == norm_path))
         ).scalar_one_or_none()
         if existing:
-            existing.file_data = None  # Never store binary payload in Neon
             existing.storage_backend = storage_service.backend
             existing.storage_key = norm_path
             existing.content_type = content_type
@@ -143,7 +142,6 @@ async def save_file_blob(
         else:
             blob = FileBlob(
                 file_path=norm_path,
-                file_data=None,  # Never store binary payload in Neon
                 storage_backend=storage_service.backend,
                 storage_key=norm_path,
                 content_type=content_type,
@@ -368,19 +366,13 @@ async def resolve_submission_file_async(
                 await db.execute(select(FileBlob).where(FileBlob.file_path == norm_path))
             ).scalar_one_or_none()
             if blob:
-                # 1. Primary: Download from Backblaze B2
-                if blob.storage_backend == "b2" or (blob.storage_key and not blob.file_data):
-                    storage_service = get_storage_service()
-                    key = blob.storage_key or norm_path
-                    data, _ = await storage_service.download_file(key)
-                    candidate.parent.mkdir(parents=True, exist_ok=True)
-                    candidate.write_bytes(data)
-                    return candidate
-                # 2. Legacy fallback: Restore from database file_data if present
-                elif blob.file_data:
-                    candidate.parent.mkdir(parents=True, exist_ok=True)
-                    candidate.write_bytes(blob.file_data)
-                    return candidate
+                # Download from Backblaze B2 / Object Storage
+                storage_service = get_storage_service()
+                key = blob.storage_key or norm_path
+                data, _ = await storage_service.download_file(key)
+                candidate.parent.mkdir(parents=True, exist_ok=True)
+                candidate.write_bytes(data)
+                return candidate
         except Exception:
             pass
 

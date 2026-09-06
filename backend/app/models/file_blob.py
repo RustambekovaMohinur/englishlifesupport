@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, LargeBinary, String, func
+from sqlalchemy import BigInteger, DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,7 +12,6 @@ class FileBlob(UUIDPKMixin, Base):
     __tablename__ = 'file_blobs'
 
     file_path: Mapped[str] = mapped_column(String(500), unique=True, nullable=False, index=True)
-    file_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     storage_backend: Mapped[str] = mapped_column(String(32), server_default="b2", nullable=False)
     storage_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)

@@ -465,24 +465,16 @@ async def get_user_avatar(
     if blob:
         dest = get_upload_root() / blob.file_path
         dest.parent.mkdir(parents=True, exist_ok=True)
-        if blob.storage_backend == "b2" or (blob.storage_key and not blob.file_data):
-            try:
-                from app.services.storage import get_storage_service
-                data, _ = await get_storage_service().download_file(blob.storage_key or blob.file_path)
-                dest.write_bytes(data)
-                return FileResponse(
-                    path=str(dest),
-                    media_type=blob.content_type or "image/jpeg",
-                    headers={"Cache-Control": "public, max-age=86400"},
-                )
-            except Exception:
-                pass
-        elif blob.file_data:
-            dest.write_bytes(blob.file_data)
+        try:
+            from app.services.storage import get_storage_service
+            data, _ = await get_storage_service().download_file(blob.storage_key or blob.file_path)
+            dest.write_bytes(data)
             return FileResponse(
                 path=str(dest),
                 media_type=blob.content_type or "image/jpeg",
                 headers={"Cache-Control": "public, max-age=86400"},
             )
+        except Exception:
+            pass
 
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")
