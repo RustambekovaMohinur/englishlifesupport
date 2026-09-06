@@ -33,7 +33,13 @@ class StorageError(Exception):
 class StorageService:
     def __init__(self):
         self.backend = (settings.STORAGE_BACKEND or "b2").lower().strip()
-        self.bucket_name = settings.B2_BUCKET_NAME
+        # Ensure B2 bucket name is always english-life-files for Backblaze B2
+        configured_bucket = (settings.B2_BUCKET_NAME or "").strip()
+        if not configured_bucket or "r2" in configured_bucket.lower():
+            self.bucket_name = "english-life-files"
+        else:
+            self.bucket_name = configured_bucket
+
         self.endpoint_url = settings.B2_ENDPOINT
         self.key_id = settings.B2_KEY_ID
         self.application_key = settings.B2_APPLICATION_KEY

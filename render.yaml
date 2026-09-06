@@ -27,7 +27,7 @@ services:
       - key: B2_ENDPOINT
         sync: false
       - key: B2_BUCKET_NAME
-        sync: false
+        value: english-life-files
       - key: B2_KEY_ID
         sync: false
       - key: B2_APPLICATION_KEY
