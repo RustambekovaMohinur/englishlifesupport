@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_teacher
 from app.core.config import settings
+from app.db.session import get_db
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.group import Group
 from app.models.student import StudentProfile
@@ -23,7 +24,8 @@ from app.schemas.group import (
     GroupStudentDetail,
     GroupUpdate,
 )
-from app.db.session import get_db
+from app.utils.datetimes import as_utc, utcnow
+
 router = APIRouter(prefix="/api/groups", tags=["groups"], dependencies=[Depends(require_teacher)])
 
 
@@ -46,6 +48,7 @@ async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
         english_level=group.english_level,
         schedule=group.schedule,
         default_homework_time=group.default_homework_time or "20:00",
+        current_cycle=getattr(group, "current_cycle", 1) or 1,
         is_active=group.is_active,
         student_count=count,
         created_at=group.created_at,
@@ -60,6 +63,7 @@ async def list_groups(
 ):
     """
     Returns all groups for the teacher panel belonging to this teacher.
+    Uses a batched GROUP BY query to count students across all groups in 2 queries instead of 1+N.
     """
     teacher_filter = or_(
         Group.created_by == current_user.id,
@@ -69,7 +73,38 @@ async def list_groups(
     if not include_archived:
         query = query.where(Group.is_active.is_(True))
     groups = (await db.execute(query)).scalars().all()
-    return [await _to_group_out(db, g) for g in groups]
+
+    if not groups:
+        return []
+
+    group_ids = [g.id for g in groups]
+    counts_res = await db.execute(
+        select(StudentProfile.group_id, func.count())
+        .select_from(StudentProfile)
+        .join(User, StudentProfile.user_id == User.id)
+        .where(
+            StudentProfile.group_id.in_(group_ids),
+            or_(User.approval_status == ApprovalStatus.APPROVED, User.approval_status.is_(None)),
+            User.is_active == True,
+        )
+        .group_by(StudentProfile.group_id)
+    )
+    counts_map = dict(counts_res.all())
+
+    return [
+        GroupOut(
+            id=g.id,
+            name=g.name,
+            english_level=g.english_level,
+            schedule=g.schedule,
+            default_homework_time=g.default_homework_time or "20:00",
+            current_cycle=getattr(g, "current_cycle", 1) or 1,
+            is_active=g.is_active,
+            student_count=counts_map.get(g.id, 0),
+            created_at=g.created_at,
+        )
+        for g in groups
+    ]
 
 
 @router.post("", response_model=GroupOut, status_code=status.HTTP_201_CREATED)
@@ -152,10 +187,16 @@ async def get_group_detail(
         for sub in subs_res.scalars().all():
             submissions_map[(sub.assignment_id, sub.student_id)] = sub
 
+    current_cycle = getattr(group, "current_cycle", 1) or 1
+    cycle_assignments = [a for a in assignments if (getattr(a, "cycle_number", 1) or 1) == current_cycle]
+    now_dt = utcnow()
+
     student_details: list[GroupStudentDetail] = []
     for st_profile, st_user in student_rows:
         student_assignments: list[AssignmentItemOverview] = []
         completed_count = 0
+        cycle_completed_count = 0
+        overdue_count = 0
 
         for a in assignments:
             sub = submissions_map.get((a.id, st_profile.id))
@@ -164,6 +205,8 @@ async def get_group_detail(
             stars = None
             has_sub = False
             sub_at = None
+            a_cycle = getattr(a, "cycle_number", 1) or 1
+            is_past_dl = as_utc(a.deadline) < now_dt
 
             if sub is not None:
                 has_sub = True
@@ -171,34 +214,40 @@ async def get_group_detail(
                 if sub.grade is not None:
                     score = sub.grade.score
                     stars = sub.grade.stars
-                    # Graded assignments: completion proportional to score (e.g. 8/10 -> 80%, 10/10 -> 100%)
                     comp_pct = min(100, max(0, int((sub.grade.score / 10.0) * 100)))
                 else:
-                    # Submitted but not yet graded -> 100% submission completion
                     comp_pct = 100
 
                 if comp_pct >= 100:
                     completed_count += 1
+                    if a_cycle == current_cycle:
+                        cycle_completed_count += 1
             else:
-                # Brand new or not submitted -> 0%
                 comp_pct = 0
+                if is_past_dl:
+                    overdue_count += 1
 
             student_assignments.append(
                 AssignmentItemOverview(
                     assignment_id=a.id,
                     title=a.title,
                     deadline=a.deadline,
-                    status=sub.status.value if sub else "not_submitted",
+                    status="overdue" if (is_past_dl and not has_sub) else (sub.status.value if sub else "not_submitted"),
                     completion_percentage=comp_pct,
+                    cycle_number=a_cycle,
                     score=score,
                     stars=stars,
                     has_submission=has_sub,
+                    is_overdue=is_past_dl and not has_sub,
                     submitted_at=sub_at,
                 )
             )
 
         overall_pct = (
             int((completed_count / len(assignments)) * 100) if assignments else 100
+        )
+        cycle_pct = (
+            int((cycle_completed_count / len(cycle_assignments)) * 100) if cycle_assignments else 0
         )
 
         student_details.append(
@@ -216,6 +265,10 @@ async def get_group_detail(
                 completed_assignments_count=completed_count,
                 total_assignments_count=len(assignments),
                 overall_completion_percentage=overall_pct,
+                completed_cycle_count=cycle_completed_count,
+                total_cycle_count=len(cycle_assignments),
+                cycle_completion_percentage=cycle_pct,
+                overdue_assignments_count=overdue_count,
                 assignments=student_assignments,
             )
         )
@@ -225,7 +278,8 @@ async def get_group_detail(
             id=a.id,
             title=a.title,
             deadline=a.deadline,
-            status=a.status.value,
+            status=a.status.value if hasattr(a.status, "value") else str(a.status),
+            cycle_number=getattr(a, "cycle_number", 1) or 1,
         )
         for a in assignments
     ]
@@ -236,11 +290,40 @@ async def get_group_detail(
         english_level=group.english_level,
         schedule=group.schedule,
         default_homework_time=group.default_homework_time or "20:00",
+        current_cycle=getattr(group, "current_cycle", 1) or 1,
         is_active=group.is_active,
         student_count=len(student_rows),
         assignments=headers,
         students=student_details,
     )
+
+
+@router.post("/{group_id}/start-cycle", response_model=GroupOut)
+async def start_new_homework_cycle(
+    group_id: uuid.UUID,
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Advances group to a new active homework cycle (e.g. Cycle 1 -> Cycle 2).
+    Historical assignments, submissions, grades, and stars remain 100% preserved.
+    Current cycle progress resets to 0% for the new cycle until students complete new work.
+    """
+    group = (await db.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+    if group is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+
+    is_owner = (
+        group.created_by == current_user.id
+        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+    )
+    if not is_owner:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
+
+    group.current_cycle = (getattr(group, "current_cycle", 1) or 1) + 1
+    await db.commit()
+    await db.refresh(group)
+    return await _to_group_out(db, group)
 
 
 @router.patch("/{group_id}", response_model=GroupOut)
