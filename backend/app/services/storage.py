@@ -107,9 +107,15 @@ class StorageService:
                 **extra_args,
             )
             return norm_key
-        except (BotoCoreError, ClientError) as e:
-            logger.error("B2 upload failed for key '%s': %s", norm_key, type(e).__name__)
-            raise StorageError(f"Failed to upload object to storage: {type(e).__name__}") from e
+        except Exception as e:
+            msg = str(e)
+            # Redact any accidental secret substring if present
+            if self.application_key and self.application_key in msg:
+                msg = msg.replace(self.application_key, "[REDACTED]")
+            if self.key_id and self.key_id in msg:
+                msg = msg.replace(self.key_id, "[REDACTED]")
+            logger.error("B2 upload failed for key '%s': %s (%s)", norm_key, type(e).__name__, msg)
+            raise StorageError(f"Upload to storage failed: {type(e).__name__} - {msg}") from e
 
     def _sync_download(self, object_key: str) -> Tuple[bytes, Optional[str]]:
         norm_key = object_key.replace("\\", "/").lstrip("/")
