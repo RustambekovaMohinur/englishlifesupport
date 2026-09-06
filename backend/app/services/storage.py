@@ -61,17 +61,30 @@ class StorageService:
                     "Backblaze B2 credentials (B2_KEY_ID / B2_APPLICATION_KEY) are not configured."
                 )
             try:
+                # Backblaze B2 endpoint region (e.g. us-east-005 from https://s3.us-east-005.backblazeb2.com)
+                endpoint = (self.endpoint_url or "").strip().rstrip("/")
+                if not endpoint.startswith("http"):
+                    endpoint = f"https://{endpoint}"
+
+                region = "us-east-005"
+                if ".backblazeb2.com" in endpoint:
+                    parts = endpoint.replace("https://", "").replace("http://", "").split(".")[0]
+                    if parts.startswith("s3."):
+                        region = parts[3:]
+
                 boto_config = Config(
                     signature_version="s3v4",
+                    s3={"addressing_style": "virtual"},
                     retries={"max_attempts": 3, "mode": "standard"},
-                    connect_timeout=10,
+                    connect_timeout=15,
                     read_timeout=30,
                 )
                 self._s3_client = boto3.client(
                     "s3",
-                    endpoint_url=self.endpoint_url,
+                    endpoint_url=endpoint,
                     aws_access_key_id=self.key_id,
                     aws_secret_access_key=self.application_key,
+                    region_name=region,
                     config=boto_config,
                 )
             except Exception as e:
