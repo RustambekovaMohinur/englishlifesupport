@@ -21,24 +21,30 @@ export default function LoginPage() {
       const user = await login(username, password);
       navigate(user.role === "teacher" ? "/teacher" : "/student");
     } catch (err) {
-      if (err instanceof AxiosError && err.response?.data) {
-        const data = err.response.data;
-        const errObj = data.error;
-        if (errObj && errObj.code) {
-          if (errObj.code === "ACCOUNT_PENDING_APPROVAL") {
-            toast.error(errObj.message || "Your account is waiting for teacher approval.");
-            return;
-          }
-          if (errObj.code === "ACCOUNT_REJECTED") {
-            toast.error(errObj.message || "Your account has been rejected.");
-            return;
-          }
+      if (err instanceof AxiosError) {
+        if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
+          toast.error("Connection timed out. Please check your internet connection and try again.");
+          return;
         }
-        const message = data.detail ?? "Invalid username or password";
-        toast.error(typeof message === "string" ? message : "Invalid username or password");
-      } else {
-        toast.error("Something went wrong");
+        if (err.response?.data) {
+          const data = err.response.data;
+          const errObj = data.error;
+          if (errObj && errObj.code) {
+            if (errObj.code === "ACCOUNT_PENDING_APPROVAL") {
+              toast.error(errObj.message || "Your account is waiting for teacher approval.");
+              return;
+            }
+            if (errObj.code === "ACCOUNT_REJECTED") {
+              toast.error(errObj.message || "Your account has been rejected.");
+              return;
+            }
+          }
+          const message = data.detail ?? "Invalid username or password";
+          toast.error(typeof message === "string" ? message : "Invalid username or password");
+          return;
+        }
       }
+      toast.error("Something went wrong");
     } finally {
       setIsSubmitting(false);
     }

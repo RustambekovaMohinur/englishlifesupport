@@ -289,9 +289,11 @@ async def is_assignment_locked_for_student(
 ) -> tuple[bool, str | None]:
     """
     Returns (is_locked: bool, reason: str | None).
-    Enforces sequential prerequisite task completion:
-    If Task A is prerequisite for Task B, and student hasn't completed Task A, Task B is locked.
-    Teacher/Admin override takes precedence.
+    Enforces sequential task progression:
+    - COMPLETED -> NEXT UNLOCKS
+    - OVERDUE -> PENALTY -> NEXT UNLOCKS (an expired task never blocks the sequence)
+    - LOCKED only when previous task is still actionable (deadline not passed and not yet submitted)
+    - Teacher override takes precedence.
     """
     # 1. Check if teacher granted explicit override
     override = (
@@ -309,27 +311,136 @@ async def is_assignment_locked_for_student(
     assignment = (
         await db.execute(select(Assignment).where(Assignment.id == assignment_id))
     ).scalar_one_or_none()
-    if not assignment or not assignment.prerequisite_id:
+    if not assignment:
         return False, None
 
-    # 3. Check if student has submitted prerequisite assignment
+    now = utcnow()
+
+    # If assignment itself has explicit prerequisite
+    prereq_id = assignment.prerequisite_id
+    # Or if sequential order within same group and cycle
+    if not prereq_id and getattr(assignment, "order_index", 0) > 0:
+        preceding = (
+            await db.execute(
+                select(Assignment)
+                .where(
+                    Assignment.group_id == assignment.group_id,
+                    Assignment.cycle_number == assignment.cycle_number,
+                    Assignment.status == AssignmentStatus.PUBLISHED,
+                    Assignment.order_index < assignment.order_index,
+                )
+                .order_by(Assignment.order_index.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if preceding:
+            prereq_id = preceding.id
+
+    if not prereq_id:
+        return False, None
+
+    # Check if student has submitted prerequisite assignment
     prereq_sub = (
         await db.execute(
             select(Submission).where(
-                Submission.assignment_id == assignment.prerequisite_id,
+                Submission.assignment_id == prereq_id,
                 Submission.student_id == student_id,
             )
         )
     ).scalar_one_or_none()
 
-    if prereq_sub is None:
-        prereq = (
-            await db.execute(select(Assignment).where(Assignment.id == assignment.prerequisite_id))
-        ).scalar_one_or_none()
-        prereq_title = prereq.title if prereq else "previous task"
+    if prereq_sub is not None:
+        # Completed -> next unlocks!
+        return False, None
+
+    # Prerequisite not submitted: check if prerequisite is overdue
+    prereq = (
+        await db.execute(select(Assignment).where(Assignment.id == prereq_id))
+    ).scalar_one_or_none()
+    if prereq:
+        if as_utc(prereq.deadline) < now:
+            # Overdue -> previous homework is no longer actionable, so sequence advances!
+            return False, None
+        prereq_title = prereq.title
         return True, f"Prerequisite '{prereq_title}' must be completed first."
 
     return False, None
+
+
+async def check_and_apply_overdue_penalties(
+    db: AsyncSession,
+    student_id: uuid.UUID,
+) -> int:
+    """
+    Checks student's group assignments and applies OVERDUE_STAR_PENALTY exactly once
+    for any assignment whose deadline has passed without submission.
+    Idempotent server-side enforcement.
+    """
+    from app.core.config import settings
+    penalty_amount = getattr(settings, "OVERDUE_STAR_PENALTY", 20)
+
+    student = (
+        await db.execute(select(StudentProfile).where(StudentProfile.id == student_id))
+    ).scalar_one_or_none()
+    if not student or not student.group_id:
+        return 0
+
+    now = utcnow()
+    overdue_assignments = (
+        await db.execute(
+            select(Assignment).where(
+                Assignment.group_id == student.group_id,
+                Assignment.status == AssignmentStatus.PUBLISHED,
+                Assignment.deadline < now,
+            )
+        )
+    ).scalars().all()
+
+    if not overdue_assignments:
+        return 0
+
+    assign_ids = [a.id for a in overdue_assignments]
+    submitted_assign_ids = set(
+        (
+            await db.execute(
+                select(Submission.assignment_id).where(
+                    Submission.student_id == student_id,
+                    Submission.assignment_id.in_(assign_ids),
+                )
+            )
+        ).scalars().all()
+    )
+
+    existing_penalty_refs = set(
+        (
+            await db.execute(
+                select(StarTransaction.reference_id).where(
+                    StarTransaction.student_id == student_id,
+                    StarTransaction.reason == StarTransactionReason.LATE_PENALTY,
+                )
+            )
+        ).scalars().all()
+    )
+
+    penalties_applied = 0
+    for a in overdue_assignments:
+        if a.id not in submitted_assign_ids and str(a.id) not in existing_penalty_refs:
+            # Apply penalty idempotently
+            applied = await award_stars(
+                db,
+                student_id=student_id,
+                amount=-abs(penalty_amount),
+                reason=StarTransactionReason.LATE_PENALTY,
+                reference_id=str(a.id),
+                description=f"Overdue penalty for '{a.title}'",
+            )
+            if applied:
+                penalties_applied += 1
+
+    if penalties_applied > 0:
+        await db.commit()
+
+    return penalties_applied
 
 
 async def get_or_create_monthly_free_pass(

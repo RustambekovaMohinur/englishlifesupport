@@ -135,8 +135,23 @@ export default function TeacherLayout() {
         </header>
 
         {/* Desktop Header */}
-        <header className="hidden items-center justify-end border-b border-neutral-100 bg-white px-8 py-4 md:flex">
-          <span className="text-sm text-neutral-500">{user?.email}</span>
+        <header className="hidden items-center justify-between border-b border-neutral-100 bg-white px-8 py-4 md:flex">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Teacher Portal</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium text-neutral-600">{user?.email}</span>
+            <button
+              onClick={() => logout()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900 transition"
+              title="Sign out of your account"
+            >
+              <svg className="h-4 w-4 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Logout
+            </button>
+          </div>
         </header>
 
         <main className="flex-1 p-4 md:p-8">

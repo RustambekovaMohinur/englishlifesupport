@@ -25,10 +25,16 @@ const API_BASE_URL = RAW_API_URL
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },
+  timeout: 15000,
 });
 
 api.interceptors.request.use((config) => {
-  const token = tokenStorage.getAccess();
+  const isPublicAuthRoute = config.url && (
+    config.url.endsWith("/auth/login") ||
+    config.url.endsWith("/auth/register") ||
+    config.url.endsWith("/auth/groups/public")
+  );
+  const token = !isPublicAuthRoute ? tokenStorage.getAccess() : null;
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }

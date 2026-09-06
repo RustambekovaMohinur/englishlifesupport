@@ -12,6 +12,7 @@ from app.db.base_class import Base, TimestampMixin, UUIDPKMixin
 class AssignmentStatus(str, enum.Enum):
     DRAFT = "draft"
     PUBLISHED = "published"
+    ARCHIVED = "archived"
 
 
 class Assignment(UUIDPKMixin, TimestampMixin, Base):
@@ -34,6 +35,7 @@ class Assignment(UUIDPKMixin, TimestampMixin, Base):
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     order_index: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    cycle_number: Mapped[int] = mapped_column(BigInteger, default=1, nullable=False)
     prerequisite_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("assignments.id", ondelete="SET NULL"), nullable=True, index=True
     )

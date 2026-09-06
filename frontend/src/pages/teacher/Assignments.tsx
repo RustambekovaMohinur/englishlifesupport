@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { EmptyState, LoadingRows, useConfirm, FileDownloadButton } from "@/components/ui";
-import { createAssignment, deleteAssignment, listAssignments, listGroups } from "@/services/lmsService";
+import { createAssignment, deleteAssignment, listAssignments, listGroups, updateAssignmentInPlace } from "@/services/lmsService";
 import { AssignmentOut, Group } from "@/types";
 
 export type TaskType = "reading" | "writing" | "dictation" | "vocabulary" | "book";
@@ -28,6 +28,7 @@ export default function AssignmentsPage() {
   const { confirm, ConfirmDialog } = useConfirm();
 
   // Builder state
+  const [editingAssignment, setEditingAssignment] = useState<AssignmentOut | null>(null);
   const [groupId, setGroupId] = useState("");
   const [title, setTitle] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -61,6 +62,55 @@ export default function AssignmentsPage() {
     setGroupId(newGroupId);
     const g = groups.find((grp) => grp.id === newGroupId);
     if (g) applyGroupDefaultTime(g);
+  }
+
+  function handleOpenEdit(a: AssignmentOut) {
+    setEditingAssignment(a);
+    setGroupId(a.group_id);
+    setTitle(a.title);
+    setDeadline(format(new Date(a.deadline), "yyyy-MM-dd'T'HH:mm"));
+    setPrerequisiteId(a.prerequisite_id || "");
+    setAssignmentImages([]);
+
+    // Try parsing tasks from description if JSON
+    try {
+      const parsed = JSON.parse(a.description);
+      if (Array.isArray(parsed)) {
+        setTasks(
+          parsed.map((p: any) => ({
+            id: p.id || Math.random().toString(36).substring(2, 9),
+            type: p.type || "reading",
+            subType: p.subType || "text",
+            content: p.content || "",
+            bookLink: p.bookLink || "",
+            unit: p.unit || "",
+            pages: p.pages || "",
+            file: null,
+          }))
+        );
+      } else {
+        setTasks([
+          {
+            id: Math.random().toString(36).substring(2, 9),
+            type: "reading",
+            subType: "text",
+            content: a.description,
+          },
+        ]);
+      }
+    } catch {
+      setTasks([
+        {
+          id: Math.random().toString(36).substring(2, 9),
+          type: "reading",
+          subType: "text",
+          content: a.description,
+        },
+      ]);
+    }
+
+    setShowBuilder(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function refresh() {
@@ -181,8 +231,14 @@ export default function AssignmentsPage() {
         assignmentImages.forEach((img) => formData.append("images", img));
       }
 
-      await createAssignment(formData);
-      toast.success("Assignment created successfully!");
+      if (editingAssignment) {
+        await updateAssignmentInPlace(editingAssignment.id, formData);
+        toast.success("Assignment updated in-place successfully!");
+      } else {
+        await createAssignment(formData);
+        toast.success("Assignment created successfully!");
+      }
+      setEditingAssignment(null);
       setTitle("");
       setDeadline("");
       setPrerequisiteId("");
@@ -192,7 +248,7 @@ export default function AssignmentsPage() {
       refresh();
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
-      const errorMsg = typeof detail === "string" ? detail : (Array.isArray(detail) ? detail.map((d: any) => d.msg).join(", ") : "Failed to create assignment");
+      const errorMsg = typeof detail === "string" ? detail : (Array.isArray(detail) ? detail.map((d: any) => d.msg).join(", ") : "Failed to save assignment");
       toast.error(errorMsg);
     } finally {
       setIsSaving(false);
@@ -224,10 +280,22 @@ export default function AssignmentsPage() {
       {showBuilder && (
         <form onSubmit={handleCreateAssignment} className="card space-y-5 border-2 border-brand-200 bg-white">
           <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
-            <h2 className="text-lg font-bold text-neutral-900">Create Assignment</h2>
+            <div>
+              <h2 className="text-lg font-bold text-neutral-900">
+                {editingAssignment ? `Edit Assignment: ${editingAssignment.title}` : "Create Assignment"}
+              </h2>
+              {editingAssignment && (
+                <p className="text-xs text-amber-600 font-medium">
+                  In-place editing: Preserves ID, student submissions, grades, and stars intact.
+                </p>
+              )}
+            </div>
             <button
               type="button"
-              onClick={() => setShowBuilder(false)}
+              onClick={() => {
+                setShowBuilder(false);
+                setEditingAssignment(null);
+              }}
               className="text-xs font-medium text-neutral-400 hover:text-neutral-600"
             >
               ✕ Cancel
@@ -713,13 +781,38 @@ export default function AssignmentsPage() {
       ) : (
         <div className="space-y-3">
           {assignments.map((a) => (
-            <div key={a.id} className="card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-semibold text-neutral-900">{a.title}</p>
+            <div key={a.id} className="card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border transition-all hover:border-neutral-300">
+              <div className="space-y-1.5 flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-bold text-neutral-900 text-base">{a.title}</p>
+                  <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200">
+                    {a.group_name}
+                  </span>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    Cycle {a.cycle_number ?? 1}
+                  </span>
+                  <span
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      a.status === "published"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : a.status === "archived"
+                        ? "bg-neutral-200 text-neutral-700"
+                        : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {a.status.toUpperCase()}
+                  </span>
                 </div>
-                <p className="text-sm text-neutral-500">
-                  {a.group_name} · Due {format(new Date(a.deadline), "MMM d, yyyy HH:mm")} · {a.submission_count} submissions
+                <p className="text-xs text-neutral-500 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span>📅 Due: <strong className="text-neutral-700">{format(new Date(a.deadline), "MMM d, yyyy HH:mm")}</strong></span>
+                  <span>·</span>
+                  <span>📥 <strong className="text-neutral-700">{a.submission_count}</strong> submissions</span>
+                  {a.images && a.images.length > 0 && (
+                    <>
+                      <span>·</span>
+                      <span>🖼️ <strong className="text-neutral-700">{a.images.length}/10</strong> images</span>
+                    </>
+                  )}
                 </p>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 pt-1">
                   {a.file_url && (
@@ -739,13 +832,28 @@ export default function AssignmentsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 self-end sm:self-center">
+              {/* Action Buttons: Edit, View Submissions, Delete */}
+              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
                 <button
                   type="button"
-                  className="text-sm font-medium text-red-600 hover:underline"
+                  onClick={() => handleOpenEdit(a)}
+                  className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1 font-semibold"
+                  title="In-place edit (preserves ID and submissions)"
+                >
+                  ✏️ Edit
+                </button>
+                <a
+                  href={`/teacher/submissions?group_id=${a.group_id}`}
+                  className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1 text-neutral-700 hover:text-neutral-900"
+                >
+                  👁️ Submissions
+                </a>
+                <button
+                  type="button"
+                  className="text-xs font-semibold px-2.5 py-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg border border-red-200 transition"
                   onClick={() => handleDelete(a)}
                 >
-                  Delete
+                  🗑️ Delete
                 </button>
               </div>
             </div>

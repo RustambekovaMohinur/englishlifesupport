@@ -52,6 +52,9 @@ class Settings(BaseSettings):
             self.B2_KEY_ID = (
                 os.getenv("B2_KEY_ID") or
                 os.getenv("B2_APPLICATION_KEY_ID") or
+                os.getenv("B2_APP_KEY_ID") or
+                os.getenv("BACKBLAZE_KEY_ID") or
+                os.getenv("BACKBLAZE_APPLICATION_KEY_ID") or
                 os.getenv("AWS_ACCESS_KEY_ID") or
                 ""
             ).strip()
@@ -60,18 +63,34 @@ class Settings(BaseSettings):
             self.B2_APPLICATION_KEY = (
                 os.getenv("B2_APPLICATION_KEY") or
                 os.getenv("B2_APPLICATION_KEY_SECRET") or
+                os.getenv("B2_APP_KEY") or
                 os.getenv("B2_SECRET_ACCESS_KEY") or
+                os.getenv("BACKBLAZE_APPLICATION_KEY") or
+                os.getenv("BACKBLAZE_SECRET_KEY") or
                 os.getenv("AWS_SECRET_ACCESS_KEY") or
                 ""
             ).strip()
 
         if not self.B2_BUCKET_NAME or self.B2_BUCKET_NAME == "english-life-files":
-            env_bucket = os.getenv("B2_BUCKET_NAME") or os.getenv("B2_BUCKET") or os.getenv("S3_BUCKET_NAME")
+            env_bucket = (
+                os.getenv("B2_BUCKET_NAME") or
+                os.getenv("B2_BUCKET") or
+                os.getenv("BACKBLAZE_BUCKET") or
+                os.getenv("BACKBLAZE_BUCKET_NAME") or
+                os.getenv("S3_BUCKET_NAME") or
+                os.getenv("S3_BUCKET")
+            )
             if env_bucket:
                 self.B2_BUCKET_NAME = env_bucket.strip()
 
         if not self.B2_ENDPOINT or self.B2_ENDPOINT == "https://s3.us-east-005.backblazeb2.com":
-            env_endpoint = os.getenv("B2_ENDPOINT") or os.getenv("B2_ENDPOINT_URL") or os.getenv("S3_ENDPOINT_URL")
+            env_endpoint = (
+                os.getenv("B2_ENDPOINT") or
+                os.getenv("B2_ENDPOINT_URL") or
+                os.getenv("BACKBLAZE_ENDPOINT") or
+                os.getenv("BACKBLAZE_ENDPOINT_URL") or
+                os.getenv("S3_ENDPOINT_URL")
+            )
             if env_endpoint:
                 self.B2_ENDPOINT = env_endpoint.strip()
 

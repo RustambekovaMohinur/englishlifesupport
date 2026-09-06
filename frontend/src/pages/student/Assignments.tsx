@@ -15,13 +15,6 @@ import { listMyAssignments, submitHomework, useFreePass, recordVocabPractice } f
 import { AssignmentForStudent } from "@/types";
 
 export function TaskStatusBadge({ assignment }: { assignment: AssignmentForStudent }) {
-  if (assignment.is_locked) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-neutral-200 text-neutral-700 px-2.5 py-0.5 text-xs font-semibold">
-        🔒 Locked
-      </span>
-    );
-  }
   if (assignment.submission_status === "graded") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 text-purple-700 px-2.5 py-0.5 text-xs font-semibold">
@@ -29,24 +22,24 @@ export function TaskStatusBadge({ assignment }: { assignment: AssignmentForStude
       </span>
     );
   }
-  if (assignment.submission_status === "late") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 text-rose-700 px-2.5 py-0.5 text-xs font-semibold">
-        🔴 Late
-      </span>
-    );
-  }
-  if (assignment.submission_status === "submitted") {
+  if (assignment.submission_status === "submitted" || assignment.submission_status === "late") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-700 px-2.5 py-0.5 text-xs font-semibold">
         🔵 Submitted
       </span>
     );
   }
-  if (assignment.is_past_deadline) {
+  if (assignment.is_overdue || (assignment.is_past_deadline && !assignment.submission_status)) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 text-rose-700 px-2.5 py-0.5 text-xs font-semibold">
-        🔴 Late / Missed
+      <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 text-rose-700 px-2.5 py-0.5 text-xs font-semibold" title="Deadline passed without submission (-20 ⭐ penalty applied)">
+        🔴 Overdue
+      </span>
+    );
+  }
+  if (assignment.is_locked) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-neutral-200 text-neutral-700 px-2.5 py-0.5 text-xs font-semibold" title={assignment.lock_reason || "Prerequisite homework not yet completed"}>
+        🔒 Locked
       </span>
     );
   }
@@ -119,8 +112,11 @@ export default function StudentAssignmentsPage() {
               }`}
             >
               <div className="space-y-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <p className="font-semibold text-neutral-900">{a.title}</p>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    Cycle {a.cycle_number ?? 1}
+                  </span>
                   {a.prerequisite_id && (
                     <span className="text-[11px] bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded font-medium">
                       Prerequisite Required
@@ -129,7 +125,8 @@ export default function StudentAssignmentsPage() {
                 </div>
                 <p className="text-sm text-neutral-500">
                   Due {format(new Date(a.deadline), "MMM d, yyyy HH:mm")}
-                  {a.is_past_deadline && !a.submission_status && " · Deadline passed"}
+                  {a.is_overdue && " · 🔴 Overdue (Penalty applied)"}
+                  {!a.is_overdue && a.is_past_deadline && !a.submission_status && " · Deadline passed"}
                   {a.is_locked && a.lock_reason && ` · 🔒 ${a.lock_reason}`}
                 </p>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 pt-1">

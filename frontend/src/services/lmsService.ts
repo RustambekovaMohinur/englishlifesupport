@@ -69,6 +69,8 @@ export const createGroup = (body: { name: string; english_level: string; schedul
 export const updateGroup = (id: string, body: Partial<{ name: string; english_level: string; schedule: string; default_homework_time?: string; is_active: boolean }>) =>
   api.patch<Group>(`/groups/${id}`, body).then((r) => r.data);
 export const deleteGroup = (id: string) => api.delete(`/groups/${id}`);
+export const startGroupCycle = (group_id: string) =>
+  api.post<{ message: string; group_id: string; previous_cycle: number; current_cycle: number }>(`/groups/${group_id}/start-cycle`).then((r) => r.data);
 
 // --- Teacher Profile ---
 export const getMyTeacherProfile = () => api.get<TeacherProfileOut>("/teachers/me").then((r) => r.data);
@@ -92,6 +94,8 @@ export const listAssignments = (group_id?: string) =>
   api.get<AssignmentOut[]>("/assignments", { params: { group_id } }).then((r) => r.data);
 export const createAssignment = (formData: FormData) =>
   api.post<AssignmentOut>("/assignments", formData).then((r) => r.data);
+export const updateAssignmentInPlace = (id: string, formData: FormData) =>
+  api.put<AssignmentOut>(`/assignments/${id}`, formData).then((r) => r.data);
 export const updateAssignment = (id: string, body: Partial<{ title: string; description: string; deadline: string; group_id: string; status: string }>) =>
   api.patch<AssignmentOut>(`/assignments/${id}`, body).then((r) => r.data);
 export const deleteAssignment = (id: string) => api.delete(`/assignments/${id}`);

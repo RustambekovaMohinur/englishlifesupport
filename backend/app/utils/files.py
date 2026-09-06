@@ -15,8 +15,11 @@ Security measures:
 - File bytes are additionally persisted in PostgreSQL Neon (file_blobs table)
   so attachments and avatars survive ephemeral container restarts on Render.
 """
+import logging
 import uuid
 from pathlib import Path
+
+logger = logging.getLogger("app.utils.files")
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select
@@ -117,10 +120,12 @@ async def save_file_blob(
         try:
             await storage_service.upload_file(norm_path, data, content_type)
         except Exception as e:
-            # Re-raise so upload flow fails explicitly; never silently write binary to Neon in production
+            # Re-raise with safe diagnostic info (error type/summary only, NO secrets)
+            err_msg = str(e).strip() or type(e).__name__
+            logger.error("Cloud storage upload error for path '%s': %s", norm_path, err_msg)
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to upload file to cloud storage.",
+                detail=f"Cloud storage upload error: {err_msg}",
             ) from e
 
     # Step 2: Only after storage upload succeeds, record metadata in PostgreSQL

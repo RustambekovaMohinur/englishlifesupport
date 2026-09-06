@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import StudentDetailModal from "@/components/StudentDetailModal";
 import { EmptyState, LoadingRows, Modal, useConfirm } from "@/components/ui";
-import { deleteGroup, getGroupDetail, updateGroup } from "@/services/lmsService";
+import { deleteGroup, getGroupDetail, updateGroup, startGroupCycle } from "@/services/lmsService";
 import { GroupDetailOut } from "@/types";
 
 const LEVELS = [
@@ -148,31 +148,75 @@ export default function GroupDetailPage() {
               <span>⏰</span>
               <span>Default homework due time: <strong className="text-neutral-700">{groupDetail.default_homework_time || "20:00"}</strong></span>
             </p>
+            <div className="mt-2.5 flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                🔄 Cycle {groupDetail.current_cycle || 1} Active
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  confirm(
+                    `Start Homework Cycle ${(groupDetail.current_cycle || 1) + 1}? All historical homework, grades, submissions, and stars will be 100% preserved. Future assignments will belong to the new cycle.`,
+                    async () => {
+                      try {
+                        const res = await startGroupCycle(groupDetail.id);
+                        toast.success(`Cycle ${res.current_cycle} started successfully!`);
+                        loadDetails();
+                      } catch (err: any) {
+                        toast.error(err?.response?.data?.detail ?? "Failed to start cycle");
+                      }
+                    }
+                  );
+                }}
+                className="btn-sm bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-2.5 py-1 rounded-md shadow-xs transition"
+              >
+                + Start Next Cycle
+              </button>
+            </div>
           </div>
 
-          {/* Group Progress Summary Pill */}
-          <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4 min-w-[240px]">
-            <div className="flex items-center justify-between text-xs font-semibold text-neutral-600 mb-1.5">
-              <span>Group Average Progress</span>
-              <span
-                className={`text-sm font-bold ${
-                  avgProgress >= 80
-                    ? "text-emerald-600"
-                    : avgProgress >= 50
-                    ? "text-amber-600"
-                    : "text-neutral-700"
-                }`}
-              >
-                {avgProgress}%
-              </span>
+          {/* Group Progress Summary Pills: Current Cycle & Historical */}
+          <div className="flex flex-col gap-2.5 min-w-[260px]">
+            {/* Current Cycle Progress */}
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3">
+              <div className="flex items-center justify-between text-xs font-semibold text-indigo-900 mb-1">
+                <span>Cycle {groupDetail.current_cycle || 1} Progress</span>
+                <span className="text-xs font-bold text-indigo-700">
+                  {groupDetail.cycle_completion_percentage ?? avgProgress}%
+                </span>
+              </div>
+              <div className="h-2 w-full bg-indigo-200/60 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-indigo-600 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(0, groupDetail.cycle_completion_percentage ?? avgProgress))}%` }}
+                />
+              </div>
             </div>
-            <div className="h-2.5 w-full bg-neutral-200 rounded-full overflow-hidden">
-              <div
-                className={`h-full transition-all duration-500 rounded-full ${
-                  avgProgress >= 80 ? "bg-emerald-500" : avgProgress >= 50 ? "bg-amber-500" : "bg-neutral-500"
-                }`}
-                style={{ width: `${Math.min(100, Math.max(0, avgProgress))}%` }}
-              />
+
+            {/* Historical Overall Progress */}
+            <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-3">
+              <div className="flex items-center justify-between text-xs font-semibold text-neutral-600 mb-1">
+                <span>All-Time Historical Progress</span>
+                <span
+                  className={`text-xs font-bold ${
+                    avgProgress >= 80
+                      ? "text-emerald-600"
+                      : avgProgress >= 50
+                      ? "text-amber-600"
+                      : "text-neutral-700"
+                  }`}
+                >
+                  {avgProgress}%
+                </span>
+              </div>
+              <div className="h-2 w-full bg-neutral-200 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-500 rounded-full ${
+                    avgProgress >= 80 ? "bg-emerald-500" : avgProgress >= 50 ? "bg-amber-500" : "bg-neutral-500"
+                  }`}
+                  style={{ width: `${Math.min(100, Math.max(0, avgProgress))}%` }}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -298,31 +342,32 @@ export default function GroupDetailPage() {
                   </span>
                 </div>
 
-                {/* Progress bar and metrics */}
-                <div className="mt-4 space-y-1.5">
+                {/* Progress bar and metrics: Cycle vs Total */}
+                <div className="mt-4 space-y-2">
                   <div className="flex items-center justify-between text-xs font-semibold">
                     <span className="text-neutral-600">
-                      Completed: <strong className="text-neutral-900">{completedCount}/{totalCount}</strong>
+                      Cycle {groupDetail.current_cycle || 1}: <strong className="text-indigo-700">{student.completed_cycle_count ?? 0}/{student.total_cycle_count ?? 0}</strong>
                     </span>
-                    <span
-                      className={
-                        pct >= 80
-                          ? "text-emerald-600 font-bold"
-                          : pct >= 50
-                          ? "text-amber-600 font-bold"
-                          : "text-rose-600 font-bold"
-                      }
-                    >
-                      Progress: {pct}%
+                    <span className="text-indigo-700 font-bold">
+                      {student.cycle_completion_percentage ?? pct}%
                     </span>
                   </div>
-                  <div className="h-2 w-full bg-neutral-100 rounded-full overflow-hidden border border-neutral-200/60">
+                  <div className="h-2 w-full bg-indigo-50 rounded-full overflow-hidden border border-indigo-200/50">
                     <div
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-rose-500"
-                      }`}
-                      style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+                      className="h-full rounded-full bg-indigo-600 transition-all duration-300"
+                      style={{ width: `${Math.min(100, Math.max(0, student.cycle_completion_percentage ?? pct))}%` }}
                     />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-neutral-500 pt-0.5">
+                    <span>All-Time: {completedCount}/{totalCount} ({pct}%)</span>
+                    {(student.overdue_assignments_count ?? 0) > 0 ? (
+                      <span className="text-rose-600 font-semibold bg-rose-50 px-1.5 py-0.2 rounded">
+                        🔴 {student.overdue_assignments_count} Overdue
+                      </span>
+                    ) : (
+                      <span className="text-emerald-600 font-medium">No overdue</span>
+                    )}
                   </div>
                 </div>
 

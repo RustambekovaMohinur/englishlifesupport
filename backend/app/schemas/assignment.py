@@ -61,6 +61,7 @@ class AssignmentOut(BaseModel):
     created_at: datetime
     submission_count: int = 0
     order_index: int = 0
+    cycle_number: int = 1
     prerequisite_id: uuid.UUID | None = None
 
     model_config = {"from_attributes": True}
@@ -77,10 +78,12 @@ class AssignmentForStudent(BaseModel):
     vocab_words: list[VocabWordItem] = []
     images: list[AssignmentImageOut] = []
     is_past_deadline: bool
+    is_overdue: bool = False
     submission_status: str | None = None  # None if not yet submitted
     score: int | None = None
     submission_id: uuid.UUID | None = None
     order_index: int = 0
+    cycle_number: int = 1
     prerequisite_id: uuid.UUID | None = None
     is_locked: bool = False
     lock_reason: str | None = None

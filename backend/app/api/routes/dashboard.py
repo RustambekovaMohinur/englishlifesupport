@@ -31,75 +31,58 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/teacher", response_model=TeacherDashboard, dependencies=[Depends(require_teacher)])
 async def teacher_dashboard(db: AsyncSession = Depends(get_db)):
-    total_students = (await db.execute(select(func.count()).select_from(StudentProfile))).scalar_one()
-    active_students = (
-        await db.execute(
-            select(func.count())
-            .select_from(StudentProfile)
-            .join(User, StudentProfile.user_id == User.id)
-            .where(User.is_active.is_(True))
-        )
-    ).scalar_one()
+    # 1. Consolidated count metrics + locked students in a single query
+    q_metrics = """
+    WITH 
+    scalars AS (
+        SELECT 
+            (SELECT count(*) FROM student_profiles) as total_students,
+            (SELECT count(*) FROM student_profiles sp JOIN users u ON sp.user_id = u.id WHERE u.is_active = true) as active_students,
+            (SELECT count(*) FROM groups WHERE is_active = true) as total_groups,
+            (SELECT count(*) FROM assignments) as total_assignments,
+            (SELECT count(*) FROM submissions WHERE status != 'graded') as pending_submissions,
+            (SELECT count(*) FROM submissions) as total_submissions,
+            (SELECT count(*) FROM assignments WHERE status = 'published') as published_assignments,
+            (SELECT count(DISTINCT student_id) FROM submissions WHERE status = 'late') as late_students
+    ),
+    prereqs AS (
+        SELECT id, group_id, prerequisite_id
+        FROM assignments
+        WHERE prerequisite_id IS NOT NULL AND status = 'published'
+    ),
+    locked_candidates AS (
+        SELECT sp.id as student_id
+        FROM student_profiles sp
+        JOIN prereqs p ON sp.group_id = p.group_id
+        LEFT JOIN submissions s ON s.student_id = sp.id AND s.assignment_id = p.prerequisite_id
+        LEFT JOIN task_lock_overrides o ON o.student_id = sp.id AND o.assignment_id = p.id AND o.is_unlocked = true
+        WHERE s.id IS NULL AND o.id IS NULL
+        GROUP BY sp.id
+    )
+    SELECT 
+        s.*,
+        (SELECT count(*) FROM locked_candidates) as locked_students
+    FROM scalars s;
+    """
+    from sqlalchemy import text
+    scalar_row = (await db.execute(text(q_metrics))).one()
+    (
+        total_students,
+        active_students,
+        total_groups,
+        total_assignments,
+        pending_submissions,
+        total_submissions,
+        published_assignments,
+        late_students,
+        locked_students_count,
+    ) = scalar_row
     inactive_students = total_students - active_students
 
-    total_groups = (
-        await db.execute(select(func.count()).select_from(Group).where(Group.is_active.is_(True)))
-    ).scalar_one()
-    total_assignments = (await db.execute(select(func.count()).select_from(Assignment))).scalar_one()
-    pending_submissions = (
-        await db.execute(
-            select(func.count()).select_from(Submission).where(Submission.status != SubmissionStatus.GRADED)
-        )
-    ).scalar_one()
-
-    # Calculate real overall completion rate and late students
-    total_submissions = (await db.execute(select(func.count()).select_from(Submission))).scalar_one()
-    published_assignments = (
-        await db.execute(select(func.count()).select_from(Assignment).where(Assignment.status == AssignmentStatus.PUBLISHED))
-    ).scalar_one()
     potential_total = total_students * published_assignments
     completion_rate = int(round((total_submissions / potential_total) * 100)) if potential_total > 0 else 100
 
-    late_students = (
-        await db.execute(
-            select(func.count(func.distinct(Submission.student_id))).where(Submission.status == SubmissionStatus.LATE)
-        )
-    ).scalar_one()
-
-    # Find locked students count
-    # A student is locked if there's an assignment with a prerequisite they haven't submitted (and no override)
-    all_students = (await db.execute(select(StudentProfile.id, StudentProfile.group_id))).all()
-    assignments_with_prereqs = (
-        (await db.execute(select(Assignment.id, Assignment.group_id, Assignment.prerequisite_id).where(Assignment.prerequisite_id.isnot(None), Assignment.status == AssignmentStatus.PUBLISHED)))
-        .all()
-    )
-
-    locked_students_count = 0
-    if assignments_with_prereqs:
-        for s_id, s_grp in all_students:
-            if not s_grp:
-                continue
-            grp_prereqs = [a for a in assignments_with_prereqs if a[1] == s_grp]
-            if not grp_prereqs:
-                continue
-            # check student submissions
-            sub_assign_ids = set(
-                (await db.execute(select(Submission.assignment_id).where(Submission.student_id == s_id))).scalars().all()
-            )
-            # check overrides
-            overrides = set(
-                (await db.execute(select(TaskLockOverride.assignment_id).where(TaskLockOverride.student_id == s_id, TaskLockOverride.is_unlocked.is_(True)))).scalars().all()
-            )
-            is_locked = False
-            for a_id, _, prereq_id in grp_prereqs:
-                if a_id in overrides:
-                    continue
-                if prereq_id not in sub_assign_ids:
-                    is_locked = True
-                    break
-            if is_locked:
-                locked_students_count += 1
-
+    # 3. Recent 10 submissions feed
     recent = (
         await db.execute(
             select(Submission)

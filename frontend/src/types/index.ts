@@ -86,6 +86,10 @@ export interface GroupStudentDetail {
   completed_assignments_count?: number;
   total_assignments_count?: number;
   overall_completion_percentage: number;
+  completed_cycle_count?: number;
+  total_cycle_count?: number;
+  cycle_completion_percentage?: number;
+  overdue_assignments_count?: number;
   assignments: AssignmentItemOverview[];
 }
 
@@ -94,6 +98,7 @@ export interface GroupAssignmentHeader {
   title: string;
   deadline: string;
   status: string;
+  cycle_number?: number;
 }
 
 export interface GroupDetailOut {
@@ -103,6 +108,8 @@ export interface GroupDetailOut {
   schedule: string | null;
   default_homework_time?: string | null;
   is_active: boolean;
+  current_cycle?: number;
+  cycle_completion_percentage?: number;
   student_count: number;
   assignments: GroupAssignmentHeader[];
   students: GroupStudentDetail[];
@@ -234,7 +241,7 @@ export interface AssignmentOut {
   title: string;
   description: string;
   deadline: string;
-  status: "draft" | "published";
+  status: "draft" | "published" | "archived";
   file_url: string | null;
   file_original_name: string | null;
   vocab_words: VocabWordItem[];
@@ -242,6 +249,7 @@ export interface AssignmentOut {
   created_at: string;
   submission_count: number;
   order_index?: number;
+  cycle_number?: number;
   prerequisite_id?: string | null;
 }
 
@@ -250,16 +258,18 @@ export interface AssignmentForStudent {
   title: string;
   description: string;
   deadline: string;
-  status: "draft" | "published";
+  status: "draft" | "published" | "archived";
   file_url: string | null;
   file_original_name: string | null;
   vocab_words: VocabWordItem[];
   images?: AssignmentImageOut[];
   is_past_deadline: boolean;
+  is_overdue?: boolean;
   submission_status: "submitted" | "late" | "graded" | null;
   score: number | null;
   submission_id?: string | null;
   order_index?: number;
+  cycle_number?: number;
   prerequisite_id?: string | null;
   is_locked?: boolean;
   lock_reason?: string | null;

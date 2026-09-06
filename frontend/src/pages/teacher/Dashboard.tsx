@@ -51,16 +51,23 @@ export default function TeacherDashboardPage() {
       .finally(() => setIsLoadingPending(false));
   }
 
+  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
+
   useEffect(() => {
-    Promise.all([
-      getTeacherDashboard().then(setData),
-      listGroups().then((res) => {
-        setGroups(res);
-        if (res.length > 0) setSelectedGroupId(res[0].id);
-      }),
-    ])
+    // 1. Load teacher dashboard metrics
+    getTeacherDashboard()
+      .then(setData)
       .catch(() => setError("Could not load dashboard data."))
       .finally(() => setIsLoading(false));
+
+    // 2. Load groups independently so dropdown and group controls render without waiting for dashboard metrics
+    listGroups()
+      .then((res) => {
+        setGroups(res);
+        if (res.length > 0) setSelectedGroupId(res[0].id);
+      })
+      .catch(() => {})
+      .finally(() => setIsLoadingGroups(false));
 
     loadPendingList(1);
   }, []);
@@ -99,12 +106,15 @@ export default function TeacherDashboardPage() {
     if (!selectedGroupId) return;
     setReportLoading(true);
     setSotwStudentId("");
-    Promise.all([
-      getTeacherGroupReport(selectedGroupId).then((rep) => setGroupReport(rep)),
-      listStudents({ group_id: selectedGroupId, page_size: 100 }).then((res) => setGroupStudents(res.items)),
-    ])
+
+    getTeacherGroupReport(selectedGroupId)
+      .then((rep) => setGroupReport(rep))
       .catch(() => setGroupReport(null))
       .finally(() => setReportLoading(false));
+
+    listStudents({ group_id: selectedGroupId, page_size: 100 })
+      .then((res) => setGroupStudents(res.items || []))
+      .catch(() => setGroupStudents([]));
   }, [selectedGroupId]);
 
   async function handleUnlockStudent(studentId: string, studentName: string) {
@@ -181,13 +191,20 @@ export default function TeacherDashboardPage() {
                 <select
                   value={selectedGroupId}
                   onChange={(e) => setSelectedGroupId(e.target.value)}
+                  disabled={isLoadingGroups || groups.length === 0}
                   className="input text-xs py-1.5 px-3 max-w-[200px]"
                 >
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
+                  {isLoadingGroups ? (
+                    <option value="">Loading groups...</option>
+                  ) : groups.length === 0 ? (
+                    <option value="">No active groups</option>
+                  ) : (
+                    groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
             </div>

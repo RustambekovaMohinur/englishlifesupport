@@ -26,7 +26,7 @@ from app.models.gamification import (
 )
 from app.models.group import Group
 from app.models.student import StudentProfile
-from app.models.submission import Submission
+from app.models.submission import Submission, SubmissionStatus
 from app.models.user import ApprovalStatus, User, UserRole
 from app.schemas.gamification import (
     AchievementOut,
@@ -45,6 +45,7 @@ from app.services.gamification_service import (
     award_stars,
     award_xp,
     calculate_level,
+    check_and_apply_overdue_penalties,
     get_or_create_monthly_free_pass,
     unlock_achievement,
     update_student_streak,
@@ -64,6 +65,8 @@ async def get_my_gamification_summary(
     Returns student's persistent stars, ⚡ streak, 🎯 XP/level, 🛡 free pass,
     achievements, and recent star transactions.
     """
+    # Proactively check and apply any overdue penalties exactly once
+    await check_and_apply_overdue_penalties(db, profile.id)
     # 1. Streak
     streak_row = (
         await db.execute(select(StudentStreak).where(StudentStreak.student_id == profile.id))
@@ -578,6 +581,10 @@ async def get_teacher_group_report(
             if a.prerequisite_id:
                 has_prereq_sub = any(sub.assignment_id == a.prerequisite_id for sub in s_subs)
                 if not has_prereq_sub:
+                    # If prerequisite deadline has passed, it is overdue (penalty applied, not locked)
+                    prereq = next((p for p in assignments if p.id == a.prerequisite_id), None)
+                    if prereq and as_utc(prereq.deadline) < now:
+                        continue
                     # check override
                     ovr = (
                         await db.execute(

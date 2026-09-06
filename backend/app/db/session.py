@@ -46,9 +46,10 @@ _clean_url, _connect_args = _build_async_engine_url(_async_url)
 
 engine = create_async_engine(
     _clean_url,
-    pool_pre_ping=True,
-    pool_size=20,
-    max_overflow=10,
+    pool_pre_ping=False,
+    pool_recycle=300,
+    pool_size=10,
+    max_overflow=5,
     echo=False,
     connect_args=_connect_args,
 )

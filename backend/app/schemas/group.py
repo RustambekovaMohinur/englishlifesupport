@@ -43,6 +43,7 @@ class GroupOut(BaseModel):
     english_level: EnglishLevel
     schedule: str | None
     default_homework_time: str | None = "20:00"
+    current_cycle: int = 1
     is_active: bool
     student_count: int = 0
     created_at: datetime
@@ -56,9 +57,11 @@ class AssignmentItemOverview(BaseModel):
     deadline: datetime
     status: str
     completion_percentage: int
+    cycle_number: int = 1
     score: int | None = None
     stars: int | None = None
     has_submission: bool = False
+    is_overdue: bool = False
     submitted_at: datetime | None = None
 
 
@@ -76,6 +79,10 @@ class GroupStudentDetail(BaseModel):
     completed_assignments_count: int = 0
     total_assignments_count: int = 0
     overall_completion_percentage: int = 0
+    completed_cycle_count: int = 0
+    total_cycle_count: int = 0
+    cycle_completion_percentage: int = 0
+    overdue_assignments_count: int = 0
     assignments: list[AssignmentItemOverview] = []
 
 
@@ -84,6 +91,7 @@ class GroupAssignmentHeader(BaseModel):
     title: str
     deadline: datetime
     status: str
+    cycle_number: int = 1
 
 
 class GroupDetailOut(BaseModel):
@@ -92,6 +100,7 @@ class GroupDetailOut(BaseModel):
     english_level: EnglishLevel
     schedule: str | None
     default_homework_time: str | None = "20:00"
+    current_cycle: int = 1
     is_active: bool
     student_count: int = 0
     assignments: list[GroupAssignmentHeader] = []

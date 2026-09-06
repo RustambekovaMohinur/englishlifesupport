@@ -1,7 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import Boolean, Enum, ForeignKey, String
+from sqlalchemy import Boolean, Enum, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -31,6 +31,7 @@ class Group(UUIDPKMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     default_homework_time: Mapped[str | None] = mapped_column(String(10), nullable=True, default="20:00")
+    current_cycle: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     students: Mapped[list["StudentProfile"]] = relationship(back_populates="group")
     assignments: Mapped[list["Assignment"]] = relationship(back_populates="group", cascade="all, delete-orphan")

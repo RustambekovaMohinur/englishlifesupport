@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -170,24 +171,28 @@ async def startup_event():
             db_path.unlink()
             logger.info("Deleted existing test SQLite DB to ensure clean state")
     # 1. Ensure database schema is migrated before application queries tables
-    try:
-        import asyncio
-        from pathlib import Path
-        from alembic.config import Config
-        from alembic import command
+    if os.environ.get("RUN_MIGRATIONS_ON_STARTUP") == "true":
+        try:
+            import asyncio
+            from pathlib import Path
+            from alembic.config import Config
+            from alembic import command
 
 
-        def _run_migrations():
-            backend_dir = Path(__file__).resolve().parents[1]
-            alembic_ini_path = backend_dir / "alembic.ini"
-            alembic_cfg = Config(str(alembic_ini_path))
-            alembic_cfg.set_main_option("script_location", str(backend_dir / "alembic"))
-            command.upgrade(alembic_cfg, "head")
+            def _run_migrations():
+                backend_dir = Path(__file__).resolve().parents[1]
+                alembic_ini_path = backend_dir / "alembic.ini"
+                alembic_cfg = Config(str(alembic_ini_path))
+                alembic_cfg.set_main_option("script_location", str(backend_dir / "alembic"))
+                command.upgrade(alembic_cfg, "head")
 
-        await asyncio.to_thread(_run_migrations)
-        logger.info("Database schema is up to date (alembic upgrade head).")
-    except Exception as exc:
-        logger.warning("Startup database migration check note: %s", exc)
+            try:
+                await asyncio.wait_for(asyncio.to_thread(_run_migrations), timeout=10.0)
+                logger.info("Database schema is up to date (alembic upgrade head).")
+            except asyncio.TimeoutError:
+                logger.warning("Startup migration check timed out; continuing startup.")
+        except Exception as exc:
+            logger.warning("Startup database migration check note: %s", exc)
 
     # 2. Bootstrap initial teacher account
     try:
