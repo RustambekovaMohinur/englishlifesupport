@@ -71,17 +71,12 @@ class Settings(BaseSettings):
                 ""
             ).strip()
 
-        if not self.B2_BUCKET_NAME or self.B2_BUCKET_NAME == "english-life-files":
-            env_bucket = (
-                os.getenv("B2_BUCKET_NAME") or
-                os.getenv("B2_BUCKET") or
-                os.getenv("BACKBLAZE_BUCKET") or
-                os.getenv("BACKBLAZE_BUCKET_NAME") or
-                os.getenv("S3_BUCKET_NAME") or
-                os.getenv("S3_BUCKET")
-            )
-            if env_bucket:
-                self.B2_BUCKET_NAME = env_bucket.strip()
+        # Priority: explicit B2_BUCKET_NAME env var, else default to 'english-life-files'
+        env_b2_bucket = os.getenv("B2_BUCKET_NAME")
+        if env_b2_bucket and env_b2_bucket.strip():
+            self.B2_BUCKET_NAME = env_b2_bucket.strip()
+        else:
+            self.B2_BUCKET_NAME = "english-life-files"
 
         if not self.B2_ENDPOINT or self.B2_ENDPOINT == "https://s3.us-east-005.backblazeb2.com":
             env_endpoint = (
