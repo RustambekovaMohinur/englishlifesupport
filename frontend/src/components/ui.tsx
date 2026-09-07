@@ -529,7 +529,7 @@ export function VoiceRecorder({
   );
 }
 
-export { ThemeToggle } from "./ThemeToggle";
+export { ThemeToggle, toggleTheme } from "./ThemeToggle";
 
 export function TelegramLink({
   username,
