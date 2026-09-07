@@ -18,21 +18,21 @@ function getGreeting(name: string): string {
 function getSkillPill(title: string) {
   const lower = title.toLowerCase();
   if (lower.includes("speak") || lower.includes("audio") || lower.includes("record") || lower.includes("voice")) {
-    return { label: "Speaking", icon: "🎙️", bg: "bg-rose-500/15 text-rose-300 border-rose-500/30" };
+    return { label: "Speaking", icon: "🎙️", bg: "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/30" };
   }
   if (lower.includes("listen") || lower.includes("listening")) {
-    return { label: "Listening", icon: "🎧", bg: "bg-sky-500/15 text-sky-300 border-sky-500/30" };
+    return { label: "Listening", icon: "🎧", bg: "bg-sky-50 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-500/30" };
   }
   if (lower.includes("vocab") || lower.includes("word") || lower.includes("glossary")) {
-    return { label: "Vocabulary", icon: "📖", bg: "bg-purple-500/15 text-purple-300 border-purple-500/30" };
+    return { label: "Vocabulary", icon: "📖", bg: "bg-purple-50 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-500/30" };
   }
   if (lower.includes("read") || lower.includes("book") || lower.includes("text") || lower.includes("unit")) {
-    return { label: "Reading", icon: "📚", bg: "bg-amber-500/15 text-amber-300 border-amber-500/30" };
+    return { label: "Reading", icon: "📚", bg: "bg-amber-50 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-500/30" };
   }
   if (lower.includes("write") || lower.includes("essay") || lower.includes("grammar")) {
-    return { label: "Writing", icon: "✍️", bg: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" };
+    return { label: "Writing", icon: "✍️", bg: "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30" };
   }
-  return { label: "Core Task", icon: "⚡", bg: "bg-indigo-500/15 text-indigo-300 border-indigo-500/30" };
+  return { label: "Core Task", icon: "⚡", bg: "bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/30" };
 }
 
 function getCountdown(deadlineStr: string) {
@@ -126,11 +126,11 @@ export default function StudentDashboardPage() {
     <div className="space-y-6">
       {/* High-Priority Today's Mission Banner */}
       {urgentMission ? (
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 border border-indigo-500/30 shadow-lg p-5 text-white">
+        <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-gradient-to-r dark:from-indigo-950 dark:via-slate-900 dark:to-indigo-950 border border-indigo-100 dark:border-indigo-500/30 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)] p-5 text-zinc-900 dark:text-white">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="space-y-1.5 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30">
                   🎯 Today&apos;s Mission
                 </span>
                 {urgentSkill && (
@@ -140,16 +140,16 @@ export default function StudentDashboardPage() {
                   </span>
                 )}
                 {urgentCountdown && (
-                  <span className="text-xs font-mono font-medium text-amber-300 tabular-nums">
+                  <span className="text-xs font-mono font-medium text-amber-700 dark:text-amber-300 tabular-nums">
                     {urgentCountdown}
                   </span>
                 )}
               </div>
-              <h3 className="text-lg md:text-xl font-bold tracking-tight text-white truncate">
+              <h3 className="text-lg md:text-xl font-bold tracking-tight text-zinc-900 dark:text-white truncate">
                 {urgentMission.title}
               </h3>
-              <p className="text-xs text-slate-300">
-                Earn <strong className="text-amber-300 font-semibold">+10 ⭐ Stars</strong> and <strong className="text-indigo-300 font-semibold">+25 XP</strong> upon verified teacher grading.
+              <p className="text-xs text-zinc-600 dark:text-slate-300">
+                Earn <strong className="text-amber-700 dark:text-amber-300 font-semibold">+10 ⭐ Stars</strong> and <strong className="text-indigo-700 dark:text-indigo-300 font-semibold">+25 XP</strong> upon verified teacher grading.
               </p>
             </div>
             <Link
@@ -162,68 +162,67 @@ export default function StudentDashboardPage() {
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl bg-emerald-950/30 border border-emerald-500/30 p-4 text-white flex items-center justify-between gap-3">
+        <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 p-4 text-zinc-900 dark:text-white flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
             <div>
-              <p className="text-sm font-bold text-emerald-300">All Daily Missions Completed!</p>
-              <p className="text-xs text-slate-300">You are completely up to date with your assigned homework and learning streak.</p>
+              <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">All Daily Missions Completed!</p>
+              <p className="text-xs text-emerald-700 dark:text-slate-300">You are completely up to date with your assigned homework and learning streak.</p>
             </div>
           </div>
           <Link
             to="/student/assignments"
-            className="text-xs font-semibold text-emerald-300 hover:text-emerald-200 underline whitespace-nowrap"
+            className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200 underline whitespace-nowrap"
           >
             View All Tasks →
           </Link>
         </div>
       )}
       {/* Hero Banner & Gamification Streak Grid (Desktop: 12-col span-8/span-4, Tablet: 2-col, Mobile: 1-col) */}
-      {/* Hero Banner & Gamification Streak Grid (Desktop: 12-col span-8/span-4, Tablet: 2-col, Mobile: 1-col) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-stretch">
         {/* Left Hero Card (Desktop span-8, Tablet span-1, Mobile full) */}
-        <div className="md:col-span-1 lg:col-span-8 relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 border border-indigo-500/20 shadow-xl p-4 sm:p-6 text-white flex flex-col justify-between min-h-[170px] sm:min-h-[200px]">
-          {/* Ambient Glows */}
-          <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
-          <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-purple-500/15 blur-3xl pointer-events-none" />
+        <div className="md:col-span-1 lg:col-span-8 relative overflow-hidden rounded-2xl bg-white dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 border border-black/[0.06] dark:border-indigo-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)] p-4 sm:p-6 text-zinc-900 dark:text-white flex flex-col justify-between min-h-[170px] sm:min-h-[200px]">
+          {/* Ambient Glows (Dark Mode Only) */}
+          <div className="hidden dark:block absolute -right-16 -top-16 h-64 w-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
+          <div className="hidden dark:block absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-purple-500/15 blur-3xl pointer-events-none" />
 
           {/* Top Content */}
           <div className="relative z-10 space-y-1 sm:space-y-2">
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider bg-white/10 backdrop-blur-md px-2 py-0.5 rounded-full text-indigo-200 border border-white/10">
+              <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider bg-zinc-100 dark:bg-white/10 text-zinc-700 dark:text-indigo-200 border border-zinc-200 dark:border-white/10 px-2 py-0.5 rounded-full">
                 English Life
               </span>
-              <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30">
                 {displayLevel}
               </span>
             </div>
-            <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold tracking-tight text-white">
+            <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
               Keep going, {data.full_name?.split(" ")[0] || "Student"}! 💪
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300">
+            <p className="text-xs sm:text-sm text-zinc-600 dark:text-slate-300">
               Every lesson brings you closer to your goals. {data.group_name ? `Cohort: ${data.group_name}` : ""}
               {data.teacher_name ? ` · Examiner: ${data.teacher_name}` : ""}
             </p>
           </div>
 
           {/* Bottom Progress Row with On Track Pill */}
-          <div className="relative z-10 mt-3 sm:mt-5 pt-2.5 sm:pt-3 border-t border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
+          <div className="relative z-10 mt-3 sm:mt-5 pt-2.5 sm:pt-3 border-t border-zinc-100 dark:border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
             <div className="flex-1 space-y-1">
-              <div className="flex justify-between text-[11px] sm:text-xs font-medium text-slate-300 tabular-nums font-mono">
+              <div className="flex justify-between text-[11px] sm:text-xs font-medium text-zinc-600 dark:text-slate-300 tabular-nums font-mono">
                 <span>Progress: {rate}%</span>
                 <span>{completedTasks}/{totalActiveTasks} tasks</span>
               </div>
               {/* Thin 3px XP progress line */}
-              <div className="h-[3px] w-full bg-white/10 rounded-full overflow-hidden backdrop-blur-xs">
+              <div className="h-[3px] w-full bg-zinc-100 dark:bg-white/10 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-amber-400 to-amber-300 rounded-full shadow-[0_0_12px_rgba(251,191,36,0.5)] transition-all duration-500 ease-out"
+                  className="h-full bg-gradient-to-r from-amber-500 to-amber-400 dark:from-amber-400 dark:to-amber-300 rounded-full shadow-[0_0_12px_rgba(251,191,36,0.5)] transition-all duration-500 ease-out"
                   style={{ width: `${Math.min(100, Math.max(0, parseFloat(rate)))}%` }}
                 />
               </div>
             </div>
             <Link
               to="/student/assignments"
-              className="inline-flex items-center justify-center gap-1.5 text-xs font-bold px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-indigo-600/90 hover:bg-indigo-600 text-white shadow-xs transition active:scale-95 shrink-0 self-start sm:self-center"
+              className="inline-flex items-center justify-center gap-1.5 text-xs font-bold px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition active:scale-95 shrink-0 self-start sm:self-center"
             >
               <span>On Track</span>
               <ArrowRight className="h-3.5 w-3.5" />

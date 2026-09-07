@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { LayoutDashboard, BookOpen, Languages, Trophy, User } from "lucide-react";
+import { LayoutDashboard, BookOpen, Trophy, User } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -16,10 +16,10 @@ const sidebarNavItems = [
 const bottomNavItems = [
   { to: "/student", label: "Home", icon: LayoutDashboard, end: true },
   { to: "/student/assignments", label: "Tasks", icon: BookOpen },
-  { to: "/student/vocabulary", label: "Words", icon: Languages },
   { to: "/student/leaderboard", label: "Rank", icon: Trophy },
   { to: "/student/profile", label: "Profile", icon: User },
 ];
+
 
 export default function StudentLayout() {
   const { user, logout } = useAuth();

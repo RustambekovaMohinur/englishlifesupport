@@ -550,6 +550,11 @@ function SubmitModal({
   const isLocked = isGraded || (assignment.is_past_deadline && !assignment.submission_status);
   const isAudioFile = assignment.file_original_name && /\.(mp3|wav|ogg|webm)$/i.test(assignment.file_original_name);
 
+  // Skill-Adaptive Detection
+  const lowerTitle = assignment.title.toLowerCase();
+  const isSpeaking = lowerTitle.includes("speak") || lowerTitle.includes("voice") || lowerTitle.includes("oral") || lowerTitle.includes("record") || lowerTitle.includes("pronun") || lowerTitle.includes("audio");
+  const isWriting = !isSpeaking && (lowerTitle.includes("writ") || lowerTitle.includes("essay") || lowerTitle.includes("composition") || lowerTitle.includes("paragraph") || lowerTitle.includes("letter"));
+
   async function handleSubmit() {
     if (!text && !file && !voiceFile && submissionImages.length === 0) {
       toast.error("Please provide a text answer, audio, file, or images");
@@ -579,19 +584,218 @@ function SubmitModal({
     name: img.original_name,
   }));
 
+  const renderVoiceSection = (isPrimary = false) => (
+    <div
+      key="voice-section"
+      className={`space-y-2 rounded-xl p-3.5 border transition-all ${
+        isPrimary
+          ? "bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 shadow-xs"
+          : "bg-zinc-50/50 dark:bg-zinc-850/40 border-zinc-200 dark:border-zinc-800"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+          <span>🎙️</span>
+          <span>{isPrimary ? "Speaking Response (Primary Task)" : "Voice Recording (Optional)"}</span>
+        </span>
+        {isPrimary && (
+          <span className="text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded-full border border-rose-500/20">
+            Audio Focus
+          </span>
+        )}
+      </div>
+      <VoiceRecorder
+        onRecordingComplete={(audio) => {
+          setVoiceFile(audio);
+          toast.success("Voice recorded! Ready for submission.");
+        }}
+      />
+      {voiceFile && (
+        <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-850 text-xs text-emerald-800 dark:text-emerald-300">
+          <span className="truncate">🎙️ {voiceFile.name} ({(voiceFile.size / 1024).toFixed(0)} KB)</span>
+          <button
+            type="button"
+            onClick={() => setVoiceFile(null)}
+            className="text-emerald-600 hover:text-emerald-800 p-1"
+            title="Remove recording"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderDropzoneSection = (isPrimary = false) => (
+    <div
+      key="dropzone-section"
+      className={`space-y-3 rounded-xl p-3.5 border transition-all ${
+        isPrimary
+          ? "bg-amber-50/30 dark:bg-amber-950/20 border-amber-200/80 dark:border-amber-900/50 shadow-xs"
+          : "bg-zinc-50/50 dark:bg-zinc-850/40 border-zinc-200 dark:border-zinc-800"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+          <span>📸</span>
+          <span>{isPrimary ? "Workbook Photos & Documents (Primary Task)" : "Attachments & Workbook Photos"}</span>
+        </span>
+        {isPrimary && (
+          <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20">
+            Photos / Docs
+          </span>
+        )}
+      </div>
+
+      {/* Fast-Submit Dropzone with Drag-and-Drop */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setIsDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragging(false);
+          const droppedFiles = Array.from(e.dataTransfer.files || []);
+          if (droppedFiles.length > 0) handleFilesAdded(droppedFiles);
+        }}
+        onClick={() => dropzoneInputRef.current?.click()}
+        className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all duration-200 ${
+          isDragging
+            ? "border-indigo-500 bg-indigo-500/[0.06] scale-[1.005] ring-4 ring-indigo-500/10"
+            : "border-zinc-300 dark:border-zinc-700 hover:border-indigo-500/50 bg-white dark:bg-zinc-900/50 hover:bg-indigo-500/[0.02]"
+        }`}
+      >
+        <input
+          ref={dropzoneInputRef}
+          type="file"
+          multiple
+          accept=".pdf,.doc,.docx,.txt,image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic"
+          className="hidden"
+          onChange={(e) => {
+            const files = Array.from(e.target.files || []);
+            if (files.length > 0) handleFilesAdded(files);
+            e.target.value = "";
+          }}
+        />
+        <UploadCloud className="mx-auto h-7 w-7 text-zinc-400 dark:text-zinc-500 mb-1 transition-colors" />
+        <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+          Drag & drop photos/files, or <span className="text-indigo-600 dark:text-indigo-400 underline decoration-indigo-400">browse</span>
+        </p>
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+          PNG, JPG, PDF (max 10MB) · Paste screenshots (<kbd className="px-1 py-0.5 bg-zinc-200 dark:bg-zinc-700 rounded text-[10px] font-mono">Ctrl+V</kbd>)
+        </p>
+      </div>
+
+      {/* Selected Document File Chip */}
+      {file && (
+        <div className="flex items-center justify-between p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-850 text-xs text-blue-900 dark:text-blue-200">
+          <div className="flex items-center gap-2 truncate">
+            <FileText className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+            <span className="font-medium truncate">{file.name}</span>
+            <span className="text-blue-600 dark:text-blue-400 text-[10px] tabular-nums font-mono">
+              ({(file.size / (1024 * 1024)).toFixed(1)} MB)
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFile(null)}
+            className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1"
+            title="Remove document"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Selected Images Grid (Thumbnails) */}
+      {submissionImages.length > 0 && (
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+              <ImageIcon className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />
+              Uploaded Photos ({submissionImages.length}/10)
+            </span>
+            <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">Max 10MB per image</span>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            {submissionImages.map((imgFile, idx) => {
+              const previewUrl = URL.createObjectURL(imgFile);
+              return (
+                <div key={idx} className="relative group rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden aspect-square bg-white dark:bg-zinc-800 shadow-xs">
+                  <img
+                    src={previewUrl}
+                    alt={imgFile.name}
+                    className="w-full h-full object-cover"
+                    onLoad={() => URL.revokeObjectURL(previewUrl)}
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSubmissionImages(submissionImages.filter((_, i) => i !== idx));
+                    }}
+                    className="absolute top-1 right-1 rounded-full bg-red-600/90 text-white p-1 hover:bg-red-700 shadow-sm"
+                    title="Remove image"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderTextareaSection = (isPrimary = false) => (
+    <div
+      key="textarea-section"
+      className={`space-y-2 rounded-xl p-3.5 border transition-all ${
+        isPrimary
+          ? "bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-200/80 dark:border-indigo-900/50 shadow-xs"
+          : "bg-zinc-50/50 dark:bg-zinc-850/40 border-zinc-200 dark:border-zinc-800"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+          <span>✍️</span>
+          <span>{isPrimary ? "Essay / Written Response (Primary Task)" : "Notes / Text Response (Optional)"}</span>
+        </label>
+        {isPrimary && (
+          <span className="text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/20">
+            Writing Focus
+          </span>
+        )}
+      </div>
+      <textarea
+        rows={isPrimary ? 6 : 3}
+        className="input text-xs w-full bg-white dark:bg-zinc-900 resize-y"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder={isPrimary ? "Type your complete essay or written response here..." : "Type your answer, or add any notes or context for your teacher..."}
+      />
+    </div>
+  );
+
   return (
     <>
       {/* Fast-Submit Modal Flex Architecture strictly in z-[70] */}
       <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 animate-in fade-in duration-150">
         <div className="fixed inset-0 bg-transparent" onClick={onClose} />
-        <div className="relative z-10 flex flex-col max-h-[88vh] w-full sm:max-w-2xl bg-white dark:bg-[#161B22] rounded-t-3xl sm:rounded-2xl border-t sm:border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200 sm:slide-in-from-bottom-0 sm:zoom-in-95">
+        <div className="relative z-10 flex flex-col max-h-[90vh] w-full sm:max-w-2xl bg-white dark:bg-[#161B22] rounded-t-3xl sm:rounded-2xl border-t sm:border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200 sm:slide-in-from-bottom-0 sm:zoom-in-95">
           {/* Mobile Drag Indicator */}
           <div className="sm:hidden pt-3 pb-1 flex justify-center shrink-0">
             <div className="w-10 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700" />
           </div>
 
           {/* 1. Rigid Header (Shrink-0) */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 shrink-0 bg-white dark:bg-[#161B22] z-10">
             <div className="min-w-0 pr-3">
               <h3 className="font-bold text-base text-zinc-900 dark:text-white truncate">
                 {assignment.title}
@@ -746,137 +950,41 @@ function SubmitModal({
 
             {!isLocked && (
               <div className="space-y-4 border-t border-zinc-200 dark:border-zinc-800 pt-3">
-                <h4 className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">Fast Homework Submission</h4>
-
-                {/* Fast-Submit Dropzone with Drag-and-Drop */}
-                <div
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setIsDragging(true);
-                  }}
-                  onDragLeave={(e) => {
-                    e.preventDefault();
-                    setIsDragging(false);
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setIsDragging(false);
-                    const droppedFiles = Array.from(e.dataTransfer.files || []);
-                    if (droppedFiles.length > 0) handleFilesAdded(droppedFiles);
-                  }}
-                  onClick={() => dropzoneInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200 ${
-                    isDragging
-                      ? "border-indigo-500 bg-indigo-500/[0.06] scale-[1.005] ring-4 ring-indigo-500/10"
-                      : "border-zinc-300 dark:border-zinc-700 hover:border-indigo-500/50 bg-zinc-50/60 dark:bg-zinc-800/30 hover:bg-indigo-500/[0.02]"
-                  }`}
-                >
-                  <input
-                    ref={dropzoneInputRef}
-                    type="file"
-                    multiple
-                    accept=".pdf,.doc,.docx,.txt,image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic"
-                    className="hidden"
-                    onChange={(e) => {
-                      const files = Array.from(e.target.files || []);
-                      if (files.length > 0) handleFilesAdded(files);
-                      e.target.value = "";
-                    }}
-                  />
-                  <UploadCloud className="mx-auto h-8 w-8 text-zinc-400 dark:text-zinc-500 mb-1.5 transition-colors" />
-                  <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                    Drag & drop files here, or <span className="text-indigo-600 dark:text-indigo-400 underline decoration-indigo-400">browse</span>
-                  </p>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    PDF, DOCX, PNG, JPG, WEBP (up to 10MB each) · Paste screenshots directly (<kbd className="px-1 py-0.5 bg-zinc-200 dark:bg-zinc-700 rounded text-[10px] font-mono">Ctrl+V</kbd>)
-                  </p>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                    Homework Submission
+                  </h4>
+                  <span className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500 font-mono">
+                    Task: {isSpeaking ? "Speaking" : isWriting ? "Writing" : "Reading / Grammar"}
+                  </span>
                 </div>
 
-                {/* Selected Document File Chip */}
-                {file && (
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-850 text-xs text-blue-900 dark:text-blue-200">
-                    <div className="flex items-center gap-2 truncate">
-                      <FileText className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-                      <span className="font-medium truncate">{file.name}</span>
-                      <span className="text-blue-600 dark:text-blue-400 text-[10px] tabular-nums font-mono">
-                        ({(file.size / (1024 * 1024)).toFixed(1)} MB)
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setFile(null)}
-                      className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1"
-                      title="Remove document"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
+                {/* Dynamic Input Widgets Prioritized by Assignment Skill */}
+                {isSpeaking ? (
+                  <>
+                    {renderVoiceSection(true)}
+                    {renderDropzoneSection(false)}
+                    {renderTextareaSection(false)}
+                  </>
+                ) : isWriting ? (
+                  <>
+                    {renderTextareaSection(true)}
+                    {renderDropzoneSection(false)}
+                    {renderVoiceSection(false)}
+                  </>
+                ) : (
+                  <>
+                    {renderDropzoneSection(true)}
+                    {renderTextareaSection(false)}
+                    {renderVoiceSection(false)}
+                  </>
                 )}
-
-                {/* Selected Images Grid (Thumbnails) */}
-                {submissionImages.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                        <ImageIcon className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />
-                        Uploaded Images ({submissionImages.length}/10)
-                      </span>
-                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">Max 10MB per image</span>
-                    </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                      {submissionImages.map((imgFile, idx) => {
-                        const previewUrl = URL.createObjectURL(imgFile);
-                        return (
-                          <div key={idx} className="relative group rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden aspect-square bg-white dark:bg-zinc-800 shadow-xs">
-                            <img
-                              src={previewUrl}
-                              alt={imgFile.name}
-                              className="w-full h-full object-cover"
-                              onLoad={() => URL.revokeObjectURL(previewUrl)}
-                            />
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSubmissionImages(submissionImages.filter((_, i) => i !== idx));
-                              }}
-                              className="absolute top-1 right-1 rounded-full bg-red-600/90 text-white p-1 hover:bg-red-700 shadow-sm"
-                              title="Remove image"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Voice Recorder */}
-                <VoiceRecorder
-                  onRecordingComplete={(audio) => {
-                    setVoiceFile(audio);
-                    toast.success("Voice recorded! Ready for submission.");
-                  }}
-                />
-
-                {/* Text answer / Teacher Notes */}
-                <div>
-                  <label className="label text-xs font-semibold text-zinc-700 dark:text-zinc-300">Notes / Written Answer for your Teacher (optional)</label>
-                  <textarea
-                    rows={3}
-                    className="input text-xs mt-1"
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    placeholder="Type your answer, or add any notes or context for your teacher..."
-                  />
-                </div>
               </div>
             )}
           </div>
 
-          {/* 3. Sticky Action Footer (Shrink-0, ALWAYS visible at bottom) */}
-          <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#161B22] shrink-0">
+          {/* 3. Immovable Sticky Action Footer (Shrink-0, ALWAYS visible above mobile keyboards & safe area) */}
+          <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#161B22] shrink-0 sticky bottom-0 z-20 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] pb-[max(1rem,env(safe-area-inset-bottom))]">
             {!isLocked ? (
               <button
                 type="button"
