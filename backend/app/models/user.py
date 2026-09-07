@@ -49,3 +49,22 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+
+    @property
+    def full_name(self) -> str:
+        if self.student_profile and self.student_profile.full_name:
+            return self.student_profile.full_name
+        if self.teacher_profile and self.teacher_profile.full_name:
+            return self.teacher_profile.full_name
+        return self.username or self.email
+
+    @property
+    def first_name(self) -> str:
+        name = self.full_name
+        return name.split()[0] if name else ""
+
+    @property
+    def last_name(self) -> str:
+        parts = self.full_name.split()
+        return " ".join(parts[1:]) if len(parts) > 1 else ""
+

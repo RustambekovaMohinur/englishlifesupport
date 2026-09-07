@@ -115,6 +115,7 @@ export function AssignmentDiscussionDrawer({
           ) : (
             comments.map((c) => {
               const isInstructor = c.user_role === "teacher";
+              const authorName = c.user_name || c.user_full_name || "User";
               return (
                 <div
                   key={c.id}
@@ -127,10 +128,10 @@ export function AssignmentDiscussionDrawer({
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 flex items-center justify-center text-[10px] font-bold shrink-0">
-                        {c.user_full_name ? c.user_full_name.charAt(0).toUpperCase() : "U"}
+                        {authorName ? authorName.charAt(0).toUpperCase() : "U"}
                       </span>
                       <span className="font-semibold text-zinc-900 dark:text-white truncate">
-                        {c.user_full_name}
+                        {authorName}
                       </span>
                       {isInstructor && (
                         <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-brand-100 dark:bg-brand-900/60 text-brand-700 dark:text-brand-300 border border-brand-300 dark:border-brand-700 shrink-0">
@@ -138,6 +139,7 @@ export function AssignmentDiscussionDrawer({
                         </span>
                       )}
                     </div>
+
                     <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono shrink-0">
                       {format(new Date(c.created_at), "MMM d, HH:mm")}
                     </span>

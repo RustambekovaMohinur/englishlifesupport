@@ -292,10 +292,12 @@ export interface AssignmentComment {
   user_id: string;
   content: string;
   created_at: string;
-  user_full_name: string;
+  user_name?: string;
+  user_full_name?: string;
   user_role: string;
   user_avatar_url?: string | null;
 }
+
 
 export interface PlatformFeedback {
   id: string;

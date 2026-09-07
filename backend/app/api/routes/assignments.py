@@ -820,65 +820,86 @@ async def get_assignment_image(
 
 @router.get("/{assignment_id}/comments", response_model=list[AssignmentCommentOut])
 async def list_assignment_comments(
-    assignment_id: uuid.UUID,
+    assignment_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    assignment = await db.get(Assignment, assignment_id)
-    if not assignment:
-        raise HTTPException(status_code=404, detail="Assignment not found.")
+    try:
+        a_id = uuid.UUID(str(assignment_id)) if isinstance(assignment_id, str) else assignment_id
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid assignment ID format")
 
-    if current_user.role == UserRole.STUDENT:
-        from app.models.student import StudentProfile
-        sp_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
-        sp = sp_res.scalar_one_or_none()
-        if not sp or sp.group_id != assignment.group_id:
-            raise HTTPException(status_code=403, detail="Not authorized to view comments for this assignment.")
+    assignment_res = await db.execute(select(Assignment).where(Assignment.id == a_id))
+    assignment = assignment_res.scalar_one_or_none()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
 
     comments = (
         await db.execute(
             select(AssignmentComment)
-            .options(selectinload(AssignmentComment.user))
-            .where(AssignmentComment.assignment_id == assignment_id)
+            .options(
+                selectinload(AssignmentComment.user).selectinload(User.student_profile),
+                selectinload(AssignmentComment.user).selectinload(User.teacher_profile),
+            )
+            .where(AssignmentComment.assignment_id == a_id)
             .order_by(AssignmentComment.created_at.asc())
         )
     ).scalars().all()
 
-    return [
-        AssignmentCommentOut(
-            id=c.id,
-            assignment_id=c.assignment_id,
-            user_id=c.user_id,
-            content=c.content,
-            created_at=c.created_at,
-            user_full_name=c.user.full_name if c.user else "User",
-            user_role=c.user.role.value if hasattr(c.user.role, "value") else str(c.user.role),
-            user_avatar_url=None,
+    result = []
+    for c in comments:
+        u = c.user
+        display_name = "User"
+        role_str = "student"
+        if u:
+            display_name = (
+                f"{getattr(u, 'first_name', '')} {getattr(u, 'last_name', '')}".strip()
+                or getattr(u, "full_name", None)
+                or u.username
+            )
+            role_str = u.role.value if hasattr(u.role, "value") else str(u.role)
+
+        result.append(
+            AssignmentCommentOut(
+                id=c.id,
+                assignment_id=c.assignment_id,
+                user_id=c.user_id,
+                user_name=display_name,
+                user_full_name=display_name,
+                user_role=role_str,
+                content=c.content,
+                created_at=c.created_at,
+                user_avatar_url=None,
+            )
         )
-        for c in comments
-    ]
+    return result
 
 
 @router.post("/{assignment_id}/comments", response_model=AssignmentCommentOut)
 async def create_assignment_comment(
-    assignment_id: uuid.UUID,
+    assignment_id: str,
     payload: AssignmentCommentCreate,
-    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    assignment = await db.get(Assignment, assignment_id)
-    if not assignment:
-        raise HTTPException(status_code=404, detail="Assignment not found.")
+    if not payload.content or not payload.content.strip():
+        raise HTTPException(status_code=400, detail="Comment content cannot be empty")
 
-    if current_user.role == UserRole.STUDENT:
-        from app.models.student import StudentProfile
-        sp_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
-        sp = sp_res.scalar_one_or_none()
-        if not sp or sp.group_id != assignment.group_id:
-            raise HTTPException(status_code=403, detail="Not authorized to comment on this assignment.")
+    # Safe UUID casting
+    try:
+        a_id = uuid.UUID(str(assignment_id)) if isinstance(assignment_id, str) else assignment_id
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid assignment ID format")
+
+    # Verify assignment exists
+    assignment_res = await db.execute(select(Assignment).where(Assignment.id == a_id))
+    assignment = assignment_res.scalar_one_or_none()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
 
     new_comment = AssignmentComment(
-        assignment_id=assignment_id,
+        id=uuid.uuid4(),
+        assignment_id=a_id,
         user_id=current_user.id,
         content=payload.content.strip(),
     )
@@ -886,15 +907,37 @@ async def create_assignment_comment(
     await db.commit()
     await db.refresh(new_comment)
 
+    # Safe display name extraction
+    # Eagerly load user profiles if needed
+    sp_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
+    sp = sp_res.scalar_one_or_none()
+    tp_res = await db.execute(select(TeacherProfile).where(TeacherProfile.user_id == current_user.id))
+    tp = tp_res.scalar_one_or_none()
+
+    user_name = (
+        (sp.full_name if sp and sp.full_name else None)
+        or (tp.full_name if tp and tp.full_name else None)
+        or f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip()
+        or getattr(current_user, "full_name", None)
+        or current_user.username
+    )
+
+    role_str = (
+        current_user.role.value if hasattr(current_user.role, "value")
+        else str(current_user.role)
+    )
+
     return AssignmentCommentOut(
         id=new_comment.id,
         assignment_id=new_comment.assignment_id,
         user_id=new_comment.user_id,
+        user_name=user_name,
+        user_full_name=user_name,
+        user_role=role_str,
         content=new_comment.content,
         created_at=new_comment.created_at,
-        user_full_name=current_user.full_name,
-        user_role=current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role),
         user_avatar_url=None,
     )
+
 
 

@@ -58,11 +58,13 @@ class AssignmentCommentOut(BaseModel):
     user_id: uuid.UUID
     content: str
     created_at: datetime
-    user_full_name: str
+    user_name: str | None = None
+    user_full_name: str | None = None
     user_role: str
     user_avatar_url: str | None = None
 
     model_config = {"from_attributes": True}
+
 
 
 class AssignmentOut(BaseModel):
