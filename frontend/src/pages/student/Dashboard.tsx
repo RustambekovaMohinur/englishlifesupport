@@ -127,7 +127,7 @@ export default function StudentDashboardPage() {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500 text-sm">⭐</span>
           </div>
           <p className="text-2xl font-bold text-neutral-900 dark:text-white tabular-nums font-mono tracking-tight">{data.total_stars}</p>
-          <p className="text-[11px] text-neutral-400">Rewards & Achievements</p>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Rewards & Achievements</p>
         </div>
 
         <div className="card p-4 space-y-1.5 border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] hover:-translate-y-0.5 transition-all duration-200 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
@@ -149,7 +149,7 @@ export default function StudentDashboardPage() {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500 text-sm">🎯</span>
           </div>
           <p className="text-2xl font-bold text-neutral-900 dark:text-white tabular-nums font-mono tracking-tight">{data.average_score !== null ? `${data.average_score}/10` : "—"}</p>
-          <p className="text-[11px] text-neutral-400">Evaluated homework</p>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Evaluated homework</p>
         </div>
 
         <div className="card p-4 space-y-1.5 border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] hover:-translate-y-0.5 transition-all duration-200 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
@@ -160,7 +160,7 @@ export default function StudentDashboardPage() {
           <p className="text-2xl font-bold text-neutral-900 dark:text-white tabular-nums font-mono tracking-tight">
             {completedTasks}/{totalActiveTasks}
           </p>
-          <p className="text-[11px] text-neutral-400">
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
             {completedTasks}/{totalActiveTasks} tasks completed
           </p>
           {/* Micro-Progress Bar with glow */}

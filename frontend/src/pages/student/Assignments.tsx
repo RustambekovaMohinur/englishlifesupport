@@ -77,10 +77,10 @@ export default function StudentAssignmentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">My Assignments & Learning Tasks</h1>
-          <p className="text-sm text-neutral-500">Sequential homework progression, tasks and vocabulary</p>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">My Assignments & Learning Tasks</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Sequential homework progression, tasks and vocabulary</p>
         </div>
-        <div className="flex items-center gap-2 text-xs bg-brand-50 text-brand-700 px-3 py-1.5 rounded-lg font-medium border border-brand-200">
+        <div className="flex items-center gap-2 text-xs bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 px-3 py-1.5 rounded-lg font-medium border border-brand-200 dark:border-brand-800">
           <span>⚡ +10 ⭐ On-time</span>
           <span>·</span>
           <span>🚀 +5 ⭐ Early</span>
@@ -100,44 +100,44 @@ export default function StudentAssignmentsPage() {
               key={a.id}
               className={`card p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border transition-all duration-150 ${
                 a.is_locked
-                  ? "bg-neutral-50/80 dark:bg-zinc-900/60 border-black/[0.04] dark:border-white/[0.06] opacity-85"
+                  ? "bg-zinc-50/80 dark:bg-zinc-900/60 border-zinc-200/60 dark:border-zinc-800/80 opacity-85"
                   : "bg-white dark:bg-[#111827] border-black/[0.06] dark:border-white/[0.08] hover:border-indigo-500/40 hover:-translate-y-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]"
               }`}
             >
               <div className="space-y-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-bold text-neutral-900 text-sm tracking-tight">{a.title}</p>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono">
+                  <p className="font-bold text-zinc-900 dark:text-white text-sm tracking-tight">{a.title}</p>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
                     Cycle {a.cycle_number ?? 1}
                   </span>
                   {a.prerequisite_id && (
-                    <span className="text-[10px] bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded font-medium">
+                    <span className="text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-1.5 py-0.5 rounded font-medium">
                       Prerequisite Required
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-neutral-500 tabular-nums font-mono">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 tabular-nums font-mono">
                   Due: {format(new Date(a.deadline), "MMM d, yyyy HH:mm")}
                   {a.is_overdue && " · 🔴 Overdue (Penalty applied)"}
                   {!a.is_overdue && a.is_past_deadline && !a.submission_status && " · Deadline passed"}
                   {a.is_locked && a.lock_reason && ` · 🔒 ${a.lock_reason}`}
                 </p>
-                <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px] text-neutral-600">
+                <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px] text-zinc-600 dark:text-zinc-400">
                   {a.file_url && (
                     <FileDownloadButton
                       url={a.file_url}
                       filename={a.file_original_name}
-                      className="inline-flex items-center gap-1 font-medium text-brand-600 hover:underline"
+                      className="inline-flex items-center gap-1 font-medium text-brand-600 dark:text-brand-400 hover:underline"
                     >
                       📎 Attached ({a.file_original_name})
                     </FileDownloadButton>
                   )}
                   {a.vocab_words && a.vocab_words.length > 0 && (
-                    <span className="inline-flex items-center gap-1 text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded font-medium text-[11px]">
+                    <span className="inline-flex items-center gap-1 text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded font-medium text-[11px] border border-purple-200 dark:border-purple-800/50">
                       📖 {a.vocab_words.length} Vocab
                     </span>
                   )}
-                  <span className="inline-flex items-center gap-1 text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded font-medium text-[11px]">
+                  <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded font-medium text-[11px] border border-amber-200 dark:border-amber-800/50">
                     ⭐ +10 Stars · 🎯 +25 XP
                   </span>
                 </div>
@@ -145,13 +145,13 @@ export default function StudentAssignmentsPage() {
               <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
                 <TaskStatusBadge assignment={a} />
                 {a.score !== null && (
-                  <span className="text-xs font-bold text-neutral-800 tabular-nums font-mono">{a.score}/10</span>
+                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 tabular-nums font-mono">{a.score}/10</span>
                 )}
 
                 {/* Free Pass CTA for missed/late tasks */}
                 {((a.is_past_deadline && !a.submission_status) || a.is_locked) && (
                   <button
-                    className="btn-sm bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-xs px-2.5 py-1"
+                    className="btn-sm bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 text-xs px-2.5 py-1"
                     disabled={applyingPassId === a.id}
                     onClick={() => handleApplyFreePass(a.id)}
                     title="Use your 1 Monthly Free Pass to bypass lock/penalty"
@@ -336,7 +336,7 @@ function SubmitModal({
       <Modal open={!!assignment} onClose={onClose} title={assignment.title}>
         <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
           <div>
-            <h4 className="text-xs font-semibold uppercase text-neutral-400">Instructions</h4>
+            <h4 className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">Instructions</h4>
             {(() => {
               try {
                 const blocks = JSON.parse(assignment.description);
@@ -344,21 +344,21 @@ function SubmitModal({
                   return (
                     <div className="mt-2 space-y-4">
                       {blocks.map((block: any, idx: number) => (
-                        <div key={block.id || idx} className="p-3 bg-neutral-50 rounded border">
+                        <div key={block.id || idx} className="p-3 bg-zinc-50 dark:bg-zinc-850 rounded-lg border border-zinc-200 dark:border-zinc-800">
                           <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs font-bold uppercase text-brand-600 bg-brand-50 px-2 py-0.5 rounded">
+                            <span className="text-xs font-bold uppercase text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40 px-2 py-0.5 rounded border border-brand-200 dark:border-brand-800/50">
                               {block.type}
                             </span>
                           </div>
-                          {block.content && <p className="whitespace-pre-wrap text-sm text-neutral-800">{block.content}</p>}
+                          {block.content && <p className="whitespace-pre-wrap text-sm text-zinc-800 dark:text-zinc-200">{block.content}</p>}
                           {block.bookLink && (
-                            <a href={block.bookLink} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline block mt-1">
+                            <a href={block.bookLink} target="_blank" rel="noreferrer" className="text-sm text-blue-600 dark:text-blue-400 hover:underline block mt-1">
                               Link to Book
                             </a>
                           )}
-                          {block.unit && <p className="text-sm text-neutral-600 mt-1">Unit: {block.unit}</p>}
-                          {block.pages && <p className="text-sm text-neutral-600 mt-1">Pages: {block.pages}</p>}
-                          {block.fileName && <p className="text-sm text-neutral-500 mt-1 flex items-center gap-1">📎 {block.fileName}</p>}
+                          {block.unit && <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">Unit: {block.unit}</p>}
+                          {block.pages && <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">Pages: {block.pages}</p>}
+                          {block.fileName && <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 flex items-center gap-1">📎 {block.fileName}</p>}
                         </div>
                       ))}
                     </div>
@@ -367,19 +367,19 @@ function SubmitModal({
               } catch (e) {
                 // Not JSON, fallback to plain text
               }
-              return <p className="whitespace-pre-wrap text-sm text-neutral-700 mt-1">{assignment.description}</p>;
+              return <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300 mt-1">{assignment.description}</p>;
             })()}
-            <p className="text-xs text-neutral-500 mt-2 font-mono tabular-nums">Deadline: {format(new Date(assignment.deadline), "MMM d, yyyy HH:mm")}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 font-mono tabular-nums">Deadline: {format(new Date(assignment.deadline), "MMM d, yyyy HH:mm")}</p>
           </div>
 
           {/* Assignment Attached Images Gallery */}
           {assignment.images && assignment.images.length > 0 && (
-            <div className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-3 space-y-2">
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-850/50 p-3 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-neutral-800 flex items-center gap-1">
+                <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
                   🖼️ Assignment Images ({assignment.images.length})
                 </span>
-                <span className="text-[11px] text-neutral-500">Click to enlarge</span>
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Click to enlarge</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {assignment.images.map((img, idx) => (
@@ -389,15 +389,15 @@ function SubmitModal({
                       setLightboxIndex(idx);
                       setLightboxOpen(true);
                     }}
-                    className="group relative cursor-pointer overflow-hidden rounded-lg border border-neutral-200 bg-white aspect-square hover:shadow-md transition-shadow"
+                    className="group relative cursor-pointer overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 aspect-square hover:shadow-md transition-shadow"
                   >
                     <AuthenticatedImage
                       url={`/api/assignments/${assignment.id}/images/${img.id}`}
                       alt={img.original_name}
                       className="h-full w-full object-cover transition-transform group-hover:scale-105"
                     />
-                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <span className="text-xs font-semibold text-white bg-black/60 px-2 py-0.5 rounded">
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="text-xs font-semibold text-white bg-black/70 px-2 py-0.5 rounded">
                         🔍 View
                       </span>
                     </div>
@@ -408,11 +408,11 @@ function SubmitModal({
           )}
 
           {assignment.file_url && (
-            <div className="p-3 bg-brand-50 border border-brand-200 rounded-lg space-y-2">
+            <div className="p-3 bg-brand-50 dark:bg-brand-950/30 border border-brand-200 dark:border-brand-800 rounded-lg space-y-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold text-brand-900">Homework Document / Audio File</p>
-                  <p className="text-xs text-brand-700">{assignment.file_original_name}</p>
+                  <p className="text-xs font-semibold text-brand-900 dark:text-brand-200">Homework Document / Audio File</p>
+                  <p className="text-xs text-brand-700 dark:text-brand-300">{assignment.file_original_name}</p>
                 </div>
                 <FileDownloadButton
                   url={assignment.file_url}
@@ -431,21 +431,21 @@ function SubmitModal({
           )}
 
           {assignment.vocab_words && assignment.vocab_words.length > 0 && (
-            <div className="space-y-3 border-t pt-3">
+            <div className="space-y-3 border-t border-zinc-200 dark:border-zinc-800 pt-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold uppercase text-purple-700 flex items-center gap-1">
+                <h4 className="text-xs font-semibold uppercase text-purple-700 dark:text-purple-300 flex items-center gap-1">
                   📖 Assignment Vocabulary ({assignment.vocab_words.length} words)
                 </h4>
-                <span className="text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-mono">
+                <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 font-mono">
                   80%+ accuracy = +10 ⭐ & +15 XP
                 </span>
               </div>
 
-              <div className="max-h-48 overflow-y-auto border rounded-lg divide-y bg-neutral-50">
+              <div className="max-h-48 overflow-y-auto border border-zinc-200 dark:border-zinc-800 rounded-lg divide-y divide-zinc-200 dark:divide-zinc-800 bg-zinc-50 dark:bg-zinc-850">
                 {assignment.vocab_words.map((word) => (
                   <div key={word.id} className="p-2 text-xs flex justify-between items-center">
-                    <span className="font-semibold text-neutral-900">{word.english_word}</span>
-                    <span className="text-neutral-600 font-medium">{word.translation}</span>
+                    <span className="font-semibold text-zinc-900 dark:text-white">{word.english_word}</span>
+                    <span className="text-zinc-600 dark:text-zinc-400 font-medium">{word.translation}</span>
                   </div>
                 ))}
               </div>
@@ -455,7 +455,7 @@ function SubmitModal({
           )}
 
           {isGraded && (
-            <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
+            <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-3 text-sm text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-850">
               This submission has already been graded and can no longer be changed.
               {assignment.score !== null && (
                 <p className="font-bold mt-1 font-mono tabular-nums">Your Grade: {assignment.score}/10</p>
@@ -463,12 +463,12 @@ function SubmitModal({
             </div>
           )}
           {isLocked && !isGraded && (
-            <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-700">The deadline has passed for new submissions.</div>
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 text-sm text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-850">The deadline has passed for new submissions.</div>
           )}
 
           {!isLocked && (
-            <div className="space-y-4 border-t pt-3">
-              <h4 className="text-xs font-semibold uppercase text-neutral-500">Fast Homework Submission</h4>
+            <div className="space-y-4 border-t border-zinc-200 dark:border-zinc-800 pt-3">
+              <h4 className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">Fast Homework Submission</h4>
 
               {/* Fast-Submit Dropzone with Drag-and-Drop */}
               <div
@@ -505,29 +505,29 @@ function SubmitModal({
                     e.target.value = "";
                   }}
                 />
-                <UploadCloud className="mx-auto h-8 w-8 text-neutral-400 dark:text-neutral-500 mb-1.5 transition-colors" />
-                <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                <UploadCloud className="mx-auto h-8 w-8 text-zinc-400 dark:text-zinc-500 mb-1.5 transition-colors" />
+                <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
                   Drag & drop files here, or <span className="text-indigo-600 dark:text-indigo-400 underline decoration-indigo-400">browse</span>
                 </p>
-                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
-                  PDF, DOCX, PNG, JPG, WEBP (up to 10MB each) · Paste screenshots directly (<kbd className="px-1 py-0.5 bg-neutral-200 dark:bg-zinc-700 rounded text-[10px] font-mono">Ctrl+V</kbd>)
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  PDF, DOCX, PNG, JPG, WEBP (up to 10MB each) · Paste screenshots directly (<kbd className="px-1 py-0.5 bg-zinc-200 dark:bg-zinc-700 rounded text-[10px] font-mono">Ctrl+V</kbd>)
                 </p>
               </div>
 
               {/* Selected Document File Chip */}
               {file && (
-                <div className="flex items-center justify-between p-2.5 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-900">
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-850 text-xs text-blue-900 dark:text-blue-200">
                   <div className="flex items-center gap-2 truncate">
-                    <FileText className="h-4 w-4 shrink-0 text-blue-600" />
+                    <FileText className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
                     <span className="font-medium truncate">{file.name}</span>
-                    <span className="text-blue-600 text-[10px] tabular-nums font-mono">
+                    <span className="text-blue-600 dark:text-blue-400 text-[10px] tabular-nums font-mono">
                       ({(file.size / (1024 * 1024)).toFixed(1)} MB)
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setFile(null)}
-                    className="text-blue-500 hover:text-blue-700 p-1"
+                    className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1"
                     title="Remove document"
                   >
                     <X className="h-4 w-4" />
@@ -539,17 +539,17 @@ function SubmitModal({
               {submissionImages.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-neutral-700 flex items-center gap-1.5">
-                      <ImageIcon className="h-3.5 w-3.5 text-brand-600" />
+                    <span className="font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                      <ImageIcon className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />
                       Uploaded Images ({submissionImages.length}/10)
                     </span>
-                    <span className="text-[10px] text-neutral-400 font-mono">Max 10MB per image</span>
+                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">Max 10MB per image</span>
                   </div>
                   <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                     {submissionImages.map((imgFile, idx) => {
                       const previewUrl = URL.createObjectURL(imgFile);
                       return (
-                        <div key={idx} className="relative group rounded-lg border border-neutral-200 overflow-hidden aspect-square bg-white shadow-xs">
+                        <div key={idx} className="relative group rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden aspect-square bg-white dark:bg-zinc-800 shadow-xs">
                           <img
                             src={previewUrl}
                             alt={imgFile.name}
@@ -594,7 +594,7 @@ function SubmitModal({
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t">
+              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
                 <button type="button" className="btn-secondary text-xs" onClick={onClose}>
                   Cancel
                 </button>
@@ -684,7 +684,7 @@ function VocabPracticeWidget({ assignmentId, words }: { assignmentId: string; wo
       <button
         type="button"
         onClick={startQuiz}
-        className="w-full btn-sm bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 font-semibold py-2 rounded-lg"
+        className="w-full btn-sm bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 font-semibold py-2 rounded-lg"
       >
         🎯 Practice Vocabulary Quiz (+15 XP / +10 ⭐)
       </button>
@@ -693,9 +693,9 @@ function VocabPracticeWidget({ assignmentId, words }: { assignmentId: string; wo
 
   if (completed) {
     return (
-      <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg text-center space-y-2">
-        <p className="font-bold text-sm text-purple-900">Quiz Completed! 🎉</p>
-        <p className="text-xs text-purple-700">
+      <div className="p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 rounded-lg text-center space-y-2">
+        <p className="font-bold text-sm text-purple-900 dark:text-purple-200">Quiz Completed! 🎉</p>
+        <p className="text-xs text-purple-700 dark:text-purple-300">
           Result: {correctCount} / {words.length} correct ({Math.round((correctCount / words.length) * 100)}%)
         </p>
         <button
@@ -712,14 +712,14 @@ function VocabPracticeWidget({ assignmentId, words }: { assignmentId: string; wo
   const current = words[currentIdx];
 
   return (
-    <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-lg space-y-3">
-      <div className="flex justify-between text-xs text-purple-700 font-medium">
+    <div className="p-3 bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 rounded-lg space-y-3">
+      <div className="flex justify-between text-xs text-purple-700 dark:text-purple-300 font-medium">
         <span>Word {currentIdx + 1} of {words.length}</span>
         <span>Score: {correctCount}</span>
       </div>
       <div>
-        <p className="text-xs text-neutral-500">Translate to English:</p>
-        <p className="text-base font-bold text-neutral-900 mt-0.5">{current.translation}</p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">Translate to English:</p>
+        <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{current.translation}</p>
       </div>
       <div className="flex gap-2">
         <input

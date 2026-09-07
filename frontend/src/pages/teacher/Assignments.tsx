@@ -259,8 +259,8 @@ export default function AssignmentsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Assignments</h1>
-          <p className="text-sm text-neutral-500">Create, manage, and assign homework</p>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Assignments</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Create, manage, and assign homework</p>
         </div>
         <button
           type="button"
@@ -278,14 +278,14 @@ export default function AssignmentsPage() {
 
       {/* Inline Assignment Builder */}
       {showBuilder && (
-        <form onSubmit={handleCreateAssignment} className="card space-y-5 border-2 border-brand-200 bg-white">
-          <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+        <form onSubmit={handleCreateAssignment} className="card space-y-5 border-2 border-brand-200 dark:border-brand-800/60 bg-white dark:bg-[#161B22]">
+          <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
             <div>
-              <h2 className="text-lg font-bold text-neutral-900">
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
                 {editingAssignment ? `Edit Assignment: ${editingAssignment.title}` : "Create Assignment"}
               </h2>
               {editingAssignment && (
-                <p className="text-xs text-amber-600 font-medium">
+                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
                   In-place editing: Preserves ID, student submissions, grades, and stars intact.
                 </p>
               )}
@@ -296,7 +296,7 @@ export default function AssignmentsPage() {
                 setShowBuilder(false);
                 setEditingAssignment(null);
               }}
-              className="text-xs font-medium text-neutral-400 hover:text-neutral-600"
+              className="text-xs font-medium text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
             >
               ✕ Cancel
             </button>
@@ -358,25 +358,25 @@ export default function AssignmentsPage() {
                     </option>
                   ))}
               </select>
-              <p className="text-[11px] text-neutral-400 mt-0.5">
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
                 Students must finish this task before unlocking this assignment.
               </p>
             </div>
           </div>
 
           {/* Multi-Image Uploader (Max 10 Images) */}
-          <div className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-4 space-y-3">
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-neutral-900">🖼️ Assignment Images</h3>
-                <p className="text-xs text-neutral-500">
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-white">🖼️ Assignment Images</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   Add up to 10 images (charts, book scans, diagrams, infographics). Max 10MB per image.
                 </p>
               </div>
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
                 assignmentImages.length >= 10
-                  ? "bg-amber-100 text-amber-800"
-                  : "bg-brand-50 text-brand-700"
+                  ? "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300"
+                  : "bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300"
               }`}>
                 {assignmentImages.length} / 10 images
               </span>
@@ -384,10 +384,10 @@ export default function AssignmentsPage() {
 
             {assignmentImages.length < 10 && (
               <div>
-                <label className="flex flex-col items-center justify-center border-2 border-dashed border-neutral-300 hover:border-brand-400 bg-white rounded-xl p-4 cursor-pointer transition-colors">
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-brand-400 bg-white dark:bg-zinc-900 rounded-xl p-4 cursor-pointer transition-colors">
                   <span className="text-2xl mb-1">📸</span>
-                  <span className="text-xs font-semibold text-neutral-700">Click to upload images</span>
-                  <span className="text-[11px] text-neutral-400">JPG, PNG, WEBP, HEIC up to 10MB</span>
+                  <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Click to upload images</span>
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">JPG, PNG, WEBP, HEIC up to 10MB</span>
                   <input
                     type="file"
                     multiple
@@ -425,7 +425,7 @@ export default function AssignmentsPage() {
                 {assignmentImages.map((file, idx) => {
                   const previewUrl = URL.createObjectURL(file);
                   return (
-                    <div key={idx} className="relative group rounded-lg overflow-hidden border border-neutral-200 bg-white aspect-square shadow-sm">
+                    <div key={idx} className="relative group rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 aspect-square shadow-sm">
                       <img
                         src={previewUrl}
                         alt={file.name}
@@ -452,13 +452,12 @@ export default function AssignmentsPage() {
             )}
           </div>
 
-
           {/* Homework Tasks Section */}
           <div className="space-y-4 pt-2">
-            <div className="flex items-center justify-between border-t border-neutral-100 pt-4">
+            <div className="flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-4">
               <div>
-                <h3 className="text-base font-semibold text-neutral-900">Homework Tasks</h3>
-                <p className="text-xs text-neutral-500">Add tasks for reading, writing, dictation, vocabulary, or book exercises</p>
+                <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Homework Tasks</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Add tasks for reading, writing, dictation, vocabulary, or book exercises</p>
               </div>
               <button
                 type="button"
@@ -470,13 +469,13 @@ export default function AssignmentsPage() {
             </div>
 
             {tasks.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-neutral-200 p-6 text-center text-sm text-neutral-500">
+              <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
                 No tasks added yet. Click <strong>+ Add Task</strong> above to add tasks.
               </div>
             ) : (
               <div className="space-y-4">
                 {tasks.map((task, idx) => (
-                  <div key={task.id} className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 space-y-3">
+                  <div key={task.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/60 p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white">
@@ -498,7 +497,7 @@ export default function AssignmentsPage() {
                       <button
                         type="button"
                         onClick={() => handleRemoveTask(task.id)}
-                        className="text-xs font-medium text-red-600 hover:text-red-800"
+                        className="text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                       >
                         ✕ Remove
                       </button>
@@ -516,7 +515,7 @@ export default function AssignmentsPage() {
                               className={`rounded-lg px-2.5 py-1 text-xs font-medium capitalize transition ${
                                 task.subType === sub
                                   ? "bg-brand-500 text-white"
-                                  : "bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-100"
+                                  : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                               }`}
                             >
                               {sub}
@@ -552,7 +551,7 @@ export default function AssignmentsPage() {
                               className="input text-xs"
                               onChange={(e) => handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null })}
                             />
-                            <p className="mt-1 text-xs text-neutral-400">JPG, PNG, WEBP image (max 10MB)</p>
+                            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">JPG, PNG, WEBP image (max 10MB)</p>
                           </div>
                         )}
 
@@ -564,7 +563,7 @@ export default function AssignmentsPage() {
                               className="input text-xs"
                               onChange={(e) => handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null })}
                             />
-                            <p className="mt-1 text-xs text-neutral-400">PDF, DOC, DOCX, XLS, PPT (max 10MB)</p>
+                            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">PDF, DOC, DOCX, XLS, PPT (max 10MB)</p>
                           </div>
                         )}
                       </div>
@@ -580,7 +579,7 @@ export default function AssignmentsPage() {
                             className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
                               task.subType === "file"
                                 ? "bg-brand-500 text-white"
-                                : "bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-100"
+                                : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                             }`}
                           >
                             Audio file
@@ -591,7 +590,7 @@ export default function AssignmentsPage() {
                             className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
                               task.subType === "link"
                                 ? "bg-brand-500 text-white"
-                                : "bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-100"
+                                : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                             }`}
                           >
                             Link
@@ -606,7 +605,7 @@ export default function AssignmentsPage() {
                               className="input text-xs"
                               onChange={(e) => handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null })}
                             />
-                            <p className="mt-1 text-xs text-neutral-400">Audio file: MP3, WAV, M4A, OGG, WEBM (max 10MB)</p>
+                            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Audio file: MP3, WAV, M4A, OGG, WEBM (max 10MB)</p>
                           </div>
                         )}
 
@@ -634,7 +633,7 @@ export default function AssignmentsPage() {
                               className={`rounded-lg px-2.5 py-1 text-xs font-medium uppercase transition ${
                                 task.subType === sub
                                   ? "bg-brand-500 text-white"
-                                  : "bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-100"
+                                  : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                               }`}
                             >
                               {sub}
@@ -670,7 +669,7 @@ export default function AssignmentsPage() {
                               className="input text-xs"
                               onChange={(e) => handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null })}
                             />
-                            <p className="mt-1 text-xs text-neutral-400">Vocabulary chart image (max 10MB)</p>
+                            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Vocabulary chart image (max 10MB)</p>
                           </div>
                         )}
 
@@ -682,7 +681,7 @@ export default function AssignmentsPage() {
                               className="input text-xs"
                               onChange={(e) => handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null })}
                             />
-                            <p className="mt-1 text-xs text-neutral-400">Vocabulary document (max 10MB)</p>
+                            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Vocabulary document (max 10MB)</p>
                           </div>
                         )}
 
@@ -694,7 +693,7 @@ export default function AssignmentsPage() {
                               className="input text-xs"
                               onChange={(e) => handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null })}
                             />
-                            <p className="mt-1 text-xs text-neutral-400">CSV format: <code>word,translation</code> per line</p>
+                            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">CSV format: <code>word,translation</code> per line</p>
                           </div>
                         )}
                       </div>
@@ -739,7 +738,7 @@ export default function AssignmentsPage() {
             )}
           </div>
 
-          <div className="flex justify-end gap-3 border-t border-neutral-100 pt-4">
+          <div className="flex justify-end gap-3 border-t border-zinc-100 dark:border-zinc-800 pt-4">
             <button
               type="button"
               className="btn-secondary"
@@ -781,51 +780,51 @@ export default function AssignmentsPage() {
       ) : (
         <div className="space-y-3">
           {assignments.map((a) => (
-            <div key={a.id} className="card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border transition-all hover:border-neutral-300">
+            <div key={a.id} className="card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border transition-all hover:border-zinc-300 dark:hover:border-zinc-700">
               <div className="space-y-1.5 flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-bold text-neutral-900 text-base">{a.title}</p>
-                  <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200">
+                  <p className="font-bold text-zinc-900 dark:text-white text-base">{a.title}</p>
+                  <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800">
                     {a.group_name}
                   </span>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                     Cycle {a.cycle_number ?? 1}
                   </span>
                   <span
                     className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                       a.status === "published"
-                        ? "bg-emerald-100 text-emerald-800"
+                        ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300"
                         : a.status === "archived"
-                        ? "bg-neutral-200 text-neutral-700"
-                        : "bg-amber-100 text-amber-800"
+                        ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                        : "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300"
                     }`}
                   >
                     {a.status.toUpperCase()}
                   </span>
                 </div>
-                <p className="text-xs text-neutral-500 flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span>📅 Due: <strong className="text-neutral-700">{format(new Date(a.deadline), "MMM d, yyyy HH:mm")}</strong></span>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span>📅 Due: <strong className="text-zinc-700 dark:text-zinc-300">{format(new Date(a.deadline), "MMM d, yyyy HH:mm")}</strong></span>
                   <span>·</span>
-                  <span>📥 <strong className="text-neutral-700">{a.submission_count}</strong> submissions</span>
+                  <span>📥 <strong className="text-zinc-700 dark:text-zinc-300">{a.submission_count}</strong> submissions</span>
                   {a.images && a.images.length > 0 && (
                     <>
                       <span>·</span>
-                      <span>🖼️ <strong className="text-neutral-700">{a.images.length}/10</strong> images</span>
+                      <span>🖼️ <strong className="text-zinc-700 dark:text-zinc-300">{a.images.length}/10</strong> images</span>
                     </>
                   )}
                 </p>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 pt-1">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-600 dark:text-zinc-400 pt-1">
                   {a.file_url && (
                     <FileDownloadButton
                       url={a.file_url}
                       filename={a.file_original_name}
-                      className="inline-flex items-center gap-1 font-medium text-brand-600 hover:underline"
+                      className="inline-flex items-center gap-1 font-medium text-brand-600 dark:text-brand-400 hover:underline"
                     >
                       📎 Attached File ({a.file_original_name})
                     </FileDownloadButton>
                   )}
                   {a.vocab_words && a.vocab_words.length > 0 && (
-                    <span className="inline-flex items-center gap-1 text-purple-700 bg-purple-50 px-2 py-0.5 rounded font-medium">
+                    <span className="inline-flex items-center gap-1 text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded font-medium">
                       📖 {a.vocab_words.length} Vocabulary Words
                     </span>
                   )}
@@ -844,13 +843,13 @@ export default function AssignmentsPage() {
                 </button>
                 <a
                   href={`/teacher/submissions?group_id=${a.group_id}`}
-                  className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1 text-neutral-700 hover:text-neutral-900"
+                  className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white"
                 >
                   👁️ Submissions
                 </a>
                 <button
                   type="button"
-                  className="text-xs font-semibold px-2.5 py-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg border border-red-200 transition"
+                  className="text-xs font-semibold px-2.5 py-1.5 text-red-600 dark:text-red-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg border border-red-200 dark:border-red-800 transition"
                   onClick={() => handleDelete(a)}
                 >
                   🗑️ Delete

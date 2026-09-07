@@ -62,8 +62,8 @@ export default function SubmissionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-neutral-900">Submissions</h1>
-        <p className="text-sm text-neutral-500">Review and grade student homework</p>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Submissions</h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">Review and grade student homework</p>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -106,25 +106,25 @@ export default function SubmissionsPage() {
           <>
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-neutral-100 text-left text-neutral-500">
-                  <th className="pb-2 pr-4 font-medium">Student</th>
-                  <th className="pb-2 pr-4 font-medium">Assignment</th>
-                  <th className="pb-2 pr-4 font-medium">Submitted</th>
-                  <th className="pb-2 pr-4 font-medium">Status</th>
-                  <th className="pb-2 font-medium">Action</th>
+                <tr className="border-b border-zinc-200/80 dark:border-zinc-800 text-left bg-zinc-50/50 dark:bg-zinc-900/50">
+                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Student</th>
+                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Assignment</th>
+                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Submitted</th>
+                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Status</th>
+                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Action</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
                 {submissions.map((s) => (
-                  <tr key={s.id} className="border-b border-neutral-50 last:border-0">
-                    <td className="py-3 pr-4 font-medium text-neutral-800">{s.student_name}</td>
-                    <td className="py-3 pr-4 text-neutral-600">{s.assignment_title}</td>
-                    <td className="py-3 pr-4 text-neutral-500">{format(new Date(s.submitted_at), "MMM d, HH:mm")}</td>
-                    <td className="py-3 pr-4">
+                  <tr key={s.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition">
+                    <td className="py-3.5 px-4 font-medium text-zinc-900 dark:text-white">{s.student_name}</td>
+                    <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">{s.assignment_title}</td>
+                    <td className="py-3.5 px-4 text-zinc-500 dark:text-zinc-400 font-mono text-xs">{format(new Date(s.submitted_at), "MMM d, HH:mm")}</td>
+                    <td className="py-3.5 px-4">
                       <StatusBadge status={s.status} />
                     </td>
-                    <td className="py-3">
-                      <button className="text-sm font-medium text-brand-600 hover:underline" onClick={() => setGrading(s)}>
+                    <td className="py-3.5 px-4">
+                      <button className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline" onClick={() => setGrading(s)}>
                         {s.grade ? "View / Edit grade" : "Grade"}
                       </button>
                     </td>
@@ -133,7 +133,7 @@ export default function SubmissionsPage() {
               </tbody>
             </table>
 
-            <div className="mt-4 flex items-center justify-between text-sm text-neutral-500">
+            <div className="mt-4 flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
               <span>
                 Page {page} of {totalPages}
               </span>
@@ -305,10 +305,10 @@ function GradeModal({
     <Modal open={!!submission} onClose={onClose} title={`Homework Review: ${submission.student_name}`}>
       <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-1">
         {/* Assignment info */}
-        <div className="flex items-center justify-between border-b pb-3">
+        <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
           <div>
-            <p className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">Assignment</p>
-            <p className="text-base font-medium text-neutral-900">{submission.assignment_title}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">Assignment</p>
+            <p className="text-base font-medium text-zinc-900 dark:text-white">{submission.assignment_title}</p>
           </div>
           <StatusBadge status={submission.status} />
         </div>
@@ -317,32 +317,32 @@ function GradeModal({
         {submission.text_answer && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold text-neutral-800">
+              <label className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
                 Student Text Answer
               </label>
               <button
                 type="button"
                 onClick={handleCaptureSelection}
-                className="text-xs font-medium text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-2.5 py-1 rounded transition"
+                className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 bg-brand-50 dark:bg-brand-950/40 hover:bg-brand-100 dark:hover:bg-brand-900/40 px-2.5 py-1 rounded transition"
               >
                 ✏️ Correct Highlighted Text
               </button>
             </div>
             <div
-              className="whitespace-pre-wrap rounded-lg bg-neutral-50 border border-neutral-200 p-4 text-sm text-neutral-800 selection:bg-brand-200 selection:text-brand-900 leading-relaxed"
+              className="whitespace-pre-wrap rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 text-sm text-zinc-800 dark:text-zinc-200 selection:bg-brand-200 selection:text-brand-900 dark:selection:bg-brand-900 dark:selection:text-brand-100 leading-relaxed"
             >
               {submission.text_answer}
             </div>
 
             {/* Error Marking Section */}
-            <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 space-y-3">
-              <p className="text-xs font-semibold uppercase text-amber-800 tracking-wider">
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase text-amber-700 dark:text-amber-400 tracking-wider">
                 Mark Error in Submission
               </p>
               <form onSubmit={handleAddCorrection} className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <div>
-                    <label className="text-xs text-neutral-600 mb-1 block">Mistake / Selected Text</label>
+                    <label className="text-xs text-zinc-600 dark:text-zinc-400 mb-1 block">Mistake / Selected Text</label>
                     <input
                       type="text"
                       className="input text-xs"
@@ -352,7 +352,7 @@ function GradeModal({
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-neutral-600 mb-1 block">Correction</label>
+                    <label className="text-xs text-zinc-600 dark:text-zinc-400 mb-1 block">Correction</label>
                     <input
                       type="text"
                       className="input text-xs"
@@ -362,7 +362,7 @@ function GradeModal({
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-neutral-600 mb-1 block">Error Type</label>
+                    <label className="text-xs text-zinc-600 dark:text-zinc-400 mb-1 block">Error Type</label>
                     <select
                       className="input text-xs"
                       value={errorType}
@@ -397,29 +397,29 @@ function GradeModal({
 
               {/* Existing corrections list */}
               {corrections.length > 0 && (
-                <div className="pt-2 border-t border-amber-200/70 space-y-2">
-                  <p className="text-xs font-semibold text-neutral-700">Annotated Corrections ({corrections.length}):</p>
+                <div className="pt-2 border-t border-amber-500/20 space-y-2">
+                  <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Annotated Corrections ({corrections.length}):</p>
                   <div className="space-y-1.5">
                     {corrections.map((corr) => (
                       <div
                         key={corr.id}
-                        className="flex items-center justify-between bg-white border border-neutral-200 rounded p-2 text-xs"
+                        className="flex items-center justify-between bg-white dark:bg-[#161B22] border border-zinc-200 dark:border-zinc-800 rounded p-2 text-xs"
                       >
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium capitalize">
+                          <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 font-medium capitalize">
                             {corr.error_type || "Error"}
                           </span>
-                          <span className="line-through text-red-600 font-medium">"{corr.selected_text}"</span>
-                          <span className="text-neutral-400">➔</span>
-                          <span className="text-emerald-700 font-semibold bg-emerald-50 px-1 rounded">
+                          <span className="line-through text-red-600 dark:text-red-400 font-medium">"{corr.selected_text}"</span>
+                          <span className="text-zinc-400 dark:text-zinc-500">➔</span>
+                          <span className="text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-1 rounded">
                             "{corr.correction}"
                           </span>
-                          {corr.comment && <span className="text-neutral-500 italic">({corr.comment})</span>}
+                          {corr.comment && <span className="text-zinc-500 dark:text-zinc-400 italic">({corr.comment})</span>}
                         </div>
                         <button
                           type="button"
                           onClick={() => handleDeleteCorrection(corr.id)}
-                          className="text-neutral-400 hover:text-red-500 ml-2"
+                          className="text-zinc-400 hover:text-red-500 ml-2"
                           title="Delete correction"
                         >
                           ✕
@@ -435,12 +435,12 @@ function GradeModal({
 
         {/* Attached images from student */}
         {submission.images && submission.images.length > 0 && (
-          <div className="space-y-2 rounded-lg border border-neutral-200 p-3 bg-neutral-50/50">
+          <div className="space-y-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 bg-zinc-50/50 dark:bg-zinc-900/50">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-neutral-800 flex items-center gap-1">
+              <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
                 📸 Submitted Images / Notebook Scans ({submission.images.length})
               </span>
-              <span className="text-[11px] text-neutral-500">Click to enlarge</span>
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Click to enlarge</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
               {submission.images.map((img, idx) => (
@@ -450,7 +450,7 @@ function GradeModal({
                     setLightboxIndex(idx);
                     setLightboxOpen(true);
                   }}
-                  className="group relative cursor-pointer overflow-hidden rounded-lg border border-neutral-200 bg-white aspect-square hover:shadow-md transition-shadow"
+                  className="group relative cursor-pointer overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 aspect-square hover:shadow-md transition-shadow"
                 >
                   <AuthenticatedImage
                     url={`/api/submissions/${submission.id}/images/${img.id}`}
@@ -471,17 +471,17 @@ function GradeModal({
         {/* Attached file & audio */}
         {submission.file_url && (
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-neutral-800">Attached File / Voice Recording</p>
+            <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Attached File / Voice Recording</p>
             <FileDownloadButton
               url={submission.file_url}
               filename={submission.file_original_name}
-              className="text-sm font-medium text-brand-600 hover:underline inline-block mb-1"
+              className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline inline-block mb-1"
             >
               📎 {submission.file_original_name ?? "Download attached file"}
             </FileDownloadButton>
             {submission.file_original_name && /\.(mp3|wav|ogg|webm|m4a)$/i.test(submission.file_original_name) && (
-              <div className="mt-2 p-2 bg-purple-50 rounded-lg border border-purple-200">
-                <p className="text-xs font-semibold text-purple-900 mb-1">🎙️ Student Voice Audio Recording</p>
+              <div className="mt-2 p-2 bg-purple-50 dark:bg-purple-950/40 rounded-lg border border-purple-200 dark:border-purple-800">
+                <p className="text-xs font-semibold text-purple-900 dark:text-purple-300 mb-1">🎙️ Student Voice Audio Recording</p>
                 <AuthenticatedAudio url={submission.file_url} className="w-full h-9" />
               </div>
             )}
@@ -489,8 +489,8 @@ function GradeModal({
         )}
 
         {/* General Comments */}
-        <div className="space-y-3 rounded-lg border border-neutral-200 p-4 bg-neutral-50/50">
-          <p className="text-xs font-semibold uppercase text-neutral-700 tracking-wider">
+        <div className="space-y-3 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50/50 dark:bg-zinc-900/50">
+          <p className="text-xs font-semibold uppercase text-zinc-700 dark:text-zinc-300 tracking-wider">
             Teacher Submission Comments
           </p>
           {comments.length > 0 && (
@@ -498,18 +498,18 @@ function GradeModal({
               {comments.map((comm) => (
                 <div
                   key={comm.id}
-                  className="flex items-start justify-between bg-white border border-neutral-200 rounded p-2.5 text-xs text-neutral-800"
+                  className="flex items-start justify-between bg-white dark:bg-[#161B22] border border-zinc-200 dark:border-zinc-800 rounded p-2.5 text-xs text-zinc-800 dark:text-zinc-200"
                 >
                   <div>
                     <p className="whitespace-pre-wrap">{comm.comment}</p>
-                    <p className="text-[10px] text-neutral-400 mt-1">
+                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1">
                       {format(new Date(comm.created_at), "MMM d, HH:mm")}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleDeleteComment(comm.id)}
-                    className="text-neutral-400 hover:text-red-500 text-xs ml-2"
+                    className="text-zinc-400 hover:text-red-500 text-xs ml-2"
                   >
                     ✕
                   </button>
@@ -536,13 +536,13 @@ function GradeModal({
         </div>
 
         {/* Grading score, custom stars & feedback */}
-        <div className="space-y-4 rounded-lg border border-neutral-200 p-4 bg-neutral-50/50">
-          <p className="text-xs font-semibold uppercase text-neutral-700 tracking-wider">
+        <div className="space-y-4 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50/50 dark:bg-zinc-900/50">
+          <p className="text-xs font-semibold uppercase text-zinc-700 dark:text-zinc-300 tracking-wider">
             Grade & Custom Stars
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-medium text-neutral-700 mb-1 block">Score (0–10)</label>
+              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1 block">Score (0–10)</label>
               <input
                 type="number"
                 min={0}
@@ -554,7 +554,7 @@ function GradeModal({
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-neutral-700">Stars Awarded (0–100 ⭐)</label>
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Stars Awarded (0–100 ⭐)</label>
                 <span className="text-xs font-bold text-amber-500">{stars} ⭐</span>
               </div>
               <div className="flex flex-col gap-2">
@@ -562,7 +562,7 @@ function GradeModal({
                   <button
                     type="button"
                     onClick={() => setStars((s) => Math.max(0, s - 1))}
-                    className="h-9 w-9 rounded-lg border border-neutral-300 bg-white font-bold text-neutral-700 hover:bg-neutral-100 flex items-center justify-center transition"
+                    className="h-9 w-9 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center justify-center transition"
                     title="Decrease 1 star"
                   >
                     −
@@ -581,7 +581,7 @@ function GradeModal({
                   <button
                     type="button"
                     onClick={() => setStars((s) => Math.min(100, s + 1))}
-                    className="h-9 w-9 rounded-lg border border-neutral-300 bg-white font-bold text-neutral-700 hover:bg-neutral-100 flex items-center justify-center transition"
+                    className="h-9 w-9 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center justify-center transition"
                     title="Increase 1 star"
                   >
                     +
@@ -597,7 +597,7 @@ function GradeModal({
                       className={`text-xs px-2.5 py-1 rounded-md border transition ${
                         stars === starPreset
                           ? "bg-amber-500 text-white border-amber-600 font-bold shadow-sm"
-                          : "bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100"
+                          : "bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                       }`}
                     >
                       {starPreset}★
@@ -609,7 +609,7 @@ function GradeModal({
           </div>
 
           <div>
-            <label className="text-xs font-medium text-neutral-700 mb-1 block">Feedback</label>
+            <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1 block">Feedback</label>
             <textarea
               rows={3}
               className="input text-sm"
@@ -620,7 +620,7 @@ function GradeModal({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-2 border-t">
+        <div className="flex justify-end gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
           <button className="btn-secondary" onClick={onClose}>
             Close
           </button>

@@ -13,26 +13,26 @@ export function Logo({ className = "h-9 w-9" }: { className?: string }) {
 export function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
     <div className="card">
-      <p className="text-sm font-medium text-neutral-500">{label}</p>
-      <p className="mt-1 text-3xl font-bold text-neutral-900">{value}</p>
-      {hint && <p className="mt-1 text-xs text-neutral-400">{hint}</p>}
+      <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{label}</p>
+      <p className="mt-1 text-3xl font-bold font-mono text-zinc-900 dark:text-white tabular-nums">{value}</p>
+      {hint && <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{hint}</p>}
     </div>
   );
 }
 
 const statusStyles: Record<string, string> = {
-  submitted: "bg-blue-50 text-blue-700",
-  late: "bg-amber-50 text-amber-700",
-  graded: "bg-green-50 text-green-700",
-  active: "bg-green-50 text-green-700",
-  inactive: "bg-neutral-100 text-neutral-500",
-  published: "bg-emerald-50 text-emerald-700",
-  draft: "bg-amber-50 text-amber-700",
-  pending: "bg-neutral-100 text-neutral-600",
+  submitted: "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300",
+  late: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300",
+  graded: "bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300",
+  active: "bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300",
+  inactive: "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400",
+  published: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300",
+  draft: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300",
+  pending: "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300",
 };
 
 export function StatusBadge({ status }: { status: string }) {
-  return <span className={`badge ${statusStyles[status] ?? "bg-neutral-100 text-neutral-600"}`}>{status}</span>;
+  return <span className={`badge ${statusStyles[status] ?? "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"}`}>{status}</span>;
 }
 
 export function Spinner({ className = "h-5 w-5" }: { className?: string }) {
@@ -46,9 +46,9 @@ export function Spinner({ className = "h-5 w-5" }: { className?: string }) {
 
 export function EmptyState({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-200 bg-white px-6 py-16 text-center">
-      <p className="text-base font-semibold text-neutral-800">{title}</p>
-      {description && <p className="mt-1 max-w-sm text-sm text-neutral-500">{description}</p>}
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#EAE9E5] dark:border-[#30363D] bg-white dark:bg-[#161B22] px-6 py-16 text-center">
+      <p className="text-base font-semibold text-zinc-900 dark:text-white">{title}</p>
+      {description && <p className="mt-1 max-w-sm text-sm text-zinc-500 dark:text-zinc-400">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
@@ -58,7 +58,7 @@ export function LoadingRows({ rows = 5 }: { rows?: number }) {
   return (
     <div className="space-y-2">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="h-12 animate-pulse rounded-lg bg-neutral-100" />
+        <div key={i} className="h-12 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800/60" />
       ))}
     </div>
   );
@@ -67,11 +67,11 @@ export function LoadingRows({ rows = 5 }: { rows?: number }) {
 export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[#EAE9E5] dark:border-[#30363D] bg-white dark:bg-[#161B22] p-6 shadow-xl text-zinc-900 dark:text-zinc-100">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-neutral-900">{title}</h3>
-          <button onClick={onClose} className="rounded-full p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600">
+          <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">{title}</h3>
+          <button onClick={onClose} className="rounded-full p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-600 dark:hover:text-zinc-300 transition">
             ✕
           </button>
         </div>

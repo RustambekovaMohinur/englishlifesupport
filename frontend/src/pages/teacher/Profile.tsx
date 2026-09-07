@@ -163,8 +163,8 @@ export default function TeacherProfilePage() {
   return (
     <div className="max-w-3xl space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-neutral-900">Teacher Profile & Settings</h1>
-        <p className="text-sm text-neutral-500">Manage your profile, public bio, and platform settings</p>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Teacher Profile & Settings</h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">Manage your profile, public bio, and platform settings</p>
       </div>
 
       {/* Main Profile Card */}
@@ -187,11 +187,11 @@ export default function TeacherProfilePage() {
 
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-neutral-900">{profile.full_name}</h2>
-                <span className="badge bg-purple-50 text-purple-700 capitalize">{profile.role}</span>
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-white">{profile.full_name}</h2>
+                <span className="badge border border-purple-200 dark:border-purple-850 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 capitalize">{profile.role}</span>
               </div>
-              <p className="text-sm font-medium text-brand-600">@{profile.username}</p>
-              <p className="mt-1 text-xs text-neutral-400">{profile.email}</p>
+              <p className="text-sm font-medium text-brand-600 dark:text-brand-400">@{profile.username}</p>
+              <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{profile.email}</p>
             </div>
           </div>
 
@@ -217,7 +217,7 @@ export default function TeacherProfilePage() {
                 type="button"
                 onClick={handleRemovePhoto}
                 disabled={isUploadingPhoto}
-                className="btn-secondary text-xs text-red-600 hover:bg-red-50"
+                className="btn-secondary text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
               >
                 Remove
               </button>
@@ -233,37 +233,37 @@ export default function TeacherProfilePage() {
         </div>
 
         {/* Bio Section */}
-        <div className="rounded-xl bg-neutral-50 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-400">About Me / Bio</p>
-          <p className="mt-1 text-sm text-neutral-700 whitespace-pre-wrap">
-            {profile.bio || <span className="italic text-neutral-400">No bio added yet. Click &quot;Edit Profile&quot; to add a teacher bio.</span>}
+        <div className="rounded-xl bg-zinc-50/80 dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/80 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">About Me / Bio</p>
+          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+            {profile.bio || <span className="italic text-zinc-400 dark:text-zinc-500">No bio added yet. Click &quot;Edit Profile&quot; to add a teacher bio.</span>}
           </p>
         </div>
 
         {/* Profile Details List */}
-        <div className="divide-y divide-neutral-100 border-t border-neutral-100 pt-2 text-sm">
+        <div className="divide-y divide-zinc-200 dark:divide-zinc-800 border-t border-zinc-200 dark:border-zinc-800 pt-2 text-sm">
           <div className="flex justify-between py-2.5">
-            <span className="text-neutral-500">Username</span>
-            <span className="font-semibold text-neutral-800">{profile.username}</span>
+            <span className="text-zinc-500 dark:text-zinc-400">Username</span>
+            <span className="font-semibold text-zinc-800 dark:text-zinc-200">{profile.username}</span>
           </div>
           <div className="flex justify-between py-2.5">
-            <span className="text-neutral-500">Email</span>
-            <span className="font-medium text-neutral-800">{profile.email}</span>
+            <span className="text-zinc-500 dark:text-zinc-400">Email</span>
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">{profile.email}</span>
           </div>
           <div className="flex justify-between py-2.5">
-            <span className="text-neutral-500">Telegram / Contact</span>
-            <span className="font-medium text-neutral-800">{profile.telegram_username || "—"}</span>
+            <span className="text-zinc-500 dark:text-zinc-400">Telegram / Contact</span>
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">{profile.telegram_username || "—"}</span>
           </div>
           <div className="flex justify-between py-2.5">
-            <span className="text-neutral-500">Role</span>
-            <span className="font-medium capitalize text-neutral-800">{profile.role}</span>
+            <span className="text-zinc-500 dark:text-zinc-400">Role</span>
+            <span className="font-medium capitalize text-zinc-800 dark:text-zinc-200">{profile.role}</span>
           </div>
         </div>
       </div>
 
       {/* Real Statistics Cards */}
       <div>
-        <h3 className="text-lg font-bold text-neutral-900">Teaching Platform Statistics</h3>
+        <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Teaching Platform Statistics</h3>
         <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatCard label="Total Students" value={profile.stats.total_students ?? 0} hint="Enrolled students" />
           <StatCard label="Active Groups" value={profile.stats.total_groups ?? 0} hint="Classes in progress" />
@@ -274,14 +274,14 @@ export default function TeacherProfilePage() {
 
       {/* Edit Profile Modal */}
       {isEditing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="card w-full max-w-md space-y-4">
-            <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
-              <h3 className="text-lg font-bold text-neutral-900">Edit Profile</h3>
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Edit Profile</h3>
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
-                className="text-neutral-400 hover:text-neutral-600"
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
               >
                 ✕
               </button>
@@ -331,7 +331,7 @@ export default function TeacherProfilePage() {
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100">
+              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}
@@ -355,7 +355,7 @@ export default function TeacherProfilePage() {
 
       {/* Password Change Card */}
       <div className="card space-y-4">
-        <h2 className="text-lg font-semibold text-neutral-900 border-b pb-2">Change Password</h2>
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-white border-b border-zinc-200 dark:border-zinc-800 pb-2">Change Password</h2>
         <form onSubmit={handleChangePassword} className="space-y-4">
           <div>
             <label className="label">Current Password</label>
@@ -379,7 +379,7 @@ export default function TeacherProfilePage() {
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="New password (min 8 chars, A-Z, a-z, 0-9, special)"
             />
-            <p className="text-xs text-neutral-500 mt-1">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
               Must include at least 8 characters, 1 uppercase, 1 lowercase, 1 digit, and 1 special character.
             </p>
           </div>

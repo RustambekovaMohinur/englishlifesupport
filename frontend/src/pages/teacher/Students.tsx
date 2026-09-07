@@ -178,14 +178,14 @@ export default function StudentsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Students</h1>
-          <p className="text-sm text-neutral-500">Manage enrolled students and approval requests</p>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Students</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Manage enrolled students and approval requests</p>
         </div>
-        <div className="flex gap-2 border border-neutral-200 bg-neutral-100 p-1 rounded-lg text-sm">
+        <div className="flex gap-2 border border-[#EAE9E5] dark:border-[#30363D] bg-zinc-100 dark:bg-zinc-800/80 p-1 rounded-lg text-sm">
           <button
             onClick={() => setActiveTab("all")}
             className={`px-3 py-1.5 rounded-md font-medium transition-all ${
-              activeTab === "all" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-600 hover:text-neutral-900"
+              activeTab === "all" ? "bg-white dark:bg-[#161B22] text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
             }`}
           >
             All Students ({total})
@@ -196,12 +196,12 @@ export default function StudentsPage() {
               loadPending();
             }}
             className={`px-3 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 ${
-              activeTab === "pending" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-600 hover:text-neutral-900"
+              activeTab === "pending" ? "bg-white dark:bg-[#161B22] text-zinc-900 dark:text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
             }`}
           >
             <span>Pending Approvals</span>
             {pendingStudents.length > 0 && (
-              <span className="bg-amber-500 text-white text-[11px] font-bold px-1.5 py-0.2 rounded-full">
+              <span className="bg-amber-500 text-white text-[11px] font-bold px-1.5 py-0.2 rounded-full font-mono">
                 {pendingStudents.length}
               </span>
             )}
@@ -249,30 +249,30 @@ export default function StudentsPage() {
             <>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-neutral-100 text-left text-neutral-500">
-                    <th className="pb-2 pr-4 font-medium">Name</th>
-                    <th className="pb-2 pr-4 font-medium">Username</th>
-                    <th className="pb-2 pr-4 font-medium">Telegram</th>
-                    <th className="pb-2 pr-4 font-medium">Group</th>
-                    <th className="pb-2 pr-4 font-medium">Level</th>
-                    <th className="pb-2 pr-4 font-medium">Registered</th>
-                    <th className="pb-2 font-medium text-right">Approval Decision</th>
+                  <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50">
+                    <th className="py-2.5 px-3 font-medium">Name</th>
+                    <th className="py-2.5 px-3 font-medium">Username</th>
+                    <th className="py-2.5 px-3 font-medium">Telegram</th>
+                    <th className="py-2.5 px-3 font-medium">Group</th>
+                    <th className="py-2.5 px-3 font-medium">Level</th>
+                    <th className="py-2.5 px-3 font-medium">Registered</th>
+                    <th className="py-2.5 px-3 font-medium text-right">Approval Decision</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pendingStudents.map((s) => (
-                    <tr key={s.id} className="border-b border-neutral-50 last:border-0">
-                      <td className="py-3 pr-4 font-medium text-neutral-800">
+                    <tr key={s.id} className="border-b border-zinc-100 dark:border-zinc-800/60 last:border-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors">
+                      <td className="py-3 px-3 font-medium text-zinc-900 dark:text-white">
                         {`${s.first_name || ""} ${s.last_name || ""}`.trim() || s.username}
                       </td>
-                      <td className="py-3 pr-4 text-neutral-600 font-mono text-xs">{s.username}</td>
-                      <td className="py-3 pr-4 text-neutral-600">{s.telegram_username || "—"}</td>
-                      <td className="py-3 pr-4 font-medium text-brand-600">{s.group_name ?? "—"}</td>
-                      <td className="py-3 pr-4 text-neutral-600 capitalize">{s.english_level?.replace("_", " ") ?? "—"}</td>
-                      <td className="py-3 pr-4 text-neutral-400 text-xs">
+                      <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 font-mono text-xs">{s.username}</td>
+                      <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 text-xs">{s.telegram_username || "—"}</td>
+                      <td className="py-3 px-3 font-medium text-brand-600 dark:text-brand-400 text-xs">{s.group_name ?? "—"}</td>
+                      <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 capitalize text-xs">{s.english_level?.replace("_", " ") ?? "—"}</td>
+                      <td className="py-3 px-3 text-zinc-400 dark:text-zinc-500 text-xs font-mono">
                         {s.created_at ? new Date(s.created_at).toLocaleString() : "—"}
                       </td>
-                      <td className="py-3 text-right space-x-2">
+                      <td className="py-3 px-3 text-right space-x-2">
                         <button
                           disabled={submittingIds[s.id]}
                           className="px-3 py-1 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700 disabled:opacity-50 transition"
@@ -282,7 +282,7 @@ export default function StudentsPage() {
                         </button>
                         <button
                           disabled={submittingIds[s.id]}
-                          className="px-3 py-1 bg-rose-50 text-rose-700 text-xs font-semibold rounded hover:bg-rose-100 disabled:opacity-50 transition border border-rose-200"
+                          className="px-3 py-1 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded hover:bg-rose-100 dark:hover:bg-rose-900/60 disabled:opacity-50 transition border border-rose-200 dark:border-rose-800"
                           onClick={() => onReject(s)}
                         >
                           {submittingIds[s.id] ? "..." : "✕ Reject"}
@@ -294,8 +294,8 @@ export default function StudentsPage() {
               </table>
 
               {/* Pagination Controls for Pending Approvals */}
-              <div className="flex flex-wrap items-center justify-between border-t border-neutral-100 pt-4 mt-4 gap-3">
-                <div className="flex items-center gap-2 text-xs text-neutral-500">
+              <div className="flex flex-wrap items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-4 mt-4 gap-3">
+                <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                   <span>Students per page:</span>
                   <select
                     value={pendingPageSize}
@@ -304,7 +304,7 @@ export default function StudentsPage() {
                       setPendingPageSize(newSize);
                       setPendingPage(1);
                     }}
-                    className="border border-neutral-200 rounded px-2 py-1 text-xs bg-white"
+                    className="border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-xs bg-white dark:bg-[#0D1117] text-zinc-900 dark:text-zinc-100"
                   >
                     <option value={20}>20</option>
                     <option value={50}>50</option>
@@ -312,21 +312,21 @@ export default function StudentsPage() {
                   </select>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-neutral-500">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
                     Page {pendingPage} of {Math.max(1, pendingTotalPages)} ({pendingTotal} pending)
                   </span>
                   <div className="flex gap-1">
                     <button
                       disabled={pendingPage <= 1}
                       onClick={() => setPendingPage((p) => Math.max(1, p - 1))}
-                      className="px-2.5 py-1 text-xs font-medium border border-neutral-200 rounded hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="px-2.5 py-1 text-xs font-medium border border-zinc-200 dark:border-zinc-700 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       Previous
                     </button>
                     <button
                       disabled={pendingPage >= pendingTotalPages || pendingTotalPages === 0}
                       onClick={() => setPendingPage((p) => p + 1)}
-                      className="px-2.5 py-1 text-xs font-medium border border-neutral-200 rounded hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="px-2.5 py-1 text-xs font-medium border border-zinc-200 dark:border-zinc-700 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       Next
                     </button>
@@ -346,44 +346,44 @@ export default function StudentsPage() {
             <>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-neutral-100 text-left text-neutral-500">
-                    <th className="pb-2 pr-4 font-medium">Name</th>
-                    <th className="pb-2 pr-4 font-medium">Username</th>
-                    <th className="pb-2 pr-4 font-medium">Telegram</th>
-                    <th className="pb-2 pr-4 font-medium">Group</th>
-                    <th className="pb-2 pr-4 font-medium">Level</th>
-                    <th className="pb-2 pr-4 font-medium text-center">⭐ Stars</th>
-                    <th className="pb-2 pr-4 font-medium text-center">⚡ Lightning</th>
-                    <th className="pb-2 font-medium">Actions</th>
+                  <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50">
+                    <th className="py-2.5 px-3 font-medium">Name</th>
+                    <th className="py-2.5 px-3 font-medium">Username</th>
+                    <th className="py-2.5 px-3 font-medium">Telegram</th>
+                    <th className="py-2.5 px-3 font-medium">Group</th>
+                    <th className="py-2.5 px-3 font-medium">Level</th>
+                    <th className="py-2.5 px-3 font-medium text-center">⭐ Stars</th>
+                    <th className="py-2.5 px-3 font-medium text-center">⚡ Lightning</th>
+                    <th className="py-2.5 px-3 font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {students.map((s) => (
-                    <tr key={s.id} className="border-b border-neutral-50 last:border-0">
+                    <tr key={s.id} className="border-b border-zinc-100 dark:border-zinc-800/60 last:border-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors">
                       <td
-                        className="py-3 pr-4 font-medium text-neutral-800 hover:text-brand-600 cursor-pointer underline decoration-dotted"
+                        className="py-3 px-3 font-medium text-zinc-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 cursor-pointer underline decoration-dotted"
                         onClick={() => setSelectedStudentId(s.id)}
                       >
                         {s.full_name}
                       </td>
-                      <td className="py-3 pr-4 text-neutral-500 font-mono text-xs">{s.username || s.email}</td>
-                      <td className="py-3 pr-4 text-neutral-600">{s.phone || s.telegram_username || "—"}</td>
-                      <td className="py-3 pr-4 text-neutral-600 font-medium">{s.group_name ?? "—"}</td>
-                      <td className="py-3 pr-4 text-neutral-500 capitalize">{s.level?.replace("_", " ") ?? "—"}</td>
-                      <td className="py-3 pr-4 text-center font-medium text-amber-500">⭐ {s.total_stars}</td>
-                      <td className="py-3 pr-4 text-center font-medium text-yellow-500">⚡ {s.total_lightning ?? 0}</td>
-                      <td className="py-3 space-x-2 whitespace-nowrap">
-                        <button className="text-sm font-medium text-brand-600 hover:underline" onClick={() => setEditing(s)}>
+                      <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 font-mono text-xs">{s.username || s.email}</td>
+                      <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 text-xs">{s.phone || s.telegram_username || "—"}</td>
+                      <td className="py-3 px-3 text-zinc-600 dark:text-zinc-300 font-medium text-xs">{s.group_name ?? "—"}</td>
+                      <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 capitalize text-xs">{s.level?.replace("_", " ") ?? "—"}</td>
+                      <td className="py-3 px-3 text-center font-bold font-mono text-amber-500 text-xs tabular-nums">⭐ {s.total_stars}</td>
+                      <td className="py-3 px-3 text-center font-bold font-mono text-yellow-500 text-xs tabular-nums">⚡ {s.total_lightning ?? 0}</td>
+                      <td className="py-3 px-3 space-x-2 whitespace-nowrap">
+                        <button className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline" onClick={() => setEditing(s)}>
                           Edit
                         </button>
                         <button
-                          className="text-sm font-medium text-amber-600 hover:underline"
+                          className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:underline"
                           onClick={() => setResettingStudent(s)}
                         >
                           Reset Pass
                         </button>
                         <button
-                          className="text-sm font-medium text-red-600 hover:underline"
+                          className="text-sm font-medium text-red-600 dark:text-red-400 hover:underline"
                           onClick={() => handleDelete(s)}
                         >
                           Delete
@@ -394,7 +394,7 @@ export default function StudentsPage() {
                 </tbody>
               </table>
 
-              <div className="mt-4 flex items-center justify-between text-sm text-neutral-500">
+              <div className="mt-4 flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
                 <span>
                   Page {page} of {totalPages}
                 </span>
@@ -482,8 +482,8 @@ function ResetStudentPasswordModal({
   return (
     <Modal open={!!student} onClose={onClose} title={`Reset Password: ${student.full_name}`}>
       <form onSubmit={handleReset} className="space-y-4 text-sm">
-        <p className="text-xs text-neutral-500">
-          Set a new password for <strong className="text-neutral-800">{student.full_name}</strong> (@{student.username || student.email}).
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Set a new password for <strong className="text-zinc-900 dark:text-zinc-100 font-semibold">{student.full_name}</strong> (@{student.username || student.email}).
           Their active sessions will be invalidated and they can immediately login with this password.
         </p>
 
@@ -513,7 +513,7 @@ function ResetStudentPasswordModal({
           />
         </div>
 
-        <div className="flex justify-end gap-2 pt-3 border-t">
+        <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
           <button type="button" className="btn-secondary" onClick={onClose}>
             Cancel
           </button>

@@ -119,8 +119,8 @@ export default function StudentProfilePage() {
     <div className="max-w-3xl space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-neutral-900">My Profile</h1>
-        <p className="text-sm text-neutral-500">Manage your personal information and profile settings</p>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">My Profile</h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">Manage your personal information and profile settings</p>
       </div>
 
       {/* Main Profile Card */}
@@ -133,7 +133,7 @@ export default function StudentProfilePage() {
                 <img
                   src={getFileUrl(profile.avatar_url)}
                   alt={profile.full_name}
-                  className="h-24 w-24 rounded-full border-2 border-brand-100 object-cover shadow-sm"
+                  className="h-24 w-24 rounded-full border-2 border-brand-100 dark:border-brand-800 object-cover shadow-sm"
                 />
               ) : (
                 <div className="flex h-24 w-24 items-center justify-center rounded-full bg-brand-500 text-2xl font-bold text-white shadow-sm">
@@ -144,11 +144,11 @@ export default function StudentProfilePage() {
 
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-neutral-900">{profile.full_name}</h2>
-                <span className="badge bg-emerald-50 text-emerald-700 capitalize">{profile.role}</span>
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-white">{profile.full_name}</h2>
+                <span className="badge bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 capitalize">{profile.role}</span>
               </div>
-              <p className="text-sm font-medium text-brand-600">@{profile.username}</p>
-              <p className="mt-1 text-xs text-neutral-400">
+              <p className="text-sm font-medium text-brand-600 dark:text-brand-400">@{profile.username}</p>
+              <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
                 {profile.group_name ? `${profile.group_name} • ${profile.english_level?.replace("_", " ")}` : "No group assigned"}
               </p>
             </div>
@@ -176,7 +176,7 @@ export default function StudentProfilePage() {
                 type="button"
                 onClick={handleRemovePhoto}
                 disabled={isUploadingPhoto}
-                className="btn-secondary text-xs text-red-600 hover:bg-red-50"
+                className="btn-secondary text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
               >
                 Remove
               </button>
@@ -192,43 +192,43 @@ export default function StudentProfilePage() {
         </div>
 
         {/* Bio Section */}
-        <div className="rounded-xl bg-neutral-50 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-400">About Me / Bio</p>
-          <p className="mt-1 text-sm text-neutral-700 whitespace-pre-wrap">
-            {profile.bio || <span className="italic text-neutral-400">No bio added yet. Click &quot;Edit Profile&quot; to add a bio.</span>}
+        <div className="rounded-xl bg-zinc-50 dark:bg-zinc-900 p-4 border border-zinc-200/60 dark:border-zinc-800">
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">About Me / Bio</p>
+          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+            {profile.bio || <span className="italic text-zinc-400 dark:text-zinc-500">No bio added yet. Click &quot;Edit Profile&quot; to add a bio.</span>}
           </p>
         </div>
 
         {/* Profile Details List */}
-        <div className="divide-y divide-neutral-100 border-t border-neutral-100 pt-2 text-sm">
+        <div className="divide-y divide-zinc-100 dark:divide-zinc-800 border-t border-zinc-100 dark:border-zinc-800 pt-2 text-sm">
           <div className="flex justify-between py-2.5">
-            <span className="text-neutral-500">Username</span>
-            <span className="font-semibold text-neutral-800">{profile.username}</span>
+            <span className="text-zinc-500 dark:text-zinc-400">Username</span>
+            <span className="font-semibold text-zinc-800 dark:text-zinc-200">{profile.username}</span>
           </div>
           <div className="flex justify-between py-2.5">
-            <span className="text-neutral-500">Telegram Username</span>
-            <span className="font-medium text-neutral-800">{profile.telegram_username || "—"}</span>
+            <span className="text-zinc-500 dark:text-zinc-400">Telegram Username</span>
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">{profile.telegram_username || "—"}</span>
           </div>
           <div className="flex justify-between py-2.5">
-            <span className="text-neutral-500">Assigned Group</span>
-            <span className="font-medium text-neutral-800">{profile.group_name || "—"}</span>
+            <span className="text-zinc-500 dark:text-zinc-400">Assigned Group</span>
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">{profile.group_name || "—"}</span>
           </div>
           <div className="flex justify-between py-2.5">
-            <span className="text-neutral-500">English Level</span>
-            <span className="font-medium capitalize text-neutral-800">
+            <span className="text-zinc-500 dark:text-zinc-400">English Level</span>
+            <span className="font-medium capitalize text-zinc-800 dark:text-zinc-200">
               {profile.english_level?.replace("_", " ") || "—"}
             </span>
           </div>
           <div className="flex justify-between py-2.5">
-            <span className="text-neutral-500">System ID</span>
-            <span className="font-mono text-xs text-neutral-400">{profile.user_id}</span>
+            <span className="text-zinc-500 dark:text-zinc-400">System ID</span>
+            <span className="font-mono text-xs text-zinc-400 dark:text-zinc-500">{profile.user_id}</span>
           </div>
         </div>
       </div>
 
       {/* Real Statistics Cards */}
       <div>
-        <h3 className="text-lg font-bold text-neutral-900">My Learning Statistics</h3>
+        <h3 className="text-lg font-bold text-zinc-900 dark:text-white">My Learning Statistics</h3>
         <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatCard label="Total Stars" value={`⭐ ${profile.stats.total_stars ?? 0}`} hint="Earned from homework" />
           <StatCard label="Submissions" value={profile.stats.total_submissions ?? 0} hint="All submitted tasks" />
@@ -241,12 +241,12 @@ export default function StudentProfilePage() {
       {isEditing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="card w-full max-w-md space-y-4">
-            <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
-              <h3 className="text-lg font-bold text-neutral-900">Edit Profile</h3>
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Edit Profile</h3>
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
-                className="text-neutral-400 hover:text-neutral-600"
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
               >
                 ✕
               </button>
@@ -296,7 +296,7 @@ export default function StudentProfilePage() {
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100">
+              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}

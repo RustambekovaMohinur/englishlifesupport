@@ -155,8 +155,8 @@ export default function TeacherDashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-neutral-900">Teacher Overview & Insights</h1>
-        <p className="text-sm text-neutral-500">Live operational statistics and weekly group reports</p>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Teacher Overview & Insights</h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">Live operational statistics and weekly group reports</p>
       </div>
 
       {error && <EmptyState title="Something went wrong" description={error} />}
@@ -178,16 +178,16 @@ export default function TeacherDashboardPage() {
 
           {/* Weekly Group Report & Teacher Controls */}
           <div className="card space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-100 dark:border-zinc-800 pb-4">
               <div>
-                <h2 className="text-base font-bold text-neutral-900 flex items-center gap-2">
+                <h2 className="text-base font-bold text-zinc-900 dark:text-white flex items-center gap-2">
                   <span>📊 Weekly Group Report</span>
-                  {groupReport && <span className="text-xs font-normal text-neutral-500">({groupReport.week_key})</span>}
+                  {groupReport && <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">({groupReport.week_key})</span>}
                 </h2>
-                <p className="text-xs text-neutral-500">Real-time performance, late work, locks, and Student of the Week</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Real-time performance, late work, locks, and Student of the Week</p>
               </div>
               <div className="flex items-center gap-2">
-                <label className="text-xs font-semibold text-neutral-600">Select Group:</label>
+                <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">Select Group:</label>
                 <select
                   value={selectedGroupId}
                   onChange={(e) => setSelectedGroupId(e.target.value)}
@@ -214,45 +214,45 @@ export default function TeacherDashboardPage() {
             ) : groupReport ? (
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                  <div className="p-3 bg-neutral-50 rounded-xl border">
-                    <p className="text-xs text-neutral-500">Group Completion</p>
-                    <p className="text-lg font-bold text-neutral-900">{groupReport.completion_rate}%</p>
+                  <div className="p-3 bg-zinc-50/50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Group Completion</p>
+                    <p className="text-lg font-bold font-mono text-zinc-900 dark:text-white tabular-nums">{groupReport.completion_rate}%</p>
                   </div>
-                  <div className="p-3 bg-neutral-50 rounded-xl border">
-                    <p className="text-xs text-neutral-500">Average Score</p>
-                    <p className="text-lg font-bold text-neutral-900">{groupReport.average_score ?? "—"}/10</p>
+                  <div className="p-3 bg-zinc-50/50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Average Score</p>
+                    <p className="text-lg font-bold font-mono text-zinc-900 dark:text-white tabular-nums">{groupReport.average_score ?? "—"}/10</p>
                   </div>
-                  <div className="p-3 bg-neutral-50 rounded-xl border">
-                    <p className="text-xs text-neutral-500">Late Submissions</p>
-                    <p className="text-lg font-bold text-rose-600">{groupReport.late_submissions}</p>
+                  <div className="p-3 bg-zinc-50/50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Late Submissions</p>
+                    <p className="text-lg font-bold font-mono text-rose-600 dark:text-rose-400 tabular-nums">{groupReport.late_submissions}</p>
                   </div>
-                  <div className="p-3 bg-neutral-50 rounded-xl border">
-                    <p className="text-xs text-neutral-500">Perfect Week</p>
-                    <p className="text-lg font-bold text-amber-600">{groupReport.perfect_week_students} students</p>
+                  <div className="p-3 bg-zinc-50/50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Perfect Week</p>
+                    <p className="text-lg font-bold font-mono text-amber-600 dark:text-amber-400 tabular-nums">{groupReport.perfect_week_students} students</p>
                   </div>
-                  <div className="p-3 bg-neutral-50 rounded-xl border">
-                    <p className="text-xs text-neutral-500">Top Performer</p>
-                    <p className="text-sm font-bold text-neutral-900 truncate">{groupReport.top_performer ?? "—"}</p>
+                  <div className="p-3 bg-zinc-50/50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Top Performer</p>
+                    <p className="text-sm font-bold text-zinc-900 dark:text-white truncate">{groupReport.top_performer ?? "—"}</p>
                   </div>
                 </div>
 
                 {/* Locked Students & Quick Recovery */}
                 {groupReport.locked_students.length > 0 && (
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
-                    <h3 className="text-xs font-bold uppercase text-amber-900 flex items-center gap-1.5">
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2">
+                    <h3 className="text-xs font-bold uppercase text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
                       <span>🔒 Locked Students ({groupReport.locked_students.length})</span>
                     </h3>
-                    <p className="text-xs text-amber-700">
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
                       These students have not completed prerequisite tasks and their next assignment is locked.
                     </p>
                     <div className="flex flex-wrap gap-2 pt-1">
                       {groupReport.locked_students.map((st) => (
-                        <div key={st.id} className="flex items-center gap-2 bg-white px-2.5 py-1 rounded border text-xs">
-                          <span className="font-medium text-neutral-800">{st.name}</span>
+                        <div key={st.id} className="flex items-center gap-2 bg-white dark:bg-zinc-800 px-2.5 py-1 rounded border border-amber-200/60 dark:border-amber-800/60 text-xs">
+                          <span className="font-medium text-zinc-900 dark:text-white">{st.name}</span>
                           <button
                             type="button"
                             onClick={() => handleUnlockStudent(st.id, st.name)}
-                            className="text-brand-600 hover:underline font-semibold"
+                            className="text-brand-600 dark:text-brand-400 hover:underline font-semibold"
                           >
                             Override Lock
                           </button>
@@ -263,31 +263,31 @@ export default function TeacherDashboardPage() {
                 )}
 
                 {/* Student of the Week Section */}
-                <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl">
-                  <h3 className="text-sm font-bold text-purple-900 flex items-center gap-2 mb-2">
+                <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                  <h3 className="text-sm font-bold text-purple-900 dark:text-purple-300 flex items-center gap-2 mb-2">
                     <span>👑 Student of the Week</span>
-                    <span className="text-xs bg-purple-200/70 text-purple-800 px-2 py-0.5 rounded-full">
+                    <span className="text-xs bg-purple-200/70 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 px-2 py-0.5 rounded-full">
                       1 per group/week
                     </span>
                   </h3>
 
                   {groupReport.student_of_the_week ? (
-                    <div className="bg-white p-3.5 rounded-lg border border-purple-100 flex items-center justify-between">
+                    <div className="bg-white dark:bg-zinc-800 p-3.5 rounded-lg border border-purple-100 dark:border-purple-900/50 flex items-center justify-between">
                       <div>
-                        <p className="font-bold text-sm text-neutral-900">
+                        <p className="font-bold text-sm text-zinc-900 dark:text-white">
                           {groupReport.student_of_the_week.student_name}
                         </p>
-                        <p className="text-xs text-neutral-500 mt-0.5">
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                           Reason: {groupReport.student_of_the_week.reason || "High weekly performance"}
                         </p>
                       </div>
-                      <span className="font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded border border-amber-200 text-xs">
+                      <span className="font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded border border-amber-200 dark:border-amber-800 text-xs font-mono">
                         +{groupReport.student_of_the_week.stars_awarded} ⭐ Awarded
                       </span>
                     </div>
                   ) : (
                     <form onSubmit={handleConfirmSotw} className="space-y-3 pt-1">
-                      <p className="text-xs text-purple-800">
+                      <p className="text-xs text-purple-800 dark:text-purple-300">
                         Select this week's top performer to award between 50 ⭐ and 100 ⭐:
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -346,17 +346,17 @@ export default function TeacherDashboardPage() {
 
           {/* Pending Students Approvals Section */}
           <div className="card space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
               <div>
-                <h2 className="text-base font-bold text-neutral-900 flex items-center gap-2">
+                <h2 className="text-base font-bold text-zinc-900 dark:text-white flex items-center gap-2">
                   <span>⏳ Pending Student Approvals</span>
                   {pendingTotal > 0 && (
-                    <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+                    <span className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-xs font-semibold px-2 py-0.5 rounded-full font-mono">
                       {pendingTotal} pending
                     </span>
                   )}
                 </h2>
-                <p className="text-xs text-neutral-500">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   New students requesting to join your groups require your approval
                 </p>
               </div>
@@ -365,46 +365,46 @@ export default function TeacherDashboardPage() {
             {isLoadingPending ? (
               <LoadingRows rows={3} />
             ) : pendingStudents.length === 0 ? (
-              <div className="text-center py-6 text-neutral-400 text-xs">
+              <div className="text-center py-6 text-zinc-400 text-xs">
                 No students currently waiting for approval.
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-neutral-100 text-left text-neutral-500">
-                      <th className="pb-2 pr-4 font-medium">Name</th>
-                      <th className="pb-2 pr-4 font-medium">Username</th>
-                      <th className="pb-2 pr-4 font-medium">Telegram</th>
-                      <th className="pb-2 pr-4 font-medium">Group</th>
-                      <th className="pb-2 pr-4 font-medium">Level</th>
-                      <th className="pb-2 font-medium text-right">Decision</th>
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50">
+                      <th className="py-2.5 px-3 font-medium">Name</th>
+                      <th className="py-2.5 px-3 font-medium">Username</th>
+                      <th className="py-2.5 px-3 font-medium">Telegram</th>
+                      <th className="py-2.5 px-3 font-medium">Group</th>
+                      <th className="py-2.5 px-3 font-medium">Level</th>
+                      <th className="py-2.5 px-3 font-medium text-right">Decision</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pendingStudents.map((st) => (
-                      <tr key={st.id} className="border-b border-neutral-50 last:border-0">
-                        <td className="py-2.5 pr-4 font-medium text-neutral-800">
+                      <tr key={st.id} className="border-b border-zinc-100 dark:border-zinc-800/60 last:border-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors">
+                        <td className="py-2.5 px-3 font-medium text-zinc-900 dark:text-white">
                           {`${st.first_name} ${st.last_name}`.trim() || st.username}
                         </td>
-                        <td className="py-2.5 pr-4 text-xs font-mono text-neutral-500">{st.username}</td>
-                        <td className="py-2.5 pr-4 text-neutral-600 text-xs">{st.telegram_username || "—"}</td>
-                        <td className="py-2.5 pr-4 font-medium text-brand-600 text-xs">{st.group_name || "—"}</td>
-                        <td className="py-2.5 pr-4 text-neutral-500 capitalize text-xs">
+                        <td className="py-2.5 px-3 text-xs font-mono text-zinc-500 dark:text-zinc-400">{st.username}</td>
+                        <td className="py-2.5 px-3 text-zinc-500 dark:text-zinc-400 text-xs">{st.telegram_username || "—"}</td>
+                        <td className="py-2.5 px-3 font-medium text-brand-600 dark:text-brand-400 text-xs">{st.group_name || "—"}</td>
+                        <td className="py-2.5 px-3 text-zinc-500 dark:text-zinc-400 capitalize text-xs">
                           {st.english_level?.replace("_", " ") || "—"}
                         </td>
-                        <td className="py-2.5 text-right space-x-2">
+                        <td className="py-2.5 px-3 text-right space-x-2">
                           <button
                             disabled={actionInProgress[st.id]}
                             onClick={() => handleQuickApprove(st)}
-                            className="px-2.5 py-1 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700 disabled:opacity-50 transition"
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded disabled:opacity-50 transition"
                           >
                             {actionInProgress[st.id] ? "..." : "✓ Approve"}
                           </button>
                           <button
                             disabled={actionInProgress[st.id]}
                             onClick={() => handleQuickReject(st)}
-                            className="px-2.5 py-1 bg-rose-50 text-rose-700 text-xs font-semibold rounded hover:bg-rose-100 disabled:opacity-50 transition border border-rose-200"
+                            className="px-2.5 py-1 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded hover:bg-rose-100 dark:hover:bg-rose-900/60 disabled:opacity-50 transition border border-rose-200 dark:border-rose-800"
                           >
                             {actionInProgress[st.id] ? "..." : "✕ Reject"}
                           </button>
@@ -415,7 +415,7 @@ export default function TeacherDashboardPage() {
                 </table>
 
                 {pendingTotalPages > 1 && (
-                  <div className="flex items-center justify-between border-t border-neutral-100 pt-3 mt-2 text-xs text-neutral-500">
+                  <div className="flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-3 mt-2 text-xs text-zinc-500 dark:text-zinc-400">
                     <span>
                       Page {pendingPage} of {pendingTotalPages} ({pendingTotal} pending)
                     </span>
@@ -427,7 +427,7 @@ export default function TeacherDashboardPage() {
                           setPendingPage(p);
                           loadPendingList(p);
                         }}
-                        className="px-2 py-0.5 border rounded hover:bg-neutral-50 disabled:opacity-40"
+                        className="px-2 py-0.5 border border-zinc-200 dark:border-zinc-700 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40"
                       >
                         Prev
                       </button>
@@ -438,7 +438,7 @@ export default function TeacherDashboardPage() {
                           setPendingPage(p);
                           loadPendingList(p);
                         }}
-                        className="px-2 py-0.5 border rounded hover:bg-neutral-50 disabled:opacity-40"
+                        className="px-2 py-0.5 border border-zinc-200 dark:border-zinc-700 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40"
                       >
                         Next
                       </button>
@@ -451,27 +451,27 @@ export default function TeacherDashboardPage() {
 
           {/* Recent Submissions Feed */}
           <div className="card">
-            <h2 className="mb-4 text-base font-semibold text-neutral-900">Recent Submissions</h2>
+            <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Recent Submissions</h2>
             {data.recent_submissions.length === 0 ? (
               <EmptyState title="No submissions yet" description="Student submissions will appear here." />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-neutral-100 text-left text-neutral-500">
-                      <th className="pb-2 pr-4 font-medium">Student</th>
-                      <th className="pb-2 pr-4 font-medium">Assignment</th>
-                      <th className="pb-2 pr-4 font-medium">Submitted</th>
-                      <th className="pb-2 font-medium">Status</th>
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50">
+                      <th className="py-2.5 px-3 font-medium">Student</th>
+                      <th className="py-2.5 px-3 font-medium">Assignment</th>
+                      <th className="py-2.5 px-3 font-medium">Submitted</th>
+                      <th className="py-2.5 px-3 font-medium">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.recent_submissions.map((s) => (
-                      <tr key={s.id} className="border-b border-neutral-50 last:border-0">
-                        <td className="py-3 pr-4 font-medium text-neutral-800">{s.student_name}</td>
-                        <td className="py-3 pr-4 text-neutral-600">{s.assignment_title}</td>
-                        <td className="py-3 pr-4 text-neutral-500">{format(new Date(s.submitted_at), "MMM d, HH:mm")}</td>
-                        <td className="py-3">
+                      <tr key={s.id} className="border-b border-zinc-100 dark:border-zinc-800/60 last:border-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors">
+                        <td className="py-3 px-3 font-medium text-zinc-900 dark:text-white">{s.student_name}</td>
+                        <td className="py-3 px-3 text-zinc-600 dark:text-zinc-300">{s.assignment_title}</td>
+                        <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 font-mono text-xs">{format(new Date(s.submitted_at), "MMM d, HH:mm")}</td>
+                        <td className="py-3 px-3">
                           <StatusBadge status={s.status} />
                         </td>
                       </tr>

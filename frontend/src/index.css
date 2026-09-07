@@ -4,10 +4,10 @@
 
 @layer base {
   body {
-    @apply bg-[#FBFBFA] dark:bg-[#0B0F19] text-neutral-900 dark:text-zinc-100 antialiased;
+    @apply bg-[#FBFBFA] dark:bg-[#0B0F19] text-zinc-900 dark:text-zinc-100 antialiased;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply tracking-[-0.02em];
+    @apply tracking-[-0.02em] text-zinc-900 dark:text-white;
   }
 }
 
@@ -16,19 +16,22 @@
     @apply inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-black/[0.08] dark:border-white/[0.1] bg-white dark:bg-zinc-800/80 px-4 py-2.5 text-sm font-medium text-neutral-700 dark:text-zinc-200 shadow-sm transition-all hover:bg-neutral-50 dark:hover:bg-zinc-700/80 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-black/[0.08] dark:border-white/[0.1] bg-white dark:bg-zinc-800/80 px-4 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-200 shadow-sm transition-all hover:bg-zinc-50 dark:hover:bg-zinc-700/80 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-danger {
     @apply inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-red-700 active:scale-[0.98];
   }
   .card {
-    @apply rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_8px_24px_rgba(0,0,0,0.4)];
+    @apply rounded-2xl border border-[#EAE9E5] dark:border-[#30363D] bg-white dark:bg-[#161B22] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_8px_24px_rgba(0,0,0,0.4)];
   }
   .input {
-    @apply w-full rounded-xl border border-neutral-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm text-neutral-900 dark:text-zinc-100 shadow-xs outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30;
+    @apply w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-[#0D1117] px-3.5 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 shadow-xs outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30;
+  }
+  select.input option, option {
+    @apply bg-white dark:bg-[#0D1117] text-zinc-900 dark:text-zinc-100;
   }
   .label {
-    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-zinc-400;
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400;
   }
   .badge {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium font-mono tabular-nums;
