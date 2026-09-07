@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { format } from "date-fns";
 import { Loader2, UploadCloud, FileText, Image as ImageIcon, X } from "lucide-react";
-import toast from "react-hot-toast";
 import {
   EmptyState,
   LoadingRows,
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui";
 import { listMyAssignments, submitHomework, useFreePass, recordVocabPractice } from "@/services/lmsService";
 import { AssignmentForStudent } from "@/types";
+import toast from "react-hot-toast";
 
 export function TaskStatusBadge({ assignment }: { assignment: AssignmentForStudent }) {
   if (assignment.submission_status === "graded") {
@@ -59,10 +60,16 @@ function getSkillBadge(title: string) {
 }
 
 export default function StudentAssignmentsPage() {
+  const location = useLocation();
+  const isVocabRoute = location.pathname.includes("vocabulary");
   const [assignments, setAssignments] = useState<AssignmentForStudent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [active, setActive] = useState<AssignmentForStudent | null>(null);
   const [applyingPassId, setApplyingPassId] = useState<string | null>(null);
+
+  const displayedAssignments = isVocabRoute
+    ? assignments.filter((a) => a.vocab_words && a.vocab_words.length > 0)
+    : assignments;
 
   function refresh() {
     setIsLoading(true);
@@ -94,8 +101,14 @@ export default function StudentAssignmentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">My Assignments & Learning Tasks</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">Sequential homework progression, tasks and vocabulary</p>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+            {isVocabRoute ? "Vocabulary Word Lists & Practice 📖" : "My Assignments & Learning Tasks"}
+          </h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {isVocabRoute
+              ? "Master vocabulary lists, take quizzes, and earn +15 XP / +10 ⭐"
+              : "Sequential homework progression, tasks and vocabulary"}
+          </p>
         </div>
         <div className="flex items-center gap-2 text-xs bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 px-3 py-1.5 rounded-lg font-medium border border-brand-200 dark:border-brand-800">
           <span>⚡ +10 ⭐ On-time</span>
@@ -108,11 +121,18 @@ export default function StudentAssignmentsPage() {
 
       {isLoading ? (
         <LoadingRows rows={5} />
-      ) : assignments.length === 0 ? (
-        <EmptyState title="No assignments yet" description="You'll see homework here once your teacher assigns it." />
+      ) : displayedAssignments.length === 0 ? (
+        <EmptyState
+          title={isVocabRoute ? "No vocabulary lists yet" : "No assignments yet"}
+          description={
+            isVocabRoute
+              ? "Vocabulary lists will appear here once your teacher attaches words to assignments."
+              : "You'll see homework here once your teacher assigns it."
+          }
+        />
       ) : (
         <div className="space-y-2.5">
-          {assignments.map((a) => {
+          {displayedAssignments.map((a) => {
             const skillBadge = getSkillBadge(a.title);
             return (
               <div key={a.id}>
@@ -412,291 +432,330 @@ function SubmitModal({
 
   return (
     <>
-      <Modal open={!!assignment} onClose={onClose} title={assignment.title}>
-        <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
-          <div>
-            <h4 className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">Instructions</h4>
-            {(() => {
-              try {
-                const blocks = JSON.parse(assignment.description);
-                if (Array.isArray(blocks)) {
-                  return (
-                    <div className="mt-2 space-y-4">
-                      {blocks.map((block: any, idx: number) => (
-                        <div key={block.id || idx} className="p-3 bg-zinc-50 dark:bg-zinc-850 rounded-lg border border-zinc-200 dark:border-zinc-800">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs font-bold uppercase text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40 px-2 py-0.5 rounded border border-brand-200 dark:border-brand-800/50">
-                              {block.type}
-                            </span>
-                          </div>
-                          {block.content && <p className="whitespace-pre-wrap text-sm text-zinc-800 dark:text-zinc-200">{block.content}</p>}
-                          {block.bookLink && (
-                            <a href={block.bookLink} target="_blank" rel="noreferrer" className="text-sm text-blue-600 dark:text-blue-400 hover:underline block mt-1">
-                              Link to Book
-                            </a>
-                          )}
-                          {block.unit && <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">Unit: {block.unit}</p>}
-                          {block.pages && <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">Pages: {block.pages}</p>}
-                          {block.fileName && <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 flex items-center gap-1">📎 {block.fileName}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                }
-              } catch (e) {
-                // Not JSON, fallback to plain text
-              }
-              return <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300 mt-1">{assignment.description}</p>;
-            })()}
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 font-mono tabular-nums">Deadline: {format(new Date(assignment.deadline), "MMM d, yyyy HH:mm")}</p>
+      {/* Fast-Submit Modal Flex Architecture strictly in z-[70] */}
+      <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 bg-transparent" onClick={onClose} />
+        <div className="relative z-10 flex flex-col max-h-[88vh] w-full sm:max-w-2xl bg-white dark:bg-[#161B22] rounded-t-3xl sm:rounded-2xl border-t sm:border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200 sm:slide-in-from-bottom-0 sm:zoom-in-95">
+          {/* Mobile Drag Indicator */}
+          <div className="sm:hidden pt-3 pb-1 flex justify-center shrink-0">
+            <div className="w-10 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700" />
           </div>
 
-          {/* Assignment Attached Images Gallery */}
-          {assignment.images && assignment.images.length > 0 && (
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-850/50 p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
-                  🖼️ Assignment Images ({assignment.images.length})
-                </span>
-                <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Click to enlarge</span>
+          {/* 1. Rigid Header (Shrink-0) */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+            <div className="min-w-0 pr-3">
+              <h3 className="font-bold text-base text-zinc-900 dark:text-white truncate">
+                {assignment.title}
+              </h3>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate font-mono mt-0.5">
+                Due: {format(new Date(assignment.deadline), "MMM d, yyyy HH:mm")}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition active:scale-95 min-h-[36px] min-w-[36px] flex items-center justify-center shrink-0"
+              aria-label="Close modal"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* 2. Scrollable Body (Overflow-y-auto flex-1) */}
+          <div className="p-5 overflow-y-auto space-y-4 flex-1 overscroll-contain">
+            <div>
+              <h4 className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">Instructions</h4>
+              {(() => {
+                try {
+                  const blocks = JSON.parse(assignment.description);
+                  if (Array.isArray(blocks)) {
+                    return (
+                      <div className="mt-2 space-y-4">
+                        {blocks.map((block: any, idx: number) => (
+                          <div key={block.id || idx} className="p-3 bg-zinc-50 dark:bg-zinc-850 rounded-lg border border-zinc-200 dark:border-zinc-800">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xs font-bold uppercase text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40 px-2 py-0.5 rounded border border-brand-200 dark:border-brand-800/50">
+                                {block.type}
+                              </span>
+                            </div>
+                            {block.content && <p className="whitespace-pre-wrap text-sm text-zinc-800 dark:text-zinc-200">{block.content}</p>}
+                            {block.bookLink && (
+                              <a href={block.bookLink} target="_blank" rel="noreferrer" className="text-sm text-blue-600 dark:text-blue-400 hover:underline block mt-1">
+                                Link to Book
+                              </a>
+                            )}
+                            {block.unit && <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">Unit: {block.unit}</p>}
+                            {block.pages && <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">Pages: {block.pages}</p>}
+                            {block.fileName && <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 flex items-center gap-1">📎 {block.fileName}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                } catch (e) {
+                  // Not JSON, fallback to plain text
+                }
+                return <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300 mt-1">{assignment.description}</p>;
+              })()}
+            </div>
+
+            {/* Assignment Attached Images Gallery */}
+            {assignment.images && assignment.images.length > 0 && (
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-850/50 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
+                    🖼️ Assignment Images ({assignment.images.length})
+                  </span>
+                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Click to enlarge</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {assignment.images.map((img, idx) => (
+                    <div
+                      key={img.id}
+                      onClick={() => {
+                        setLightboxIndex(idx);
+                        setLightboxOpen(true);
+                      }}
+                      className="group relative cursor-pointer overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 aspect-square hover:shadow-md transition-shadow"
+                    >
+                      <AuthenticatedImage
+                        url={`/api/assignments/${assignment.id}/images/${img.id}`}
+                        alt={img.original_name}
+                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="text-xs font-semibold text-white bg-black/70 px-2 py-0.5 rounded">
+                          🔍 View
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {assignment.images.map((img, idx) => (
-                  <div
-                    key={img.id}
-                    onClick={() => {
-                      setLightboxIndex(idx);
-                      setLightboxOpen(true);
-                    }}
-                    className="group relative cursor-pointer overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 aspect-square hover:shadow-md transition-shadow"
+            )}
+
+            {assignment.file_url && (
+              <div className="p-3 bg-brand-50 dark:bg-brand-950/30 border border-brand-200 dark:border-brand-800 rounded-lg space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-brand-900 dark:text-brand-200">Homework Document / Audio File</p>
+                    <p className="text-xs text-brand-700 dark:text-brand-300">{assignment.file_original_name}</p>
+                  </div>
+                  <FileDownloadButton
+                    url={assignment.file_url}
+                    filename={assignment.file_original_name}
+                    className="btn-sm btn-primary"
                   >
-                    <AuthenticatedImage
-                      url={`/api/assignments/${assignment.id}/images/${img.id}`}
-                      alt={img.original_name}
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <span className="text-xs font-semibold text-white bg-black/70 px-2 py-0.5 rounded">
-                        🔍 View
+                    Download File
+                  </FileDownloadButton>
+                </div>
+                {isAudioFile && (
+                  <div className="pt-2">
+                    <AuthenticatedAudio url={assignment.file_url} className="w-full h-8" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {assignment.vocab_words && assignment.vocab_words.length > 0 && (
+              <div className="space-y-3 border-t border-zinc-200 dark:border-zinc-800 pt-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold uppercase text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                    📖 Assignment Vocabulary ({assignment.vocab_words.length} words)
+                  </h4>
+                  <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 font-mono">
+                    80%+ accuracy = +10 ⭐ & +15 XP
+                  </span>
+                </div>
+
+                <div className="max-h-48 overflow-y-auto border border-zinc-200 dark:border-zinc-800 rounded-lg divide-y divide-zinc-200 dark:divide-zinc-800 bg-zinc-50 dark:bg-zinc-850">
+                  {assignment.vocab_words.map((word) => (
+                    <div key={word.id} className="p-2 text-xs flex justify-between items-center">
+                      <span className="font-semibold text-zinc-900 dark:text-white">{word.english_word}</span>
+                      <span className="text-zinc-600 dark:text-zinc-400 font-medium">{word.translation}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <VocabPracticeWidget assignmentId={assignment.id} words={assignment.vocab_words} />
+              </div>
+            )}
+
+            {isGraded && (
+              <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-3 text-sm text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-855">
+                This submission has already been graded and can no longer be changed.
+                {assignment.score !== null && (
+                  <p className="font-bold mt-1 font-mono tabular-nums">Your Grade: {assignment.score}/10</p>
+                )}
+              </div>
+            )}
+            {isLocked && !isGraded && (
+              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 text-sm text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-850">
+                The deadline has passed for new submissions.
+              </div>
+            )}
+
+            {!isLocked && (
+              <div className="space-y-4 border-t border-zinc-200 dark:border-zinc-800 pt-3">
+                <h4 className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">Fast Homework Submission</h4>
+
+                {/* Fast-Submit Dropzone with Drag-and-Drop */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    const droppedFiles = Array.from(e.dataTransfer.files || []);
+                    if (droppedFiles.length > 0) handleFilesAdded(droppedFiles);
+                  }}
+                  onClick={() => dropzoneInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200 ${
+                    isDragging
+                      ? "border-indigo-500 bg-indigo-500/[0.06] scale-[1.005] ring-4 ring-indigo-500/10"
+                      : "border-zinc-300 dark:border-zinc-700 hover:border-indigo-500/50 bg-zinc-50/60 dark:bg-zinc-800/30 hover:bg-indigo-500/[0.02]"
+                  }`}
+                >
+                  <input
+                    ref={dropzoneInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.txt,image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic"
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length > 0) handleFilesAdded(files);
+                      e.target.value = "";
+                    }}
+                  />
+                  <UploadCloud className="mx-auto h-8 w-8 text-zinc-400 dark:text-zinc-500 mb-1.5 transition-colors" />
+                  <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                    Drag & drop files here, or <span className="text-indigo-600 dark:text-indigo-400 underline decoration-indigo-400">browse</span>
+                  </p>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    PDF, DOCX, PNG, JPG, WEBP (up to 10MB each) · Paste screenshots directly (<kbd className="px-1 py-0.5 bg-zinc-200 dark:bg-zinc-700 rounded text-[10px] font-mono">Ctrl+V</kbd>)
+                  </p>
+                </div>
+
+                {/* Selected Document File Chip */}
+                {file && (
+                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-850 text-xs text-blue-900 dark:text-blue-200">
+                    <div className="flex items-center gap-2 truncate">
+                      <FileText className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                      <span className="font-medium truncate">{file.name}</span>
+                      <span className="text-blue-600 dark:text-blue-400 text-[10px] tabular-nums font-mono">
+                        ({(file.size / (1024 * 1024)).toFixed(1)} MB)
                       </span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setFile(null)}
+                      className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1"
+                      title="Remove document"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                )}
 
-          {assignment.file_url && (
-            <div className="p-3 bg-brand-50 dark:bg-brand-950/30 border border-brand-200 dark:border-brand-800 rounded-lg space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-brand-900 dark:text-brand-200">Homework Document / Audio File</p>
-                  <p className="text-xs text-brand-700 dark:text-brand-300">{assignment.file_original_name}</p>
-                </div>
-                <FileDownloadButton
-                  url={assignment.file_url}
-                  filename={assignment.file_original_name}
-                  className="btn-sm btn-primary"
-                >
-                  Download File
-                </FileDownloadButton>
-              </div>
-              {isAudioFile && (
-                <div className="pt-2">
-                  <AuthenticatedAudio url={assignment.file_url} className="w-full h-8" />
-                </div>
-              )}
-            </div>
-          )}
-
-          {assignment.vocab_words && assignment.vocab_words.length > 0 && (
-            <div className="space-y-3 border-t border-zinc-200 dark:border-zinc-800 pt-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold uppercase text-purple-700 dark:text-purple-300 flex items-center gap-1">
-                  📖 Assignment Vocabulary ({assignment.vocab_words.length} words)
-                </h4>
-                <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 font-mono">
-                  80%+ accuracy = +10 ⭐ & +15 XP
-                </span>
-              </div>
-
-              <div className="max-h-48 overflow-y-auto border border-zinc-200 dark:border-zinc-800 rounded-lg divide-y divide-zinc-200 dark:divide-zinc-800 bg-zinc-50 dark:bg-zinc-850">
-                {assignment.vocab_words.map((word) => (
-                  <div key={word.id} className="p-2 text-xs flex justify-between items-center">
-                    <span className="font-semibold text-zinc-900 dark:text-white">{word.english_word}</span>
-                    <span className="text-zinc-600 dark:text-zinc-400 font-medium">{word.translation}</span>
+                {/* Selected Images Grid (Thumbnails) */}
+                {submissionImages.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                        <ImageIcon className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />
+                        Uploaded Images ({submissionImages.length}/10)
+                      </span>
+                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">Max 10MB per image</span>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                      {submissionImages.map((imgFile, idx) => {
+                        const previewUrl = URL.createObjectURL(imgFile);
+                        return (
+                          <div key={idx} className="relative group rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden aspect-square bg-white dark:bg-zinc-800 shadow-xs">
+                            <img
+                              src={previewUrl}
+                              alt={imgFile.name}
+                              className="w-full h-full object-cover"
+                              onLoad={() => URL.revokeObjectURL(previewUrl)}
+                            />
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSubmissionImages(submissionImages.filter((_, i) => i !== idx));
+                              }}
+                              className="absolute top-1 right-1 rounded-full bg-red-600/90 text-white p-1 hover:bg-red-700 shadow-sm"
+                              title="Remove image"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                ))}
-              </div>
+                )}
 
-              <VocabPracticeWidget assignmentId={assignment.id} words={assignment.vocab_words} />
-            </div>
-          )}
-
-          {isGraded && (
-            <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-3 text-sm text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-850">
-              This submission has already been graded and can no longer be changed.
-              {assignment.score !== null && (
-                <p className="font-bold mt-1 font-mono tabular-nums">Your Grade: {assignment.score}/10</p>
-              )}
-            </div>
-          )}
-          {isLocked && !isGraded && (
-            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 text-sm text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-850">The deadline has passed for new submissions.</div>
-          )}
-
-          {!isLocked && (
-            <div className="space-y-4 border-t border-zinc-200 dark:border-zinc-800 pt-3">
-              <h4 className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">Fast Homework Submission</h4>
-
-              {/* Fast-Submit Dropzone with Drag-and-Drop */}
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={(e) => {
-                  e.preventDefault();
-                  setIsDragging(false);
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setIsDragging(false);
-                  const droppedFiles = Array.from(e.dataTransfer.files || []);
-                  if (droppedFiles.length > 0) handleFilesAdded(droppedFiles);
-                }}
-                onClick={() => dropzoneInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200 ${
-                  isDragging
-                    ? "border-indigo-500 bg-indigo-500/[0.06] scale-[1.005] ring-4 ring-indigo-500/10"
-                    : "border-zinc-300 dark:border-zinc-700 hover:border-indigo-500/50 bg-zinc-50/60 dark:bg-zinc-800/30 hover:bg-indigo-500/[0.02]"
-                }`}
-              >
-                <input
-                  ref={dropzoneInputRef}
-                  type="file"
-                  multiple
-                  accept=".pdf,.doc,.docx,.txt,image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic"
-                  className="hidden"
-                  onChange={(e) => {
-                    const files = Array.from(e.target.files || []);
-                    if (files.length > 0) handleFilesAdded(files);
-                    e.target.value = "";
+                {/* Voice Recorder */}
+                <VoiceRecorder
+                  onRecordingComplete={(audio) => {
+                    setVoiceFile(audio);
+                    toast.success("Voice recorded! Ready for submission.");
                   }}
                 />
-                <UploadCloud className="mx-auto h-8 w-8 text-zinc-400 dark:text-zinc-500 mb-1.5 transition-colors" />
-                <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                  Drag & drop files here, or <span className="text-indigo-600 dark:text-indigo-400 underline decoration-indigo-400">browse</span>
-                </p>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  PDF, DOCX, PNG, JPG, WEBP (up to 10MB each) · Paste screenshots directly (<kbd className="px-1 py-0.5 bg-zinc-200 dark:bg-zinc-700 rounded text-[10px] font-mono">Ctrl+V</kbd>)
-                </p>
-              </div>
 
-              {/* Selected Document File Chip */}
-              {file && (
-                <div className="flex items-center justify-between p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-850 text-xs text-blue-900 dark:text-blue-200">
-                  <div className="flex items-center gap-2 truncate">
-                    <FileText className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-                    <span className="font-medium truncate">{file.name}</span>
-                    <span className="text-blue-600 dark:text-blue-400 text-[10px] tabular-nums font-mono">
-                      ({(file.size / (1024 * 1024)).toFixed(1)} MB)
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setFile(null)}
-                    className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1"
-                    title="Remove document"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                {/* Text answer / Teacher Notes */}
+                <div>
+                  <label className="label text-xs font-semibold text-zinc-700 dark:text-zinc-300">Notes / Written Answer for your Teacher (optional)</label>
+                  <textarea
+                    rows={3}
+                    className="input text-xs mt-1"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="Type your answer, or add any notes or context for your teacher..."
+                  />
                 </div>
-              )}
-
-              {/* Selected Images Grid (Thumbnails) */}
-              {submissionImages.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                      <ImageIcon className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />
-                      Uploaded Images ({submissionImages.length}/10)
-                    </span>
-                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">Max 10MB per image</span>
-                  </div>
-                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                    {submissionImages.map((imgFile, idx) => {
-                      const previewUrl = URL.createObjectURL(imgFile);
-                      return (
-                        <div key={idx} className="relative group rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden aspect-square bg-white dark:bg-zinc-800 shadow-xs">
-                          <img
-                            src={previewUrl}
-                            alt={imgFile.name}
-                            className="w-full h-full object-cover"
-                            onLoad={() => URL.revokeObjectURL(previewUrl)}
-                          />
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSubmissionImages(submissionImages.filter((_, i) => i !== idx));
-                            }}
-                            className="absolute top-1 right-1 rounded-full bg-red-600/90 text-white p-1 hover:bg-red-700 shadow-sm"
-                            title="Remove image"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Voice Recorder */}
-              <VoiceRecorder
-                onRecordingComplete={(audio) => {
-                  setVoiceFile(audio);
-                  toast.success("Voice recorded! Ready for submission.");
-                }}
-              />
-
-              {/* Text answer / Teacher Notes */}
-              <div>
-                <label className="label text-xs">Notes / Written Answer for your Teacher (optional)</label>
-                <textarea
-                  rows={3}
-                  className="input text-xs"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Type your answer, or add any notes or context for your teacher..."
-                />
               </div>
+            )}
+          </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-                <button type="button" className="btn-secondary text-xs" onClick={onClose}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn-primary text-xs inline-flex items-center gap-2"
-                  disabled={isSubmitting}
-                  onClick={handleSubmit}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      <span>Submitting...</span>
-                    </>
-                  ) : (
-                    <span>Submit Homework</span>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
+          {/* 3. Sticky Action Footer (Shrink-0, ALWAYS visible at bottom) */}
+          <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#161B22] shrink-0">
+            {!isLocked ? (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isSubmitting || (!text.trim() && !file && !voiceFile && submissionImages.length === 0)}
+                className="w-full py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none transition-all min-h-[48px]"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Yuborilmoqda...</span>
+                  </>
+                ) : (
+                  <span>Submit Homework 🚀</span>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-3 px-4 rounded-xl btn-secondary text-sm font-semibold flex items-center justify-center min-h-[44px]"
+              >
+                Close Task
+              </button>
+            )}
+          </div>
         </div>
-      </Modal>
+      </div>
 
       {/* Lightbox for assignment instruction images */}
       <ImageLightbox

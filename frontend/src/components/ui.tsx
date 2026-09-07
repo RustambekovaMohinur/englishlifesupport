@@ -67,7 +67,7 @@ export function LoadingRows({ rows = 5 }: { rows?: number }) {
 export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 animate-in fade-in duration-150">
       <div className="fixed inset-x-0 bottom-0 sm:static max-h-[85vh] sm:max-h-[90vh] w-full sm:max-w-lg overflow-y-auto rounded-t-3xl sm:rounded-2xl border-t sm:border border-zinc-200 dark:border-zinc-800 sm:border-[#EAE9E5] sm:dark:border-[#30363D] bg-white dark:bg-[#161B22] p-5 sm:p-6 shadow-2xl text-zinc-900 dark:text-zinc-100 animate-in slide-in-from-bottom duration-200 sm:slide-in-from-bottom-0 sm:zoom-in-95">
         {/* Top Drag Indicator (w-10 h-1 rounded-full) */}
         <div className="sm:hidden w-10 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700 mx-auto mb-4" />

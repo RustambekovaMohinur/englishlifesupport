@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { format } from "date-fns";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -59,6 +59,7 @@ export function formatEnglishLevel(level?: string | null): string {
 }
 
 export default function StudentDashboardPage() {
+  const location = useLocation();
   const [data, setData] = useState<StudentDashboard | null>(null);
   const [gamify, setGamify] = useState<StudentGamificationSummary | null>(null);
   const [leaderboard, setLeaderboard] = useState<WeeklyLeaderboardOut | null>(null);
@@ -74,6 +75,17 @@ export default function StudentDashboardPage() {
     getGamificationSummary().then(setGamify).catch(() => null);
     getWeeklyLeaderboard().then(setLeaderboard).catch(() => null);
   }, []);
+
+  useEffect(() => {
+    if (location.pathname === "/student/leaderboard" || location.hash === "#leaderboard") {
+      const el = document.getElementById("leaderboard");
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 200);
+      }
+    }
+  }, [location.pathname, location.hash, data]);
 
   if (isLoading) return <LoadingRows rows={4} />;
   if (error || !data) return <EmptyState title="Something went wrong" description={error ?? undefined} />;
@@ -392,7 +404,7 @@ export default function StudentDashboardPage() {
 
         {/* Right Col: Real Weekly Leaderboard */}
         <div className="space-y-6">
-          <div className="card border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
+          <div id="leaderboard" className="card border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-base font-semibold text-neutral-900 dark:text-white flex items-center gap-1.5 tracking-tight">

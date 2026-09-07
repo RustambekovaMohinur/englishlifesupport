@@ -58,7 +58,7 @@ export default function App() {
             <Route path="vocabulary" element={<StudentAssignmentsPage />} />
             <Route path="submissions" element={<StudentSubmissionsPage />} />
             <Route path="results" element={<StudentResultsPage />} />
-            <Route path="leaderboard" element={<StudentResultsPage />} />
+            <Route path="leaderboard" element={<StudentDashboardPage />} />
             <Route path="progress" element={<StudentProgressPage />} />
             <Route path="profile" element={<StudentProfilePage />} />
           </Route>

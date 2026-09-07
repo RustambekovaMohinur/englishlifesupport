@@ -23,7 +23,6 @@ const bottomNavItems = [
 
 export default function TeacherLayout() {
   const { user, logout } = useAuth();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-[#FBFBFA] dark:bg-[#0B0F19] font-sans antialiased text-zinc-900 dark:text-zinc-100 transition-colors">
@@ -67,100 +66,24 @@ export default function TeacherLayout() {
         </div>
       </aside>
 
-      {/* Mobile Drawer Navigation (Slide-over for extra links) */}
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 flex lg:hidden">
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-          <aside className="relative flex w-72 max-w-[80%] flex-col bg-white dark:bg-[#111827] p-6 shadow-2xl border-r border-zinc-200 dark:border-zinc-800 animate-in slide-in-from-left duration-200">
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Logo />
-                <div>
-                  <span className="font-bold text-zinc-900 dark:text-white block leading-tight">Asadbek Khasanov</span>
-                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">Examiner Desk</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(false)}
-                className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 active:scale-95"
-                aria-label="Close menu"
-              >
-                ✕
-              </button>
-            </div>
-            <nav className="flex-1 space-y-1">
-              {sidebarNavItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={({ isActive }) =>
-                    `block rounded-xl px-3 py-2.5 text-sm font-medium transition active:scale-[0.98] ${
-                      isActive
-                        ? "bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 font-semibold border border-brand-200 dark:border-brand-850"
-                        : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white"
-                    }`
-                  }
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
-            <div className="border-t border-zinc-200 dark:border-zinc-800 pt-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="truncate text-xs text-zinc-500 dark:text-zinc-400 max-w-[140px]">{user?.email}</p>
-                <ThemeToggle />
-              </div>
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  logout();
-                }}
-                className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition active:scale-95"
-              >
-                Logout
-              </button>
-            </div>
-          </aside>
-        </div>
-      )}
-
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
-        {/* Tablet & Mobile Header (lg:hidden) */}
+        {/* Tablet & Mobile Header (lg:hidden) - Strictly: Brand Name, ThemeToggle, User Avatar */}
         <header className="flex h-16 items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-[#111827]/80 backdrop-blur-md px-4 sm:px-6 lg:hidden sticky top-0 z-30">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(true)}
-              className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-2 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 active:scale-95 focus:outline-none"
-              aria-label="Open menu"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            <div className="flex items-center gap-2">
-              <Logo className="h-7 w-7 text-xs" />
-              <div>
-                <span className="font-bold text-zinc-900 dark:text-white block leading-tight text-sm tracking-tight">English Life</span>
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Examiner Desk</span>
-              </div>
+          <div className="flex items-center gap-2.5">
+            <Logo className="h-7 w-7 text-xs" />
+            <div>
+              <span className="font-bold text-zinc-900 dark:text-white block leading-tight text-sm tracking-tight">Asadbek Khasanov</span>
+              <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Examiner Desk</span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <ThemeToggle />
-            <button
-              onClick={() => logout()}
-              className="text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white px-2.5 py-1.5 rounded-lg active:scale-95 transition"
-            >
-              Logout
-            </button>
+            <NavLink to="/teacher/profile" className="flex items-center active:scale-95 transition-transform" title="Teacher Profile">
+              <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                {(user?.full_name?.charAt(0) || user?.email?.charAt(0) || "T").toUpperCase()}
+              </div>
+            </NavLink>
           </div>
         </header>
 
