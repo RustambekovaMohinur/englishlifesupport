@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { FileDownloadButton, LoadingRows, Modal } from "@/components/ui";
+import { FileDownloadButton, LoadingRows, Modal, TelegramLink } from "@/components/ui";
 import { getStudent, getStudentHistory, listSubmissions, resetStudentPassword } from "@/services/lmsService";
 import { StudentHistoryOut, StudentOut, SubmissionOut } from "@/types";
 
@@ -156,15 +156,8 @@ export default function StudentDetailModal({ studentId, onClose }: StudentDetail
                       Email: <strong className="text-zinc-800 dark:text-zinc-200 font-medium">{profile.email}</strong>
                     </span>
                   )}
-                  <span>
-                    Telegram:{" "}
-                    {telegram ? (
-                      <span className="font-medium text-brand-600 dark:text-brand-400">
-                        {telegram.startsWith("@") ? telegram : `@${telegram}`}
-                      </span>
-                    ) : (
-                      <span className="text-zinc-400 dark:text-zinc-600">—</span>
-                    )}
+                  <span className="flex items-center gap-1.5">
+                    Telegram: <TelegramLink username={telegram} />
                   </span>
                   <span>
                     Group: <strong className="text-zinc-900 dark:text-white font-medium">{groupName}</strong>

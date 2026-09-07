@@ -529,3 +529,39 @@ export function VoiceRecorder({
   );
 }
 
+export { ThemeToggle } from "./ThemeToggle";
+
+export function TelegramLink({
+  username,
+  className = "",
+}: {
+  username?: string | null;
+  className?: string;
+}) {
+  if (!username || !username.trim()) {
+    return <span className="text-zinc-400 dark:text-zinc-500">—</span>;
+  }
+  const clean = username.trim().replace(/^@+/, "");
+  // Sanitize: Telegram usernames are letters, digits, and underscores (3-32 chars)
+  const isValid = /^[a-zA-Z0-9_]{3,32}$/.test(clean);
+  if (!isValid) {
+    return (
+      <span className={`text-zinc-700 dark:text-zinc-300 font-mono text-xs ${className}`}>
+        {username.startsWith("@") ? username : `@${username}`}
+      </span>
+    );
+  }
+  return (
+    <a
+      href={`https://t.me/${encodeURIComponent(clean)}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`Chat on Telegram with @${clean}`}
+      className={`inline-flex items-center gap-1 font-medium text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline text-xs bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 rounded-lg border border-sky-200/60 dark:border-sky-800/60 transition shadow-2xs ${className}`}
+    >
+      <span className="text-[11px] leading-none">✈️</span>
+      <span className="font-mono">@{clean}</span>
+    </a>
+  );
+}
+

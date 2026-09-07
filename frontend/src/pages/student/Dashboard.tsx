@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { format } from "date-fns";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { EmptyState, LoadingRows, StatCard } from "@/components/ui";
 import { getStudentDashboard, getGamificationSummary, getWeeklyLeaderboard } from "@/services/lmsService";
@@ -11,6 +13,37 @@ function getGreeting(name: string): string {
   if (hour >= 12 && hour < 17) timeStr = "Good afternoon";
   else if (hour >= 17) timeStr = "Good evening";
   return `${timeStr}, ${name}`;
+}
+
+function getSkillPill(title: string) {
+  const lower = title.toLowerCase();
+  if (lower.includes("speak") || lower.includes("audio") || lower.includes("record") || lower.includes("voice")) {
+    return { label: "Speaking", icon: "🎙️", bg: "bg-rose-500/15 text-rose-300 border-rose-500/30" };
+  }
+  if (lower.includes("listen") || lower.includes("listening")) {
+    return { label: "Listening", icon: "🎧", bg: "bg-sky-500/15 text-sky-300 border-sky-500/30" };
+  }
+  if (lower.includes("vocab") || lower.includes("word") || lower.includes("glossary")) {
+    return { label: "Vocabulary", icon: "📖", bg: "bg-purple-500/15 text-purple-300 border-purple-500/30" };
+  }
+  if (lower.includes("read") || lower.includes("book") || lower.includes("text") || lower.includes("unit")) {
+    return { label: "Reading", icon: "📚", bg: "bg-amber-500/15 text-amber-300 border-amber-500/30" };
+  }
+  if (lower.includes("write") || lower.includes("essay") || lower.includes("grammar")) {
+    return { label: "Writing", icon: "✍️", bg: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" };
+  }
+  return { label: "Core Task", icon: "⚡", bg: "bg-indigo-500/15 text-indigo-300 border-indigo-500/30" };
+}
+
+function getCountdown(deadlineStr: string) {
+  const diffMs = new Date(deadlineStr).getTime() - Date.now();
+  if (diffMs <= 0) return "🔴 Deadline passed · Submit to waive penalty";
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+  const remHours = diffHours % 24;
+  if (diffDays > 0) return `⏰ Due in ${diffDays}d ${remHours}h`;
+  const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  return `⏰ Due in ${diffHours}h ${diffMins}m`;
 }
 
 export function formatEnglishLevel(level?: string | null): string {
@@ -69,8 +102,70 @@ export default function StudentDashboardPage() {
     return (b.weekly_stars ?? 0) - (a.weekly_stars ?? 0);
   });
 
+  // Priority Today's Mission selection
+  const pendingMissions = (data.upcoming_deadlines || []).filter((d) => !d.submitted);
+  const urgentMission = pendingMissions.sort(
+    (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+  )[0];
+  const urgentSkill = urgentMission ? getSkillPill(urgentMission.title) : null;
+  const urgentCountdown = urgentMission ? getCountdown(urgentMission.deadline) : null;
+
   return (
     <div className="space-y-6">
+      {/* High-Priority Today's Mission Banner */}
+      {urgentMission ? (
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 border border-indigo-500/30 shadow-lg p-5 text-white">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-1.5 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  🎯 Today&apos;s Mission
+                </span>
+                {urgentSkill && (
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${urgentSkill.bg}`}>
+                    <span>{urgentSkill.icon}</span>
+                    <span>{urgentSkill.label}</span>
+                  </span>
+                )}
+                {urgentCountdown && (
+                  <span className="text-xs font-mono font-medium text-amber-300 tabular-nums">
+                    {urgentCountdown}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-lg md:text-xl font-bold tracking-tight text-white truncate">
+                {urgentMission.title}
+              </h3>
+              <p className="text-xs text-slate-300">
+                Earn <strong className="text-amber-300 font-semibold">+10 ⭐ Stars</strong> and <strong className="text-indigo-300 font-semibold">+25 XP</strong> upon verified teacher grading.
+              </p>
+            </div>
+            <Link
+              to="/student/assignments"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-md hover:shadow-indigo-500/25 transition shrink-0 active:scale-95"
+            >
+              <span>Start Homework</span>
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl bg-emerald-950/30 border border-emerald-500/30 p-4 text-white flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-emerald-300">All Daily Missions Completed!</p>
+              <p className="text-xs text-slate-300">You are completely up to date with your assigned homework and learning streak.</p>
+            </div>
+          </div>
+          <Link
+            to="/student/assignments"
+            className="text-xs font-semibold text-emerald-300 hover:text-emerald-200 underline whitespace-nowrap"
+          >
+            View All Tasks →
+          </Link>
+        </div>
+      )}
       {/* Asadbek Khasanov Header Banner (Ambient Mesh Gradient) */}
       <div className="relative overflow-hidden rounded-2xl bg-slate-900 border border-indigo-500/20 shadow-xl p-6 text-white">
         <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />

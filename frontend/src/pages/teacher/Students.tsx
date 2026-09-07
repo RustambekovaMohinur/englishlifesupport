@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import StudentDetailModal from "@/components/StudentDetailModal";
-import { EmptyState, LoadingRows, Modal, useConfirm } from "@/components/ui";
+import { EmptyState, LoadingRows, Modal, useConfirm, TelegramLink } from "@/components/ui";
 import {
   approveStudent,
   deleteStudent,
@@ -266,7 +266,9 @@ export default function StudentsPage() {
                         {`${s.first_name || ""} ${s.last_name || ""}`.trim() || s.username}
                       </td>
                       <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 font-mono text-xs">{s.username}</td>
-                      <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 text-xs">{s.telegram_username || "—"}</td>
+                      <td className="py-3 px-3 text-xs">
+                        <TelegramLink username={s.telegram_username} />
+                      </td>
                       <td className="py-3 px-3 font-medium text-brand-600 dark:text-brand-400 text-xs">{s.group_name ?? "—"}</td>
                       <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 capitalize text-xs">{s.english_level?.replace("_", " ") ?? "—"}</td>
                       <td className="py-3 px-3 text-zinc-400 dark:text-zinc-500 text-xs font-mono">
@@ -367,7 +369,9 @@ export default function StudentsPage() {
                         {s.full_name}
                       </td>
                       <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 font-mono text-xs">{s.username || s.email}</td>
-                      <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 text-xs">{s.phone || s.telegram_username || "—"}</td>
+                      <td className="py-3 px-3 text-xs">
+                        <TelegramLink username={s.telegram_username || s.phone} />
+                      </td>
                       <td className="py-3 px-3 text-zinc-600 dark:text-zinc-300 font-medium text-xs">{s.group_name ?? "—"}</td>
                       <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 capitalize text-xs">{s.level?.replace("_", " ") ?? "—"}</td>
                       <td className="py-3 px-3 text-center font-bold font-mono text-amber-500 text-xs tabular-nums">⭐ {s.total_stars}</td>

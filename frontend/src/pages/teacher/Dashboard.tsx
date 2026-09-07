@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
-import { StatCard, StatusBadge, LoadingRows, EmptyState } from "@/components/ui";
+import { StatCard, StatusBadge, LoadingRows, EmptyState, Modal, TelegramLink } from "@/components/ui";
 import {
   getTeacherDashboard,
   listGroups,
@@ -33,7 +33,8 @@ export default function TeacherDashboardPage() {
   const [isLoadingPending, setIsLoadingPending] = useState(false);
   const [actionInProgress, setActionInProgress] = useState<Record<string, boolean>>({});
 
-  // SOTW nomination form
+  // SOTW nomination modal state
+  const [sotwModalOpen, setSotwModalOpen] = useState(false);
   const [sotwStudentId, setSotwStudentId] = useState("");
   const [sotwStars, setSotwStars] = useState(50);
   const [sotwReason, setSotwReason] = useState("Outstanding weekly effort and on-time completion");
@@ -144,6 +145,8 @@ export default function TeacherDashboardPage() {
         reason: sotwReason,
       });
       toast.success("Student of the Week confirmed and rewarded! 👑⭐");
+      setSotwModalOpen(false);
+      setSotwStudentId("");
       getTeacherGroupReport(selectedGroupId).then(setGroupReport);
     } catch (err: any) {
       toast.error(err?.response?.data?.detail ?? "Failed to award Student of the Week");
@@ -264,15 +267,17 @@ export default function TeacherDashboardPage() {
 
                 {/* Student of the Week Section */}
                 <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
-                  <h3 className="text-sm font-bold text-purple-900 dark:text-purple-300 flex items-center gap-2 mb-2">
-                    <span>👑 Student of the Week</span>
-                    <span className="text-xs bg-purple-200/70 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 px-2 py-0.5 rounded-full">
-                      1 per group/week
-                    </span>
-                  </h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-bold text-purple-900 dark:text-purple-300 flex items-center gap-2">
+                      <span>👑 Student of the Week</span>
+                      <span className="text-xs bg-purple-200/70 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 px-2 py-0.5 rounded-full">
+                        1 per group/week
+                      </span>
+                    </h3>
+                  </div>
 
                   {groupReport.student_of_the_week ? (
-                    <div className="bg-white dark:bg-zinc-800 p-3.5 rounded-lg border border-purple-100 dark:border-purple-900/50 flex items-center justify-between">
+                    <div className="bg-white dark:bg-zinc-800 p-3.5 rounded-xl border border-purple-100 dark:border-purple-900/50 flex items-center justify-between">
                       <div>
                         <p className="font-bold text-sm text-zinc-900 dark:text-white">
                           {groupReport.student_of_the_week.student_name}
@@ -286,59 +291,90 @@ export default function TeacherDashboardPage() {
                       </span>
                     </div>
                   ) : (
-                    <form onSubmit={handleConfirmSotw} className="space-y-3 pt-1">
-                      <p className="text-xs text-purple-800 dark:text-purple-300">
-                        Select this week's top performer to award between 50 ⭐ and 100 ⭐:
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="label text-xs">Select Student *</label>
-                          <select
-                            value={sotwStudentId}
-                            onChange={(e) => setSotwStudentId(e.target.value)}
-                            className="input text-xs py-1.5"
-                            required
-                          >
-                            <option value="">-- Choose Student --</option>
-                            {groupStudents.map((st) => (
-                              <option key={st.id} value={st.id}>
-                                {st.full_name} (@{st.email.split("@")[0]})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="label text-xs">Stars Reward (50–100)</label>
-                          <select
-                            value={sotwStars}
-                            onChange={(e) => setSotwStars(Number(e.target.value))}
-                            className="input text-xs py-1.5"
-                          >
-                            <option value={50}>+50 ⭐</option>
-                            <option value={75}>+75 ⭐</option>
-                            <option value={100}>+100 ⭐</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="label text-xs">Recognition Reason</label>
-                          <input
-                            type="text"
-                            value={sotwReason}
-                            onChange={(e) => setSotwReason(e.target.value)}
-                            className="input text-xs py-1.5"
-                            placeholder="Reason for award..."
-                          />
-                        </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-zinc-800/80 p-3.5 rounded-xl border border-purple-100 dark:border-purple-900/50">
+                      <div>
+                        <p className="font-semibold text-sm text-zinc-900 dark:text-white">Award this week's top performer</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                          Recognize a standout student in this cohort with between 50 ⭐ and 100 ⭐.
+                        </p>
                       </div>
                       <button
-                        type="submit"
-                        disabled={sotwSubmitting || !sotwStudentId}
-                        className="btn-sm bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg px-4 py-2"
+                        type="button"
+                        onClick={() => setSotwModalOpen(true)}
+                        className="btn-sm bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg px-4 py-2 shrink-0 flex items-center gap-1.5 shadow-xs transition"
                       >
-                        {sotwSubmitting ? "Awarding..." : "Confirm Student of the Week 👑"}
+                        <span>👑</span>
+                        <span>Award Student of the Week ⭐</span>
                       </button>
-                    </form>
+                    </div>
                   )}
+
+                  {/* On-Demand Student of the Week Action Modal */}
+                  <Modal open={sotwModalOpen} onClose={() => setSotwModalOpen(false)} title="Award Student of the Week 👑">
+                    <form onSubmit={handleConfirmSotw} className="space-y-4">
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                        Choose a student from <strong className="text-zinc-900 dark:text-white">{groupReport.group_name}</strong> to award recognition stars:
+                      </p>
+
+                      <div>
+                        <label className="label text-xs font-semibold text-zinc-700 dark:text-zinc-300">Select Student *</label>
+                        <select
+                          value={sotwStudentId}
+                          onChange={(e) => setSotwStudentId(e.target.value)}
+                          className="input text-sm"
+                          required
+                        >
+                          <option value="">-- Choose Student --</option>
+                          {groupStudents.map((st) => (
+                            <option key={st.id} value={st.id}>
+                              {st.full_name} (@{st.email.split("@")[0]})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="label text-xs font-semibold text-zinc-700 dark:text-zinc-300">Stars Reward (50–100)</label>
+                        <select
+                          value={sotwStars}
+                          onChange={(e) => setSotwStars(Number(e.target.value))}
+                          className="input text-sm"
+                        >
+                          <option value={50}>+50 ⭐ (Standard Excellence)</option>
+                          <option value={75}>+75 ⭐ (Exceptional Effort)</option>
+                          <option value={100}>+100 ⭐ (Cohort MVP / Top Exam)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="label text-xs font-semibold text-zinc-700 dark:text-zinc-300">Recognition Reason</label>
+                        <input
+                          type="text"
+                          value={sotwReason}
+                          onChange={(e) => setSotwReason(e.target.value)}
+                          className="input text-sm"
+                          placeholder="e.g. Perfect homework on-time streak and speaking clarity"
+                        />
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+                        <button
+                          type="button"
+                          onClick={() => setSotwModalOpen(false)}
+                          className="btn-secondary text-xs"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={sotwSubmitting || !sotwStudentId}
+                          className="btn-sm bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg px-4 py-2 text-xs"
+                        >
+                          {sotwSubmitting ? "Awarding..." : "Confirm Award 👑"}
+                        </button>
+                      </div>
+                    </form>
+                  </Modal>
                 </div>
               </div>
             ) : null}
@@ -388,7 +424,9 @@ export default function TeacherDashboardPage() {
                           {`${st.first_name} ${st.last_name}`.trim() || st.username}
                         </td>
                         <td className="py-2.5 px-3 text-xs font-mono text-zinc-500 dark:text-zinc-400">{st.username}</td>
-                        <td className="py-2.5 px-3 text-zinc-500 dark:text-zinc-400 text-xs">{st.telegram_username || "—"}</td>
+                        <td className="py-2.5 px-3 text-xs">
+                          <TelegramLink username={st.telegram_username} />
+                        </td>
                         <td className="py-2.5 px-3 font-medium text-brand-600 dark:text-brand-400 text-xs">{st.group_name || "—"}</td>
                         <td className="py-2.5 px-3 text-zinc-500 dark:text-zinc-400 capitalize text-xs">
                           {st.english_level?.replace("_", " ") || "—"}

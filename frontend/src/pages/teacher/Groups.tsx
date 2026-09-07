@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { EmptyState, LoadingRows, Modal, useConfirm } from "@/components/ui";
+import { EmptyState, LoadingRows, Modal, useConfirm, TelegramLink } from "@/components/ui";
 import {
   createGroup,
   deleteGroup,
@@ -233,8 +233,8 @@ export default function GroupsPage() {
                           <span className="text-xs text-zinc-400 dark:text-zinc-500 font-normal">(@{st.username})</span>
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-zinc-500 dark:text-zinc-400 text-xs">
-                        {st.telegram_username || "—"}
+                      <td className="px-3 py-3 text-xs">
+                        <TelegramLink username={st.telegram_username} />
                       </td>
                       <td className="px-3 py-3 text-center font-semibold text-amber-500">
                         ⭐ {st.total_stars}
@@ -316,7 +316,7 @@ export default function GroupsPage() {
                   <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">@{studentHistory.username}</span>
                 </div>
                 <div className="flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400 mt-1 flex-wrap">
-                  <span>Telegram: <strong className="text-zinc-700 dark:text-zinc-300">{studentHistory.telegram_username || "—"}</strong></span>
+                  <span className="flex items-center gap-1">Telegram: <TelegramLink username={studentHistory.telegram_username} /></span>
                   <span>Group: <strong className="text-brand-600 dark:text-brand-400">{studentHistory.group_name || "—"}</strong></span>
                   <span>Level: <strong className="capitalize text-zinc-700 dark:text-zinc-300">{studentHistory.level?.replace("_", " ") || "—"}</strong></span>
                 </div>
