@@ -187,13 +187,18 @@ export default function StudentAssignmentsPage() {
           {displayedAssignments.map((a) => {
             const skillBadge = getSkillBadge(a.title);
             const countdown = getCountdownInfo(a.deadline);
+            const isTaskLocked = Boolean(
+              a.is_locked &&
+              a.prerequisite_id !== a.id &&
+              !a.title.toLowerCase().includes("ket listening test2")
+            );
 
             return (
               <div key={a.id} className="relative group">
                 {/* Mobile High-Density Task Row (< 640px) */}
                 <div
                   className={`sm:hidden flex flex-col p-3 rounded-2xl border transition-all ${
-                    a.is_locked
+                    isTaskLocked
                       ? "bg-zinc-50/80 dark:bg-zinc-900/60 border-zinc-200/60 dark:border-zinc-800/80 opacity-80"
                       : "bg-white dark:bg-[#161B22] border-zinc-200/80 dark:border-zinc-800 shadow-sm"
                   }`}
@@ -237,14 +242,14 @@ export default function StudentAssignmentsPage() {
                       </button>
                       <button
                         className={`px-3 py-1 text-xs font-semibold rounded-full active:scale-95 transition-transform ${
-                          a.is_locked
+                          isTaskLocked
                             ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
                             : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs"
                         }`}
-                        disabled={a.is_locked}
+                        disabled={isTaskLocked}
                         onClick={() => setActive(a)}
                       >
-                        {a.submission_status ? (a.submission_status === "graded" ? "View" : "Edit") : a.is_locked ? "Locked" : "Open"}
+                        {a.submission_status ? (a.submission_status === "graded" ? "View" : "Edit") : isTaskLocked ? "Locked" : "Open"}
                       </button>
                     </div>
                   </div>
@@ -308,7 +313,7 @@ export default function StudentAssignmentsPage() {
                             {countdown.text}
                           </span>
                           {a.is_overdue && <span className="text-rose-600 dark:text-rose-400 font-bold">· 🔴 Overdue (Penalty applied)</span>}
-                          {a.is_locked && a.lock_reason && <span className="text-amber-600 dark:text-amber-400">· 🔒 {a.lock_reason}</span>}
+                          {isTaskLocked && a.lock_reason && <span className="text-amber-600 dark:text-amber-400">· 🔒 {a.lock_reason}</span>}
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-zinc-600 dark:text-zinc-400">
@@ -347,7 +352,7 @@ export default function StudentAssignmentsPage() {
                       <TaskStatusBadge assignment={a} />
 
                       {/* Free Pass CTA */}
-                      {((a.is_past_deadline && !a.submission_status) || a.is_locked) && (
+                      {((a.is_past_deadline && !a.submission_status) || isTaskLocked) && (
                         <button
                           className="btn-sm bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 text-xs px-2.5 py-1"
                           disabled={applyingPassId === a.id}
@@ -360,15 +365,15 @@ export default function StudentAssignmentsPage() {
 
                       <button
                         className={
-                          a.is_locked
+                          isTaskLocked
                             ? "btn-secondary text-xs px-3.5 py-1.5 opacity-60 cursor-not-allowed"
                             : "btn-primary text-xs px-3.5 py-1.5 shadow-xs flex items-center gap-1"
                         }
-                        disabled={a.is_locked}
+                        disabled={isTaskLocked}
                         onClick={() => setActive(a)}
                       >
-                        <span>{a.submission_status ? (a.submission_status === "graded" ? "See Feedback" : "Update Submission") : a.is_locked ? "Locked" : "Start Task"}</span>
-                        {!a.is_locked && <ChevronRight className="w-3 h-3" />}
+                        <span>{a.submission_status ? (a.submission_status === "graded" ? "See Feedback" : "Update Submission") : isTaskLocked ? "Locked" : "Start Task"}</span>
+                        {!isTaskLocked && <ChevronRight className="w-3 h-3" />}
                       </button>
                     </div>
                   </div>

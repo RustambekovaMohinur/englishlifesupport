@@ -292,6 +292,10 @@ export interface AssignmentComment {
   user_id: string;
   content: string;
   created_at: string;
+  updated_at?: string | null;
+  likes?: number;
+  liked_by_users?: string[];
+  is_liked_by_me?: boolean;
   user_name?: string;
   user_full_name?: string;
   user_role: string;

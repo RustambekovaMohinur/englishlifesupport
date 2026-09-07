@@ -3,8 +3,8 @@ import uuid
 from datetime import datetime
 
 import sqlalchemy as sa
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base, TimestampMixin, UUIDPKMixin
@@ -91,6 +91,8 @@ class AssignmentComment(UUIDPKMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    likes: Mapped[int] = mapped_column(Integer, default=0, server_default=sa.text("0"), nullable=False)
+    liked_by_users: Mapped[list] = mapped_column(JSONB, default=list, server_default=sa.text("'[]'::jsonb"), nullable=False)
 
     assignment: Mapped["Assignment"] = relationship(back_populates="comments")
     user: Mapped["User"] = relationship(lazy="joined")

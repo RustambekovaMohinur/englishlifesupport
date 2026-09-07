@@ -177,6 +177,15 @@ export const getAssignmentComments = (assignmentId: string) =>
 export const addAssignmentComment = (assignmentId: string, content: string) =>
   api.post<AssignmentComment>(`/assignments/${assignmentId}/comments`, { content }).then((r) => r.data);
 
+export const updateAssignmentComment = (assignmentId: string, commentId: string, content: string) =>
+  api.put<AssignmentComment>(`/assignments/${assignmentId}/comments/${commentId}`, { content }).then((r) => r.data);
+
+export const deleteAssignmentComment = (assignmentId: string, commentId: string) =>
+  api.delete<{ success: boolean; message: string }>(`/assignments/${assignmentId}/comments/${commentId}`).then((r) => r.data);
+
+export const toggleLikeAssignmentComment = (assignmentId: string, commentId: string) =>
+  api.post<AssignmentComment>(`/assignments/${assignmentId}/comments/${commentId}/like`).then((r) => r.data);
+
 // --- Platform Feedback & Reviews ---
 export const submitPlatformFeedback = (rating: number, category: string, message: string) =>
   api.post<PlatformFeedback>("/feedback/platform", { rating, category, message }).then((r) => r.data);

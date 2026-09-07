@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
@@ -12,12 +12,14 @@ from app.db.session import get_db
 from app.models.assignment import Assignment, AssignmentComment, AssignmentStatus
 from app.models.group import Group
 from app.models.student import StudentProfile
+from app.models.teacher import TeacherProfile
 from app.models.submission import Submission
 from app.models.user import User, UserRole
 from app.models.vocabulary import VocabularyAssignment, VocabularyWord
 from app.schemas.assignment import (
     AssignmentCommentCreate,
     AssignmentCommentOut,
+    AssignmentCommentUpdate,
     AssignmentCreate,
     AssignmentForStudent,
     AssignmentImageOut,
@@ -368,7 +370,7 @@ async def list_my_assignments(
                     preceding.sort(key=lambda x: getattr(x, "order_index", 0), reverse=True)
                     prereq_id = preceding[0].id
 
-            if prereq_id:
+            if prereq_id and prereq_id != assignment.id:
                 if prereq_id in sub_map:
                     is_locked = False
                     lock_reason = None
@@ -818,14 +820,11 @@ async def get_assignment_image(
     )
 
 
-@router.get("/{assignment_id}/comments", response_model=list[AssignmentCommentOut])
-async def list_assignment_comments(
-    assignment_id: str,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
+async def _verify_assignment_access(
+    assignment_id_str: str, current_user: User, db: AsyncSession
+) -> tuple[uuid.UUID, Assignment]:
     try:
-        a_id = uuid.UUID(str(assignment_id)) if isinstance(assignment_id, str) else assignment_id
+        a_id = uuid.UUID(str(assignment_id_str)) if isinstance(assignment_id_str, str) else assignment_id_str
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid assignment ID format")
 
@@ -833,6 +832,65 @@ async def list_assignment_comments(
     assignment = assignment_res.scalar_one_or_none()
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
+
+    # Strict Group Privacy Isolation Gate
+    if current_user.role == UserRole.STUDENT:
+        sp_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
+        sp = sp_res.scalar_one_or_none()
+        if not sp or sp.group_id != assignment.group_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. You are not enrolled in this cohort.",
+            )
+        if assignment.status != AssignmentStatus.PUBLISHED:
+            raise HTTPException(status_code=404, detail="Assignment not found")
+
+    return a_id, assignment
+
+
+def _format_comment_out(c: AssignmentComment, current_user_id: uuid.UUID) -> AssignmentCommentOut:
+    u = c.user
+    display_name = "User"
+    role_str = "student"
+    if u:
+        sp = getattr(u, "student_profile", None)
+        tp = getattr(u, "teacher_profile", None)
+        display_name = (
+            (sp.full_name if sp and sp.full_name else None)
+            or (tp.full_name if tp and tp.full_name else None)
+            or f"{getattr(u, 'first_name', '')} {getattr(u, 'last_name', '')}".strip()
+            or getattr(u, "full_name", None)
+            or u.username
+        )
+        role_str = u.role.value if hasattr(u.role, "value") else str(u.role)
+
+    liked_by = [str(uid) for uid in (c.liked_by_users or [])]
+    is_liked = str(current_user_id) in liked_by
+
+    return AssignmentCommentOut(
+        id=c.id,
+        assignment_id=c.assignment_id,
+        user_id=c.user_id,
+        user_name=display_name,
+        user_full_name=display_name,
+        user_role=role_str,
+        content=c.content,
+        created_at=c.created_at,
+        updated_at=c.updated_at,
+        likes=c.likes or len(liked_by),
+        liked_by_users=liked_by,
+        is_liked_by_me=is_liked,
+        user_avatar_url=None,
+    )
+
+
+@router.get("/{assignment_id}/comments", response_model=list[AssignmentCommentOut])
+async def list_assignment_comments(
+    assignment_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    a_id, assignment = await _verify_assignment_access(assignment_id, current_user, db)
 
     comments = (
         await db.execute(
@@ -846,33 +904,7 @@ async def list_assignment_comments(
         )
     ).scalars().all()
 
-    result = []
-    for c in comments:
-        u = c.user
-        display_name = "User"
-        role_str = "student"
-        if u:
-            display_name = (
-                f"{getattr(u, 'first_name', '')} {getattr(u, 'last_name', '')}".strip()
-                or getattr(u, "full_name", None)
-                or u.username
-            )
-            role_str = u.role.value if hasattr(u.role, "value") else str(u.role)
-
-        result.append(
-            AssignmentCommentOut(
-                id=c.id,
-                assignment_id=c.assignment_id,
-                user_id=c.user_id,
-                user_name=display_name,
-                user_full_name=display_name,
-                user_role=role_str,
-                content=c.content,
-                created_at=c.created_at,
-                user_avatar_url=None,
-            )
-        )
-    return result
+    return [_format_comment_out(c, current_user.id) for c in comments]
 
 
 @router.post("/{assignment_id}/comments", response_model=AssignmentCommentOut)
@@ -882,62 +914,174 @@ async def create_assignment_comment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not payload.content or not payload.content.strip():
+    content_clean = payload.content.strip() if payload.content else ""
+    if not content_clean:
         raise HTTPException(status_code=400, detail="Comment content cannot be empty")
 
-    # Safe UUID casting
-    try:
-        a_id = uuid.UUID(str(assignment_id)) if isinstance(assignment_id, str) else assignment_id
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Invalid assignment ID format")
+    a_id, assignment = await _verify_assignment_access(assignment_id, current_user, db)
 
-    # Verify assignment exists
-    assignment_res = await db.execute(select(Assignment).where(Assignment.id == a_id))
-    assignment = assignment_res.scalar_one_or_none()
-    if not assignment:
-        raise HTTPException(status_code=404, detail="Assignment not found")
+    # Idempotency & Debounce: check for duplicate comment posted within last 3 seconds
+    recent = (
+        await db.execute(
+            select(AssignmentComment)
+            .options(
+                selectinload(AssignmentComment.user).selectinload(User.student_profile),
+                selectinload(AssignmentComment.user).selectinload(User.teacher_profile),
+            )
+            .where(
+                AssignmentComment.assignment_id == a_id,
+                AssignmentComment.user_id == current_user.id,
+                AssignmentComment.content == content_clean,
+                AssignmentComment.created_at >= utcnow() - timedelta(seconds=3),
+            )
+        )
+    ).scalars().first()
+    if recent:
+        return _format_comment_out(recent, current_user.id)
 
     new_comment = AssignmentComment(
         id=uuid.uuid4(),
         assignment_id=a_id,
         user_id=current_user.id,
-        content=payload.content.strip(),
+        content=content_clean,
+        likes=0,
+        liked_by_users=[],
     )
     db.add(new_comment)
     await db.commit()
-    await db.refresh(new_comment)
 
-    # Safe display name extraction
-    # Eagerly load user profiles if needed
-    sp_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
-    sp = sp_res.scalar_one_or_none()
-    tp_res = await db.execute(select(TeacherProfile).where(TeacherProfile.user_id == current_user.id))
-    tp = tp_res.scalar_one_or_none()
+    refetched = (
+        await db.execute(
+            select(AssignmentComment)
+            .options(
+                selectinload(AssignmentComment.user).selectinload(User.student_profile),
+                selectinload(AssignmentComment.user).selectinload(User.teacher_profile),
+            )
+            .where(AssignmentComment.id == new_comment.id)
+        )
+    ).scalar_one()
 
-    user_name = (
-        (sp.full_name if sp and sp.full_name else None)
-        or (tp.full_name if tp and tp.full_name else None)
-        or f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip()
-        or getattr(current_user, "full_name", None)
-        or current_user.username
-    )
+    return _format_comment_out(refetched, current_user.id)
 
-    role_str = (
-        current_user.role.value if hasattr(current_user.role, "value")
-        else str(current_user.role)
-    )
 
-    return AssignmentCommentOut(
-        id=new_comment.id,
-        assignment_id=new_comment.assignment_id,
-        user_id=new_comment.user_id,
-        user_name=user_name,
-        user_full_name=user_name,
-        user_role=role_str,
-        content=new_comment.content,
-        created_at=new_comment.created_at,
-        user_avatar_url=None,
-    )
+@router.put("/{assignment_id}/comments/{comment_id}", response_model=AssignmentCommentOut)
+async def update_assignment_comment(
+    assignment_id: str,
+    comment_id: str,
+    payload: AssignmentCommentUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    content_clean = payload.content.strip() if payload.content else ""
+    if not content_clean:
+        raise HTTPException(status_code=400, detail="Comment content cannot be empty")
+
+    a_id, assignment = await _verify_assignment_access(assignment_id, current_user, db)
+
+    try:
+        c_id = uuid.UUID(str(comment_id)) if isinstance(comment_id, str) else comment_id
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid comment ID format")
+
+    comment = (
+        await db.execute(
+            select(AssignmentComment)
+            .options(
+                selectinload(AssignmentComment.user).selectinload(User.student_profile),
+                selectinload(AssignmentComment.user).selectinload(User.teacher_profile),
+            )
+            .where(AssignmentComment.id == c_id, AssignmentComment.assignment_id == a_id)
+        )
+    ).scalar_one_or_none()
+
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    if comment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the comment author can edit this comment")
+
+    comment.content = content_clean
+    comment.updated_at = utcnow()
+    await db.commit()
+    await db.refresh(comment)
+
+    return _format_comment_out(comment, current_user.id)
+
+
+@router.delete("/{assignment_id}/comments/{comment_id}")
+async def delete_assignment_comment(
+    assignment_id: str,
+    comment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    a_id, assignment = await _verify_assignment_access(assignment_id, current_user, db)
+
+    try:
+        c_id = uuid.UUID(str(comment_id)) if isinstance(comment_id, str) else comment_id
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid comment ID format")
+
+    comment = (
+        await db.execute(
+            select(AssignmentComment)
+            .where(AssignmentComment.id == c_id, AssignmentComment.assignment_id == a_id)
+        )
+    ).scalar_one_or_none()
+
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    if comment.user_id != current_user.id and current_user.role != UserRole.TEACHER:
+        raise HTTPException(status_code=403, detail="Permission denied to delete this comment")
+
+    await db.delete(comment)
+    await db.commit()
+    return {"success": True, "message": "Comment deleted successfully"}
+
+
+@router.post("/{assignment_id}/comments/{comment_id}/like", response_model=AssignmentCommentOut)
+async def toggle_like_assignment_comment(
+    assignment_id: str,
+    comment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    a_id, assignment = await _verify_assignment_access(assignment_id, current_user, db)
+
+    try:
+        c_id = uuid.UUID(str(comment_id)) if isinstance(comment_id, str) else comment_id
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid comment ID format")
+
+    comment = (
+        await db.execute(
+            select(AssignmentComment)
+            .options(
+                selectinload(AssignmentComment.user).selectinload(User.student_profile),
+                selectinload(AssignmentComment.user).selectinload(User.teacher_profile),
+            )
+            .where(AssignmentComment.id == c_id, AssignmentComment.assignment_id == a_id)
+        )
+    ).scalar_one_or_none()
+
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    liked_by = [str(uid) for uid in (comment.liked_by_users or [])]
+    user_id_str = str(current_user.id)
+
+    if user_id_str in liked_by:
+        liked_by.remove(user_id_str)
+    else:
+        liked_by.append(user_id_str)
+
+    comment.liked_by_users = liked_by
+    comment.likes = len(liked_by)
+    await db.commit()
+    await db.refresh(comment)
+
+    return _format_comment_out(comment, current_user.id)
 
 
 

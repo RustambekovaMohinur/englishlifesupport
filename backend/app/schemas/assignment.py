@@ -52,12 +52,20 @@ class AssignmentCommentCreate(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
 
 
+class AssignmentCommentUpdate(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+
+
 class AssignmentCommentOut(BaseModel):
     id: uuid.UUID
     assignment_id: uuid.UUID
     user_id: uuid.UUID
     content: str
     created_at: datetime
+    updated_at: datetime | None = None
+    likes: int = 0
+    liked_by_users: list[str] = []
+    is_liked_by_me: bool = False
     user_name: str | None = None
     user_full_name: str | None = None
     user_role: str
