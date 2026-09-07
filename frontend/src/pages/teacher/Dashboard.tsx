@@ -429,52 +429,111 @@ export default function TeacherDashboardPage() {
                 No students currently waiting for approval.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50">
-                      <th className="py-2.5 px-3 font-medium">Name</th>
-                      <th className="py-2.5 px-3 font-medium">Username</th>
-                      <th className="py-2.5 px-3 font-medium">Telegram</th>
-                      <th className="py-2.5 px-3 font-medium">Group</th>
-                      <th className="py-2.5 px-3 font-medium">Level</th>
-                      <th className="py-2.5 px-3 font-medium text-right">Decision</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingStudents.map((st) => (
-                      <tr key={st.id} className="border-b border-zinc-100 dark:border-zinc-800/60 last:border-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors">
-                        <td className="py-2.5 px-3 font-medium text-zinc-900 dark:text-white">
-                          {`${st.first_name} ${st.last_name}`.trim() || st.username}
-                        </td>
-                        <td className="py-2.5 px-3 text-xs font-mono text-zinc-500 dark:text-zinc-400">{st.username}</td>
-                        <td className="py-2.5 px-3 text-xs">
-                          <TelegramLink username={st.telegram_username} />
-                        </td>
-                        <td className="py-2.5 px-3 font-medium text-brand-600 dark:text-brand-400 text-xs">{st.group_name || "—"}</td>
-                        <td className="py-2.5 px-3 text-zinc-500 dark:text-zinc-400 capitalize text-xs">
-                          {st.english_level?.replace("_", " ") || "—"}
-                        </td>
-                        <td className="py-2.5 px-3 text-right space-x-2">
+              <div>
+                {/* Mobile High-Density Pending Student Cards */}
+                <div className="sm:hidden space-y-2.5">
+                  {pendingStudents.map((st) => (
+                    <div
+                      key={st.id}
+                      className="p-3 rounded-xl bg-zinc-50/70 dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/70 space-y-2.5 shadow-2xs"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-bold text-zinc-900 dark:text-white text-xs truncate">
+                            {`${st.first_name} ${st.last_name}`.trim() || st.username}
+                          </p>
+                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                            <span className="font-mono">@{st.username}</span>
+                            {st.group_name && (
+                              <>
+                                <span>·</span>
+                                <span className="font-medium text-brand-600 dark:text-brand-400 truncate max-w-[120px]">
+                                  {st.group_name}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        {st.telegram_username && (
+                          <div className="shrink-0">
+                            <TelegramLink username={st.telegram_username} />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-200/50 dark:border-zinc-800/50">
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-200/60 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 capitalize">
+                          {st.english_level?.replace("_", " ") || "No level"}
+                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <button
                             disabled={actionInProgress[st.id]}
                             onClick={() => handleQuickApprove(st)}
-                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded disabled:opacity-50 transition"
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50 active:scale-95 transition min-h-[36px]"
                           >
                             {actionInProgress[st.id] ? "..." : "✓ Approve"}
                           </button>
                           <button
                             disabled={actionInProgress[st.id]}
                             onClick={() => handleQuickReject(st)}
-                            className="px-2.5 py-1 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded hover:bg-rose-100 dark:hover:bg-rose-900/60 disabled:opacity-50 transition border border-rose-200 dark:border-rose-800"
+                            className="px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/60 disabled:opacity-50 active:scale-95 transition border border-rose-200 dark:border-rose-800 min-h-[36px]"
                           >
                             {actionInProgress[st.id] ? "..." : "✕ Reject"}
                           </button>
-                        </td>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Table (>= 640px) */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50">
+                        <th className="py-2.5 px-3 font-medium">Name</th>
+                        <th className="py-2.5 px-3 font-medium">Username</th>
+                        <th className="py-2.5 px-3 font-medium">Telegram</th>
+                        <th className="py-2.5 px-3 font-medium">Group</th>
+                        <th className="py-2.5 px-3 font-medium">Level</th>
+                        <th className="py-2.5 px-3 font-medium text-right">Decision</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {pendingStudents.map((st) => (
+                        <tr key={st.id} className="border-b border-zinc-100 dark:border-zinc-800/60 last:border-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors">
+                          <td className="py-2.5 px-3 font-medium text-zinc-900 dark:text-white">
+                            {`${st.first_name} ${st.last_name}`.trim() || st.username}
+                          </td>
+                          <td className="py-2.5 px-3 text-xs font-mono text-zinc-500 dark:text-zinc-400">{st.username}</td>
+                          <td className="py-2.5 px-3 text-xs">
+                            <TelegramLink username={st.telegram_username} />
+                          </td>
+                          <td className="py-2.5 px-3 font-medium text-brand-600 dark:text-brand-400 text-xs">{st.group_name || "—"}</td>
+                          <td className="py-2.5 px-3 text-zinc-500 dark:text-zinc-400 capitalize text-xs">
+                            {st.english_level?.replace("_", " ") || "—"}
+                          </td>
+                          <td className="py-2.5 px-3 text-right space-x-2">
+                            <button
+                              disabled={actionInProgress[st.id]}
+                              onClick={() => handleQuickApprove(st)}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded disabled:opacity-50 transition"
+                            >
+                              {actionInProgress[st.id] ? "..." : "✓ Approve"}
+                            </button>
+                            <button
+                              disabled={actionInProgress[st.id]}
+                              onClick={() => handleQuickReject(st)}
+                              className="px-2.5 py-1 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded hover:bg-rose-100 dark:hover:bg-rose-900/60 disabled:opacity-50 transition border border-rose-200 dark:border-rose-800"
+                            >
+                              {actionInProgress[st.id] ? "..." : "✕ Reject"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
                 {pendingTotalPages > 1 && (
                   <div className="flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-3 mt-2 text-xs text-zinc-500 dark:text-zinc-400">
@@ -517,29 +576,62 @@ export default function TeacherDashboardPage() {
             {data.recent_submissions.length === 0 ? (
               <EmptyState title="No submissions yet" description="Student submissions will appear here." />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50">
-                      <th className="py-2.5 px-3 font-medium">Student</th>
-                      <th className="py-2.5 px-3 font-medium">Assignment</th>
-                      <th className="py-2.5 px-3 font-medium">Submitted</th>
-                      <th className="py-2.5 px-3 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.recent_submissions.map((s) => (
-                      <tr key={s.id} className="border-b border-zinc-100 dark:border-zinc-800/60 last:border-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors">
-                        <td className="py-3 px-3 font-medium text-zinc-900 dark:text-white">{s.student_name}</td>
-                        <td className="py-3 px-3 text-zinc-600 dark:text-zinc-300">{s.assignment_title}</td>
-                        <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 font-mono text-xs">{format(new Date(s.submitted_at), "MMM d, HH:mm")}</td>
-                        <td className="py-3 px-3">
-                          <StatusBadge status={s.status} />
-                        </td>
+              <div>
+                {/* Mobile High-Density Submission Rows */}
+                <div className="sm:hidden space-y-2">
+                  {data.recent_submissions.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between p-3 rounded-xl bg-zinc-50/50 dark:bg-zinc-900/50 border border-zinc-200/70 dark:border-zinc-800/70 gap-3"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
+                          {s.student_name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-zinc-900 dark:text-white text-xs truncate max-w-[150px]">
+                            {s.student_name}
+                          </p>
+                          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate max-w-[150px] mt-0.5">
+                            {s.assignment_title}
+                          </p>
+                          <p className="text-[9px] text-zinc-400 font-mono">
+                            {format(new Date(s.submitted_at), "MMM d, HH:mm")}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="shrink-0">
+                        <StatusBadge status={s.status} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Table (>= 640px) */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50">
+                        <th className="py-2.5 px-3 font-medium">Student</th>
+                        <th className="py-2.5 px-3 font-medium">Assignment</th>
+                        <th className="py-2.5 px-3 font-medium">Submitted</th>
+                        <th className="py-2.5 px-3 font-medium">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {data.recent_submissions.map((s) => (
+                        <tr key={s.id} className="border-b border-zinc-100 dark:border-zinc-800/60 last:border-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors">
+                          <td className="py-3 px-3 font-medium text-zinc-900 dark:text-white">{s.student_name}</td>
+                          <td className="py-3 px-3 text-zinc-600 dark:text-zinc-300">{s.assignment_title}</td>
+                          <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 font-mono text-xs">{format(new Date(s.submitted_at), "MMM d, HH:mm")}</td>
+                          <td className="py-3 px-3">
+                            <StatusBadge status={s.status} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>

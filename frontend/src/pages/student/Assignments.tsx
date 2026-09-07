@@ -41,6 +41,23 @@ export function TaskStatusBadge({ assignment }: { assignment: AssignmentForStude
   );
 }
 
+function getSkillBadge(title: string) {
+  const t = title.toLowerCase();
+  if (t.includes("read") || t.includes("book") || t.includes("article") || t.includes("text")) {
+    return { icon: "📖", bg: "bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/60" };
+  }
+  if (t.includes("listen") || t.includes("audio") || t.includes("podcast")) {
+    return { icon: "🎧", bg: "bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/60" };
+  }
+  if (t.includes("speak") || t.includes("voice") || t.includes("oral") || t.includes("record")) {
+    return { icon: "🎙️", bg: "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60" };
+  }
+  if (t.includes("writ") || t.includes("essay") || t.includes("grammar") || t.includes("vocab")) {
+    return { icon: "✍️", bg: "bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800/60" };
+  }
+  return { icon: "⚡", bg: "bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800/60" };
+}
+
 export default function StudentAssignmentsPage() {
   const [assignments, setAssignments] = useState<AssignmentForStudent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -95,85 +112,147 @@ export default function StudentAssignmentsPage() {
         <EmptyState title="No assignments yet" description="You'll see homework here once your teacher assigns it." />
       ) : (
         <div className="space-y-2.5">
-          {assignments.map((a) => (
-            <div
-              key={a.id}
-              className={`card p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border transition-all duration-150 ${
-                a.is_locked
-                  ? "bg-zinc-50/80 dark:bg-zinc-900/60 border-zinc-200/60 dark:border-zinc-800/80 opacity-85"
-                  : "bg-white dark:bg-[#111827] border-black/[0.06] dark:border-white/[0.08] hover:border-indigo-500/40 hover:-translate-y-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]"
-              }`}
-            >
-              <div className="space-y-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-bold text-zinc-900 dark:text-white text-sm tracking-tight">{a.title}</p>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
-                    Cycle {a.cycle_number ?? 1}
-                  </span>
-                  {a.prerequisite_id && (
-                    <span className="text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-1.5 py-0.5 rounded font-medium">
-                      Prerequisite Required
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 tabular-nums font-mono">
-                  Due: {format(new Date(a.deadline), "MMM d, yyyy HH:mm")}
-                  {a.is_overdue && " · 🔴 Overdue (Penalty applied)"}
-                  {!a.is_overdue && a.is_past_deadline && !a.submission_status && " · Deadline passed"}
-                  {a.is_locked && a.lock_reason && ` · 🔒 ${a.lock_reason}`}
-                </p>
-                <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px] text-zinc-600 dark:text-zinc-400">
-                  {a.file_url && (
-                    <FileDownloadButton
-                      url={a.file_url}
-                      filename={a.file_original_name}
-                      className="inline-flex items-center gap-1 font-medium text-brand-600 dark:text-brand-400 hover:underline"
-                    >
-                      📎 Attached ({a.file_original_name})
-                    </FileDownloadButton>
-                  )}
-                  {a.vocab_words && a.vocab_words.length > 0 && (
-                    <span className="inline-flex items-center gap-1 text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded font-medium text-[11px] border border-purple-200 dark:border-purple-800/50">
-                      📖 {a.vocab_words.length} Vocab
-                    </span>
-                  )}
-                  <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded font-medium text-[11px] border border-amber-200 dark:border-amber-800/50">
-                    ⭐ +10 Stars · 🎯 +25 XP
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
-                <TaskStatusBadge assignment={a} />
-                {a.score !== null && (
-                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 tabular-nums font-mono">{a.score}/10</span>
-                )}
-
-                {/* Free Pass CTA for missed/late tasks */}
-                {((a.is_past_deadline && !a.submission_status) || a.is_locked) && (
-                  <button
-                    className="btn-sm bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 text-xs px-2.5 py-1"
-                    disabled={applyingPassId === a.id}
-                    onClick={() => handleApplyFreePass(a.id)}
-                    title="Use your 1 Monthly Free Pass to bypass lock/penalty"
-                  >
-                    {applyingPassId === a.id ? "Using..." : "🛡 Free Pass"}
-                  </button>
-                )}
-
-                <button
-                  className={
+          {assignments.map((a) => {
+            const skillBadge = getSkillBadge(a.title);
+            return (
+              <div key={a.id}>
+                {/* Mobile High-Density Task Row (< 640px) */}
+                <div
+                  className={`sm:hidden flex items-center justify-between p-3 rounded-xl border transition-all ${
                     a.is_locked
-                      ? "btn-secondary text-xs px-3 py-1.5 opacity-60 cursor-not-allowed"
-                      : "btn-secondary text-xs px-3 py-1.5"
-                  }
-                  disabled={a.is_locked}
-                  onClick={() => setActive(a)}
+                      ? "bg-zinc-50/80 dark:bg-zinc-900/60 border-zinc-200/60 dark:border-zinc-800/80 opacity-80"
+                      : "bg-white dark:bg-[#161B22] border-zinc-200/70 dark:border-zinc-800/70 shadow-sm"
+                  }`}
                 >
-                  {a.submission_status ? "View / Update" : a.is_locked ? "Locked" : "Open Task"}
-                </button>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border text-base ${skillBadge.bg}`}>
+                      {skillBadge.icon}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-zinc-900 dark:text-white text-xs truncate max-w-[170px]">
+                          {a.title}
+                        </p>
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 shrink-0">
+                          C{a.cycle_number ?? 1}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
+                        Due: {format(new Date(a.deadline), "MMM d, HH:mm")}
+                        {a.submission_status && (
+                          <span className="ml-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                            · {a.submission_status === "graded" && a.score !== null ? `${a.score}/10` : a.submission_status}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {((a.is_past_deadline && !a.submission_status) || a.is_locked) && (
+                      <button
+                        className="px-2 py-1 text-[10px] font-semibold rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 active:scale-95 transition-transform"
+                        disabled={applyingPassId === a.id}
+                        onClick={() => handleApplyFreePass(a.id)}
+                        title="1 Monthly Free Pass"
+                      >
+                        {applyingPassId === a.id ? "..." : "🛡 Pass"}
+                      </button>
+                    )}
+                    <button
+                      className={`px-3 py-1 text-xs font-semibold rounded-full active:scale-95 transition-transform ${
+                        a.is_locked
+                          ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+                          : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs"
+                      }`}
+                      disabled={a.is_locked}
+                      onClick={() => setActive(a)}
+                    >
+                      {a.submission_status ? (a.submission_status === "graded" ? "View" : "Edit") : a.is_locked ? "Locked" : "Open"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Desktop / Tablet Full Card (>= 640px) */}
+                <div
+                  className={`hidden sm:flex sm:flex-row sm:items-center sm:justify-between card p-4 gap-3 border transition-all duration-150 ${
+                    a.is_locked
+                      ? "bg-zinc-50/80 dark:bg-zinc-900/60 border-zinc-200/60 dark:border-zinc-800/80 opacity-85"
+                      : "bg-white dark:bg-[#111827] border-black/[0.06] dark:border-white/[0.08] hover:border-indigo-500/40 hover:-translate-y-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]"
+                  }`}
+                >
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-bold text-zinc-900 dark:text-white text-sm tracking-tight">{a.title}</p>
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
+                        Cycle {a.cycle_number ?? 1}
+                      </span>
+                      {a.prerequisite_id && (
+                        <span className="text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-1.5 py-0.5 rounded font-medium">
+                          Prerequisite Required
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 tabular-nums font-mono">
+                      Due: {format(new Date(a.deadline), "MMM d, yyyy HH:mm")}
+                      {a.is_overdue && " · 🔴 Overdue (Penalty applied)"}
+                      {!a.is_overdue && a.is_past_deadline && !a.submission_status && " · Deadline passed"}
+                      {a.is_locked && a.lock_reason && ` · 🔒 ${a.lock_reason}`}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px] text-zinc-600 dark:text-zinc-400">
+                      {a.file_url && (
+                        <FileDownloadButton
+                          url={a.file_url}
+                          filename={a.file_original_name}
+                          className="inline-flex items-center gap-1 font-medium text-brand-600 dark:text-brand-400 hover:underline"
+                        >
+                          📎 Attached ({a.file_original_name})
+                        </FileDownloadButton>
+                      )}
+                      {a.vocab_words && a.vocab_words.length > 0 && (
+                        <span className="inline-flex items-center gap-1 text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded font-medium text-[11px] border border-purple-200 dark:border-purple-800/50">
+                          📖 {a.vocab_words.length} Vocab
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded font-medium text-[11px] border border-amber-200 dark:border-amber-800/50">
+                        ⭐ +10 Stars · 🎯 +25 XP
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+                    <TaskStatusBadge assignment={a} />
+                    {a.score !== null && (
+                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 tabular-nums font-mono">{a.score}/10</span>
+                    )}
+
+                    {/* Free Pass CTA for missed/late tasks */}
+                    {((a.is_past_deadline && !a.submission_status) || a.is_locked) && (
+                      <button
+                        className="btn-sm bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 text-xs px-2.5 py-1"
+                        disabled={applyingPassId === a.id}
+                        onClick={() => handleApplyFreePass(a.id)}
+                        title="Use your 1 Monthly Free Pass to bypass lock/penalty"
+                      >
+                        {applyingPassId === a.id ? "Using..." : "🛡 Free Pass"}
+                      </button>
+                    )}
+
+                    <button
+                      className={
+                        a.is_locked
+                          ? "btn-secondary text-xs px-3 py-1.5 opacity-60 cursor-not-allowed"
+                          : "btn-secondary text-xs px-3 py-1.5"
+                      }
+                      disabled={a.is_locked}
+                      onClick={() => setActive(a)}
+                    >
+                      {a.submission_status ? "View / Update" : a.is_locked ? "Locked" : "Open Task"}
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

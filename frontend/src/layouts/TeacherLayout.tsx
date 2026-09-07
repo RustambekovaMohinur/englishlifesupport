@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { LayoutDashboard, Users, BookOpen, FileCheck, User } from "lucide-react";
+import { LayoutDashboard, Grid3X3, FileText, CheckSquare, User } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -14,10 +14,10 @@ const sidebarNavItems = [
 ];
 
 const bottomNavItems = [
-  { to: "/teacher", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/teacher/groups", label: "Groups", icon: Users },
-  { to: "/teacher/assignments", label: "Assignments", icon: BookOpen },
-  { to: "/teacher/submissions", label: "Submissions", icon: FileCheck },
+  { to: "/teacher", label: "Desk", icon: LayoutDashboard, end: true },
+  { to: "/teacher/groups", label: "Matrix", icon: Grid3X3 },
+  { to: "/teacher/assignments", label: "Tasks", icon: FileText },
+  { to: "/teacher/submissions", label: "Review", icon: CheckSquare },
   { to: "/teacher/profile", label: "Profile", icon: User },
 ];
 
@@ -191,35 +191,35 @@ export default function TeacherLayout() {
         </main>
       </div>
 
-      {/* Mobile & Tablet Frosted Glass Bottom Navigation Bar (lg:hidden) */}
+      {/* Fixed Mobile Bottom App Bar (Native App Navigation) */}
       <nav
         aria-label="Mobile Navigation"
-        className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-white/85 dark:bg-[#111827]/85 backdrop-blur-lg border-t border-zinc-200/80 dark:border-zinc-800 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-[max(0.35rem,env(safe-area-inset-bottom))]"
+        className="fixed bottom-0 left-0 right-0 z-50 block lg:hidden bg-white/90 dark:bg-[#111827]/90 backdrop-blur-xl border-t border-zinc-200/80 dark:border-zinc-800/80 px-2 py-1.5 flex justify-around items-center shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       >
-        <div className="grid grid-cols-5 h-16 max-w-lg mx-auto px-2">
+        <div className="flex items-center justify-around w-full max-w-md mx-auto">
           {bottomNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `flex flex-col items-center justify-center py-1 px-1 transition-all duration-150 active:scale-95 select-none ${
+                `flex flex-col items-center justify-center min-w-[56px] py-1 px-1 transition-all duration-150 active:scale-95 select-none ${
                   isActive
-                    ? "text-brand-600 dark:text-brand-400 font-semibold"
-                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+                    ? "text-indigo-600 dark:text-indigo-400 font-semibold"
+                    : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  <div className={`relative p-1 rounded-xl transition ${isActive ? "bg-brand-50 dark:bg-brand-950/50" : ""}`}>
-                    <item.icon className={`h-5 w-5 ${isActive ? "text-brand-600 dark:text-brand-400 stroke-[2.25]" : "stroke-[1.75]"}`} />
+                  <div className={`p-1 rounded-xl transition ${isActive ? "bg-indigo-50 dark:bg-indigo-950/50" : ""}`}>
+                    <item.icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.5 : 1.75} />
                   </div>
-                  <span className="text-[10px] sm:text-[11px] leading-none mt-0.5 tracking-tight truncate max-w-full">
+                  <span className="text-[10px] leading-tight mt-0.5 tracking-tight truncate max-w-full">
                     {item.label}
                   </span>
                   {isActive && (
-                    <span className="h-1 w-1 rounded-full bg-brand-600 dark:bg-brand-400 mt-0.5 animate-in zoom-in duration-150" />
+                    <span className="h-1 w-1 rounded-full bg-indigo-600 dark:bg-indigo-400 mt-0.5 animate-in zoom-in duration-150" />
                   )}
                 </>
               )}
