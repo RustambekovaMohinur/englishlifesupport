@@ -2,7 +2,8 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, Text
+import sqlalchemy as sa
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +25,9 @@ class Assignment(UUIDPKMixin, TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    is_hard_deadline: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=sa.text("false"), nullable=False
+    )
     status: Mapped[AssignmentStatus] = mapped_column(
         Enum(AssignmentStatus, name="assignment_status", values_callable=lambda x: [e.value for e in x]),
         default=AssignmentStatus.DRAFT,
@@ -54,6 +58,12 @@ class Assignment(UUIDPKMixin, TimestampMixin, Base):
         order_by="AssignmentImage.order_index",
         lazy="selectin",
     )
+    comments: Mapped[list["AssignmentComment"]] = relationship(
+        back_populates="assignment",
+        cascade="all, delete-orphan",
+        order_by="AssignmentComment.created_at",
+        lazy="selectin",
+    )
 
 
 class AssignmentImage(UUIDPKMixin, TimestampMixin, Base):
@@ -69,5 +79,21 @@ class AssignmentImage(UUIDPKMixin, TimestampMixin, Base):
     order_index: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
 
     assignment: Mapped["Assignment"] = relationship(back_populates="images")
+
+
+class AssignmentComment(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "assignment_comments"
+
+    assignment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    assignment: Mapped["Assignment"] = relationship(back_populates="comments")
+    user: Mapped["User"] = relationship(lazy="joined")
+
 
 

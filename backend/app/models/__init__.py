@@ -10,7 +10,8 @@ from app.models.refresh_token import RefreshToken  # noqa: F401
 from app.models.teacher import TeacherProfile  # noqa: F401
 from app.models.group import Group, EnglishLevel  # noqa: F401
 from app.models.student import StudentProfile  # noqa: F401
-from app.models.assignment import Assignment  # noqa: F401
+from app.models.assignment import Assignment, AssignmentComment  # noqa: F401
+from app.models.feedback import PlatformFeedback  # noqa: F401
 from app.models.submission import (  # noqa: F401
     Submission,
     SubmissionComment,
@@ -46,6 +47,8 @@ __all__ = [
     "EnglishLevel",
     "StudentProfile",
     "Assignment",
+    "AssignmentComment",
+    "PlatformFeedback",
     "Submission",
     "SubmissionStatus",
     "SubmissionCorrection",
@@ -65,3 +68,4 @@ __all__ = [
     "TaskLockOverride",
     "StudentOfTheWeek",
 ]
+

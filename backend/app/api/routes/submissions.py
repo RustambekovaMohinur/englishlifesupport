@@ -181,6 +181,12 @@ async def submit_homework(
 
 
     now = utcnow()
+    if getattr(assignment, "is_hard_deadline", False) and as_utc(assignment.deadline) < now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Submission rejected: The hard deadline for this assignment has expired.",
+        )
+
     existing = (
         await db.execute(
             select(Submission)
@@ -456,6 +462,7 @@ async def download_submission_file(
 
 
 @router.post("/{submission_id}/grade", response_model=GradeOut, dependencies=[Depends(require_teacher)])
+@router.post("/{submission_id}/feedback", response_model=GradeOut, dependencies=[Depends(require_teacher)])
 async def grade_submission(
     submission_id: uuid.UUID,
     body: GradeCreate,

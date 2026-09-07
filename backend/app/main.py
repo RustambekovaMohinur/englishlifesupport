@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
 
-from app.api.routes import assignments, auth, dashboard, gamification, groups, profile, students, submissions, teachers
+from app.api.routes import assignments, auth, dashboard, feedback, gamification, groups, profile, students, submissions, teachers
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.security import hash_password
@@ -109,6 +109,8 @@ app.include_router(submissions.router)
 app.include_router(dashboard.router)
 app.include_router(gamification.router)
 app.include_router(profile.router)
+app.include_router(feedback.router)
+
 
 
 @app.get("/api/health")

@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { downloadAuthenticatedFile, fetchAuthenticatedBlobUrl } from "@/services/api";
 
@@ -120,6 +120,8 @@ export function FileDownloadButton({
 
 export function AuthenticatedAudio({ url, className }: { url: string; className?: string }) {
   const [src, setSrc] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playbackRate, setPlaybackRate] = useState<number>(1.0);
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -139,9 +141,37 @@ export function AuthenticatedAudio({ url, className }: { url: string; className?
     };
   }, [url]);
 
+  function changeRate(rate: number) {
+    setPlaybackRate(rate);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = rate;
+    }
+  }
+
   if (!src) return <p className="text-xs text-neutral-400">Loading audio...</p>;
-  return <audio controls src={src} className={className} />;
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+      <audio ref={audioRef} controls src={src} className={className} />
+      <div className="flex items-center gap-1 shrink-0">
+        {[1.0, 1.25, 1.5, 2.0].map((rate) => (
+          <button
+            key={rate}
+            type="button"
+            onClick={() => changeRate(rate)}
+            className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded transition ${
+              playbackRate === rate
+                ? "bg-brand-600 text-white shadow-xs"
+                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+            }`}
+          >
+            {rate}x
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
+
 
 export function useConfirm() {
   const [state, setState] = useState<{ open: boolean; message: string; onConfirm: () => void }>({

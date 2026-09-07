@@ -246,6 +246,7 @@ export interface AssignmentOut {
   title: string;
   description: string;
   deadline: string;
+  is_hard_deadline?: boolean;
   status: "draft" | "published" | "archived";
   file_url: string | null;
   file_original_name: string | null;
@@ -253,6 +254,7 @@ export interface AssignmentOut {
   images?: AssignmentImageOut[];
   created_at: string;
   submission_count: number;
+  comment_count?: number;
   order_index?: number;
   cycle_number?: number;
   prerequisite_id?: string | null;
@@ -263,6 +265,7 @@ export interface AssignmentForStudent {
   title: string;
   description: string;
   deadline: string;
+  is_hard_deadline?: boolean;
   status: "draft" | "published" | "archived";
   file_url: string | null;
   file_original_name: string | null;
@@ -272,13 +275,45 @@ export interface AssignmentForStudent {
   is_overdue?: boolean;
   submission_status: "submitted" | "late" | "graded" | null;
   score: number | null;
+  stars?: number | null;
+  feedback?: string | null;
   submission_id?: string | null;
   order_index?: number;
   cycle_number?: number;
   prerequisite_id?: string | null;
   is_locked?: boolean;
   lock_reason?: string | null;
+  comment_count?: number;
 }
+
+export interface AssignmentComment {
+  id: string;
+  assignment_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  user_full_name: string;
+  user_role: string;
+  user_avatar_url?: string | null;
+}
+
+export interface PlatformFeedback {
+  id: string;
+  user_id: string;
+  user_full_name: string;
+  user_role: string;
+  rating: number;
+  category: string;
+  message: string;
+  created_at: string;
+}
+
+export interface PlatformFeedbackStats {
+  average_rating: number;
+  total_reviews: number;
+  rating_distribution: Record<string, number>;
+}
+
 
 export interface GradeOut {
   id: string;

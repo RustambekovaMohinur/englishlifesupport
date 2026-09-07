@@ -1,5 +1,6 @@
 import { api } from "./api";
 import {
+  AssignmentComment,
   AssignmentForStudent,
   AssignmentOut,
   Group,
@@ -7,6 +8,8 @@ import {
   Paginated,
   PaginatedPendingStudents,
   PendingStudentItem,
+  PlatformFeedback,
+  PlatformFeedbackStats,
   StudentDashboard,
   StudentGamificationSummary,
   StudentHistoryOut,
@@ -166,3 +169,21 @@ export const nominateStudentOfTheWeek = (group_id: string, body: { student_id: s
 
 export const getTeacherGroupReport = (group_id: string) =>
   api.get<TeacherGroupReport>(`/gamification/teacher/group-report/${group_id}`).then((r) => r.data);
+
+// --- Assignment Q&A Discussion Thread ---
+export const getAssignmentComments = (assignmentId: string) =>
+  api.get<AssignmentComment[]>(`/assignments/${assignmentId}/comments`).then((r) => r.data);
+
+export const addAssignmentComment = (assignmentId: string, content: string) =>
+  api.post<AssignmentComment>(`/assignments/${assignmentId}/comments`, { content }).then((r) => r.data);
+
+// --- Platform Feedback & Reviews ---
+export const submitPlatformFeedback = (rating: number, category: string, message: string) =>
+  api.post<PlatformFeedback>("/feedback/platform", { rating, category, message }).then((r) => r.data);
+
+export const getTeacherPlatformFeedback = () =>
+  api.get<PlatformFeedback[]>("/feedback/teacher/platform").then((r) => r.data);
+
+export const getTeacherPlatformFeedbackStats = () =>
+  api.get<PlatformFeedbackStats>("/feedback/teacher/platform/stats").then((r) => r.data);
+

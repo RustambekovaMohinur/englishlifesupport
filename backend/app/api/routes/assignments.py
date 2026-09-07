@@ -9,15 +9,18 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_student_profile, get_current_user, require_teacher
 from app.db.session import get_db
-from app.models.assignment import Assignment, AssignmentStatus
+from app.models.assignment import Assignment, AssignmentComment, AssignmentStatus
 from app.models.group import Group
 from app.models.student import StudentProfile
 from app.models.submission import Submission
 from app.models.user import User, UserRole
 from app.models.vocabulary import VocabularyAssignment, VocabularyWord
 from app.schemas.assignment import (
+    AssignmentCommentCreate,
+    AssignmentCommentOut,
     AssignmentCreate,
     AssignmentForStudent,
+    AssignmentImageOut,
     AssignmentOut,
     AssignmentUpdate,
     VocabWordItem,
@@ -33,15 +36,6 @@ from app.utils.files import (
 
 router = APIRouter(prefix="/api/assignments", tags=["assignments"])
 
-
-from app.schemas.assignment import (
-    AssignmentCreate,
-    AssignmentForStudent,
-    AssignmentImageOut,
-    AssignmentOut,
-    AssignmentUpdate,
-    VocabWordItem,
-)
 
 
 def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, vocab_words: list[VocabularyWord] | None = None) -> AssignmentOut:
@@ -72,6 +66,7 @@ def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, 
         title=assignment.title,
         description=assignment.description,
         deadline=assignment.deadline,
+        is_hard_deadline=bool(getattr(assignment, "is_hard_deadline", False)),
         status=assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status),
         file_url=f"/api/assignments/{assignment.id}/file" if assignment.file_path else None,
         file_original_name=assignment.file_original_name,
@@ -79,6 +74,7 @@ def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, 
         images=images_out,
         created_at=assignment.created_at,
         submission_count=sub_count,
+        comment_count=len(getattr(assignment, "comments", []) or []),
         order_index=getattr(assignment, "order_index", 0) or 0,
         cycle_number=getattr(assignment, "cycle_number", 1) or 1,
         prerequisite_id=getattr(assignment, "prerequisite_id", None),
@@ -92,7 +88,7 @@ async def list_assignments(
 ):
     query = (
         select(Assignment, Group.name)
-        .options(selectinload(Assignment.images))
+        .options(selectinload(Assignment.images), selectinload(Assignment.comments))
         .join(Group, Assignment.group_id == Group.id)
     )
     if group_id:
@@ -130,9 +126,11 @@ async def create_assignment(
     title: str = Form(...),
     description: str = Form(...),
     deadline: datetime = Form(...),
+    is_hard_deadline: bool = Form(default=False),
     status_val: str = Form(default="published", alias="status"),
     order_index: int = Form(default=0),
     prerequisite_id: uuid.UUID | None = Form(default=None),
+
     file: UploadFile | None = File(default=None),
     vocab_file: UploadFile | None = File(default=None),
     images: list[UploadFile] | None = File(default=None),
@@ -178,6 +176,7 @@ async def create_assignment(
         title=title.strip(),
         description=description.strip(),
         deadline=deadline,
+        is_hard_deadline=is_hard_deadline,
         status=assign_status,
         order_index=order_index,
         cycle_number=getattr(group, "current_cycle", 1) or 1,
@@ -260,7 +259,7 @@ async def list_my_assignments(
     assignments = (
         await db.execute(
             select(Assignment)
-            .options(selectinload(Assignment.images))
+            .options(selectinload(Assignment.images), selectinload(Assignment.comments))
             .where(
                 Assignment.group_id == profile.group_id,
                 Assignment.status == AssignmentStatus.PUBLISHED,
@@ -316,11 +315,15 @@ async def list_my_assignments(
     for assignment in assignments:
         submission = sub_map.get(assignment.id)
         score = None
+        stars = None
+        feedback = None
         submission_id = None
         if submission:
             submission_id = submission.id
             if submission.grade:
                 score = submission.grade.score
+                stars = submission.grade.stars
+                feedback = submission.grade.feedback
 
         vocab_assoc = vocab_map.get(assignment.id)
         vocab_words = vocab_assoc.words if vocab_assoc else []
@@ -389,6 +392,7 @@ async def list_my_assignments(
                 title=assignment.title,
                 description=assignment.description,
                 deadline=assignment.deadline,
+                is_hard_deadline=bool(getattr(assignment, "is_hard_deadline", False)),
                 status=assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status),
                 file_url=f"/api/assignments/{assignment.id}/file" if assignment.file_path else None,
                 file_original_name=assignment.file_original_name,
@@ -398,12 +402,15 @@ async def list_my_assignments(
                 is_overdue=is_overdue,
                 submission_status=submission.status.value if submission else None,
                 score=score,
+                stars=stars,
+                feedback=feedback,
                 submission_id=submission_id,
                 order_index=getattr(assignment, "order_index", 0) or 0,
                 cycle_number=getattr(assignment, "cycle_number", 1) or 1,
                 prerequisite_id=getattr(assignment, "prerequisite_id", None),
                 is_locked=is_locked,
                 lock_reason=lock_reason,
+                comment_count=len(getattr(assignment, "comments", []) or []),
             )
         )
     return result
@@ -418,10 +425,11 @@ async def get_assignment(
     assignment = (
         await db.execute(
             select(Assignment)
-            .options(selectinload(Assignment.images))
+            .options(selectinload(Assignment.images), selectinload(Assignment.comments))
             .where(Assignment.id == assignment_id)
         )
     ).scalar_one_or_none()
+
     if assignment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
 
@@ -491,6 +499,7 @@ async def edit_assignment_in_place(
     title: str = Form(...),
     description: str = Form(...),
     deadline: datetime = Form(...),
+    is_hard_deadline: bool | None = Form(default=None),
     status_val: str = Form(default="published", alias="status"),
     order_index: int = Form(default=0),
     prerequisite_id: uuid.UUID | None = Form(default=None),
@@ -507,7 +516,7 @@ async def edit_assignment_in_place(
     assignment = (
         await db.execute(
             select(Assignment)
-            .options(selectinload(Assignment.images))
+            .options(selectinload(Assignment.images), selectinload(Assignment.comments))
             .where(Assignment.id == assignment_id)
         )
     ).scalar_one_or_none()
@@ -521,6 +530,8 @@ async def edit_assignment_in_place(
     assignment.title = title.strip()
     assignment.description = description.strip()
     assignment.deadline = deadline
+    if is_hard_deadline is not None:
+        assignment.is_hard_deadline = is_hard_deadline
     assignment.status = assign_status
     assignment.order_index = order_index
     assignment.prerequisite_id = prerequisite_id
@@ -805,4 +816,85 @@ async def get_assignment_image(
         media_type=img.file_content_type or "image/jpeg",
         filename=img.file_original_name,
     )
+
+
+@router.get("/{assignment_id}/comments", response_model=list[AssignmentCommentOut])
+async def list_assignment_comments(
+    assignment_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    assignment = await db.get(Assignment, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found.")
+
+    if current_user.role == UserRole.STUDENT:
+        from app.models.student import StudentProfile
+        sp_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
+        sp = sp_res.scalar_one_or_none()
+        if not sp or sp.group_id != assignment.group_id:
+            raise HTTPException(status_code=403, detail="Not authorized to view comments for this assignment.")
+
+    comments = (
+        await db.execute(
+            select(AssignmentComment)
+            .options(selectinload(AssignmentComment.user))
+            .where(AssignmentComment.assignment_id == assignment_id)
+            .order_by(AssignmentComment.created_at.asc())
+        )
+    ).scalars().all()
+
+    return [
+        AssignmentCommentOut(
+            id=c.id,
+            assignment_id=c.assignment_id,
+            user_id=c.user_id,
+            content=c.content,
+            created_at=c.created_at,
+            user_full_name=c.user.full_name if c.user else "User",
+            user_role=c.user.role.value if hasattr(c.user.role, "value") else str(c.user.role),
+            user_avatar_url=None,
+        )
+        for c in comments
+    ]
+
+
+@router.post("/{assignment_id}/comments", response_model=AssignmentCommentOut)
+async def create_assignment_comment(
+    assignment_id: uuid.UUID,
+    payload: AssignmentCommentCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    assignment = await db.get(Assignment, assignment_id)
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found.")
+
+    if current_user.role == UserRole.STUDENT:
+        from app.models.student import StudentProfile
+        sp_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
+        sp = sp_res.scalar_one_or_none()
+        if not sp or sp.group_id != assignment.group_id:
+            raise HTTPException(status_code=403, detail="Not authorized to comment on this assignment.")
+
+    new_comment = AssignmentComment(
+        assignment_id=assignment_id,
+        user_id=current_user.id,
+        content=payload.content.strip(),
+    )
+    db.add(new_comment)
+    await db.commit()
+    await db.refresh(new_comment)
+
+    return AssignmentCommentOut(
+        id=new_comment.id,
+        assignment_id=new_comment.assignment_id,
+        user_id=new_comment.user_id,
+        content=new_comment.content,
+        created_at=new_comment.created_at,
+        user_full_name=current_user.full_name,
+        user_role=current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role),
+        user_avatar_url=None,
+    )
+
 

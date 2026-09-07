@@ -538,24 +538,51 @@ function GradeModal({
         {/* Grading score, custom stars & feedback */}
         <div className="space-y-4 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50/50 dark:bg-zinc-900/50">
           <p className="text-xs font-semibold uppercase text-zinc-700 dark:text-zinc-300 tracking-wider">
-            Grade & Custom Stars
+            Pedagogical Grading Studio & Stars
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1 block">Score (0–10)</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Score (0–10)</label>
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">{score}/10</span>
+              </div>
               <input
                 type="number"
                 min={0}
                 max={10}
-                className="input"
+                className="input font-mono font-bold"
                 value={score}
                 onChange={(e) => setScore(Number(e.target.value))}
               />
+              {/* One-click Score Pills */}
+              <div className="flex flex-wrap gap-1 mt-2">
+                {[
+                  { val: 10, label: "10 ★ Max" },
+                  { val: 9, label: "9 ★ Great" },
+                  { val: 8, label: "8 ★ Good" },
+                  { val: 7, label: "7 ★ Fair" },
+                  { val: 6, label: "6 ★ Pass" },
+                ].map((p) => (
+                  <button
+                    key={p.val}
+                    type="button"
+                    onClick={() => setScore(p.val)}
+                    className={`text-[11px] px-2 py-0.5 rounded-md border transition ${
+                      score === p.val
+                        ? "bg-emerald-600 text-white border-emerald-700 font-bold shadow-xs"
+                        : "bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
             </div>
+
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Stars Awarded (0–100 ⭐)</label>
-                <span className="text-xs font-bold text-amber-500">{stars} ⭐</span>
+                <span className="text-xs font-bold text-amber-500 font-mono">+{stars} ⭐</span>
               </div>
               <div className="flex flex-col gap-2">
                 <div className="flex gap-1.5 items-center">
@@ -571,7 +598,7 @@ function GradeModal({
                     type="number"
                     min={0}
                     max={100}
-                    className="input text-center font-semibold"
+                    className="input text-center font-semibold font-mono"
                     value={stars}
                     onChange={(e) => {
                       const val = Math.min(100, Math.max(0, parseInt(e.target.value || "0", 10)));
@@ -589,18 +616,18 @@ function GradeModal({
                 </div>
                 {/* Preset Chips */}
                 <div className="flex flex-wrap gap-1">
-                  {[0, 1, 2, 5, 10, 20].map((starPreset) => (
+                  {[5, 10, 15, 20, 25].map((starPreset) => (
                     <button
                       key={starPreset}
                       type="button"
                       onClick={() => setStars(starPreset)}
                       className={`text-xs px-2.5 py-1 rounded-md border transition ${
                         stars === starPreset
-                          ? "bg-amber-500 text-white border-amber-600 font-bold shadow-sm"
+                          ? "bg-amber-500 text-white border-amber-600 font-bold shadow-xs"
                           : "bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                       }`}
                     >
-                      {starPreset}★
+                      +{starPreset}★
                     </button>
                   ))}
                 </div>
@@ -609,16 +636,42 @@ function GradeModal({
           </div>
 
           <div>
-            <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1 block">Feedback</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                Teacher Pedagogical Feedback
+              </label>
+              <span className="text-[10px] text-zinc-400">Click a template below to auto-fill</span>
+            </div>
+
+            {/* Quick Feedback Presets */}
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {[
+                "🌟 Excellent fluency, natural intonation, and confident delivery!",
+                "👍 Great effort! Be sure to pay attention to past tense verb endings.",
+                "🎯 Accurate vocabulary usage. Focus on sentence flow and pacing.",
+                "💡 Well-structured ideas! Expand further on supporting examples.",
+              ].map((template, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setFeedback((prev) => prev ? `${prev} ${template}` : template)}
+                  className="text-[11px] text-left px-2 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-brand-50 dark:hover:bg-brand-950/40 text-zinc-700 dark:text-zinc-300 hover:text-brand-700 dark:hover:text-brand-300 border border-zinc-200 dark:border-zinc-700 transition"
+                >
+                  {template}
+                </button>
+              ))}
+            </div>
+
             <textarea
               rows={3}
-              className="input text-sm"
-              placeholder="Overall feedback and words of encouragement..."
+              className="input text-sm resize-none"
+              placeholder="Constructive feedback, encouragement, and areas for improvement..."
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
             />
           </div>
         </div>
+
 
         <div className="flex justify-end gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
           <button className="btn-secondary" onClick={onClose}>

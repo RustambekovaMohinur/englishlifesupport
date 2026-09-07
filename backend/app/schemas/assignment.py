@@ -20,6 +20,7 @@ class AssignmentCreate(BaseModel):
     title: str = Field(min_length=2, max_length=255)
     description: str = Field(min_length=1)
     deadline: datetime
+    is_hard_deadline: bool = False
     status: AssignmentStatus = AssignmentStatus.DRAFT
     order_index: int = 0
     prerequisite_id: uuid.UUID | None = None
@@ -29,6 +30,7 @@ class AssignmentUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=2, max_length=255)
     description: str | None = None
     deadline: datetime | None = None
+    is_hard_deadline: bool | None = None
     group_id: uuid.UUID | None = None
     status: AssignmentStatus | None = None
     order_index: int | None = None
@@ -46,6 +48,23 @@ class AssignmentImageOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AssignmentCommentCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class AssignmentCommentOut(BaseModel):
+    id: uuid.UUID
+    assignment_id: uuid.UUID
+    user_id: uuid.UUID
+    content: str
+    created_at: datetime
+    user_full_name: str
+    user_role: str
+    user_avatar_url: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class AssignmentOut(BaseModel):
     id: uuid.UUID
     group_id: uuid.UUID
@@ -53,6 +72,7 @@ class AssignmentOut(BaseModel):
     title: str
     description: str
     deadline: datetime
+    is_hard_deadline: bool = False
     status: str
     file_url: str | None = None
     file_original_name: str | None = None
@@ -60,6 +80,7 @@ class AssignmentOut(BaseModel):
     images: list[AssignmentImageOut] = []
     created_at: datetime
     submission_count: int = 0
+    comment_count: int = 0
     order_index: int = 0
     cycle_number: int = 1
     prerequisite_id: uuid.UUID | None = None
@@ -72,6 +93,7 @@ class AssignmentForStudent(BaseModel):
     title: str
     description: str
     deadline: datetime
+    is_hard_deadline: bool = False
     status: str
     file_url: str | None = None
     file_original_name: str | None = None
@@ -81,12 +103,16 @@ class AssignmentForStudent(BaseModel):
     is_overdue: bool = False
     submission_status: str | None = None  # None if not yet submitted
     score: int | None = None
+    stars: int | None = None
+    feedback: str | None = None
     submission_id: uuid.UUID | None = None
     order_index: int = 0
     cycle_number: int = 1
     prerequisite_id: uuid.UUID | None = None
     is_locked: bool = False
     lock_reason: str | None = None
+    comment_count: int = 0
 
     model_config = {"from_attributes": True}
+
 
