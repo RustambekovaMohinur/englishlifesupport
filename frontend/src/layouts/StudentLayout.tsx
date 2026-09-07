@@ -24,7 +24,7 @@ export default function StudentLayout() {
           <Logo />
           <div>
             <p className="text-sm font-bold leading-tight text-neutral-900">Asadbek Khasanov</p>
-            <p className="text-xs text-neutral-400">Student Panel</p>
+            <p className="text-xs text-neutral-400">Candidate Portal</p>
           </div>
         </div>
         <nav className="flex-1 space-y-1">
@@ -62,7 +62,10 @@ export default function StudentLayout() {
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Logo />
-                <span className="font-bold text-neutral-900">Asadbek Khasanov</span>
+                <div>
+                  <span className="font-bold text-neutral-900 block leading-tight">Asadbek Khasanov</span>
+                  <span className="text-[11px] text-neutral-400 font-medium">Candidate Portal</span>
+                </div>
               </div>
               <button
                 type="button"
@@ -123,7 +126,10 @@ export default function StudentLayout() {
             </button>
             <div className="flex items-center gap-2">
               <Logo className="h-7 w-7 text-xs" />
-              <span className="font-bold text-neutral-900">Asadbek Khasanov</span>
+              <div>
+                <span className="font-bold text-neutral-900 block leading-tight text-sm">Asadbek Khasanov</span>
+                <span className="text-[10px] text-neutral-400">Candidate Portal</span>
+              </div>
             </div>
           </div>
           <button
@@ -137,7 +143,7 @@ export default function StudentLayout() {
         {/* Desktop Header */}
         <header className="hidden items-center justify-between border-b border-neutral-100 bg-white px-8 py-4 md:flex">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Student Portal</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Candidate Portal</span>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm font-medium text-neutral-600">{user?.email}</span>

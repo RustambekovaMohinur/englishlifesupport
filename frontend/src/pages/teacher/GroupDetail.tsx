@@ -1,10 +1,28 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { ExternalLink, Loader2, X, Star, FileText, CheckCircle2, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import StudentDetailModal from "@/components/StudentDetailModal";
-import { EmptyState, LoadingRows, Modal, useConfirm } from "@/components/ui";
-import { deleteGroup, getGroupDetail, updateGroup, startGroupCycle } from "@/services/lmsService";
-import { GroupDetailOut } from "@/types";
+import {
+  EmptyState,
+  LoadingRows,
+  Modal,
+  useConfirm,
+  AuthenticatedAudio,
+  AuthenticatedImage,
+  FileDownloadButton,
+  ImageLightbox,
+} from "@/components/ui";
+import {
+  deleteGroup,
+  getGroupDetail,
+  updateGroup,
+  startGroupCycle,
+  gradeSubmission,
+  listSubmissions,
+  getSubmission,
+} from "@/services/lmsService";
+import { GroupDetailOut, GroupStudentDetail, GroupAssignmentHeader, AssignmentItemOverview, SubmissionOut } from "@/types";
 
 const LEVELS = [
   "beginner",
@@ -24,6 +42,12 @@ export default function GroupDetailPage() {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [viewTab, setViewTab] = useState<"cards" | "matrix">("cards");
+  const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
+  const [activeGradingCell, setActiveGradingCell] = useState<{
+    student: GroupStudentDetail;
+    assignment: GroupAssignmentHeader;
+    item?: AssignmentItemOverview;
+  } | null>(null);
 
   const { confirm, ConfirmDialog } = useConfirm();
 
@@ -390,105 +414,187 @@ export default function GroupDetailPage() {
           })}
         </div>
       ) : (
-        /* ================= 2. GROUP ASSIGNMENT MATRIX VIEW ================= */
-        <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white shadow-xs">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-neutral-50 text-xs uppercase text-neutral-600 border-b border-neutral-200">
-              <tr>
-                <th className="px-4 py-3 sticky left-0 bg-neutral-50 z-10 font-bold">Student</th>
-                <th className="px-3 py-3 font-semibold">Telegram</th>
-                <th className="px-3 py-3 text-center font-semibold">⭐ Stars</th>
-                <th className="px-3 py-3 text-center font-semibold">⚡ Lightning</th>
-                <th className="px-3 py-3 text-center font-semibold">Overall %</th>
-                {groupDetail.assignments.map((a) => (
-                  <th key={a.id} className="px-3 py-3 min-w-[130px] text-center">
-                    <div className="font-bold truncate max-w-[150px]" title={a.title}>
-                      {a.title}
-                    </div>
-                    <div className="text-[10px] text-neutral-400 font-normal">
-                      {new Date(a.deadline).toLocaleDateString()}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-100">
-              {groupDetail.students.map((st) => (
-                <tr
-                  key={st.student_id}
-                  className="hover:bg-neutral-50/80 transition-colors cursor-pointer"
-                  onClick={() => setSelectedStudentId(st.student_id)}
-                >
-                  <td className="px-4 py-3 sticky left-0 bg-white z-10 font-medium text-neutral-900 group">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 font-bold text-brand-700 text-xs overflow-hidden">
-                        {st.avatar_url ? (
-                          <img src={st.avatar_url} alt={st.full_name} className="h-full w-full object-cover" />
-                        ) : (
-                          st.full_name.slice(0, 2).toUpperCase()
-                        )}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-neutral-900 hover:text-brand-600 underline decoration-dotted">
-                          {st.full_name}
-                        </span>
-                        <span className="text-xs text-neutral-400 font-mono ml-1.5">(@{st.username})</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 text-neutral-500 text-xs">
-                    {st.telegram_username || "—"}
-                  </td>
-                  <td className="px-3 py-3 text-center font-bold text-amber-500">
-                    ⭐ {st.total_stars}
-                  </td>
-                  <td className="px-3 py-3 text-center font-bold text-yellow-600">
-                    ⚡ {st.total_lightning}
-                  </td>
-                  <td className="px-3 py-3 text-center">
-                    <span
-                      className={`inline-block px-2.5 py-0.5 rounded text-xs font-bold ${
-                        st.overall_completion_percentage >= 80
-                          ? "bg-emerald-100 text-emerald-800"
-                          : st.overall_completion_percentage >= 50
-                          ? "bg-amber-100 text-amber-800"
-                          : "bg-rose-100 text-rose-800"
-                      }`}
-                    >
-                      {st.overall_completion_percentage}%
-                    </span>
-                  </td>
-                  {groupDetail.assignments.map((a) => {
-                    const item = st.assignments.find((asg) => asg.assignment_id === a.id);
-                    const pct = item ? item.completion_percentage : 0;
-                    const isComplete = pct >= 100;
-                    const isZero = pct === 0;
+        /* ================= 2. GROUP ASSIGNMENT MATRIX VIEW (HIGH DENSITY) ================= */
+        <div className="space-y-4">
+          {/* Cycle Filter Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-neutral-200 shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Progression Cycle:</span>
+              {(() => {
+                const currentCycle = groupDetail.current_cycle ?? 1;
+                const cycleSet = new Set(groupDetail.assignments.map((a) => a.cycle_number ?? 1));
+                cycleSet.add(currentCycle);
+                const cycles = Array.from(cycleSet).sort((a, b) => a - b);
+                const activeCycle = selectedCycle ?? currentCycle;
 
-                    return (
-                      <td key={a.id} className="px-3 py-3 text-center">
-                        <span
-                          title={
-                            item?.has_submission
-                              ? `Submitted: ${pct}%${item.score !== null ? ` (Score: ${item.score}/10)` : ""}`
-                              : "Not submitted (0%)"
-                          }
-                          className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-bold ${
-                            isComplete
-                              ? "bg-emerald-500 text-white"
-                              : isZero
-                              ? "bg-rose-100 text-rose-700"
-                              : "bg-amber-400 text-neutral-900"
-                          }`}
-                        >
-                          {isComplete ? "✓ 100%" : isZero ? "✕ 0%" : `${pct}%`}
-                        </span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                return cycles.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setSelectedCycle(c)}
+                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                      activeCycle === c
+                        ? "bg-indigo-600 text-white shadow-xs"
+                        : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                    }`}
+                  >
+                    Cycle {c} {c === currentCycle && "• Active"}
+                  </button>
+                ));
+              })()}
+            </div>
+
+            <p className="text-xs text-neutral-400">
+              💡 Click any cell to inspect homework, grade submissions, and award stars.
+            </p>
+          </div>
+
+          {/* Spreadsheet Table with Sticky Left Column */}
+          <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white shadow-xs">
+            {(() => {
+              const currentCycle = groupDetail.current_cycle ?? 1;
+              const activeCycle = selectedCycle ?? currentCycle;
+              const cycleAssignments = groupDetail.assignments.filter(
+                (a) => (a.cycle_number ?? 1) === activeCycle
+              );
+
+              return (
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead className="bg-neutral-50 text-xs uppercase text-neutral-600 border-b border-neutral-200">
+                    <tr>
+                      <th className="px-4 py-3.5 sticky left-0 bg-neutral-50 z-20 font-bold border-r border-neutral-200 shadow-xs">
+                        Student Identity
+                      </th>
+                      <th className="px-3 py-3.5 font-semibold text-xs text-neutral-500">Telegram</th>
+                      <th className="px-3 py-3.5 text-center font-semibold text-xs text-amber-600">⭐ Stars</th>
+                      <th className="px-3 py-3.5 text-center font-semibold text-xs text-yellow-600">⚡ Lightning</th>
+                      <th className="px-3 py-3.5 text-center font-semibold text-xs">Cycle %</th>
+                      {cycleAssignments.length === 0 ? (
+                        <th className="px-4 py-3 text-neutral-400 font-normal italic text-xs">
+                          No assignments in Cycle {activeCycle}
+                        </th>
+                      ) : (
+                        cycleAssignments.map((a) => (
+                          <th key={a.id} className="px-3 py-3.5 min-w-[135px] text-center border-l border-neutral-100">
+                            <div className="font-bold truncate max-w-[150px] text-xs text-neutral-900" title={a.title}>
+                              {a.title}
+                            </div>
+                            <div className="text-[10px] text-neutral-400 font-normal tabular-nums font-mono mt-0.5">
+                              Due: {new Date(a.deadline).toLocaleDateString()}
+                            </div>
+                          </th>
+                        ))
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {groupDetail.students.map((st) => (
+                      <tr key={st.student_id} className="hover:bg-neutral-50/70 transition-colors">
+                        {/* Sticky Left Column: Student identity */}
+                        <td className="px-4 py-3 sticky left-0 bg-white z-10 font-medium text-neutral-900 border-r border-neutral-200 shadow-xs">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 font-bold text-brand-700 text-xs overflow-hidden">
+                              {st.avatar_url ? (
+                                <img src={st.avatar_url} alt={st.full_name} className="h-full w-full object-cover" />
+                              ) : (
+                                st.full_name.slice(0, 2).toUpperCase()
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p
+                                onClick={() => setSelectedStudentId(st.student_id)}
+                                className="font-semibold text-neutral-900 hover:text-brand-600 cursor-pointer truncate max-w-[140px] text-xs underline decoration-dotted"
+                                title={st.full_name}
+                              >
+                                {st.full_name}
+                              </p>
+                              <p className="text-[10px] text-neutral-400 font-mono">@{st.username}</p>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Telegram Link */}
+                        <td className="px-3 py-3 text-xs">
+                          {st.telegram_username ? (
+                            <a
+                              href={
+                                st.telegram_username.startsWith("http")
+                                  ? st.telegram_username
+                                  : `https://t.me/${st.telegram_username.replace("@", "").trim()}`
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1 font-mono"
+                              title={`Open Telegram: @${st.telegram_username.replace("@", "")}`}
+                            >
+                              <span>@{st.telegram_username.replace("@", "")}</span>
+                              <ExternalLink className="h-3 w-3 text-blue-400" />
+                            </a>
+                          ) : (
+                            <span className="text-neutral-400 font-mono text-xs">—</span>
+                          )}
+                        </td>
+
+                        {/* Stars */}
+                        <td className="px-3 py-3 text-center font-bold text-amber-500 tabular-nums font-mono text-xs">
+                          ⭐ {st.total_stars}
+                        </td>
+
+                        {/* Lightning */}
+                        <td className="px-3 py-3 text-center font-bold text-yellow-600 tabular-nums font-mono text-xs">
+                          ⚡ {st.total_lightning}
+                        </td>
+
+                        {/* Cycle Completion % */}
+                        <td className="px-3 py-3 text-center tabular-nums font-mono text-xs">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
+                              (st.cycle_completion_percentage ?? st.overall_completion_percentage) >= 80
+                                ? "bg-emerald-100 text-emerald-800"
+                                : (st.cycle_completion_percentage ?? st.overall_completion_percentage) >= 50
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-rose-100 text-rose-800"
+                            }`}
+                          >
+                            {st.cycle_completion_percentage ?? st.overall_completion_percentage}%
+                          </span>
+                        </td>
+
+                        {/* Assignment Status Cells */}
+                        {cycleAssignments.map((a) => {
+                          const item = st.assignments.find((asg) => asg.assignment_id === a.id);
+                          const isDone = item?.has_submission && item.score !== null;
+                          const isPending = item?.has_submission && item.score === null;
+
+                          return (
+                            <td
+                              key={a.id}
+                              className="px-3 py-3 text-center border-l border-neutral-100 cursor-pointer hover:bg-blue-50/50 transition-colors"
+                              onClick={() => setActiveGradingCell({ student: st, assignment: a, item })}
+                            >
+                              {isDone ? (
+                                <span className="border border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-full px-2.5 py-0.5 text-xs font-semibold inline-flex items-center gap-1 font-mono">
+                                  ✓ DONE {item.score !== null ? `${item.score}/10` : ""}
+                                </span>
+                              ) : isPending ? (
+                                <span className="border border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 rounded-full px-2.5 py-0.5 text-xs font-semibold inline-flex items-center gap-1 font-mono">
+                                  ⏳ PENDING
+                                </span>
+                              ) : (
+                                <span className="border border-[#D1D5DB] text-zinc-500 bg-zinc-50/50 dark:border-zinc-700 dark:text-zinc-400 dark:bg-zinc-800/30 rounded-full px-2.5 py-0.5 text-xs font-semibold inline-flex items-center gap-1 font-mono">
+                                  ○ NOT YET
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
+            })()}
+          </div>
         </div>
       )}
 
@@ -496,6 +602,39 @@ export default function GroupDetailPage() {
       <StudentDetailModal
         studentId={selectedStudentId}
         onClose={() => setSelectedStudentId(null)}
+      />
+
+      {/* Grading Slide-Over Drawer */}
+      <GradingSlideOver
+        cell={activeGradingCell}
+        groupId={groupDetail.id}
+        onClose={() => setActiveGradingCell(null)}
+        onGraded={(studentId, assignmentId, score, stars) => {
+          setGroupDetail((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              students: prev.students.map((s) => {
+                if (s.student_id !== studentId) return s;
+                return {
+                  ...s,
+                  assignments: s.assignments.map((asg) => {
+                    if (asg.assignment_id !== assignmentId) return asg;
+                    return {
+                      ...asg,
+                      has_submission: true,
+                      score,
+                      stars,
+                      status: "graded",
+                      completion_percentage: Math.min(100, Math.max(0, Math.round((score / 10) * 100))),
+                    };
+                  }),
+                };
+              }),
+            };
+          });
+          setActiveGradingCell(null);
+        }}
       />
 
       {/* Edit Group Modal */}
@@ -512,6 +651,311 @@ export default function GroupDetailPage() {
       )}
 
       <ConfirmDialog />
+    </div>
+  );
+}
+
+function GradingSlideOver({
+  cell,
+  groupId,
+  onClose,
+  onGraded,
+}: {
+  cell: { student: GroupStudentDetail; assignment: GroupAssignmentHeader; item?: AssignmentItemOverview } | null;
+  groupId: string;
+  onClose: () => void;
+  onGraded: (studentId: string, assignmentId: string, score: number, stars: number, feedback: string) => void;
+}) {
+  const [submission, setSubmission] = useState<SubmissionOut | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [score, setScore] = useState(8);
+  const [stars, setStars] = useState(5);
+  const [feedback, setFeedback] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  useEffect(() => {
+    if (!cell) {
+      setSubmission(null);
+      return;
+    }
+
+    setScore(cell.item?.score ?? 8);
+    setStars(cell.item?.stars ?? 5);
+    setFeedback("");
+    setIsLoading(true);
+
+    listSubmissions({
+      group_id: groupId,
+      student_id: cell.student.student_id,
+      page_size: 50,
+    })
+      .then((res) => {
+        const found = res.items.find((s) => s.assignment_id === cell.assignment.id);
+        if (found) {
+          return getSubmission(found.id).then((full) => {
+            setSubmission(full);
+            if (full.grade) {
+              setScore(full.grade.score);
+              setStars(full.grade.stars);
+              setFeedback(full.grade.feedback ?? "");
+            }
+          });
+        } else {
+          setSubmission(null);
+        }
+      })
+      .catch(() => {
+        setSubmission(null);
+      })
+      .finally(() => setIsLoading(false));
+  }, [cell, groupId]);
+
+  if (!cell) return null;
+
+  async function handleSaveGrade(e: FormEvent) {
+    e.preventDefault();
+    if (!cell) return;
+
+    if (!submission) {
+      toast.error("No active submission recorded to grade.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await gradeSubmission(submission.id, {
+        score,
+        stars,
+        feedback: feedback || undefined,
+      });
+      toast.success("Grade & star rewards saved!");
+      onGraded(cell.student.student_id, cell.assignment.id, score, stars, feedback);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Failed to save grade");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const galleryImages = (submission?.images || []).map((img) => ({
+    url: `/api/submissions/${submission!.id}/images/${img.id}`,
+    name: img.original_name,
+  }));
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
+        onClick={onClose}
+      />
+
+      {/* Slide-Over Panel */}
+      <div className="fixed inset-y-0 right-0 max-w-lg w-full bg-white shadow-2xl p-6 flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200 border-l border-neutral-200">
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-start justify-between border-b border-neutral-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded font-mono">
+                  Cycle {cell.assignment.cycle_number ?? 1}
+                </span>
+                <span className="text-xs text-neutral-400 font-mono">
+                  Due: {new Date(cell.assignment.deadline).toLocaleDateString()}
+                </span>
+              </div>
+              <h2 className="text-lg font-black text-neutral-900 mt-1">{cell.assignment.title}</h2>
+              <div className="flex items-center gap-2 mt-2">
+                <div className="h-6 w-6 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center">
+                  {cell.student.full_name.slice(0, 2).toUpperCase()}
+                </div>
+                <span className="text-sm font-semibold text-neutral-800">{cell.student.full_name}</span>
+                {cell.student.telegram_username && (
+                  <span className="text-xs text-blue-600 font-mono">
+                    @{cell.student.telegram_username.replace("@", "")}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg transition"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Submission Inspection Content */}
+          {isLoading ? (
+            <div className="py-12 flex flex-col items-center justify-center gap-2 text-neutral-400">
+              <Loader2 className="h-6 w-6 animate-spin text-brand-600" />
+              <p className="text-xs">Fetching student submission...</p>
+            </div>
+          ) : !submission ? (
+            <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-6 text-center space-y-2">
+              <AlertCircle className="mx-auto h-8 w-8 text-neutral-400" />
+              <p className="text-sm font-semibold text-neutral-700">No Submission Yet</p>
+              <p className="text-xs text-neutral-500">
+                This student has not yet submitted their homework for this assignment.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-xs text-neutral-500 bg-neutral-50 p-2.5 rounded-lg border border-neutral-100">
+                <span>
+                  Submitted: <strong className="text-neutral-800 font-mono">{new Date(submission.submitted_at).toLocaleString()}</strong>
+                </span>
+                <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                  submission.status === "late" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                }`}>
+                  {submission.status}
+                </span>
+              </div>
+
+              {/* Text answer */}
+              {submission.text_answer && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase text-neutral-500">Student Answer / Notes</label>
+                  <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 text-sm text-neutral-800 whitespace-pre-wrap">
+                    {submission.text_answer}
+                  </div>
+                </div>
+              )}
+
+              {/* Document attachment */}
+              {submission.file_url && (
+                <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900">
+                  <div className="flex items-center gap-2 truncate">
+                    <FileText className="h-4 w-4 shrink-0 text-blue-600" />
+                    <span className="font-semibold truncate">{submission.file_original_name || "Homework Document"}</span>
+                  </div>
+                  <FileDownloadButton
+                    url={submission.file_url}
+                    filename={submission.file_original_name}
+                    className="btn-sm btn-primary text-xs"
+                  >
+                    Download
+                  </FileDownloadButton>
+                </div>
+              )}
+
+              {/* Audio playback */}
+              {submission.file_url && submission.file_original_name && /\.(mp3|wav|ogg|webm)$/i.test(submission.file_original_name) && (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase text-neutral-500">Audio Recording</label>
+                  <AuthenticatedAudio url={submission.file_url} className="w-full h-8" />
+                </div>
+              )}
+
+              {/* Image Attachments */}
+              {galleryImages.length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-neutral-500">
+                    Uploaded Work Images ({galleryImages.length})
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {submission.images?.map((img, idx) => (
+                      <div
+                        key={img.id}
+                        onClick={() => {
+                          setLightboxIndex(idx);
+                          setLightboxOpen(true);
+                        }}
+                        className="cursor-pointer group relative rounded-lg border border-neutral-200 overflow-hidden aspect-square bg-neutral-50"
+                      >
+                        <AuthenticatedImage
+                          url={`/api/submissions/${submission.id}/images/${img.id}`}
+                          alt={img.original_name}
+                          className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] text-white font-bold">
+                          View
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Grading Form */}
+              <form onSubmit={handleSaveGrade} className="space-y-4 pt-4 border-t border-neutral-100">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label text-xs">Score (out of 10)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={10}
+                      required
+                      value={score}
+                      onChange={(e) => setScore(Number(e.target.value))}
+                      className="input text-sm font-bold font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="label text-xs">⭐ Stars Awarded (1-10)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      required
+                      value={stars}
+                      onChange={(e) => setStars(Number(e.target.value))}
+                      className="input text-sm font-bold font-mono text-amber-600"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label text-xs">Feedback / Teacher Remarks</label>
+                  <textarea
+                    rows={3}
+                    value={feedback}
+                    onChange={(e) => setFeedback(e.target.value)}
+                    placeholder="Well done on the grammar exercises..."
+                    className="input text-xs"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="w-full btn-primary py-2.5 text-sm font-bold flex items-center justify-center gap-2"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Saving Grade...</span>
+                    </>
+                  ) : (
+                    <span>Save & Award Stars</span>
+                  )}
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="pt-4 border-t border-neutral-100 flex justify-end">
+          <button type="button" onClick={onClose} className="btn-secondary text-xs px-4 py-2">
+            Close Drawer
+          </button>
+        </div>
+      </div>
+
+      {/* Lightbox for student images */}
+      <ImageLightbox
+        isOpen={lightboxOpen}
+        images={galleryImages}
+        initialIndex={lightboxIndex}
+        onClose={() => setLightboxOpen(false)}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Spinner } from "@/components/ui";
 import { UserRole } from "@/types";
+import ApprovalGate from "@/components/ApprovalGate";
 
 export default function ProtectedRoute({ allowedRole }: { allowedRole: UserRole }) {
   const { user, isLoading } = useAuth();
@@ -15,6 +16,11 @@ export default function ProtectedRoute({ allowedRole }: { allowedRole: UserRole 
   }
 
   if (!user) return <Navigate to="/login" replace />;
+
+  // Intercept pending approval state
+  if (user.approval_status === "pending") {
+    return <ApprovalGate user={user} />;
+  }
 
   // Role enforcement is cosmetic on the frontend only - the backend
   // independently verifies the role on every request via require_teacher /

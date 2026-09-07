@@ -6,6 +6,9 @@ export interface CurrentUser {
   username?: string;
   role: UserRole;
   is_active: boolean;
+  approval_status?: string;
+  full_name?: string;
+  first_name?: string;
 }
 
 export interface GroupBrief {
@@ -71,6 +74,7 @@ export interface AssignmentItemOverview {
   stars: number | null;
   has_submission: boolean;
   submitted_at: string | null;
+  submission_id?: string | number | null;
 }
 
 export interface GroupStudentDetail {
@@ -175,6 +179,7 @@ export interface UserProfileOut {
   stats: Record<string, any>;
   group_name?: string | null;
   english_level?: string | null;
+  approval_status?: string | null;
 }
 
 export interface UserProfileUpdate {
