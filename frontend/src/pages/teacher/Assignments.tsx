@@ -35,6 +35,10 @@ export default function AssignmentsPage() {
   const [prerequisiteId, setPrerequisiteId] = useState<string>("");
   const [tasks, setTasks] = useState<TaskBlock[]>([]);
   const [assignmentImages, setAssignmentImages] = useState<File[]>([]);
+  const [primaryDocFile, setPrimaryDocFile] = useState<File | null>(null);
+  const [audioPromptFile, setAudioPromptFile] = useState<File | null>(null);
+  const [externalResourceUrl, setExternalResourceUrl] = useState<string>("");
+  const [mainInstructionsText, setMainInstructionsText] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -71,13 +75,26 @@ export default function AssignmentsPage() {
     setDeadline(format(new Date(a.deadline), "yyyy-MM-dd'T'HH:mm"));
     setPrerequisiteId(a.prerequisite_id || "");
     setAssignmentImages([]);
+    setPrimaryDocFile(null);
+    setAudioPromptFile(null);
+    setExternalResourceUrl("");
+    setMainInstructionsText("");
 
     // Try parsing tasks from description if JSON
     try {
       const parsed = JSON.parse(a.description);
       if (Array.isArray(parsed)) {
+        const linkBlock = parsed.find((p: any) => p.id === "external_resource" || (p.subType === "link" && p.content));
+        if (linkBlock) {
+          setExternalResourceUrl(linkBlock.content || linkBlock.bookLink || "");
+        }
+        const promptBlock = parsed.find((p: any) => p.id === "main_prompt");
+        if (promptBlock) {
+          setMainInstructionsText(promptBlock.content || "");
+        }
+
         setTasks(
-          parsed.map((p: any) => ({
+          parsed.filter((p: any) => p.id !== "main_prompt" && p.id !== "external_resource").map((p: any) => ({
             id: p.id || Math.random().toString(36).substring(2, 9),
             type: p.type || "reading",
             subType: p.subType || "text",
@@ -89,24 +106,12 @@ export default function AssignmentsPage() {
           }))
         );
       } else {
-        setTasks([
-          {
-            id: Math.random().toString(36).substring(2, 9),
-            type: "reading",
-            subType: "text",
-            content: a.description,
-          },
-        ]);
+        setMainInstructionsText(a.description);
+        setTasks([]);
       }
     } catch {
-      setTasks([
-        {
-          id: Math.random().toString(36).substring(2, 9),
-          type: "reading",
-          subType: "text",
-          content: a.description,
-        },
-      ]);
+      setMainInstructionsText(a.description);
+      setTasks([]);
     }
 
     setShowBuilder(true);
@@ -186,7 +191,7 @@ export default function AssignmentsPage() {
     }
 
     // Find any attached files
-    let primaryFile: File | null = null;
+    let primaryFile: File | null = audioPromptFile || primaryDocFile;
     let vocabFile: File | null = null;
 
     for (const task of tasks) {
@@ -216,6 +221,32 @@ export default function AssignmentsPage() {
         fileName: t.file?.name ?? null,
       }));
 
+      if (mainInstructionsText.trim() && !taskDataForJson.some((t) => t.content === mainInstructionsText.trim())) {
+        taskDataForJson.unshift({
+          id: "main_prompt",
+          type: "reading",
+          subType: "text",
+          content: mainInstructionsText.trim(),
+          bookLink: "",
+          unit: "",
+          pages: "",
+          fileName: null,
+        });
+      }
+
+      if (externalResourceUrl.trim() && !taskDataForJson.some((t) => t.content === externalResourceUrl.trim() || t.bookLink === externalResourceUrl.trim())) {
+        taskDataForJson.push({
+          id: "external_resource",
+          type: "reading",
+          subType: "link",
+          content: externalResourceUrl.trim(),
+          bookLink: externalResourceUrl.trim(),
+          unit: "",
+          pages: "",
+          fileName: null,
+        });
+      }
+
       const descriptionPayload = JSON.stringify(taskDataForJson);
 
       const formData = new FormData();
@@ -244,6 +275,10 @@ export default function AssignmentsPage() {
       setPrerequisiteId("");
       setTasks([]);
       setAssignmentImages([]);
+      setPrimaryDocFile(null);
+      setAudioPromptFile(null);
+      setExternalResourceUrl("");
+      setMainInstructionsText("");
       setShowBuilder(false);
       refresh();
     } catch (err: any) {
@@ -361,6 +396,115 @@ export default function AssignmentsPage() {
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
                 Students must finish this task before unlocking this assignment.
               </p>
+            </div>
+          </div>
+
+          {/* Universal 4-Way Teacher Attachment Suite */}
+          <div className="rounded-2xl border border-brand-200 dark:border-brand-850 bg-brand-50/[0.15] dark:bg-brand-950/[0.1] p-5 space-y-5">
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                <span>📎</span> 4-Way Learning Materials & Attachments
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Attach workbook photos, document files, audio instructions, or external links
+              </p>
+            </div>
+
+            {/* 1. Main Instructions / Text Prompt */}
+            <div className="space-y-1.5">
+              <label className="label flex items-center justify-between">
+                <span>✍️ Assignment Prompt & Detailed Instructions</span>
+                <span className="text-[11px] text-zinc-400 font-normal">Supports rich text & markdown</span>
+              </label>
+              <textarea
+                rows={4}
+                className="input text-xs w-full bg-white dark:bg-zinc-900 leading-relaxed font-sans resize-y"
+                placeholder="Type comprehensive instructions, questions, reading passages, or criteria for your students..."
+                value={mainInstructionsText}
+                onChange={(e) => setMainInstructionsText(e.target.value)}
+              />
+            </div>
+
+            {/* 2. External Resource Link (YouTube / Drive / Notion / Docs) */}
+            <div className="space-y-1.5">
+              <label className="label flex items-center justify-between">
+                <span>🔗 External Resource Link (YouTube / Google Drive / Notion / Docs)</span>
+                {externalResourceUrl.trim() && (
+                  <a
+                    href={externalResourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
+                  >
+                    Test Link ↗
+                  </a>
+                )}
+              </label>
+              <input
+                type="url"
+                className="input text-xs font-mono"
+                placeholder="https://drive.google.com/... or https://youtube.com/..."
+                value={externalResourceUrl}
+                onChange={(e) => setExternalResourceUrl(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 3. Primary Homework Document File */}
+              <div className="space-y-1.5">
+                <label className="label">📁 Homework Document Attachment (PDF, DOCX, TXT)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.txt"
+                    className="input text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-50 dark:file:bg-brand-950 file:text-brand-700 dark:file:text-brand-300"
+                    onChange={(e) => setPrimaryDocFile(e.target.files?.[0] ?? null)}
+                  />
+                  {primaryDocFile && (
+                    <button
+                      type="button"
+                      onClick={() => setPrimaryDocFile(null)}
+                      className="text-red-500 hover:text-red-700 text-xs px-2"
+                      title="Clear file"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                {primaryDocFile && (
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                    ✓ Attached: {primaryDocFile.name} ({(primaryDocFile.size / (1024 * 1024)).toFixed(1)} MB)
+                  </p>
+                )}
+              </div>
+
+              {/* 4. Audio Prompt File (MP3, WAV, M4A) */}
+              <div className="space-y-1.5">
+                <label className="label">🎙️ Audio Prompt / Listening Audio (MP3, WAV, M4A)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
+                    className="input text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-rose-50 dark:file:bg-rose-950 file:text-rose-700 dark:file:text-rose-300"
+                    onChange={(e) => setAudioPromptFile(e.target.files?.[0] ?? null)}
+                  />
+                  {audioPromptFile && (
+                    <button
+                      type="button"
+                      onClick={() => setAudioPromptFile(null)}
+                      className="text-red-500 hover:text-red-700 text-xs px-2"
+                      title="Clear audio"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                {audioPromptFile && (
+                  <p className="text-[11px] text-rose-600 dark:text-rose-400">
+                    ✓ Audio attached: {audioPromptFile.name} ({(audioPromptFile.size / 1024).toFixed(0)} KB)
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 

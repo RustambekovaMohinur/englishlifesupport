@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { LayoutDashboard, BookOpen, Trophy, User } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
@@ -23,6 +23,8 @@ const bottomNavItems = [
 
 export default function StudentLayout() {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const isSubmitPage = location.pathname.includes("/submit");
 
   return (
     <div className="flex min-h-screen bg-[#FBFBFA] dark:bg-[#0B0F19] font-sans antialiased text-zinc-900 dark:text-zinc-100 transition-colors">
@@ -68,24 +70,26 @@ export default function StudentLayout() {
 
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
-        {/* Tablet & Mobile Header (lg:hidden) - Strictly: Brand Name, ThemeToggle, User Avatar */}
-        <header className="flex h-16 items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-[#111827]/80 backdrop-blur-md px-4 sm:px-6 lg:hidden sticky top-0 z-30">
-          <div className="flex items-center gap-2.5">
-            <Logo className="h-7 w-7 text-xs" />
-            <div>
-              <span className="font-bold text-zinc-900 dark:text-white block leading-tight text-sm tracking-tight">Asadbek Khasanov</span>
-              <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Candidate Portal</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <ThemeToggle />
-            <NavLink to="/student/profile" className="flex items-center active:scale-95 transition-transform" title="Profile">
-              <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
-                {(user?.full_name?.charAt(0) || user?.email?.charAt(0) || "U").toUpperCase()}
+        {/* Tablet & Mobile Header (lg:hidden) - Hidden on dedicated submit page */}
+        {!isSubmitPage && (
+          <header className="flex h-16 items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-[#111827]/80 backdrop-blur-md px-4 sm:px-6 lg:hidden sticky top-0 z-30">
+            <div className="flex items-center gap-2.5">
+              <Logo className="h-7 w-7 text-xs" />
+              <div>
+                <span className="font-bold text-zinc-900 dark:text-white block leading-tight text-sm tracking-tight">Asadbek Khasanov</span>
+                <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Candidate Portal</span>
               </div>
-            </NavLink>
-          </div>
-        </header>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <ThemeToggle />
+              <NavLink to="/student/profile" className="flex items-center active:scale-95 transition-transform" title="Profile">
+                <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                  {(user?.full_name?.charAt(0) || user?.email?.charAt(0) || "U").toUpperCase()}
+                </div>
+              </NavLink>
+            </div>
+          </header>
+        )}
 
         {/* Desktop Header (lg:flex) */}
         <header className="hidden items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-[#111827]/80 backdrop-blur-md px-8 py-4 lg:flex sticky top-0 z-30">
@@ -108,17 +112,18 @@ export default function StudentLayout() {
           </div>
         </header>
 
-        {/* Content Container: pb-24 on mobile/tablet to avoid bottom bar overlap, pb-8 on desktop */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8">
+        {/* Content Container: clean on submit page, pb-24 on mobile/tablet for normal pages */}
+        <main className={`flex-1 ${isSubmitPage ? "p-0 pb-0" : "p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8"}`}>
           <Outlet />
         </main>
       </div>
 
-      {/* Fixed Mobile Bottom App Bar (Native App Navigation) */}
-      <nav
-        aria-label="Mobile Navigation"
-        className="fixed bottom-0 left-0 right-0 z-50 block lg:hidden bg-white/90 dark:bg-[#111827]/90 backdrop-blur-xl border-t border-zinc-200/80 dark:border-zinc-800/80 px-2 py-1.5 flex justify-around items-center shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
-      >
+      {/* Fixed Mobile Bottom App Bar (Native App Navigation) - Hidden on submit page */}
+      {!isSubmitPage && (
+        <nav
+          aria-label="Mobile Navigation"
+          className="fixed bottom-0 left-0 right-0 z-50 block lg:hidden bg-white/90 dark:bg-[#111827]/90 backdrop-blur-xl border-t border-zinc-200/80 dark:border-zinc-800/80 px-2 py-1.5 flex justify-around items-center shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        >
         <div className="flex items-center justify-around w-full max-w-md mx-auto">
           {bottomNavItems.map((item) => (
             <NavLink
@@ -150,6 +155,7 @@ export default function StudentLayout() {
           ))}
         </div>
       </nav>
+      )}
     </div>
   );
 }

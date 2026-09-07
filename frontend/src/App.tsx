@@ -18,6 +18,7 @@ import TeacherProfilePage from "@/pages/teacher/Profile";
 import StudentLayout from "@/layouts/StudentLayout";
 import StudentDashboardPage from "@/pages/student/Dashboard";
 import StudentAssignmentsPage from "@/pages/student/Assignments";
+import StudentAssignmentSubmitPage from "@/pages/student/AssignmentSubmit";
 import StudentSubmissionsPage from "@/pages/student/Submissions";
 import StudentResultsPage from "@/pages/student/Results";
 import StudentProgressPage from "@/pages/student/Progress";
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/student" element={<StudentLayout />}>
             <Route index element={<StudentDashboardPage />} />
             <Route path="assignments" element={<StudentAssignmentsPage />} />
+            <Route path="assignments/:assignmentId/submit" element={<StudentAssignmentSubmitPage />} />
             <Route path="vocabulary" element={<StudentAssignmentsPage />} />
             <Route path="submissions" element={<StudentSubmissionsPage />} />
             <Route path="results" element={<StudentResultsPage />} />
