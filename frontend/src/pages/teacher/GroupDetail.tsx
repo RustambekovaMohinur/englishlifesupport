@@ -450,7 +450,7 @@ export default function GroupDetailPage() {
           </div>
 
           {/* Spreadsheet Table with Sticky Left Column */}
-          <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white shadow-xs">
+          <div className="overflow-x-auto rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
             {(() => {
               const currentCycle = groupDetail.current_cycle ?? 1;
               const activeCycle = selectedCycle ?? currentCycle;
@@ -460,23 +460,23 @@ export default function GroupDetailPage() {
 
               return (
                 <table className="w-full text-left text-sm border-collapse">
-                  <thead className="bg-neutral-50 text-xs uppercase text-neutral-600 border-b border-neutral-200">
+                  <thead className="sticky top-0 z-20 backdrop-blur-md bg-white/90 dark:bg-[#161B22]/90 text-xs uppercase text-neutral-600 dark:text-neutral-400 border-b border-black/[0.08] dark:border-white/[0.08]">
                     <tr>
-                      <th className="px-4 py-3.5 sticky left-0 bg-neutral-50 z-20 font-bold border-r border-neutral-200 shadow-xs">
+                      <th className="px-4 py-3.5 sticky left-0 bg-white/95 dark:bg-[#161B22]/95 z-30 font-bold border-r border-black/[0.08] dark:border-white/[0.08] shadow-[4px_0_12px_rgba(0,0,0,0.04)]">
                         Student Identity
                       </th>
-                      <th className="px-3 py-3.5 font-semibold text-xs text-neutral-500">Telegram</th>
-                      <th className="px-3 py-3.5 text-center font-semibold text-xs text-amber-600">⭐ Stars</th>
-                      <th className="px-3 py-3.5 text-center font-semibold text-xs text-yellow-600">⚡ Lightning</th>
-                      <th className="px-3 py-3.5 text-center font-semibold text-xs">Cycle %</th>
+                      <th className="px-3 py-3.5 font-semibold text-xs text-neutral-500 dark:text-neutral-400">Telegram</th>
+                      <th className="px-3 py-3.5 text-center font-semibold text-xs text-amber-600 dark:text-amber-400">⭐ Stars</th>
+                      <th className="px-3 py-3.5 text-center font-semibold text-xs text-yellow-600 dark:text-yellow-400">⚡ Lightning</th>
+                      <th className="px-3 py-3.5 text-center font-semibold text-xs text-neutral-600 dark:text-neutral-400">Cycle %</th>
                       {cycleAssignments.length === 0 ? (
                         <th className="px-4 py-3 text-neutral-400 font-normal italic text-xs">
                           No assignments in Cycle {activeCycle}
                         </th>
                       ) : (
                         cycleAssignments.map((a) => (
-                          <th key={a.id} className="px-3 py-3.5 min-w-[135px] text-center border-l border-neutral-100">
-                            <div className="font-bold truncate max-w-[150px] text-xs text-neutral-900" title={a.title}>
+                          <th key={a.id} className="px-3 py-3.5 min-w-[135px] text-center border-l border-black/[0.04] dark:border-white/[0.06]">
+                            <div className="font-bold truncate max-w-[150px] text-xs text-neutral-900 dark:text-white" title={a.title}>
                               {a.title}
                             </div>
                             <div className="text-[10px] text-neutral-400 font-normal tabular-nums font-mono mt-0.5">
@@ -487,23 +487,26 @@ export default function GroupDetailPage() {
                       )}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-neutral-100">
+                  <tbody className="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
                     {groupDetail.students.map((st) => (
-                      <tr key={st.student_id} className="hover:bg-neutral-50/70 transition-colors">
-                        {/* Sticky Left Column: Student identity */}
-                        <td className="px-4 py-3 sticky left-0 bg-white z-10 font-medium text-neutral-900 border-r border-neutral-200 shadow-xs">
+                      <tr key={st.student_id} className="hover:bg-neutral-50/70 dark:hover:bg-zinc-800/40 transition-colors">
+                        {/* Sticky Left Column: Student identity with status dot & shadow */}
+                        <td className="px-4 py-3 sticky left-0 bg-white dark:bg-[#111827] z-10 font-medium text-neutral-900 dark:text-white border-r border-black/[0.08] dark:border-white/[0.08] shadow-[4px_0_12px_rgba(0,0,0,0.04)]">
                           <div className="flex items-center gap-2.5">
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 font-bold text-brand-700 text-xs overflow-hidden">
-                              {st.avatar_url ? (
-                                <img src={st.avatar_url} alt={st.full_name} className="h-full w-full object-cover" />
-                              ) : (
-                                st.full_name.slice(0, 2).toUpperCase()
-                              )}
+                            <div className="relative">
+                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 font-bold text-brand-700 text-xs overflow-hidden">
+                                {st.avatar_url ? (
+                                  <img src={st.avatar_url} alt={st.full_name} className="h-full w-full object-cover" />
+                                ) : (
+                                  st.full_name.slice(0, 2).toUpperCase()
+                                )}
+                              </div>
+                              <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-900" title="Active" />
                             </div>
                             <div className="min-w-0">
                               <p
                                 onClick={() => setSelectedStudentId(st.student_id)}
-                                className="font-semibold text-neutral-900 hover:text-brand-600 cursor-pointer truncate max-w-[140px] text-xs underline decoration-dotted"
+                                className="font-semibold text-neutral-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 cursor-pointer truncate max-w-[140px] text-xs underline decoration-dotted"
                                 title={st.full_name}
                               >
                                 {st.full_name}
@@ -524,7 +527,7 @@ export default function GroupDetailPage() {
                               }
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1 font-mono"
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 font-mono"
                               title={`Open Telegram: @${st.telegram_username.replace("@", "")}`}
                             >
                               <span>@{st.telegram_username.replace("@", "")}</span>
@@ -541,7 +544,7 @@ export default function GroupDetailPage() {
                         </td>
 
                         {/* Lightning */}
-                        <td className="px-3 py-3 text-center font-bold text-yellow-600 tabular-nums font-mono text-xs">
+                        <td className="px-3 py-3 text-center font-bold text-yellow-600 dark:text-yellow-400 tabular-nums font-mono text-xs">
                           ⚡ {st.total_lightning}
                         </td>
 
@@ -550,17 +553,17 @@ export default function GroupDetailPage() {
                           <span
                             className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
                               (st.cycle_completion_percentage ?? st.overall_completion_percentage) >= 80
-                                ? "bg-emerald-100 text-emerald-800"
+                                ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200"
                                 : (st.cycle_completion_percentage ?? st.overall_completion_percentage) >= 50
-                                ? "bg-amber-100 text-amber-800"
-                                : "bg-rose-100 text-rose-800"
+                                ? "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200"
+                                : "bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-200"
                             }`}
                           >
                             {st.cycle_completion_percentage ?? st.overall_completion_percentage}%
                           </span>
                         </td>
 
-                        {/* Assignment Status Cells */}
+                        {/* Assignment Status Cells with Refined Luxury Glass Pills */}
                         {cycleAssignments.map((a) => {
                           const item = st.assignments.find((asg) => asg.assignment_id === a.id);
                           const isDone = item?.has_submission && item.score !== null;
@@ -569,19 +572,23 @@ export default function GroupDetailPage() {
                           return (
                             <td
                               key={a.id}
-                              className="px-3 py-3 text-center border-l border-neutral-100 cursor-pointer hover:bg-blue-50/50 transition-colors"
+                              className="px-3 py-3 text-center border-l border-black/[0.04] dark:border-white/[0.06] cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-950/30 transition-colors"
                               onClick={() => setActiveGradingCell({ student: st, assignment: a, item })}
                             >
                               {isDone ? (
-                                <span className="border border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-full px-2.5 py-0.5 text-xs font-semibold inline-flex items-center gap-1 font-mono">
+                                <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-mono font-medium rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1 shadow-xs">
                                   ✓ DONE {item.score !== null ? `${item.score}/10` : ""}
                                 </span>
                               ) : isPending ? (
-                                <span className="border border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 rounded-full px-2.5 py-0.5 text-xs font-semibold inline-flex items-center gap-1 font-mono">
-                                  ⏳ PENDING
+                                <span className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-mono font-medium rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1.5 shadow-xs">
+                                  <span className="relative flex h-2 w-2 mr-0.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                  </span>
+                                  PENDING
                                 </span>
                               ) : (
-                                <span className="border border-[#D1D5DB] text-zinc-500 bg-zinc-50/50 dark:border-zinc-700 dark:text-zinc-400 dark:bg-zinc-800/30 rounded-full px-2.5 py-0.5 text-xs font-semibold inline-flex items-center gap-1 font-mono">
+                                <span className="bg-zinc-100/70 dark:bg-zinc-800/40 text-zinc-400 border border-zinc-200/50 dark:border-zinc-700/50 font-mono font-medium rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1">
                                   ○ NOT YET
                                 </span>
                               )}

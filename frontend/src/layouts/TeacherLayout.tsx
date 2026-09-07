@@ -17,13 +17,13 @@ export default function TeacherLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-neutral-50">
+    <div className="flex min-h-screen bg-[#FBFBFA] dark:bg-[#0B0F19] font-sans antialiased text-neutral-900 dark:text-neutral-100">
       {/* Desktop Sidebar */}
-      <aside className="hidden w-64 flex-col border-r border-neutral-100 bg-white px-4 py-6 md:flex">
+      <aside className="hidden w-64 flex-col border-r border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] px-4 py-6 md:flex">
         <div className="mb-8 flex items-center gap-3 px-2">
           <Logo />
           <div>
-            <p className="text-sm font-bold leading-tight text-neutral-900">Asadbek Khasanov</p>
+            <p className="text-sm font-bold leading-tight text-neutral-900 dark:text-white tracking-tight">Asadbek Khasanov</p>
             <p className="text-xs text-neutral-400">Examiner Desk / Teacher Portal</p>
           </div>
         </div>
@@ -112,12 +112,12 @@ export default function TeacherLayout() {
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
         {/* Mobile Header */}
-        <header className="flex items-center justify-between border-b border-neutral-100 bg-white px-4 py-3 md:hidden">
+        <header className="flex items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-[#111827]/80 backdrop-blur-md px-4 py-3 md:hidden">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="rounded-lg border border-neutral-200 p-2 text-neutral-600 hover:bg-neutral-50 focus:outline-none"
+              className="rounded-lg border border-neutral-200 dark:border-neutral-700 p-2 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 focus:outline-none"
               aria-label="Open menu"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -127,29 +127,29 @@ export default function TeacherLayout() {
             <div className="flex items-center gap-2">
               <Logo className="h-7 w-7 text-xs" />
               <div>
-                <span className="font-bold text-neutral-900 block leading-tight text-sm">Asadbek Khasanov</span>
+                <span className="font-bold text-neutral-900 dark:text-white block leading-tight text-sm tracking-tight">Asadbek Khasanov</span>
                 <span className="text-[10px] text-neutral-400">Examiner Desk / Teacher Portal</span>
               </div>
             </div>
           </div>
           <button
             onClick={() => logout()}
-            className="text-xs font-medium text-neutral-500 hover:text-neutral-900"
+            className="text-xs font-medium text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
           >
             Logout
           </button>
         </header>
 
         {/* Desktop Header */}
-        <header className="hidden items-center justify-between border-b border-neutral-100 bg-white px-8 py-4 md:flex">
+        <header className="hidden items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-[#111827]/80 backdrop-blur-md px-8 py-4 md:flex">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Examiner Desk / Teacher Portal</span>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium text-neutral-600">{user?.email}</span>
+            <span className="text-sm font-medium text-neutral-600 dark:text-neutral-300">{user?.email}</span>
             <button
               onClick={() => logout()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900 transition"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-black/[0.08] dark:border-white/[0.1] px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white transition shadow-xs"
               title="Sign out of your account"
             >
               <svg className="h-4 w-4 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">

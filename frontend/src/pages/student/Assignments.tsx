@@ -18,20 +18,24 @@ import { AssignmentForStudent } from "@/types";
 export function TaskStatusBadge({ assignment }: { assignment: AssignmentForStudent }) {
   if (assignment.submission_status === "graded") {
     return (
-      <span className="border border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-full px-2.5 py-0.5 text-xs font-semibold inline-flex items-center gap-1 font-mono">
+      <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-mono font-medium rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1 shadow-xs">
         ✓ DONE {assignment.score !== null ? `${assignment.score}/10` : ""}
       </span>
     );
   }
   if (assignment.submission_status === "submitted" || assignment.submission_status === "late") {
     return (
-      <span className="border border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 rounded-full px-2.5 py-0.5 text-xs font-semibold inline-flex items-center gap-1 font-mono">
-        ⏳ PENDING
+      <span className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-mono font-medium rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1.5 shadow-xs">
+        <span className="relative flex h-2 w-2 mr-0.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+        </span>
+        PENDING
       </span>
     );
   }
   return (
-    <span className="border border-[#D1D5DB] text-zinc-500 bg-zinc-50/50 dark:border-zinc-700 dark:text-zinc-400 dark:bg-zinc-800/30 rounded-full px-2.5 py-0.5 text-xs font-semibold inline-flex items-center gap-1 font-mono">
+    <span className="bg-zinc-100/70 dark:bg-zinc-800/40 text-zinc-400 border border-zinc-200/50 dark:border-zinc-700/50 font-mono font-medium rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1">
       ○ NOT YET
     </span>
   );
@@ -94,10 +98,10 @@ export default function StudentAssignmentsPage() {
           {assignments.map((a) => (
             <div
               key={a.id}
-              className={`card p-3.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border transition-all ${
+              className={`card p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border transition-all duration-150 ${
                 a.is_locked
-                  ? "bg-neutral-50/80 border-neutral-200 opacity-90"
-                  : "bg-white border-neutral-200/80 hover:border-neutral-300 hover:shadow-xs"
+                  ? "bg-neutral-50/80 dark:bg-zinc-900/60 border-black/[0.04] dark:border-white/[0.06] opacity-85"
+                  : "bg-white dark:bg-[#111827] border-black/[0.06] dark:border-white/[0.08] hover:border-indigo-500/40 hover:-translate-y-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]"
               }`}
             >
               <div className="space-y-1 min-w-0">
@@ -483,10 +487,10 @@ function SubmitModal({
                   if (droppedFiles.length > 0) handleFilesAdded(droppedFiles);
                 }}
                 onClick={() => dropzoneInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${
+                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200 ${
                   isDragging
-                    ? "border-blue-500 bg-blue-50/50"
-                    : "border-neutral-300 hover:border-neutral-400 bg-neutral-50/60"
+                    ? "border-indigo-500 bg-indigo-500/[0.06] scale-[1.005] ring-4 ring-indigo-500/10"
+                    : "border-zinc-300 dark:border-zinc-700 hover:border-indigo-500/50 bg-zinc-50/60 dark:bg-zinc-800/30 hover:bg-indigo-500/[0.02]"
                 }`}
               >
                 <input
@@ -501,12 +505,12 @@ function SubmitModal({
                     e.target.value = "";
                   }}
                 />
-                <UploadCloud className="mx-auto h-8 w-8 text-neutral-400 mb-1.5" />
-                <p className="text-xs font-semibold text-neutral-800">
-                  Drag & drop files here, or <span className="text-blue-600 underline">browse</span>
+                <UploadCloud className="mx-auto h-8 w-8 text-neutral-400 dark:text-neutral-500 mb-1.5 transition-colors" />
+                <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                  Drag & drop files here, or <span className="text-indigo-600 dark:text-indigo-400 underline decoration-indigo-400">browse</span>
                 </p>
-                <p className="text-[11px] text-neutral-500 mt-0.5">
-                  PDF, DOCX, PNG, JPG, WEBP (up to 10MB each) · Paste screenshots directly (<kbd className="px-1 py-0.5 bg-neutral-200 rounded text-[10px]">Ctrl+V</kbd>)
+                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  PDF, DOCX, PNG, JPG, WEBP (up to 10MB each) · Paste screenshots directly (<kbd className="px-1 py-0.5 bg-neutral-200 dark:bg-zinc-700 rounded text-[10px] font-mono">Ctrl+V</kbd>)
                 </p>
               </div>
 
