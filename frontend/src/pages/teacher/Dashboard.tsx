@@ -157,9 +157,33 @@ export default function TeacherDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Teacher Overview & Insights</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Live operational statistics and weekly group reports</p>
+      {/* Teacher Hero Banner with Ambient Gradient (Matching Reference Design) */}
+      <div className="relative overflow-hidden rounded-2xl bg-slate-950 border border-indigo-500/20 shadow-xl p-5 sm:p-6 text-white">
+        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider bg-white/10 backdrop-blur-md px-2.5 py-0.5 rounded-full text-indigo-200 border border-white/10">
+                Examiner Desk
+              </span>
+              <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                Active Cohort
+              </span>
+            </div>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-white">
+              Good morning, Mr. Asadbek! 👋
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300">
+              Here&apos;s what&apos;s happening with your classes and student submissions today.
+            </p>
+          </div>
+
+          <div className="self-start sm:self-auto bg-white/[0.08] backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 text-xs font-mono font-semibold text-indigo-200 shadow-inner tabular-nums">
+            📅 {format(new Date(), "EEE, d MMM yyyy")}
+          </div>
+        </div>
       </div>
 
       {error && <EmptyState title="Something went wrong" description={error} />}
@@ -168,8 +192,8 @@ export default function TeacherDashboardPage() {
         <LoadingRows rows={4} />
       ) : data ? (
         <>
-          {/* Key LMS Metrics */}
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-7">
+          {/* Key LMS Metrics (Responsive 3-Tier Grid: 2-col on mobile, 4-col on tablet, 7-col on desktop) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
             <StatCard label="Total Students" value={data.total_students} />
             <StatCard label="Active Students" value={data.active_students} />
             <StatCard label="Active Groups" value={data.total_groups} />

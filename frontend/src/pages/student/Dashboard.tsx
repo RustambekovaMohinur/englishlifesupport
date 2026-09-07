@@ -166,132 +166,189 @@ export default function StudentDashboardPage() {
           </Link>
         </div>
       )}
-      {/* Asadbek Khasanov Header Banner (Ambient Mesh Gradient) */}
-      <div className="relative overflow-hidden rounded-2xl bg-slate-900 border border-indigo-500/20 shadow-xl p-6 text-white">
-        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
-        <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-purple-500/15 blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
+      {/* Hero Banner & Gamification Streak Grid (Desktop: 12-col span-8/span-4, Tablet: 2-col, Mobile: 1-col) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-stretch">
+        {/* Left Hero Card (Desktop span-8, Tablet span-1, Mobile full) */}
+        <div className="md:col-span-1 lg:col-span-8 relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 border border-indigo-500/20 shadow-xl p-5 sm:p-6 text-white flex flex-col justify-between min-h-[200px]">
+          {/* Ambient Glows */}
+          <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
+          <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-purple-500/15 blur-3xl pointer-events-none" />
+
+          {/* Top Content */}
+          <div className="relative z-10 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider bg-white/10 backdrop-blur-md px-2.5 py-1 rounded-full text-indigo-200 border border-white/10">
-                Asadbek Khasanov Learning Center
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider bg-white/10 backdrop-blur-md px-2.5 py-0.5 rounded-full text-indigo-200 border border-white/10">
+                English Life
               </span>
-              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/25 tabular-nums font-mono">
-                🔥 {streakVal} {streakVal === 1 ? "day" : "days"} in a row
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                {displayLevel}
               </span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-bold mt-2 tracking-tight">{getGreeting(data.full_name)}</h1>
-            <p className="mt-1 text-sm text-slate-300">
-              {data.group_name ? `Group: ${data.group_name}` : "No group assigned yet"}
-              {data.teacher_name && ` · Teacher: ${data.teacher_name}`}
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-white">
+              Keep going, {data.full_name?.split(" ")[0] || "Student"}! 💪
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300">
+              Every lesson brings you closer to your goals. {data.group_name ? `Cohort: ${data.group_name}` : ""}
+              {data.teacher_name ? ` · Examiner: ${data.teacher_name}` : ""}
             </p>
           </div>
-          <div className="flex items-center gap-3 self-start md:self-auto bg-white/[0.07] backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/10 shadow-inner">
-            <div className="text-center px-2">
-              <p className="text-xs text-slate-400 font-medium">English Level</p>
-              <p className="text-base font-bold text-white tracking-tight" data-testid="student-english-level">{displayLevel}</p>
+
+          {/* Bottom Progress Row with On Track Pill */}
+          <div className="relative z-10 mt-5 pt-3 border-t border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex-1 space-y-1.5">
+              <div className="flex justify-between text-xs font-medium text-slate-300 tabular-nums font-mono">
+                <span>Your progress: {rate}%</span>
+                <span>{completedTasks}/{totalActiveTasks} tasks</span>
+              </div>
+              <div className="h-2.5 w-full bg-white/10 rounded-full overflow-hidden backdrop-blur-xs">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-400 to-amber-300 rounded-full shadow-[0_0_12px_rgba(251,191,36,0.5)] transition-all duration-500 ease-out"
+                  style={{ width: `${Math.min(100, Math.max(0, parseFloat(rate)))}%` }}
+                />
+              </div>
             </div>
-            <div className="h-8 w-px bg-white/15" />
-            <div className="text-center px-2">
-              <p className="text-xs text-slate-400 font-medium">Monthly Pass</p>
-              <p className="text-base font-bold text-white tracking-tight">{hasFreePass ? "🛡 Available" : "Used"}</p>
-            </div>
+            <Link
+              to="/student/assignments"
+              className="inline-flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl bg-indigo-600/90 hover:bg-indigo-600 text-white shadow-xs transition active:scale-95 shrink-0 self-start sm:self-center"
+            >
+              <span>On Track</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
         </div>
 
-        {/* XP Level Progress Bar with Back-glow */}
-        <div className="relative z-10 mt-5 pt-4 border-t border-white/10">
-          <div className="flex justify-between text-xs font-medium text-slate-300 mb-1.5 tabular-nums font-mono">
-            <span>🎯 {xpVal} XP earned</span>
-            <span>Next Level: {nextXp} XP</span>
+        {/* Right Streak Box (Desktop span-4, Tablet span-1, Mobile full) */}
+        <div className="md:col-span-1 lg:col-span-4 relative overflow-hidden rounded-2xl bg-white dark:bg-[#111827] border border-black/[0.06] dark:border-white/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)] p-5 sm:p-6 flex flex-col justify-between items-center text-center">
+          <div className="w-full flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Activity Streak</span>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-mono">
+              {hasFreePass ? "🛡 Pass Ready" : "Pass Used"}
+            </span>
           </div>
-          <div className="h-2.5 w-full bg-white/10 rounded-full overflow-hidden backdrop-blur-xs">
-            <div
-              className="h-full bg-gradient-to-r from-amber-400 to-amber-300 rounded-full shadow-[0_0_12px_rgba(251,191,36,0.5)] transition-all duration-500 ease-out"
-              style={{ width: `${Math.min(100, Math.round((xpVal / (nextXp || 100)) * 100))}%` }}
-            />
+
+          <div className="my-3 flex flex-col items-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/20 to-rose-500/20 text-3xl shadow-inner border border-amber-500/20">
+              🔥
+            </div>
+            <h2 className="mt-2 text-2xl sm:text-3xl font-extrabold font-mono text-zinc-900 dark:text-white tabular-nums tracking-tight">
+              {streakVal} {streakVal === 1 ? "day" : "days"}
+            </h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Consecutive daily learning</p>
           </div>
+
+          <Link
+            to="/student/assignments"
+            className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs shadow-md shadow-amber-500/20 transition flex items-center justify-center gap-1.5 min-h-[44px]"
+          >
+            <span>Keep it up! 🔥</span>
+          </Link>
         </div>
       </div>
 
-      {/* Gamified Core Metrics (Floating Cards with Ambient Halos) */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <div className="card p-4 space-y-1.5 border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] hover:-translate-y-0.5 transition-all duration-200 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
+      {/* 4-Stat Metric Row (Compact on mobile, 4-col on desktop) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+        {/* Stars */}
+        <div className="card p-3.5 sm:p-4 space-y-1 border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] hover:-translate-y-0.5 transition-all duration-200 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)] active:scale-95">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Total Stars</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Total Stars</p>
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500 text-sm">⭐</span>
           </div>
-          <p className="text-2xl font-bold text-neutral-900 dark:text-white tabular-nums font-mono tracking-tight">{data.total_stars}</p>
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Rewards & Achievements</p>
+          <p className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white tabular-nums font-mono tracking-tight">{data.total_stars}</p>
+          <p className="text-[10px] sm:text-[11px] text-zinc-500 dark:text-zinc-400 truncate">Rewards & Badges</p>
         </div>
 
-        <div className="card p-4 space-y-1.5 border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] hover:-translate-y-0.5 transition-all duration-200 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
+        {/* Lightning */}
+        <div className="card p-3.5 sm:p-4 space-y-1 border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] hover:-translate-y-0.5 transition-all duration-200 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)] active:scale-95">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Learning Streak</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Learning Streak</p>
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500 text-sm">⚡</span>
           </div>
-          <p className="text-2xl font-bold text-neutral-900 dark:text-white tabular-nums font-mono tracking-tight">{streakVal} {streakVal === 1 ? "day" : "days"}</p>
-          <div className="pt-0.5">
-            <span className="inline-flex items-center text-[11px] font-semibold text-amber-600 dark:text-amber-400 tabular-nums font-mono">
-              🔥 {streakVal} {streakVal === 1 ? "day" : "days"} in a row
-            </span>
-          </div>
+          <p className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white tabular-nums font-mono tracking-tight">{streakVal} {streakVal === 1 ? "day" : "days"}</p>
+          <p className="text-[10px] sm:text-[11px] text-zinc-500 dark:text-zinc-400 truncate">🔥 Active daily pace</p>
         </div>
 
-        <div className="card p-4 space-y-1.5 border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] hover:-translate-y-0.5 transition-all duration-200 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
+        {/* XP */}
+        <div className="card p-3.5 sm:p-4 space-y-1 border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] hover:-translate-y-0.5 transition-all duration-200 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)] active:scale-95">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Average Score</p>
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500 text-sm">🎯</span>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Total XP</p>
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 text-sm font-bold font-mono">🎯</span>
           </div>
-          <p className="text-2xl font-bold text-neutral-900 dark:text-white tabular-nums font-mono tracking-tight">{data.average_score !== null ? `${data.average_score}/10` : "—"}</p>
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Evaluated homework</p>
+          <p className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white tabular-nums font-mono tracking-tight">{xpVal.toLocaleString()}</p>
+          <p className="text-[10px] sm:text-[11px] text-zinc-500 dark:text-zinc-400 truncate">Next: {nextXp} XP</p>
         </div>
 
-        <div className="card p-4 space-y-1.5 border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] hover:-translate-y-0.5 transition-all duration-200 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
+        {/* Level */}
+        <div className="card p-3.5 sm:p-4 space-y-1 border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] hover:-translate-y-0.5 transition-all duration-200 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)] active:scale-95">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Task Progress</p>
-            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 tabular-nums font-mono">{rate}%</span>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Level {levelVal}</p>
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/10 text-purple-600 text-sm">👑</span>
           </div>
-          <p className="text-2xl font-bold text-neutral-900 dark:text-white tabular-nums font-mono tracking-tight">
-            {completedTasks}/{totalActiveTasks}
-          </p>
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-            {completedTasks}/{totalActiveTasks} tasks completed
-          </p>
-          {/* Micro-Progress Bar with glow */}
-          <div className="h-1.5 w-full bg-neutral-100 dark:bg-zinc-800 rounded-full overflow-hidden mt-1.5">
-            <div
-              className="h-full bg-indigo-600 rounded-full transition-all duration-500 ease-out shadow-[0_0_8px_rgba(79,70,229,0.3)]"
-              style={{ width: `${Math.min(100, Math.max(0, parseFloat(rate)))}%` }}
-            />
-          </div>
+          <p className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white tabular-nums font-mono tracking-tight truncate">{levelTitle}</p>
+          <p className="text-[10px] sm:text-[11px] text-zinc-500 dark:text-zinc-400 truncate">Score: {data.average_score !== null ? `${data.average_score}/10` : "—"}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left 2 Cols: Deadlines & Grades */}
         <div className="space-y-6 lg:col-span-2">
-          {/* Upcoming Deadlines */}
+          {/* Upcoming Deadlines / Today's Assignments */}
           <div className="card border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
-            <h2 className="mb-4 text-base font-semibold text-neutral-900 dark:text-white flex items-center justify-between tracking-tight">
-              <span>Upcoming Deadlines</span>
-              <span className="text-xs font-normal text-neutral-500 dark:text-neutral-400 tabular-nums font-mono">{data.upcoming_deadlines.length} active</span>
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold text-zinc-900 dark:text-white flex items-center gap-2 tracking-tight">
+                <span>📝 Today&apos;s Assignments</span>
+                <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400 tabular-nums font-mono">{data.upcoming_deadlines.length} active</span>
+              </h2>
+              <Link to="/student/assignments" className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">
+                View all →
+              </Link>
+            </div>
             {data.upcoming_deadlines.length === 0 ? (
               <p className="text-sm text-neutral-500 dark:text-neutral-400">No upcoming deadlines. 🎉</p>
             ) : (
               <ul className="divide-y divide-neutral-100 dark:divide-zinc-800/60">
-                {data.upcoming_deadlines.map((a) => (
-                  <li
-                    key={a.id}
-                    className="py-3 px-2 rounded-lg border-l-2 border-transparent hover:border-indigo-600 hover:bg-neutral-50/70 dark:hover:bg-zinc-800/40 transition-all active:scale-[0.99] flex items-center justify-between text-sm"
-                  >
-                    <span className="font-medium text-neutral-800 dark:text-neutral-200">{a.title}</span>
-                    <span className={a.submitted ? "text-emerald-600 dark:text-emerald-400 font-medium font-mono text-xs" : "text-neutral-500 dark:text-neutral-400 font-mono text-xs"}>
-                      {a.submitted ? "✓ Submitted" : format(new Date(a.deadline), "MMM d, HH:mm")}
-                    </span>
-                  </li>
-                ))}
+                {data.upcoming_deadlines.map((a) => {
+                  const skill = getSkillPill(a.title);
+                  return (
+                    <li
+                      key={a.id}
+                      className="py-3 px-2 rounded-xl hover:bg-neutral-50/70 dark:hover:bg-zinc-800/40 transition-all flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 active:scale-[0.99]"
+                    >
+                      <div className="flex items-start sm:items-center gap-3 min-w-0">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-base border border-indigo-100 dark:border-indigo-900/50">
+                          {skill.icon}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-semibold px-2 py-0.2 rounded-full border ${skill.bg}`}>
+                              {skill.label}
+                            </span>
+                            <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
+                              {a.submitted ? "Submitted" : format(new Date(a.deadline), "MMM d, HH:mm")}
+                            </span>
+                          </div>
+                          <h4 className="font-semibold text-sm text-zinc-900 dark:text-white truncate mt-0.5" title={a.title}>
+                            {a.title}
+                          </h4>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end sm:justify-start gap-2 shrink-0 self-end sm:self-center">
+                        {a.submitted ? (
+                          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                            ✓ Submitted
+                          </span>
+                        ) : (
+                          <Link
+                            to="/student/assignments"
+                            className="btn-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs py-1.5 px-3 rounded-lg transition shadow-xs active:scale-95"
+                          >
+                            Start Task →
+                          </Link>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

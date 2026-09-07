@@ -67,11 +67,13 @@ export function LoadingRows({ rows = 5 }: { rows?: number }) {
 export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[#EAE9E5] dark:border-[#30363D] bg-white dark:bg-[#161B22] p-6 shadow-xl text-zinc-900 dark:text-zinc-100">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 animate-in fade-in duration-150">
+      <div className="max-h-[92vh] sm:max-h-[90vh] w-full sm:max-w-lg overflow-y-auto rounded-t-3xl sm:rounded-2xl border-t sm:border border-[#EAE9E5] dark:border-[#30363D] bg-white dark:bg-[#161B22] p-5 sm:p-6 shadow-2xl text-zinc-900 dark:text-zinc-100 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+        {/* Mobile Drag / Pull Handle */}
+        <div className="sm:hidden w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full mx-auto mb-3" />
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">{title}</h3>
-          <button onClick={onClose} className="rounded-full p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-600 dark:hover:text-zinc-300 transition">
+          <button onClick={onClose} className="rounded-full p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-600 dark:hover:text-zinc-300 transition active:scale-95">
             ✕
           </button>
         </div>

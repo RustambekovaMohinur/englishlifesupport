@@ -450,7 +450,7 @@ export default function GroupDetailPage() {
           </div>
 
           {/* Spreadsheet Table with Sticky Left Column */}
-          <div className="overflow-x-auto rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
+          <div className="overflow-x-auto touch-pan-x rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
             {(() => {
               const currentCycle = groupDetail.current_cycle ?? 1;
               const activeCycle = selectedCycle ?? currentCycle;
@@ -462,7 +462,7 @@ export default function GroupDetailPage() {
                 <table className="w-full text-left text-sm border-collapse">
                   <thead className="sticky top-0 z-20 backdrop-blur-md bg-white/90 dark:bg-[#161B22]/90 text-xs uppercase text-neutral-600 dark:text-neutral-400 border-b border-black/[0.08] dark:border-white/[0.08]">
                     <tr>
-                      <th className="px-4 py-3.5 sticky left-0 bg-white/95 dark:bg-[#161B22]/95 z-30 font-bold border-r border-black/[0.08] dark:border-white/[0.08] shadow-[4px_0_12px_rgba(0,0,0,0.04)]">
+                      <th className="px-4 py-3.5 sticky left-0 bg-white/95 dark:bg-[#161B22]/95 z-30 font-bold border-r border-black/[0.08] dark:border-white/[0.08] shadow-[4px_0_8px_rgba(0,0,0,0.08)]">
                         Student Identity
                       </th>
                       <th className="px-3 py-3.5 font-semibold text-xs text-neutral-500 dark:text-neutral-400">Telegram</th>
@@ -491,7 +491,7 @@ export default function GroupDetailPage() {
                     {groupDetail.students.map((st) => (
                       <tr key={st.student_id} className="hover:bg-neutral-50/70 dark:hover:bg-zinc-800/40 transition-colors">
                         {/* Sticky Left Column: Student identity with status dot & shadow */}
-                        <td className="px-4 py-3 sticky left-0 bg-white dark:bg-[#111827] z-10 font-medium text-neutral-900 dark:text-white border-r border-black/[0.08] dark:border-white/[0.08] shadow-[4px_0_12px_rgba(0,0,0,0.04)]">
+                        <td className="px-4 py-3 sticky left-0 bg-white dark:bg-[#111827] z-10 font-medium text-neutral-900 dark:text-white border-r border-black/[0.08] dark:border-white/[0.08] shadow-[4px_0_8px_rgba(0,0,0,0.08)]">
                           <div className="flex items-center gap-2.5">
                             <div className="relative">
                               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 font-bold text-brand-700 text-xs overflow-hidden">
@@ -755,12 +755,14 @@ function GradingSlideOver({
     <div className="fixed inset-0 z-50 overflow-hidden">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
+        className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
         onClick={onClose}
       />
 
-      {/* Slide-Over Panel */}
-      <div className="fixed inset-y-0 right-0 max-w-lg w-full bg-white dark:bg-[#161B22] shadow-2xl p-6 flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200 border-l border-zinc-200 dark:border-zinc-800">
+      {/* Slide-Over / Bottom Sheet Drawer Panel */}
+      <div className="fixed inset-x-0 bottom-0 sm:inset-y-0 sm:left-auto sm:right-0 max-h-[92vh] sm:max-h-full max-w-lg w-full bg-white dark:bg-[#161B22] shadow-2xl p-5 sm:p-6 flex flex-col justify-between overflow-y-auto animate-in slide-in-from-bottom-6 sm:slide-in-from-right duration-200 rounded-t-3xl sm:rounded-none border-t sm:border-t-0 sm:border-l border-zinc-200 dark:border-zinc-800">
+        {/* Mobile Pull Handle */}
+        <div className="sm:hidden w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full mx-auto mb-3" />
         <div className="space-y-6">
           {/* Header */}
           <div className="flex items-start justify-between border-b border-zinc-100 dark:border-zinc-800 pb-4">
@@ -790,7 +792,7 @@ function GradingSlideOver({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition"
+              className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition active:scale-95"
             >
               <X className="h-5 w-5" />
             </button>
