@@ -438,6 +438,13 @@ export function VoiceRecorder({
   }, [recording]);
 
   const startRecording = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast.error("Brauzeringizda ovoz yozish imkoniyati cheklangan. Audio fayl yuklashingiz mumkin.", {
+        id: "mic-unsupported",
+      });
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported("audio/webm")
@@ -473,7 +480,9 @@ export function VoiceRecorder({
       setAudioUrl(null);
       setAudioBlob(null);
     } catch (err) {
-      toast.error("Microphone access denied or unavailable");
+      toast.error("Mikrofon ruxsati berilmadi. Fayl sifatida .mp3/.m4a yuklashingiz mumkin.", {
+        id: "mic-access-error",
+      });
     }
   };
 

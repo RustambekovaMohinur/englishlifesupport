@@ -33,8 +33,8 @@ import {
   AuthenticatedAudio,
   AuthenticatedImage,
   ImageLightbox,
-  VoiceRecorder,
 } from "@/components/ui";
+import { AudioRecorderWidget } from "@/components/AudioRecorder";
 import { AssignmentDiscussionDrawer } from "@/components/AssignmentDiscussionDrawer";
 import {
   listMyAssignments,
@@ -320,10 +320,29 @@ export default function StudentAssignmentSubmitPage() {
       const effectiveFile = voiceFile || docFile || null;
 
       await submitHomework(assignment.id, combinedText, effectiveFile, submissionImages);
-      toast.success("Homework submitted successfully! 🚀");
+      toast.success("Homework submitted successfully! 🚀", { id: "submit-success" });
       navigate("/student/assignments");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "Failed to submit homework. Please try again.");
+      console.error("Submission error diagnostics:", err);
+      let errorMsg = "Topshiriqni yuborishda xatolik yuz berdi.";
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail;
+
+      if (typeof detail === "string") {
+        errorMsg = detail;
+      } else if (Array.isArray(detail)) {
+        errorMsg = detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
+      } else if (status === 413) {
+        errorMsg = "Yuklangan fayllar hajmi 10 MB limitdan oshib ketdi. Iltimos, faylni kichikroq qiling.";
+      } else if (status === 403) {
+        errorMsg = "Ushbu topshiriqqa javob yuborish huquqi yo'q yoki muddat tugagan.";
+      } else if (status === 409) {
+        errorMsg = "Ushbu topshiriq allaqachon baholangan, uni qayta yuborib bo'lmaydi.";
+      } else if (!err.response) {
+        errorMsg = "Internet aloqasini tekshiring. Serverga ulanib bo'lmadi.";
+      }
+
+      toast.error(errorMsg, { id: "submit-homework-error" });
     } finally {
       setIsSubmitting(false);
     }
@@ -935,12 +954,19 @@ export default function StudentAssignmentSubmitPage() {
                     </p>
                   </div>
 
-                  {/* Native Waveform Audio Recorder Component */}
-                  <VoiceRecorder
-                    onRecordingComplete={(audio) => {
-                      setVoiceFile(audio);
-                      toast.success("Voice response recorded! Ready for submission.");
+                  {/* Resilient Audio Recorder Component with Stream Cleanup & Toast Deduplication */}
+                  <AudioRecorderWidget
+                    onAudioRecorded={(blob) => {
+                      if (blob) {
+                        const ext = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
+                        const audioFile = new File([blob], `voice_recording_${Date.now()}.${ext}`, { type: blob.type || "audio/webm" });
+                        setVoiceFile(audioFile);
+                        toast.success("Ovozli javob tayyor!", { id: "voice-recorded-success" });
+                      } else {
+                        setVoiceFile(null);
+                      }
                     }}
+                    existingAudio={voiceFile}
                   />
 
                   {/* Or upload pre-recorded audio */}
