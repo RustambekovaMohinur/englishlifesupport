@@ -190,6 +190,12 @@ export default function AssignmentsPage() {
       return;
     }
 
+    const parsedDate = new Date(deadline);
+    if (isNaN(parsedDate.getTime())) {
+      toast.error("Invalid deadline date format");
+      return;
+    }
+
     // Find any attached files
     let primaryFile: File | null = audioPromptFile || primaryDocFile;
     let vocabFile: File | null = null;
@@ -210,14 +216,14 @@ export default function AssignmentsPage() {
 
     setIsSaving(true);
     try {
-      const taskDataForJson = tasks.map((t) => ({
+      const taskDataForJson = (tasks || []).map((t) => ({
         id: t.id,
         type: t.type,
         subType: t.subType,
-        content: t.content,
-        bookLink: t.bookLink,
-        unit: t.unit,
-        pages: t.pages,
+        content: t.content || "",
+        bookLink: t.bookLink || "",
+        unit: t.unit || "",
+        pages: t.pages || "",
         fileName: t.file?.name ?? null,
       }));
 
@@ -253,7 +259,7 @@ export default function AssignmentsPage() {
       formData.append("group_id", groupId);
       formData.append("title", title.trim());
       formData.append("description", descriptionPayload);
-      formData.append("deadline", new Date(deadline).toISOString());
+      formData.append("deadline", parsedDate.toISOString());
       formData.append("status", "published");
       if (prerequisiteId) formData.append("prerequisite_id", prerequisiteId);
       if (primaryFile) formData.append("file", primaryFile);
@@ -282,8 +288,9 @@ export default function AssignmentsPage() {
       setShowBuilder(false);
       refresh();
     } catch (err: any) {
+      console.error("Save assignment error details:", err?.response?.data || err);
       const detail = err?.response?.data?.detail;
-      const errorMsg = typeof detail === "string" ? detail : (Array.isArray(detail) ? detail.map((d: any) => d.msg).join(", ") : "Failed to save assignment");
+      const errorMsg = typeof detail === "string" ? detail : (Array.isArray(detail) ? detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ") : (err?.message || "Failed to save assignment"));
       toast.error(errorMsg);
     } finally {
       setIsSaving(false);

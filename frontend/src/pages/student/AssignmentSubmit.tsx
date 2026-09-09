@@ -8,6 +8,9 @@ import {
   Image as ImageIcon,
   Mic,
   Link as LinkIcon,
+  Link2,
+  FolderClosed,
+  PenTool,
   PenLine,
   X,
   CheckCircle2,
@@ -740,83 +743,44 @@ export default function StudentAssignmentSubmitPage() {
               </span>
             </div>
 
-            {/* 4-Way Segmented Tab Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-zinc-100 dark:bg-zinc-850 p-1.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
-              {/* Tab 1: Photos & Files */}
-              <button
-                type="button"
-                onClick={() => setActiveTab("files")}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-semibold transition-all select-none ${
-                  activeTab === "files"
-                    ? "bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
-                }`}
-              >
-                <UploadCloud className="w-4 h-4" />
-                <span>Photos & Files</span>
-                {attachedCount.files > 0 && (
-                  <span className="h-5 min-w-[20px] px-1 rounded-full bg-indigo-600 text-white text-[10px] font-mono flex items-center justify-center font-bold">
-                    {attachedCount.files}
-                  </span>
-                )}
-              </button>
-
-              {/* Tab 2: Voice Recording */}
-              <button
-                type="button"
-                onClick={() => setActiveTab("voice")}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-semibold transition-all select-none ${
-                  activeTab === "voice"
-                    ? "bg-white dark:bg-zinc-900 text-rose-600 dark:text-rose-400 shadow-xs"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
-                }`}
-              >
-                <Mic className="w-4 h-4" />
-                <span>Voice Note</span>
-                {attachedCount.voice > 0 && (
-                  <span className="h-5 w-5 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center font-bold">
-                    ✓
-                  </span>
-                )}
-              </button>
-
-              {/* Tab 3: External Link */}
-              <button
-                type="button"
-                onClick={() => setActiveTab("link")}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-semibold transition-all select-none ${
-                  activeTab === "link"
-                    ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
-                }`}
-              >
-                <LinkIcon className="w-4 h-4" />
-                <span>Web Link</span>
-                {attachedCount.link > 0 && (
-                  <span className="h-5 w-5 rounded-full bg-blue-600 text-white text-[10px] flex items-center justify-center font-bold">
-                    ✓
-                  </span>
-                )}
-              </button>
-
-              {/* Tab 4: Written Essay */}
-              <button
-                type="button"
-                onClick={() => setActiveTab("text")}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-semibold transition-all select-none ${
-                  activeTab === "text"
-                    ? "bg-white dark:bg-zinc-900 text-violet-600 dark:text-violet-400 shadow-xs"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
-                }`}
-              >
-                <PenLine className="w-4 h-4" />
-                <span>Essay / Text</span>
-                {wordCount > 0 && (
-                  <span className="h-5 px-1.5 rounded-full bg-violet-600 text-white text-[10px] font-mono flex items-center justify-center font-bold">
-                    {wordCount}w
-                  </span>
-                )}
-              </button>
+            {/* 4-Way Segmented Tab Bar (Theme Harmonious) */}
+            <div className="flex items-center p-1.5 rounded-2xl bg-zinc-100 dark:bg-[#0D1117] border border-zinc-200 dark:border-zinc-800/80 shadow-inner">
+              {[
+                { id: "files", label: "Photos & Files", icon: FolderClosed, count: attachedCount.files, isWord: false, hasCheck: false },
+                { id: "voice", label: "Voice Note", icon: Mic, count: 0, isWord: false, hasCheck: attachedCount.voice > 0 },
+                { id: "link", label: "Web Link", icon: Link2, count: 0, isWord: false, hasCheck: attachedCount.link > 0 },
+                { id: "text", label: "Essay / Text", icon: PenTool, count: wordCount, isWord: true, hasCheck: false },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 px-2 sm:px-3 rounded-xl text-xs font-semibold transition-all duration-200 select-none ${
+                      isActive
+                        ? "bg-white dark:bg-[#1C2128] text-indigo-600 dark:text-indigo-400 shadow-sm border border-zinc-200/50 dark:border-zinc-700/60"
+                        : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/40"
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{tab.label}</span>
+                    {tab.hasCheck && (
+                      <span className="h-4 w-4 rounded-full bg-emerald-600 text-white text-[9px] flex items-center justify-center font-bold shrink-0">
+                        ✓
+                      </span>
+                    )}
+                    {tab.count > 0 && (
+                      <span className={`h-4 min-w-[16px] px-1 rounded-full text-white text-[9px] font-mono flex items-center justify-center font-bold shrink-0 ${
+                        tab.isWord ? "bg-violet-600" : "bg-indigo-600"
+                      }`}>
+                        {tab.count}{tab.isWord ? "w" : ""}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Active Tab View: Clean, Isolated Widget Canvas */}
