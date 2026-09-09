@@ -4,6 +4,56 @@ import toast from "react-hot-toast";
 import { EmptyState, LoadingRows, useConfirm, FileDownloadButton } from "@/components/ui";
 import { createAssignment, deleteAssignment, listAssignments, listGroups, updateAssignmentInPlace } from "@/services/lmsService";
 import { AssignmentOut, Group } from "@/types";
+import { compressImage } from "@/utils/imageCompressor";
+
+function ImagePreviewItem({
+  file,
+  index,
+  onRemove,
+}: {
+  file: File;
+  index: number;
+  onRemove: () => void;
+}) {
+  const [url, setUrl] = useState<string>("");
+
+  useEffect(() => {
+    const objUrl = URL.createObjectURL(file);
+    setUrl(objUrl);
+    return () => {
+      URL.revokeObjectURL(objUrl);
+    };
+  }, [file]);
+
+  return (
+    <div className="relative group rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 aspect-square shadow-sm">
+      {url && (
+        <img
+          src={url}
+          alt={file.name}
+          className="w-full h-full object-cover"
+        />
+      )}
+      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-1.5">
+        <span className="text-[10px] text-white font-medium truncate bg-black/60 px-1 py-0.5 rounded">
+          #{index + 1}
+        </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="self-end rounded-full bg-red-600 text-white p-1 hover:bg-red-700 transition"
+          title="Remove image"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export type TaskType = "reading" | "writing" | "dictation" | "vocabulary" | "book";
 export type SubType = "text" | "link" | "image" | "file" | "csv";
@@ -40,6 +90,7 @@ export default function AssignmentsPage() {
   const [externalResourceUrl, setExternalResourceUrl] = useState<string>("");
   const [mainInstructionsText, setMainInstructionsText] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isCompressingImages, setIsCompressingImages] = useState(false);
 
   useEffect(() => {
     listGroups(false).then((data) => {
@@ -168,6 +219,58 @@ export default function AssignmentsPage() {
       }
     });
   }
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    e.stopPropagation(); // Stop native form triggers
+
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // Convert FileList to Array safely
+    const fileArray = Array.from(files);
+    setIsCompressingImages(true);
+
+    try {
+      // Process photos SEQUENTIALLY to prevent mobile tab memory spike/crash
+      const processedPhotos: File[] = [];
+      for (const file of fileArray) {
+        if (file.size > 20 * 1024 * 1024) {
+          toast.error(`"${file.name}" fayl hajmi juda katta (maksimal 20MB)`);
+          continue;
+        }
+        try {
+          const compressed = await compressImage(file, 1600, 0.72);
+          processedPhotos.push(compressed);
+        } catch (compErr) {
+          console.warn("Compression fallback:", compErr);
+          processedPhotos.push(file);
+        }
+      }
+
+      setAssignmentImages((prev) => {
+        const remainingSlots = 10 - prev.length;
+        if (remainingSlots <= 0) {
+          toast.error("Maksimal 10 ta rasm yuklash mumkin");
+          return prev;
+        }
+        const toAdd = processedPhotos.slice(0, remainingSlots);
+        if (processedPhotos.length > remainingSlots) {
+          toast.error(`Faqat ${remainingSlots} ta rasm qo'shildi (maksimal 10 ta)`);
+        } else {
+          toast.success(`${toAdd.length} ta rasm tayyorlandi 📸`);
+        }
+        return [...prev, ...toAdd];
+      });
+    } catch (err) {
+      console.error("Image attachment error:", err);
+      toast.error("Rasmlarni biriktirishda xatolik yuz berdi.");
+    } finally {
+      setIsCompressingImages(false);
+      // Reset input value so the same file can be re-selected if needed
+      e.target.value = "";
+    }
+  };
 
   function handleAddTask() {
     const newTask: TaskBlock = {
@@ -393,7 +496,7 @@ export default function AssignmentsPage() {
 
       {/* Inline Assignment Builder */}
       {showBuilder && (
-        <form onSubmit={handleCreateAssignment} className="card space-y-5 border-2 border-brand-200 dark:border-brand-800/60 bg-white dark:bg-[#161B22]">
+        <form onSubmit={(e) => { e.preventDefault(); handleCreateAssignment(e); }} className="card space-y-5 border-2 border-brand-200 dark:border-brand-800/60 bg-white dark:bg-[#161B22]">
           <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
             <div>
               <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
@@ -608,12 +711,19 @@ export default function AssignmentsPage() {
                     type="file"
                     accept=".pdf,.doc,.docx,.txt"
                     className="input text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-50 dark:file:bg-brand-950 file:text-brand-700 dark:file:text-brand-300"
-                    onChange={(e) => setPrimaryDocFile(e.target.files?.[0] ?? null)}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      setPrimaryDocFile(e.target.files?.[0] ?? null);
+                    }}
                   />
                   {primaryDocFile && (
                     <button
                       type="button"
-                      onClick={() => setPrimaryDocFile(null)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setPrimaryDocFile(null);
+                      }}
                       className="text-red-500 hover:text-red-700 text-xs px-2"
                       title="Clear file"
                     >
@@ -636,12 +746,19 @@ export default function AssignmentsPage() {
                     type="file"
                     accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
                     className="input text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-rose-50 dark:file:bg-rose-950 file:text-rose-700 dark:file:text-rose-300"
-                    onChange={(e) => setAudioPromptFile(e.target.files?.[0] ?? null)}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      setAudioPromptFile(e.target.files?.[0] ?? null);
+                    }}
                   />
                   {audioPromptFile && (
                     <button
                       type="button"
-                      onClick={() => setAudioPromptFile(null)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setAudioPromptFile(null);
+                      }}
                       className="text-red-500 hover:text-red-700 text-xs px-2"
                       title="Clear audio"
                     >
@@ -678,70 +795,43 @@ export default function AssignmentsPage() {
 
             {assignmentImages.length < 10 && (
               <div>
-                <label className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-brand-400 bg-white dark:bg-zinc-900 rounded-xl p-4 cursor-pointer transition-colors">
-                  <span className="text-2xl mb-1">📸</span>
-                  <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Click to upload images</span>
-                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">JPG, PNG, WEBP, HEIC up to 10MB</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic"
-                    className="hidden"
-                    onChange={(e) => {
-                      const files = Array.from(e.target.files || []);
-                      if (!files.length) return;
-                      const validFiles: File[] = [];
-                      for (const f of files) {
-                        if (f.size > 10 * 1024 * 1024) {
-                          toast.error(`"${f.name}" exceeds 10MB limit`);
-                          continue;
-                        }
-                        validFiles.push(f);
-                      }
-                      if (assignmentImages.length + validFiles.length > 10) {
-                        toast.error(`Maximum 10 images allowed per assignment (${assignmentImages.length} already uploaded)`);
-                        const remainingSlots = 10 - assignmentImages.length;
-                        if (remainingSlots > 0) {
-                          setAssignmentImages([...assignmentImages, ...validFiles.slice(0, remainingSlots)]);
-                        }
-                      } else {
-                        setAssignmentImages([...assignmentImages, ...validFiles]);
-                      }
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
+                <input
+                  id="teacher-photo-input"
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic"
+                  className="hidden"
+                  onChange={handlePhotoUpload}
+                />
+                <button
+                  type="button"
+                  disabled={isCompressingImages}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    document.getElementById("teacher-photo-input")?.click();
+                  }}
+                  className="w-full flex flex-col items-center justify-center border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-brand-400 bg-white dark:bg-zinc-900 rounded-xl p-4 cursor-pointer transition-colors"
+                >
+                  <span className="text-2xl mb-1">{isCompressingImages ? "⏳" : "📸"}</span>
+                  <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                    {isCompressingImages ? "Rasmlar siqilmoqda va tayyorlanmoqda..." : "Click to upload images"}
+                  </span>
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">JPG, PNG, WEBP, HEIC (avtomatik siqiladi)</span>
+                </button>
               </div>
             )}
 
             {assignmentImages.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 pt-1">
-                {assignmentImages.map((file, idx) => {
-                  const previewUrl = URL.createObjectURL(file);
-                  return (
-                    <div key={idx} className="relative group rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 aspect-square shadow-sm">
-                      <img
-                        src={previewUrl}
-                        alt={file.name}
-                        className="w-full h-full object-cover"
-                        onLoad={() => URL.revokeObjectURL(previewUrl)}
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-1.5">
-                        <span className="text-[10px] text-white font-medium truncate bg-black/60 px-1 py-0.5 rounded">
-                          #{idx + 1}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setAssignmentImages(assignmentImages.filter((_, i) => i !== idx))}
-                          className="self-end rounded-full bg-red-600 text-white p-1 hover:bg-red-700 transition"
-                          title="Remove image"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+                {assignmentImages.map((file, idx) => (
+                  <ImagePreviewItem
+                    key={`${file.name}-${idx}`}
+                    file={file}
+                    index={idx}
+                    onRemove={() => setAssignmentImages((prev) => prev.filter((_, i) => i !== idx))}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -843,7 +933,10 @@ export default function AssignmentsPage() {
                               type="file"
                               accept="image/*"
                               className="input text-xs"
-                              onChange={(e) => handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null })}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null });
+                              }}
                             />
                             <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">JPG, PNG, WEBP image (max 10MB)</p>
                           </div>
@@ -855,7 +948,10 @@ export default function AssignmentsPage() {
                               type="file"
                               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
                               className="input text-xs"
-                              onChange={(e) => handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null })}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null });
+                              }}
                             />
                             <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">PDF, DOC, DOCX, XLS, PPT (max 10MB)</p>
                           </div>
@@ -897,7 +993,10 @@ export default function AssignmentsPage() {
                               type="file"
                               accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
                               className="input text-xs"
-                              onChange={(e) => handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null })}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null });
+                              }}
                             />
                             <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Audio file: MP3, WAV, M4A, OGG, WEBM (max 10MB)</p>
                           </div>
@@ -961,7 +1060,10 @@ export default function AssignmentsPage() {
                               type="file"
                               accept="image/*"
                               className="input text-xs"
-                              onChange={(e) => handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null })}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null });
+                              }}
                             />
                             <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Vocabulary chart image (max 10MB)</p>
                           </div>
@@ -973,7 +1075,10 @@ export default function AssignmentsPage() {
                               type="file"
                               accept=".pdf,.doc,.docx,.txt"
                               className="input text-xs"
-                              onChange={(e) => handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null })}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null });
+                              }}
                             />
                             <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Vocabulary document (max 10MB)</p>
                           </div>
@@ -985,7 +1090,10 @@ export default function AssignmentsPage() {
                               type="file"
                               accept=".csv"
                               className="input text-xs"
-                              onChange={(e) => handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null })}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleUpdateTask(task.id, { file: e.target.files?.[0] ?? null });
+                              }}
                             />
                             <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">CSV format: <code>word,translation</code> per line</p>
                           </div>
