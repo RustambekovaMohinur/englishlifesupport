@@ -219,9 +219,9 @@ export default function TeacherLayout() {
           <MarqueeTicker />
         </div>
 
-        {/* Content Container: Left-aligned ultra-slim stealth scrollbar adjacent to sidebar */}
-        <main className="flex-1 scroll-container-left p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8">
-          <div className="w-full text-left [direction:ltr]">
+        {/* Content Container: Right-aligned ultra-slim stealth scrollbar */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-container-right p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8">
+          <div className="max-w-7xl mx-auto w-full">
             <Outlet />
           </div>
         </main>
