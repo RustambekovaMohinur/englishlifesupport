@@ -2,7 +2,8 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, Text, UniqueConstraint
+import sqlalchemy as sa
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,9 +19,9 @@ class SubmissionStatus(str, enum.Enum):
 class Submission(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "submissions"
     __table_args__ = (
-        # A student can only have ONE submission row per assignment; resubmission
-        # updates this row (and only while before the deadline / allowed).
-        UniqueConstraint("assignment_id", "student_id", name="uq_submission_assignment_student"),
+        # A student has one active submission row per assignment cycle;
+        # resubmission updates this row for the cycle.
+        UniqueConstraint("assignment_id", "student_id", "cycle_number", name="uq_submission_assignment_student_cycle"),
     )
 
     assignment_id: Mapped[uuid.UUID] = mapped_column(
@@ -44,6 +45,8 @@ class Submission(UUIDPKMixin, TimestampMixin, Base):
         nullable=False,
     )
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    cycle_number: Mapped[int] = mapped_column(BigInteger, default=1, server_default=sa.text("1"), nullable=False)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.text("false"), nullable=False)
 
     assignment: Mapped["Assignment"] = relationship(back_populates="submissions")
     student: Mapped["StudentProfile"] = relationship(back_populates="submissions")

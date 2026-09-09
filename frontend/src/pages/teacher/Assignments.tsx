@@ -51,21 +51,49 @@ export default function AssignmentsPage() {
     }).catch(() => {});
   }, []);
 
-  function applyGroupDefaultTime(group?: Group) {
+  function extractCohortTime(group?: Group | null): string {
+    if (!group) return "20:00";
+    // 1. Check group name (e.g. "Upper-Intermediate 13:30", "Pre-IELTS 15:00")
+    const nameMatch = group.name?.match(/\b([01]?[0-9]|2[0-3]):([0-5][0-9])\b/);
+    if (nameMatch) {
+      return `${nameMatch[1].padStart(2, "0")}:${nameMatch[2]}`;
+    }
+    // 2. Check group schedule (e.g. "Mon/Wed/Fri 16:00-17:30")
+    if (group.schedule) {
+      const schedMatch = group.schedule.match(/\b([01]?[0-9]|2[0-3]):([0-5][0-9])\b/);
+      if (schedMatch) {
+        return `${schedMatch[1].padStart(2, "0")}:${schedMatch[2]}`;
+      }
+    }
+    // 3. Check group default_homework_time
+    if (group.default_homework_time && /^\d{1,2}:\d{2}$/.test(group.default_homework_time)) {
+      const [h, m] = group.default_homework_time.split(":");
+      return `${h.padStart(2, "0")}:${m}`;
+    }
+    return "20:00";
+  }
+
+  function applyGroupDefaultTime(group?: Group, targetDate?: Date) {
     if (!group) return;
-    const timeStr = group.default_homework_time || "20:00";
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const timeStr = extractCohortTime(group);
     const [hours, mins] = timeStr.split(":");
-    tomorrow.setHours(parseInt(hours || "20", 10), parseInt(mins || "0", 10), 0, 0);
-    const formatted = format(tomorrow, "yyyy-MM-dd'T'HH:mm");
+    const dateObj = targetDate ? new Date(targetDate) : new Date();
+    if (!targetDate) {
+      dateObj.setDate(dateObj.getDate() + 1);
+    }
+    dateObj.setHours(parseInt(hours || "20", 10), parseInt(mins || "0", 10), 0, 0);
+    const formatted = format(dateObj, "yyyy-MM-dd'T'HH:mm");
     setDeadline(formatted);
   }
 
   function handleGroupChange(newGroupId: string) {
     setGroupId(newGroupId);
     const g = groups.find((grp) => grp.id === newGroupId);
-    if (g) applyGroupDefaultTime(g);
+    if (g) {
+      // If deadline already selected, preserve that date but apply the cohort's class time!
+      const existingDate = deadline ? new Date(deadline) : undefined;
+      applyGroupDefaultTime(g, existingDate && !isNaN(existingDate.getTime()) ? existingDate : undefined);
+    }
   }
 
   function handleOpenEdit(a: AssignmentOut) {
@@ -262,18 +290,28 @@ export default function AssignmentsPage() {
       formData.append("deadline", parsedDate.toISOString());
       formData.append("status", "published");
       if (prerequisiteId) formData.append("prerequisite_id", prerequisiteId);
-      if (primaryFile) formData.append("file", primaryFile);
-      if (vocabFile) formData.append("vocab_file", vocabFile);
+
+      // Ghost file protection: strictly filter non-empty File instances
+      if (primaryFile instanceof File && primaryFile.size > 0) {
+        formData.append("file", primaryFile);
+      }
+      if (vocabFile instanceof File && vocabFile.size > 0) {
+        formData.append("vocab_file", vocabFile);
+      }
       if (assignmentImages.length > 0) {
-        assignmentImages.forEach((img) => formData.append("images", img));
+        assignmentImages
+          .filter((img) => img instanceof File && img.size > 0)
+          .forEach((img) => formData.append("images", img));
       }
 
       if (editingAssignment) {
-        await updateAssignmentInPlace(editingAssignment.id, formData);
-        toast.success("Assignment updated in-place successfully!");
+        const updated = await updateAssignmentInPlace(editingAssignment.id, formData);
+        setAssignments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+        toast.success("Vazifa muvaffaqiyatli saqlandi va yangilandi! ⚡");
       } else {
-        await createAssignment(formData);
-        toast.success("Assignment created successfully!");
+        const created = await createAssignment(formData);
+        setAssignments((prev) => [created, ...prev]);
+        toast.success("Vazifa muvaffaqiyatli yaratildi! ⚡");
       }
       setEditingAssignment(null);
       setTitle("");
@@ -289,9 +327,18 @@ export default function AssignmentsPage() {
       refresh();
     } catch (err: any) {
       console.error("Save assignment error details:", err?.response?.data || err);
-      const detail = err?.response?.data?.detail;
-      const errorMsg = typeof detail === "string" ? detail : (Array.isArray(detail) ? detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ") : (err?.message || "Failed to save assignment"));
-      toast.error(errorMsg);
+      if (err?.code === "ECONNABORTED" || err?.message?.includes("timeout")) {
+        toast.error("Server javob berish vaqti tugadi (Timeout). Iltimos fayl hajmini tekshiring va qayta urinib ko'ring.");
+      } else {
+        const detail = err?.response?.data?.detail;
+        const errorMsg =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+            ? detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ")
+            : err?.message || "Vazifani saqlashda xatolik yuz berdi";
+        toast.error(errorMsg);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -374,7 +421,14 @@ export default function AssignmentsPage() {
             </div>
 
             <div>
-              <label className="label">Deadline *</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="label mb-0">Deadline *</label>
+                {groups.find((g) => g.id === groupId) && (
+                  <span className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 font-semibold">
+                    Cohort Time: {extractCohortTime(groups.find((g) => g.id === groupId))}
+                  </span>
+                )}
+              </div>
               <input
                 required
                 type="datetime-local"
@@ -382,6 +436,45 @@ export default function AssignmentsPage() {
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
               />
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">Quick:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const g = groups.find((grp) => grp.id === groupId);
+                    const d = new Date();
+                    d.setDate(d.getDate() + 1);
+                    applyGroupDefaultTime(g, d);
+                  }}
+                  className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 transition active:scale-95"
+                >
+                  Tomorrow
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const g = groups.find((grp) => grp.id === groupId);
+                    const d = new Date();
+                    d.setDate(d.getDate() + 2);
+                    applyGroupDefaultTime(g, d);
+                  }}
+                  className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 transition active:scale-95"
+                >
+                  +2 Days
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const g = groups.find((grp) => grp.id === groupId);
+                    const d = new Date();
+                    d.setDate(d.getDate() + 3);
+                    applyGroupDefaultTime(g, d);
+                  }}
+                  className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 transition active:scale-95"
+                >
+                  +3 Days
+                </button>
+              </div>
             </div>
 
             <div>

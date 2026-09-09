@@ -165,41 +165,67 @@ async def student_dashboard(
     average_score = round(sum(s.grade.score for s in graded) / len(graded), 2) if graded else None
 
     total_assignments = 0
+    completed_assignments = 0
+    now_dt = datetime.now(timezone.utc)
+    upcoming = []
+
     if profile.group_id:
-        total_assignments = (
+        group_obj = (await db.execute(select(Group).where(Group.id == profile.group_id))).scalar_one_or_none()
+        current_cycle = getattr(group_obj, "current_cycle", 1) or 1
+
+        # Current cycle assignments for the student's cohort
+        cycle_assignments = (
             await db.execute(
-                select(func.count())
-                .select_from(Assignment)
+                select(Assignment)
                 .where(
                     Assignment.group_id == profile.group_id,
                     Assignment.status == AssignmentStatus.PUBLISHED,
+                    Assignment.cycle_number == current_cycle,
                 )
             )
-        ).scalar_one()
+        ).scalars().all()
 
-    now_dt = datetime.now(timezone.utc)
-    upcoming = []
-    if profile.group_id:
-        assignments = (
-            (
+        # If no assignments tagged with current_cycle, fallback to all published
+        if not cycle_assignments:
+            cycle_assignments = (
                 await db.execute(
                     select(Assignment)
                     .where(
                         Assignment.group_id == profile.group_id,
                         Assignment.status == AssignmentStatus.PUBLISHED,
-                        Assignment.deadline >= now_dt,
                     )
-                    .order_by(Assignment.deadline)
-                    .limit(5)
                 )
+            ).scalars().all()
+
+        total_assignments = len(cycle_assignments)
+        cycle_assign_ids = {a.id for a in cycle_assignments}
+
+        # Active, non-archived submissions for the current cycle
+        active_cycle_subs = [
+            s for s in submissions
+            if s.assignment_id in cycle_assign_ids
+            and (getattr(s, "cycle_number", 1) or 1) == current_cycle
+            and not getattr(s, "is_archived", False)
+        ]
+        completed_assignments = len(active_cycle_subs)
+        submitted_cycle_ids = {s.assignment_id for s in active_cycle_subs}
+
+        upcoming_assignments = (
+            await db.execute(
+                select(Assignment)
+                .where(
+                    Assignment.group_id == profile.group_id,
+                    Assignment.status == AssignmentStatus.PUBLISHED,
+                    Assignment.deadline >= now_dt,
+                )
+                .order_by(Assignment.deadline)
+                .limit(5)
             )
-            .scalars()
-            .all()
-        )
-        submitted_ids = {s.assignment_id for s in submissions}
+        ).scalars().all()
+
         upcoming = [
-            UpcomingAssignmentItem(id=a.id, title=a.title, deadline=a.deadline, submitted=a.id in submitted_ids)
-            for a in assignments
+            UpcomingAssignmentItem(id=a.id, title=a.title, deadline=a.deadline, submitted=a.id in submitted_cycle_ids)
+            for a in upcoming_assignments
         ]
 
     recent_grades_query = (
@@ -236,7 +262,7 @@ async def student_dashboard(
         free_pass_available=not fp.is_used,
         average_score=average_score,
         total_assignments=total_assignments,
-        completed_assignments=len(submissions),
+        completed_assignments=completed_assignments,
         upcoming_deadlines=upcoming,
         recent_grades=recent_grades,
     )

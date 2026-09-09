@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -287,7 +287,12 @@ async def list_my_assignments(
             )
         )
     ).scalars().all()
-    sub_map = {s.assignment_id: s for s in subs}
+    # Active submissions strictly scoped to current assignment cycle (non-archived)
+    sub_map = {
+        s.assignment_id: s for s in subs
+        if (getattr(s, "cycle_number", 1) or 1) == (getattr(assign_map[s.assignment_id], "cycle_number", 1) or 1)
+        and not getattr(s, "is_archived", False)
+    }
 
     # Batch 2: Vocabulary assignments with words
     vocabs = (
@@ -523,6 +528,33 @@ async def edit_assignment_in_place(
     assign_status = AssignmentStatus.DRAFT if status_val.lower() == "draft" else (
         AssignmentStatus.ARCHIVED if status_val.lower() == "archived" else AssignmentStatus.PUBLISHED
     )
+
+    now = utcnow()
+    new_dl_utc = as_utc(deadline)
+    old_dl_utc = as_utc(assignment.deadline)
+
+    # Detect cycle rollover:
+    # If the new deadline is in the future compared to now AND
+    # (either the previous deadline was in the past OR the deadline changed forward to a new date)
+    if new_dl_utc > now and (old_dl_utc <= now or new_dl_utc > old_dl_utc):
+        old_cycle = getattr(assignment, "cycle_number", 1) or 1
+        new_cycle = old_cycle + 1
+        assignment.cycle_number = new_cycle
+
+        # Also update group's current_cycle if group is behind
+        grp = (await db.execute(select(Group).where(Group.id == assignment.group_id))).scalar_one_or_none()
+        if grp and (getattr(grp, "current_cycle", 1) or 1) < new_cycle:
+            grp.current_cycle = new_cycle
+
+        # Mark previous cycle submissions as archived, preserving 100% of their historical data
+        await db.execute(
+            update(Submission)
+            .where(
+                Submission.assignment_id == assignment.id,
+                Submission.cycle_number < new_cycle,
+            )
+            .values(is_archived=True)
+        )
 
     assignment.title = title.strip()
     assignment.description = description.strip()

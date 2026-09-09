@@ -182,11 +182,18 @@ async def submit_homework(
 
     now = utcnow()
 
+    curr_cycle = getattr(assignment, "cycle_number", 1) or 1
+
     existing = (
         await db.execute(
             select(Submission)
             .options(selectinload(Submission.grade))
-            .where(Submission.assignment_id == assignment_id, Submission.student_id == profile.id)
+            .where(
+                Submission.assignment_id == assignment_id,
+                Submission.student_id == profile.id,
+                Submission.cycle_number == curr_cycle,
+                Submission.is_archived == False,
+            )
         )
     ).scalar_one_or_none()
 
@@ -219,6 +226,8 @@ async def submit_homework(
         submission = Submission(
             assignment_id=assignment_id,
             student_id=profile.id,
+            cycle_number=curr_cycle,
+            is_archived=False,
             text_answer=text_answer,
             file_path=file_path,
             file_original_name=file_original_name,

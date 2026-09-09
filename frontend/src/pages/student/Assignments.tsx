@@ -252,7 +252,7 @@ export default function StudentAssignmentsPage() {
                         ) : a.submission_status ? (
                           a.submission_status === "graded" ? "View" : "Edit"
                         ) : (
-                          "Open"
+                          "Start 🚀"
                         )}
                       </button>
                     </div>
@@ -391,7 +391,7 @@ export default function StudentAssignmentsPage() {
                           </>
                         ) : (
                           <>
-                            <span>{a.submission_status ? (a.submission_status === "graded" ? "See Feedback" : "Update Submission") : "Start Task"}</span>
+                            <span>{a.submission_status ? (a.submission_status === "graded" ? "See Feedback" : "Update Submission") : "Start Task 🚀"}</span>
                             <ChevronRight className="w-3 h-3" />
                           </>
                         )}
