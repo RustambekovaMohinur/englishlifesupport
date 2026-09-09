@@ -531,6 +531,21 @@ export default function StudentAssignmentSubmitPage() {
           </div>
         )}
 
+        {/* Late Submission Notice Banner */}
+        {isPastDeadline && !isGraded && (
+          <div className="rounded-2xl border border-amber-300 dark:border-amber-700/80 bg-amber-500/10 dark:bg-amber-950/40 p-4 sm:p-5 flex items-start gap-3 shadow-xs">
+            <span className="text-xl shrink-0">⚠️</span>
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                Muddat o‘tgan (Late Submission)
+              </h4>
+              <p className="text-xs sm:text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
+                Muddat o‘tgan, lekin vazifani topshirishingiz mumkin. O‘qituvchi buni kechikkan deb ko‘radi.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Section A: Assignment Instructions & Attached Teacher Resources */}
         <section className="card bg-white dark:bg-[#161B22] border border-zinc-200/80 dark:border-zinc-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-xs">
           <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
@@ -1217,12 +1232,21 @@ export default function StudentAssignmentSubmitPage() {
                 type="button"
                 onClick={handleSubmitHomework}
                 disabled={isSubmitting || !canSubmit}
-                className="w-full sm:w-80 py-3.5 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 disabled:opacity-40 disabled:pointer-events-none transition-all min-h-[48px]"
+                className={`w-full sm:w-80 py-3.5 px-6 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:pointer-events-none transition-all min-h-[48px] active:scale-95 ${
+                  isPastDeadline
+                    ? "bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30 ring-2 ring-amber-500/50"
+                    : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30"
+                }`}
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Yuborilmoqda...</span>
+                  </>
+                ) : isPastDeadline ? (
+                  <>
+                    <span>Submit Late</span>
+                    <span className="text-base">⚠️</span>
                   </>
                 ) : (
                   <>

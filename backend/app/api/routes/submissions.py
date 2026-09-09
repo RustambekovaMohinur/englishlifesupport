@@ -181,11 +181,6 @@ async def submit_homework(
 
 
     now = utcnow()
-    if getattr(assignment, "is_hard_deadline", False) and as_utc(assignment.deadline) < now:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Submission rejected: The hard deadline for this assignment has expired.",
-        )
 
     existing = (
         await db.execute(
@@ -199,8 +194,6 @@ async def submit_homework(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="This submission has already been graded and can no longer be edited"
         )
-    if existing is not None and as_utc(assignment.deadline) < now:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="The deadline has passed; resubmission is not allowed")
 
     file_path = existing.file_path if existing else None
     file_original_name = existing.file_original_name if existing else None

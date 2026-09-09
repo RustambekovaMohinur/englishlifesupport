@@ -376,14 +376,9 @@ async def list_my_assignments(
                     lock_reason = None
                 else:
                     prereq = assign_map.get(prereq_id)
-                    if prereq and as_utc(prereq.deadline) < now:
-                        # Overdue -> unlocks next task automatically
-                        is_locked = False
-                        lock_reason = None
-                    else:
-                        is_locked = True
-                        prereq_title = prereq.title if prereq else "previous homework"
-                        lock_reason = f"Prerequisite '{prereq_title}' must be completed first."
+                    is_locked = True
+                    prereq_title = prereq.title if prereq else "oldingi vazifa"
+                    lock_reason = f"Oldingi vazifani topshiring: '{prereq_title}'"
 
         is_past_dl = as_utc(assignment.deadline) < now
         is_overdue = is_past_dl and (submission is None)

@@ -353,16 +353,13 @@ async def is_assignment_locked_for_student(
         # Completed -> next unlocks!
         return False, None
 
-    # Prerequisite not submitted: check if prerequisite is overdue
+    # Prerequisite not submitted: strictly lock subsequent tasks until submitted!
     prereq = (
         await db.execute(select(Assignment).where(Assignment.id == prereq_id))
     ).scalar_one_or_none()
     if prereq:
-        if as_utc(prereq.deadline) < now:
-            # Overdue -> previous homework is no longer actionable, so sequence advances!
-            return False, None
         prereq_title = prereq.title
-        return True, f"Prerequisite '{prereq_title}' must be completed first."
+        return True, f"Oldingi vazifani topshiring: '{prereq_title}'"
 
     return False, None
 

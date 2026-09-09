@@ -236,18 +236,35 @@ export default function StudentAssignmentsPage() {
                         <span className="text-[10px] font-bold">{a.comment_count ?? 0}</span>
                       </button>
                       <button
-                        className={`px-3 py-1 text-xs font-semibold rounded-full active:scale-95 transition-transform ${
+                        className={`px-3 py-1 text-xs font-semibold rounded-full active:scale-95 transition-transform flex items-center gap-1 ${
                           isTaskLocked
-                            ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+                            ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 cursor-not-allowed border border-zinc-300 dark:border-zinc-700"
                             : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs"
                         }`}
                         disabled={isTaskLocked}
                         onClick={() => navigate(`/student/assignments/${a.id}/submit`)}
                       >
-                        {a.submission_status ? (a.submission_status === "graded" ? "View" : "Edit") : isTaskLocked ? "Locked" : "Open"}
+                        {isTaskLocked ? (
+                          <>
+                            <Lock className="w-3 h-3" />
+                            <span>Qulflangan</span>
+                          </>
+                        ) : a.submission_status ? (
+                          a.submission_status === "graded" ? "View" : "Edit"
+                        ) : (
+                          "Open"
+                        )}
                       </button>
                     </div>
                   </div>
+
+                  {/* Mobile Lock Warning Banner */}
+                  {isTaskLocked && (
+                    <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30 p-2 rounded-xl flex items-start gap-1.5 border border-amber-500/20">
+                      <span className="shrink-0">⚠️</span>
+                      <span>{a.lock_reason || "Ushbu vazifani ochish uchun avval oldingi vazifani topshiring."}</span>
+                    </div>
+                  )}
 
                   {/* Mobile Graded & Feedback snippet */}
                   {a.submission_status === "graded" && (
@@ -361,17 +378,36 @@ export default function StudentAssignmentsPage() {
                       <button
                         className={
                           isTaskLocked
-                            ? "btn-secondary text-xs px-3.5 py-1.5 opacity-60 cursor-not-allowed"
+                            ? "btn-secondary text-xs px-3.5 py-1.5 opacity-60 cursor-not-allowed flex items-center gap-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400"
                             : "btn-primary text-xs px-3.5 py-1.5 shadow-xs flex items-center gap-1"
                         }
                         disabled={isTaskLocked}
                         onClick={() => navigate(`/student/assignments/${a.id}/submit`)}
                       >
-                        <span>{a.submission_status ? (a.submission_status === "graded" ? "See Feedback" : "Update Submission") : isTaskLocked ? "Locked" : "Start Task"}</span>
-                        {!isTaskLocked && <ChevronRight className="w-3 h-3" />}
+                        {isTaskLocked ? (
+                          <>
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Qulflangan</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>{a.submission_status ? (a.submission_status === "graded" ? "See Feedback" : "Update Submission") : "Start Task"}</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
+
+                  {/* Desktop Lock Warning Helper */}
+                  {isTaskLocked && (
+                    <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800 text-xs text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30 p-2.5 rounded-xl flex items-center gap-2 border border-amber-500/20">
+                      <span className="text-sm shrink-0">⚠️</span>
+                      <span className="font-medium">
+                        Ushbu vazifani ochish uchun avval {a.lock_reason ? `'${a.lock_reason.replace("Oldingi vazifani topshiring: ", "")}'` : "oldingi"} vazifasini topshiring.
+                      </span>
+                    </div>
+                  )}
 
                   {/* Desktop Pedagogical Feedback Banner */}
                   {a.submission_status === "graded" && (
