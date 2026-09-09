@@ -1,6 +1,20 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
+import {
+  BarChart3,
+  Trophy,
+  Clock,
+  Sparkles,
+  Lock,
+  Calendar,
+  Users,
+  UserCheck,
+  GraduationCap,
+  BookOpen,
+  CheckCircle2,
+  Star,
+} from "lucide-react";
 import { StatCard, StatusBadge, LoadingRows, EmptyState, Modal, TelegramLink } from "@/components/ui";
 import {
   getTeacherDashboard,
@@ -144,7 +158,7 @@ export default function TeacherDashboardPage() {
         stars_awarded: Number(sotwStars),
         reason: sotwReason,
       });
-      toast.success("Student of the Week confirmed and rewarded! 👑⭐");
+      toast.success("Student of the Week confirmed and rewarded!");
       setSotwModalOpen(false);
       setSotwStudentId("");
       getTeacherGroupReport(selectedGroupId).then(setGroupReport);
@@ -157,13 +171,13 @@ export default function TeacherDashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Teacher Hero Banner with Ambient Gradient (Matching Reference Design) */}
-      <div className="relative overflow-hidden rounded-2xl bg-slate-950 border border-indigo-500/20 shadow-xl p-5 sm:p-6 text-white">
-        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none" />
-        <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />
+      {/* Teacher Hero Banner with Ambient Gradient (Sleek Frosted Titanium) */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-[#151D2F] to-slate-900 text-white border border-slate-800/80 shadow-xl p-7">
+        <div className="absolute -right-16 -top-16 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 h-72 w-72 rounded-full bg-sky-500/15 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider bg-white/10 backdrop-blur-md px-2.5 py-0.5 rounded-full text-indigo-200 border border-white/10">
                 Examiner Desk
@@ -172,16 +186,18 @@ export default function TeacherDashboardPage() {
                 Active Cohort
               </span>
             </div>
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-white">
-              Good morning, Mr. Asadbek! 👋
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-white flex items-center gap-2">
+              <span>Good morning, Mr. Asadbek!</span>
+              <Sparkles className="w-5 h-5 text-amber-400 inline shrink-0" />
             </h1>
             <p className="text-xs sm:text-sm text-slate-300">
               Here&apos;s what&apos;s happening with your classes and student submissions today.
             </p>
           </div>
 
-          <div className="self-start sm:self-auto bg-white/[0.08] backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 text-xs font-mono font-semibold text-indigo-200 shadow-inner tabular-nums">
-            📅 {format(new Date(), "EEE, d MMM yyyy")}
+          <div className="self-start sm:self-auto flex items-center gap-2 bg-white/[0.08] backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 text-xs font-mono font-semibold text-indigo-200 shadow-inner tabular-nums">
+            <Calendar className="w-3.5 h-3.5 text-indigo-300" />
+            <span>{format(new Date(), "EEE, d MMM yyyy")}</span>
           </div>
         </div>
       </div>
@@ -194,13 +210,49 @@ export default function TeacherDashboardPage() {
         <>
           {/* Key LMS Metrics (Responsive 3-Tier Grid: 2-col on mobile, 4-col on tablet, 7-col on desktop) */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
-            <StatCard label="Total Students" value={data.total_students} />
-            <StatCard label="Active Students" value={data.active_students} />
-            <StatCard label="Active Groups" value={data.total_groups} />
-            <StatCard label="Assignments" value={data.total_assignments} />
-            <StatCard label="Pending Review" value={data.pending_submissions} />
-            <StatCard label="Completion" value={`${data.completion_rate ?? 0}%`} />
-            <StatCard label="Locked Students" value={data.locked_students ?? 0} hint="Prerequisite lock" />
+            <StatCard
+              label="Total Students"
+              value={data.total_students}
+              icon={<Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />}
+              iconBg="bg-indigo-50 dark:bg-indigo-950/40"
+            />
+            <StatCard
+              label="Active Students"
+              value={data.active_students}
+              icon={<UserCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
+              iconBg="bg-emerald-50 dark:bg-emerald-950/40"
+            />
+            <StatCard
+              label="Active Groups"
+              value={data.total_groups}
+              icon={<GraduationCap className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
+              iconBg="bg-blue-50 dark:bg-blue-950/40"
+            />
+            <StatCard
+              label="Assignments"
+              value={data.total_assignments}
+              icon={<BookOpen className="w-4 h-4 text-violet-600 dark:text-violet-400" />}
+              iconBg="bg-violet-50 dark:bg-violet-950/40"
+            />
+            <StatCard
+              label="Pending Review"
+              value={data.pending_submissions}
+              icon={<Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />}
+              iconBg="bg-amber-50 dark:bg-amber-950/40"
+            />
+            <StatCard
+              label="Completion"
+              value={`${data.completion_rate ?? 0}%`}
+              icon={<CheckCircle2 className="w-4 h-4 text-teal-600 dark:text-teal-400" />}
+              iconBg="bg-teal-50 dark:bg-teal-950/40"
+            />
+            <StatCard
+              label="Locked Students"
+              value={data.locked_students ?? 0}
+              hint="Prerequisite lock"
+              icon={<Lock className="w-4 h-4 text-rose-600 dark:text-rose-400" />}
+              iconBg="bg-rose-50 dark:bg-rose-950/40"
+            />
           </div>
 
           {/* Weekly Group Report & Teacher Controls */}
@@ -208,7 +260,8 @@ export default function TeacherDashboardPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-100 dark:border-zinc-800 pb-4">
               <div>
                 <h2 className="text-base font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                  <span>📊 Weekly Group Report</span>
+                  <BarChart3 className="w-5 h-5 text-indigo-500" />
+                  <span>Weekly Group Report</span>
                   {groupReport && <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">({groupReport.week_key})</span>}
                 </h2>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">Real-time performance, late work, locks, and Student of the Week</p>
@@ -267,7 +320,8 @@ export default function TeacherDashboardPage() {
                 {groupReport.locked_students.length > 0 && (
                   <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2">
                     <h3 className="text-xs font-bold uppercase text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                      <span>🔒 Locked Students ({groupReport.locked_students.length})</span>
+                      <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                      <span>Locked Students ({groupReport.locked_students.length})</span>
                     </h3>
                     <p className="text-xs text-amber-700 dark:text-amber-400">
                       These students have not completed prerequisite tasks and their next assignment is locked.
@@ -293,7 +347,8 @@ export default function TeacherDashboardPage() {
                 <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-bold text-purple-900 dark:text-purple-300 flex items-center gap-2">
-                      <span>👑 Student of the Week</span>
+                      <Trophy className="w-5 h-5 text-amber-500" />
+                      <span>Student of the Week</span>
                       <span className="text-xs bg-purple-200/70 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 px-2 py-0.5 rounded-full">
                         1 per group/week
                       </span>
@@ -310,8 +365,10 @@ export default function TeacherDashboardPage() {
                           Reason: {groupReport.student_of_the_week.reason || "High weekly performance"}
                         </p>
                       </div>
-                      <span className="font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded border border-amber-200 dark:border-amber-800 text-xs font-mono">
-                        +{groupReport.student_of_the_week.stars_awarded} ⭐ Awarded
+                      <span className="font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded border border-amber-200 dark:border-amber-800 text-xs font-mono flex items-center gap-1">
+                        <span>+{groupReport.student_of_the_week.stars_awarded}</span>
+                        <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                        <span>Awarded</span>
                       </span>
                     </div>
                   ) : (
@@ -319,7 +376,7 @@ export default function TeacherDashboardPage() {
                       <div>
                         <p className="font-semibold text-sm text-zinc-900 dark:text-white">Award this week's top performer</p>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                          Recognize a standout student in this cohort with between 50 ⭐ and 100 ⭐.
+                          Recognize a standout student in this cohort with between 50 and 100 bonus stars.
                         </p>
                       </div>
                       <button
@@ -327,14 +384,14 @@ export default function TeacherDashboardPage() {
                         onClick={() => setSotwModalOpen(true)}
                         className="btn-sm bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg px-4 py-2 shrink-0 flex items-center gap-1.5 shadow-xs transition"
                       >
-                        <span>👑</span>
-                        <span>Award Student of the Week ⭐</span>
+                        <Trophy className="w-4 h-4 text-amber-300" />
+                        <span>Award Student of the Week</span>
                       </button>
                     </div>
                   )}
 
                   {/* On-Demand Student of the Week Action Modal */}
-                  <Modal open={sotwModalOpen} onClose={() => setSotwModalOpen(false)} title="Award Student of the Week 👑">
+                  <Modal open={sotwModalOpen} onClose={() => setSotwModalOpen(false)} title="Award Student of the Week">
                     <form onSubmit={handleConfirmSotw} className="space-y-4">
                       <p className="text-xs text-zinc-600 dark:text-zinc-400">
                         Choose a student from <strong className="text-zinc-900 dark:text-white">{groupReport.group_name}</strong> to award recognition stars:
@@ -364,9 +421,9 @@ export default function TeacherDashboardPage() {
                           onChange={(e) => setSotwStars(Number(e.target.value))}
                           className="input text-sm"
                         >
-                          <option value={50}>+50 ⭐ (Standard Excellence)</option>
-                          <option value={75}>+75 ⭐ (Exceptional Effort)</option>
-                          <option value={100}>+100 ⭐ (Cohort MVP / Top Exam)</option>
+                          <option value={50}>+50 Stars (Standard Excellence)</option>
+                          <option value={75}>+75 Stars (Exceptional Effort)</option>
+                          <option value={100}>+100 Stars (Cohort MVP / Top Exam)</option>
                         </select>
                       </div>
 
@@ -392,9 +449,16 @@ export default function TeacherDashboardPage() {
                         <button
                           type="submit"
                           disabled={sotwSubmitting || !sotwStudentId}
-                          className="btn-sm bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg px-4 py-2 text-xs"
+                          className="btn-sm bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg px-4 py-2 text-xs flex items-center gap-1.5"
                         >
-                          {sotwSubmitting ? "Awarding..." : "Confirm Award 👑"}
+                          {sotwSubmitting ? (
+                            "Awarding..."
+                          ) : (
+                            <>
+                              <Trophy className="w-3.5 h-3.5 text-amber-300" />
+                              <span>Confirm Award</span>
+                            </>
+                          )}
                         </button>
                       </div>
                     </form>
@@ -409,7 +473,8 @@ export default function TeacherDashboardPage() {
             <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
               <div>
                 <h2 className="text-base font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                  <span>⏳ Pending Student Approvals</span>
+                  <Clock className="w-5 h-5 text-sky-500" />
+                  <span>Pending Student Approvals</span>
                   {pendingTotal > 0 && (
                     <span className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-xs font-semibold px-2 py-0.5 rounded-full font-mono">
                       {pendingTotal} pending

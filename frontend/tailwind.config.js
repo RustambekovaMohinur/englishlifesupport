@@ -25,6 +25,15 @@ export default {
         xs: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
         card: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
       },
+      keyframes: {
+        marquee: {
+          "0%": { transform: "translateX(0%)" },
+          "100%": { transform: "translateX(-33.333333%)" },
+        },
+      },
+      animation: {
+        marquee: "marquee 25s linear infinite",
+      },
     },
   },
   plugins: [],

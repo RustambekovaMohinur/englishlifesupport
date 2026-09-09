@@ -10,12 +10,31 @@ export function Logo({ className = "h-9 w-9" }: { className?: string }) {
   );
 }
 
-export function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+export function StatCard({
+  label,
+  value,
+  hint,
+  icon,
+  iconBg = "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400",
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  icon?: ReactNode;
+  iconBg?: string;
+}) {
   return (
-    <div className="card">
-      <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{label}</p>
-      <p className="mt-1 text-3xl font-bold font-mono text-zinc-900 dark:text-white tabular-nums">{value}</p>
-      {hint && <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{hint}</p>}
+    <div className="card hover:-translate-y-1 hover:shadow-lg transition-all duration-200 group relative">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 truncate">{label}</p>
+        {icon && (
+          <div className={`p-1.5 rounded-lg shrink-0 ${iconBg}`}>
+            {icon}
+          </div>
+        )}
+      </div>
+      <p className="mt-2 font-bold text-2xl tracking-tight text-slate-900 dark:text-white font-mono tabular-nums">{value}</p>
+      {hint && <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500 truncate">{hint}</p>}
     </div>
   );
 }
