@@ -64,7 +64,7 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
       });
       streamRef.current = stream;
 
-      // Select supported audio mimeType
+      // Select supported audio mimeType with Opus compression
       const mimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
       let selectedMimeType = '';
       for (const mime of mimeTypes) {
@@ -74,7 +74,15 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
         }
       }
 
-      const mediaRecorder = new MediaRecorder(stream, selectedMimeType ? { mimeType: selectedMimeType } : undefined);
+      // 32 kbps produces pristine voice quality at only ~240 KB per minute instead of 4 MB!
+      const recorderOptions: MediaRecorderOptions = {
+        audioBitsPerSecond: 32000,
+      };
+      if (selectedMimeType) {
+        recorderOptions.mimeType = selectedMimeType;
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, recorderOptions);
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event: BlobEvent) => {
@@ -85,6 +93,7 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
 
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: selectedMimeType || 'audio/webm' });
+        console.log(`[AudioRecorder] Recorded voice note size: ${(audioBlob.size / 1024).toFixed(1)} KB`);
         const url = URL.createObjectURL(audioBlob);
         setAudioUrl(url);
         onAudioRecorded(audioBlob);

@@ -310,6 +310,38 @@ export default function StudentAssignmentSubmitPage() {
       return;
     }
 
+    // Pre-flight file size and payload validation
+    const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB limit
+    const VERCEL_PAYLOAD_LIMIT = 4.5 * 1024 * 1024; // 4.5 MB serverless limit
+    let totalSizeBytes = 0;
+
+    // Determine single file payload: prioritize voiceFile if present, else docFile
+    const effectiveFile = voiceFile || docFile || null;
+
+    if (effectiveFile) {
+      if (effectiveFile.size > MAX_FILE_SIZE_BYTES) {
+        toast.error(`"${effectiveFile.name}" fayl hajmi juda katta (maksimal 10 MB). Iltimos, ixchamroq audio yoki hujjat yuklang.`);
+        return;
+      }
+      totalSizeBytes += effectiveFile.size;
+    }
+
+    for (const img of submissionImages) {
+      if (img.size > MAX_FILE_SIZE_BYTES) {
+        toast.error(`"${img.name}" rasm hajmi juda katta (maksimal 10 MB).`);
+        return;
+      }
+      totalSizeBytes += img.size;
+    }
+
+    if (totalSizeBytes > VERCEL_PAYLOAD_LIMIT) {
+      toast.error(
+        `Yuklanayotgan fayllarning umumiy hajmi (${(totalSizeBytes / (1024 * 1024)).toFixed(1)} MB) ruxsat etilgan 4.5 MB server limitidan oshmoqda. Iltimos, rasmlar yoki audio hajmini kamaytiring.`,
+        { duration: 6000 }
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       // Cleanly bundle externalLink into text_answer if present
@@ -318,9 +350,6 @@ export default function StudentAssignmentSubmitPage() {
         const linkBlock = `🔗 Attached Link: ${externalLink.trim()}`;
         combinedText = combinedText ? `${linkBlock}\n\n${combinedText}` : linkBlock;
       }
-
-      // Determine single file payload: prioritize voiceFile if present, else docFile
-      const effectiveFile = voiceFile || docFile || null;
 
       await submitHomework(assignment.id, combinedText, effectiveFile, submissionImages);
       toast.success("Homework submitted successfully! 🚀", { id: "submit-success" });
@@ -336,16 +365,24 @@ export default function StudentAssignmentSubmitPage() {
       } else if (Array.isArray(detail)) {
         errorMsg = detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
       } else if (status === 413) {
-        errorMsg = "Yuklangan fayllar hajmi 10 MB limitdan oshib ketdi. Iltimos, faylni kichikroq qiling.";
+        errorMsg = "Yuklangan fayllar hajmi ruxsat etilgan limitdan oshdi (maksimal 4.5 MB). Iltimos, ixchamroq fayl yuklang.";
       } else if (status === 403) {
         errorMsg = "Ushbu topshiriqqa javob yuborish huquqi yo'q yoki muddat tugagan.";
       } else if (status === 409) {
         errorMsg = "Ushbu topshiriq allaqachon baholangan, uni qayta yuborib bo'lmaydi.";
+      } else if (status === 500 || status === 502) {
+        errorMsg = "Server faylni qabul qilishda xatolikka uchradi. Iltimos, qayta urinib ko'ring.";
+      } else if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
+        errorMsg = "Tarmoq sekinligi tufayli vaqt tugadi. Internet yaxshiroq joyda qayta urining.";
       } else if (!err.response) {
-        errorMsg = "Internet aloqasini tekshiring. Serverga ulanib bo'lmadi.";
+        if (typeof window !== "undefined" && !window.navigator.onLine) {
+          errorMsg = "Internet aloqasini tekshiring. Tarmoqqa ulanish mavjud emas.";
+        } else {
+          errorMsg = "Server qabul qila olmadi. Iltimos, fayl hajmini tekshiring (maksimal 4.5 MB) yoki qayta urinib ko'ring.";
+        }
       }
 
-      toast.error(errorMsg, { id: "submit-homework-error" });
+      toast.error(errorMsg, { id: "submit-homework-error", duration: 5000 });
     } finally {
       setIsSubmitting(false);
     }
@@ -970,10 +1007,13 @@ export default function StudentAssignmentSubmitPage() {
                           const file = e.target.files?.[0];
                           if (file) {
                             if (file.size > 10 * 1024 * 1024) {
-                              toast.error("Audio file exceeds 10MB limit");
+                              toast.error("Fayl hajmi juda katta (maksimal 10 MB). Iltimos, ixchamroq audio yuklang.");
                             } else {
+                              if (file.size > 4.5 * 1024 * 1024) {
+                                toast("Eslatma: Fayl hajmi 4.5 MB dan katta. Serverga yuborishda muammo bo'lmasligi uchun ixchamroq audio tavsiya etiladi.", { icon: "⚠️", duration: 5000 });
+                              }
                               setVoiceFile(file);
-                              toast.success(`Attached audio file: ${file.name}`);
+                              toast.success(`Biriktirilgan audio fayl: ${file.name}`);
                             }
                           }
                           e.target.value = "";

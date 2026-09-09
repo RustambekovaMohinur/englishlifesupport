@@ -126,7 +126,10 @@ export const submitHomework = (assignment_id: string, text_answer: string, file:
   if (images && images.length > 0) {
     images.forEach((img) => form.append("images", img));
   }
-  return api.post<SubmissionOut>("/submissions", form).then((r) => r.data);
+  return api.post<SubmissionOut>("/submissions", form, {
+    timeout: 120000, // 2 full minutes for slow mobile connections
+    headers: { "Content-Type": "multipart/form-data" },
+  }).then((r) => r.data);
 };
 
 export const gradeSubmission = (id: string, body: { score: number; feedback?: string; stars: number }) =>

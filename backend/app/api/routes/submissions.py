@@ -1,5 +1,8 @@
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
@@ -208,7 +211,16 @@ async def submit_homework(
     file_size = existing.file_size_bytes if existing else None
 
     if file is not None:
-        file_path, file_original_name, file_content_type, file_size = await save_submission_file(file, profile.id, db=db)
+        try:
+            file_path, file_original_name, file_content_type, file_size = await save_submission_file(file, profile.id, db=db)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception("Failed to save submission file: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Fayl yoki audio faylni saqlashda xatolik yuz berdi. Iltimos, qayta yuklang.",
+            ) from e
 
     is_late = as_utc(assignment.deadline) < now
     submission_status = SubmissionStatus.LATE if is_late else SubmissionStatus.SUBMITTED
@@ -244,7 +256,16 @@ async def submit_homework(
         from app.utils.files import save_submission_image
 
         for idx, img_file in enumerate(valid_images):
-            img_path, img_orig_name, img_content_type, img_size = await save_submission_image(img_file, submission.id, db=db)
+            try:
+                img_path, img_orig_name, img_content_type, img_size = await save_submission_image(img_file, submission.id, db=db)
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.exception("Failed to save submission image: %s", e)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Rasmni saqlashda xatolik yuz berdi. Iltimos qayta urinib ko'ring.",
+                ) from e
             sub_img = SubmissionImage(
                 submission_id=submission.id,
                 file_path=img_path,
