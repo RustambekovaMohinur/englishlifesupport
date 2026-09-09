@@ -53,6 +53,7 @@ class GroupOut(BaseModel):
 
 class AssignmentItemOverview(BaseModel):
     assignment_id: uuid.UUID
+    submission_id: uuid.UUID | None = None
     title: str
     deadline: datetime
     status: str
@@ -62,6 +63,7 @@ class AssignmentItemOverview(BaseModel):
     stars: int | None = None
     has_submission: bool = False
     is_overdue: bool = False
+    is_locked: bool = False
     submitted_at: datetime | None = None
 
 
@@ -92,6 +94,7 @@ class GroupAssignmentHeader(BaseModel):
     deadline: datetime
     status: str
     cycle_number: int = 1
+    prerequisite_id: uuid.UUID | None = None
 
 
 class GroupDetailOut(BaseModel):

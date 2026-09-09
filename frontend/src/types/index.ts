@@ -73,8 +73,10 @@ export interface AssignmentItemOverview {
   score: number | null;
   stars: number | null;
   has_submission: boolean;
+  is_overdue?: boolean;
+  is_locked?: boolean;
   submitted_at: string | null;
-  submission_id?: string | number | null;
+  submission_id?: string | null;
 }
 
 export interface GroupStudentDetail {
@@ -103,6 +105,7 @@ export interface GroupAssignmentHeader {
   deadline: string;
   status: string;
   cycle_number?: number;
+  prerequisite_id?: string | null;
 }
 
 export interface GroupDetailOut {

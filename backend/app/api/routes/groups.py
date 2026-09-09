@@ -178,6 +178,7 @@ async def get_group_detail(
     student_ids = [s.id for s, _ in student_rows]
 
     submissions_map: dict[tuple[uuid.UUID, uuid.UUID], Submission] = {}
+    overrides_set: set[tuple[uuid.UUID, uuid.UUID]] = set()
     if assignment_ids and student_ids:
         subs_res = await db.execute(
             select(Submission)
@@ -186,6 +187,17 @@ async def get_group_detail(
         )
         for sub in subs_res.scalars().all():
             submissions_map[(sub.assignment_id, sub.student_id)] = sub
+
+        from app.models.gamification import TaskLockOverride
+        ov_res = await db.execute(
+            select(TaskLockOverride.assignment_id, TaskLockOverride.student_id)
+            .where(
+                TaskLockOverride.assignment_id.in_(assignment_ids),
+                TaskLockOverride.student_id.in_(student_ids),
+                TaskLockOverride.is_unlocked == True,
+            )
+        )
+        overrides_set = {(r[0], r[1]) for r in ov_res.all()}
 
     current_cycle = getattr(group, "current_cycle", 1) or 1
     cycle_assignments = [a for a in assignments if (getattr(a, "cycle_number", 1) or 1) == current_cycle]
@@ -227,18 +239,30 @@ async def get_group_detail(
                 if is_past_dl:
                     overdue_count += 1
 
+            # Determine lock status
+            is_locked = False
+            if a.prerequisite_id and not has_sub:
+                if (a.id, st_profile.id) not in overrides_set:
+                    prereq_sub = submissions_map.get((a.prerequisite_id, st_profile.id))
+                    if not prereq_sub:
+                        is_locked = True
+
+            computed_status = "locked" if is_locked else ("overdue" if (is_past_dl and not has_sub) else (sub.status.value if sub else "not_submitted"))
+
             student_assignments.append(
                 AssignmentItemOverview(
                     assignment_id=a.id,
+                    submission_id=sub.id if sub else None,
                     title=a.title,
                     deadline=a.deadline,
-                    status="overdue" if (is_past_dl and not has_sub) else (sub.status.value if sub else "not_submitted"),
+                    status=computed_status,
                     completion_percentage=comp_pct,
                     cycle_number=a_cycle,
                     score=score,
                     stars=stars,
                     has_submission=has_sub,
                     is_overdue=is_past_dl and not has_sub,
+                    is_locked=is_locked,
                     submitted_at=sub_at,
                 )
             )
@@ -280,6 +304,7 @@ async def get_group_detail(
             deadline=a.deadline,
             status=a.status.value if hasattr(a.status, "value") else str(a.status),
             cycle_number=getattr(a, "cycle_number", 1) or 1,
+            prerequisite_id=a.prerequisite_id,
         )
         for a in assignments
     ]
