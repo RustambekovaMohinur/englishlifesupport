@@ -47,6 +47,7 @@ import {
   getSubmission,
 } from "@/services/lmsService";
 import { AssignmentForStudent, SubmissionOut } from "@/types";
+import { compressImage, compressImages } from "@/utils/imageCompressor";
 import toast from "react-hot-toast";
 
 type SubmissionTab = "files" | "voice" | "link" | "text";
@@ -203,7 +204,7 @@ export default function StudentAssignmentSubmitPage() {
 
     for (const f of incomingFiles) {
       if (f.size > 10 * 1024 * 1024) {
-        toast.error(`"${f.name}" exceeds 10MB limit`);
+        toast.error(`"${f.name}" fayl hajmi juda katta (maksimal 10 MB). Iltimos, ixchamroq fayl yuklang.`);
         continue;
       }
       const isImg = f.type.startsWith("image/") || allowedImgExts.test(f.name);
@@ -211,7 +212,7 @@ export default function StudentAssignmentSubmitPage() {
       const isDoc = allowedDocExts.test(f.name);
 
       if (!isImg && !isDoc && !isAudio) {
-        toast.error(`"${f.name}" unsupported format. Please upload PDF, DOCX, PNG, JPG, or MP3.`);
+        toast.error(`"${f.name}" formati qo'llab-quvvatlanmaydi. Iltimos, PDF, DOCX, PNG, JPG yoki MP3 yuklang.`);
         continue;
       }
 
@@ -226,28 +227,40 @@ export default function StudentAssignmentSubmitPage() {
 
     if (newAudio) {
       setVoiceFile(newAudio);
-      toast.success(`Attached audio recording: ${newAudio.name}`);
+      toast.success(`Biriktirilgan audio: ${newAudio.name}`);
     }
 
     if (newDoc) {
       setDocFile(newDoc);
-      toast.success(`Attached document: ${newDoc.name}`);
+      toast.success(`Biriktirilgan hujjat: ${newDoc.name}`);
     }
 
     if (newImages.length > 0) {
-      setSubmissionImages((prev) => {
-        if (prev.length >= 10) {
-          toast.error("Maximum 10 images allowed per submission");
-          return prev;
-        }
-        const remainingSlots = 10 - prev.length;
-        const toAdd = newImages.slice(0, remainingSlots);
-        if (newImages.length > remainingSlots) {
-          toast.error(`Only ${remainingSlots} more image(s) could be added (max 10)`);
-        } else {
-          toast.success(`Added ${toAdd.length} photo(s)`);
-        }
-        return [...prev, ...toAdd];
+      // Automatic client-side canvas compression down to 1600px WebP
+      compressImages(newImages).then(({ compressedFiles, originalTotalBytes, compressedTotalBytes, savedPercentage }) => {
+        setSubmissionImages((prev) => {
+          if (prev.length >= 10) {
+            toast.error("Maximum 10 images allowed per submission");
+            return prev;
+          }
+          const remainingSlots = 10 - prev.length;
+          const toAdd = compressedFiles.slice(0, remainingSlots);
+          if (compressedFiles.length > remainingSlots) {
+            toast.error(`Faqat ${remainingSlots} ta rasm qo'shildi (maksimal 10 ta)`);
+          } else {
+            const origMb = (originalTotalBytes / (1024 * 1024)).toFixed(1);
+            const compMb = (compressedTotalBytes / (1024 * 1024)).toFixed(1);
+            if (savedPercentage >= 20) {
+              toast.success(`${toAdd.length} ta rasm siqildi (${origMb} MB ➔ ${compMb} MB, -${savedPercentage}% tejandi) ⚡`, { duration: 4000 });
+            } else {
+              toast.success(`${toAdd.length} ta rasm qo'shildi`);
+            }
+          }
+          return [...prev, ...toAdd];
+        });
+      }).catch((err) => {
+        console.error("Compression fallback error:", err);
+        setSubmissionImages((prev) => [...prev, ...newImages.slice(0, 10 - prev.length)]);
       });
     }
   }
@@ -780,8 +793,8 @@ export default function StudentAssignmentSubmitPage() {
               </span>
             </div>
 
-            {/* 4-Way Segmented Tab Bar (Theme Harmonious) */}
-            <div className="flex items-center p-1.5 rounded-2xl bg-zinc-100 dark:bg-[#0D1117] border border-zinc-200 dark:border-zinc-800/80 shadow-inner">
+            {/* 4-Way Segmented Tab Bar (Mobile 2x2 Grid / Desktop Segmented Row) */}
+            <div className="grid grid-cols-2 sm:flex sm:items-center p-1.5 rounded-2xl bg-zinc-100 dark:bg-[#0D1117] border border-zinc-200 dark:border-zinc-800/80 shadow-inner gap-1.5 sm:gap-1">
               {[
                 { id: "files", label: "Photos & Files", icon: FolderClosed, count: attachedCount.files, isWord: false, hasCheck: false },
                 { id: "voice", label: "Voice Note", icon: Mic, count: 0, isWord: false, hasCheck: attachedCount.voice > 0 },
@@ -795,7 +808,7 @@ export default function StudentAssignmentSubmitPage() {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 px-2 sm:px-3 rounded-xl text-xs font-semibold transition-all duration-200 select-none ${
+                    className={`w-full sm:flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 px-2.5 sm:px-3 rounded-xl text-xs font-semibold transition-all duration-200 select-none ${
                       isActive
                         ? "bg-white dark:bg-[#1C2128] text-indigo-600 dark:text-indigo-400 shadow-sm border border-zinc-200/50 dark:border-zinc-700/60"
                         : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/40"
