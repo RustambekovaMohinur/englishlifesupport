@@ -137,6 +137,55 @@ function detectLinkType(url: string): { label: string; icon: string; color: stri
   return { label: "Web Link", icon: "🔗", color: "text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700" };
 }
 
+function StudentImagePreviewItem({
+  file,
+  index,
+  onRemove,
+}: {
+  file: File;
+  index: number;
+  onRemove: () => void;
+}) {
+  const [url, setUrl] = useState<string>("");
+
+  useEffect(() => {
+    const objUrl = URL.createObjectURL(file);
+    setUrl(objUrl);
+    return () => {
+      URL.revokeObjectURL(objUrl);
+    };
+  }, [file]);
+
+  return (
+    <div className="relative group rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden aspect-square bg-white dark:bg-zinc-850 shadow-xs">
+      {url && (
+        <img
+          src={url}
+          alt={file.name}
+          className="w-full h-full object-cover"
+        />
+      )}
+      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2">
+        <span className="text-[10px] text-white font-mono bg-black/60 px-1.5 py-0.5 rounded self-start">
+          #{index + 1}
+        </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="self-end rounded-full bg-red-600 text-white p-1 hover:bg-red-700 shadow-sm transition"
+          title="Remove photo"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function StudentAssignmentSubmitPage() {
   const { assignmentId } = useParams<{ assignmentId: string }>();
   const navigate = useNavigate();
@@ -145,6 +194,7 @@ export default function StudentAssignmentSubmitPage() {
   const [existingSubmission, setExistingSubmission] = useState<SubmissionOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCompressingImages, setIsCompressingImages] = useState(false);
   const [applyingPass, setApplyingPass] = useState(false);
   const [discussionOpen, setDiscussionOpen] = useState(false);
 
@@ -236,32 +286,37 @@ export default function StudentAssignmentSubmitPage() {
     }
 
     if (newImages.length > 0) {
-      // Automatic client-side canvas compression down to 1600px WebP
-      compressImages(newImages).then(({ compressedFiles, originalTotalBytes, compressedTotalBytes, savedPercentage }) => {
-        setSubmissionImages((prev) => {
-          if (prev.length >= 10) {
-            toast.error("Maximum 10 images allowed per submission");
-            return prev;
-          }
-          const remainingSlots = 10 - prev.length;
-          const toAdd = compressedFiles.slice(0, remainingSlots);
-          if (compressedFiles.length > remainingSlots) {
-            toast.error(`Faqat ${remainingSlots} ta rasm qo'shildi (maksimal 10 ta)`);
-          } else {
-            const origMb = (originalTotalBytes / (1024 * 1024)).toFixed(1);
-            const compMb = (compressedTotalBytes / (1024 * 1024)).toFixed(1);
-            if (savedPercentage >= 20) {
-              toast.success(`${toAdd.length} ta rasm siqildi (${origMb} MB ➔ ${compMb} MB, -${savedPercentage}% tejandi) ⚡`, { duration: 4000 });
-            } else {
-              toast.success(`${toAdd.length} ta rasm qo'shildi`);
+      setIsCompressingImages(true);
+      compressImages(newImages, 1200, 0.62)
+        .then(({ compressedFiles, originalTotalBytes, compressedTotalBytes, savedPercentage }) => {
+          setSubmissionImages((prev) => {
+            if (prev.length >= 10) {
+              toast.error("Maximum 10 images allowed per submission");
+              return prev;
             }
-          }
-          return [...prev, ...toAdd];
+            const remainingSlots = 10 - prev.length;
+            const toAdd = compressedFiles.slice(0, remainingSlots);
+            if (compressedFiles.length > remainingSlots) {
+              toast.error(`Faqat ${remainingSlots} ta rasm qo'shildi (maksimal 10 ta)`);
+            } else {
+              const origMb = (originalTotalBytes / (1024 * 1024)).toFixed(1);
+              const compMb = (compressedTotalBytes / (1024 * 1024)).toFixed(1);
+              if (savedPercentage >= 20) {
+                toast.success(`${toAdd.length} ta rasm siqildi (${origMb} MB ➔ ${compMb} MB, -${savedPercentage}% tejandi) ⚡`, { duration: 4000 });
+              } else {
+                toast.success(`${toAdd.length} ta rasm qo'shildi`);
+              }
+            }
+            return [...prev, ...toAdd];
+          });
+        })
+        .catch((err) => {
+          console.error("Compression fallback error:", err);
+          setSubmissionImages((prev) => [...prev, ...newImages.slice(0, 10 - prev.length)]);
+        })
+        .finally(() => {
+          setIsCompressingImages(false);
         });
-      }).catch((err) => {
-        console.error("Compression fallback error:", err);
-        setSubmissionImages((prev) => [...prev, ...newImages.slice(0, 10 - prev.length)]);
-      });
     }
   }
 
@@ -323,40 +378,54 @@ export default function StudentAssignmentSubmitPage() {
       return;
     }
 
-    // Pre-flight file size and payload validation
-    const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB limit
-    const VERCEL_PAYLOAD_LIMIT = 4.5 * 1024 * 1024; // 4.5 MB serverless limit
-    let totalSizeBytes = 0;
+    if (isCompressingImages) {
+      toast.loading("Rasmlar siqilmoqda, iltimos kuting...", { id: "compressing-wait" });
+      return;
+    }
 
     // Determine single file payload: prioritize voiceFile if present, else docFile
     const effectiveFile = voiceFile || docFile || null;
 
     if (effectiveFile) {
-      if (effectiveFile.size > MAX_FILE_SIZE_BYTES) {
+      if (effectiveFile.size > 10 * 1024 * 1024) {
         toast.error(`"${effectiveFile.name}" fayl hajmi juda katta (maksimal 10 MB). Iltimos, ixchamroq audio yoki hujjat yuklang.`);
         return;
       }
-      totalSizeBytes += effectiveFile.size;
-    }
-
-    for (const img of submissionImages) {
-      if (img.size > MAX_FILE_SIZE_BYTES) {
-        toast.error(`"${img.name}" rasm hajmi juda katta (maksimal 10 MB).`);
-        return;
-      }
-      totalSizeBytes += img.size;
-    }
-
-    if (totalSizeBytes > VERCEL_PAYLOAD_LIMIT) {
-      toast.error(
-        `Yuklanayotgan fayllarning umumiy hajmi (${(totalSizeBytes / (1024 * 1024)).toFixed(1)} MB) ruxsat etilgan 4.5 MB server limitidan oshmoqda. Iltimos, rasmlar yoki audio hajmini kamaytiring.`,
-        { duration: 6000 }
-      );
-      return;
     }
 
     setIsSubmitting(true);
     try {
+      // Ensure all images are compressed before submission
+      const finalImages: File[] = [];
+      for (const img of submissionImages) {
+        if (img.size > 300 * 1024) {
+          try {
+            const comp = await compressImage(img, 1200, 0.62);
+            finalImages.push(comp);
+          } catch {
+            finalImages.push(img);
+          }
+        } else {
+          finalImages.push(img);
+        }
+      }
+
+      // Pre-flight file size and payload validation on the actual compressed payload
+      let totalSizeBytes = effectiveFile ? effectiveFile.size : 0;
+      for (const img of finalImages) {
+        totalSizeBytes += img.size;
+      }
+
+      const VERCEL_PAYLOAD_LIMIT = 4.5 * 1024 * 1024; // 4.5 MB serverless limit
+      if (totalSizeBytes > VERCEL_PAYLOAD_LIMIT) {
+        toast.error(
+          `Yuklanayotgan fayllarning umumiy hajmi (${(totalSizeBytes / (1024 * 1024)).toFixed(1)} MB) ruxsat etilgan 4.5 MB server limitidan oshmoqda. Iltimos, rasmlar yoki audio hajmini kamaytiring.`,
+          { duration: 6000 }
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
       // Cleanly bundle externalLink into text_answer if present
       let combinedText = textAnswer.trim();
       if (externalLink.trim()) {
@@ -364,7 +433,7 @@ export default function StudentAssignmentSubmitPage() {
         combinedText = combinedText ? `${linkBlock}\n\n${combinedText}` : linkBlock;
       }
 
-      await submitHomework(assignment.id, combinedText, effectiveFile, submissionImages);
+      await submitHomework(assignment.id, combinedText, effectiveFile, finalImages);
       toast.success("Homework submitted successfully! 🚀", { id: "submit-success" });
       navigate("/student/assignments");
     } catch (err: any) {
@@ -935,35 +1004,14 @@ export default function StudentAssignmentSubmitPage() {
                         </button>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                        {submissionImages.map((imgFile, idx) => {
-                          const previewUrl = URL.createObjectURL(imgFile);
-                          return (
-                            <div
-                              key={idx}
-                              className="relative group rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden aspect-square bg-white dark:bg-zinc-850 shadow-xs"
-                            >
-                              <img
-                                src={previewUrl}
-                                alt={imgFile.name}
-                                className="w-full h-full object-cover"
-                                onLoad={() => URL.revokeObjectURL(previewUrl)}
-                              />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2">
-                                <span className="text-[10px] text-white font-mono bg-black/60 px-1.5 py-0.5 rounded self-start">
-                                  #{idx + 1}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setSubmissionImages(submissionImages.filter((_, i) => i !== idx))}
-                                  className="self-end rounded-full bg-red-600 text-white p-1 hover:bg-red-700 shadow-sm transition"
-                                  title="Remove photo"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
+                        {submissionImages.map((imgFile, idx) => (
+                          <StudentImagePreviewItem
+                            key={`${imgFile.name}-${idx}`}
+                            file={imgFile}
+                            index={idx}
+                            onRemove={() => setSubmissionImages((prev) => prev.filter((_, i) => i !== idx))}
+                          />
+                        ))}
                       </div>
                     </div>
                   )}
@@ -1248,7 +1296,7 @@ export default function StudentAssignmentSubmitPage() {
               <button
                 type="button"
                 onClick={handleSubmitHomework}
-                disabled={isSubmitting || !canSubmit}
+                disabled={isSubmitting || isCompressingImages || !canSubmit}
                 className={`w-full sm:w-80 py-3.5 px-6 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:pointer-events-none transition-all min-h-[48px] active:scale-95 ${
                   isPastDeadline
                     ? "bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30 ring-2 ring-amber-500/50"
@@ -1259,6 +1307,11 @@ export default function StudentAssignmentSubmitPage() {
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Yuborilmoqda...</span>
+                  </>
+                ) : isCompressingImages ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Rasmlar siqilmoqda...</span>
                   </>
                 ) : isPastDeadline ? (
                   <>

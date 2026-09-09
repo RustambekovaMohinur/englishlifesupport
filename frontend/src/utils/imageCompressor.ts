@@ -1,9 +1,9 @@
 /**
  * Zero-dependency Client-Side Canvas Image Compressor.
- * Downscales oversized camera images (up to 48MP/108MP) to crisp 1600px WebP,
- * shrinking 4-15MB phone photos to ~150-250KB (90-95% compression) with zero visual quality loss.
+ * Downscales oversized camera images (up to 48MP/108MP) to crisp 1200px JPEG,
+ * shrinking 4-15MB phone photos to ~100-200KB without losing handwriting clarity.
  */
-export async function compressImage(file: File, maxWidth = 1600, quality = 0.72): Promise<File> {
+export async function compressImage(file: File, maxWidth = 1200, quality = 0.62): Promise<File> {
   // If not an image or SVG/GIF, return as is
   if (!file.type.startsWith('image/') || file.type.includes('svg') || file.type.includes('gif')) {
     return file;
@@ -20,15 +20,14 @@ export async function compressImage(file: File, maxWidth = 1600, quality = 0.72)
         let width = img.width;
         let height = img.height;
 
-        // Downscale proportionally if width or height exceeds maxWidth (1600px)
-        const maxDim = maxWidth;
-        if (width > maxDim || height > maxDim) {
+        // Clamp maximum resolution to 1200px (ideal for notebook scans)
+        if (width > maxWidth || height > maxWidth) {
           if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
           } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
           }
         }
 
@@ -40,24 +39,28 @@ export async function compressImage(file: File, maxWidth = 1600, quality = 0.72)
           return;
         }
 
+        // Apply slight image smoothing
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Export to WebP with fallback to original if compression doesn't yield smaller size
+        // Convert to JPEG for 100% universal support and minimal payload
+        const outputType = 'image/jpeg';
         canvas.toBlob(
           (blob) => {
-            if (!blob || blob.size >= file.size) {
-              resolve(file); // Keep original if compression didn't reduce size
+            if (!blob) {
+              resolve(file);
             } else {
               const baseName = file.name.replace(/\.[^/.]+$/, '');
               const compressedFile = new File(
                 [blob],
-                `${baseName}.webp`,
-                { type: 'image/webp', lastModified: Date.now() }
+                `${baseName}.jpg`,
+                { type: outputType, lastModified: Date.now() }
               );
               resolve(compressedFile);
             }
           },
-          'image/webp',
+          outputType,
           quality
         );
       };
@@ -69,8 +72,8 @@ export async function compressImage(file: File, maxWidth = 1600, quality = 0.72)
 
 export async function compressImages(
   files: File[],
-  maxWidth = 1600,
-  quality = 0.72
+  maxWidth = 1200,
+  quality = 0.62
 ): Promise<{ compressedFiles: File[]; originalTotalBytes: number; compressedTotalBytes: number; savedPercentage: number }> {
   let originalTotalBytes = 0;
   let compressedTotalBytes = 0;

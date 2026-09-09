@@ -128,7 +128,6 @@ export const submitHomework = (assignment_id: string, text_answer: string, file:
   }
   return api.post<SubmissionOut>("/submissions", form, {
     timeout: 120000, // 2 full minutes for slow mobile connections
-    headers: { "Content-Type": "multipart/form-data" },
   }).then((r) => r.data);
 };
 
