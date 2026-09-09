@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, useMemo } from "react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { EmptyState, LoadingRows, useConfirm, FileDownloadButton } from "@/components/ui";
@@ -77,11 +77,12 @@ export default function AssignmentsPage() {
     if (!group) return;
     const timeStr = extractCohortTime(group);
     const [hours, mins] = timeStr.split(":");
-    const dateObj = targetDate ? new Date(targetDate) : new Date();
-    if (!targetDate) {
+    const nowLocal = new Date();
+    const dateObj = targetDate ? new Date(targetDate) : new Date(nowLocal.getTime() + 24 * 60 * 60 * 1000);
+    dateObj.setHours(parseInt(hours || "20", 10), parseInt(mins || "0", 10), 0, 0);
+    if (dateObj.getTime() <= nowLocal.getTime()) {
       dateObj.setDate(dateObj.getDate() + 1);
     }
-    dateObj.setHours(parseInt(hours || "20", 10), parseInt(mins || "0", 10), 0, 0);
     const formatted = format(dateObj, "yyyy-MM-dd'T'HH:mm");
     setDeadline(formatted);
   }
@@ -202,6 +203,31 @@ export default function AssignmentsPage() {
   function handleRemoveTask(id: string) {
     setTasks((prev) => prev.filter((t) => t.id !== id));
   }
+
+  const isPastDeadlineSelected = useMemo(() => {
+    if (!deadline) return false;
+    const t = new Date(deadline).getTime();
+    return !isNaN(t) && t < Date.now();
+  }, [deadline]);
+
+  const filteredAssignments = useMemo(() => {
+    if (!groupFilter) return assignments;
+    return assignments.filter((a) => a.group_id === groupFilter);
+  }, [assignments, groupFilter]);
+
+  const sortedAssignments = useMemo(() => {
+    const now = Date.now();
+    return [...filteredAssignments].sort((a, b) => {
+      const aTime = new Date(a.deadline).getTime();
+      const bTime = new Date(b.deadline).getTime();
+      const aActive = aTime >= now;
+      const bActive = bTime >= now;
+      if (aActive && !bActive) return -1;
+      if (!aActive && bActive) return 1;
+      if (aActive && bActive) return aTime - bTime;
+      return bTime - aTime;
+    });
+  }, [filteredAssignments]);
 
   async function handleCreateAssignment(e: FormEvent) {
     e.preventDefault();
@@ -475,6 +501,30 @@ export default function AssignmentsPage() {
                   +3 Days
                 </button>
               </div>
+
+              {isPastDeadlineSelected && (
+                <div className="flex items-center justify-between gap-2 mt-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-800 dark:text-amber-300 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base shrink-0">⚠️</span>
+                    <div>
+                      <span className="font-semibold block">Ogohlantirish: Ushbu muddat o'tib ketgan sanaga to'g'ri keladi ({format(new Date(deadline), "dd/MM/yyyy HH:mm")}).</span>
+                      <span className="text-[11px] opacity-80">O'quvchilar bu vazifani muddatidan o'tgan deb ko'rishadi.</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const g = groups.find((grp) => grp.id === groupId);
+                      const d = new Date();
+                      d.setDate(d.getDate() + 1);
+                      applyGroupDefaultTime(g, d);
+                    }}
+                    className="shrink-0 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-[11px] transition shadow-xs active:scale-95"
+                  >
+                    Ertangi kunga surish ⚡
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>
@@ -1019,21 +1069,37 @@ export default function AssignmentsPage() {
 
       {isLoading ? (
         <LoadingRows rows={5} />
-      ) : assignments.length === 0 ? (
+      ) : sortedAssignments.length === 0 ? (
         <EmptyState title="No assignments yet" description="Click '+ New Assignment' above to create homework." />
       ) : (
         <div className="space-y-3">
-          {assignments.map((a) => (
-            <div key={a.id} className="card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border transition-all hover:border-zinc-300 dark:hover:border-zinc-700">
+          {sortedAssignments.map((a) => {
+            const isCardActive = new Date(a.deadline).getTime() >= Date.now();
+            return (
+            <div
+              key={a.id}
+              className={`card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border transition-all ${
+                isCardActive
+                  ? "border-indigo-500/40 ring-1 ring-indigo-500/15 shadow-sm bg-white dark:bg-[#111827] hover:border-indigo-500/60"
+                  : "opacity-75 hover:opacity-100 transition-opacity bg-zinc-50/60 dark:bg-zinc-900/40 border-zinc-200/60 dark:border-zinc-800"
+              }`}
+            >
               <div className="space-y-1.5 flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-bold text-zinc-900 dark:text-white text-base">{a.title}</p>
                   <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800">
                     {a.group_name}
                   </span>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                    Cycle {a.cycle_number ?? 1}
-                  </span>
+                  {isCardActive ? (
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1 font-mono">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      ACTIVE CYCLE {a.cycle_number ?? 1}
+                    </span>
+                  ) : (
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/20 font-mono">
+                      PAST DEADLINE (C{a.cycle_number ?? 1})
+                    </span>
+                  )}
                   <span
                     className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                       a.status === "published"
@@ -1100,7 +1166,8 @@ export default function AssignmentsPage() {
                 </button>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
 
