@@ -3,7 +3,7 @@ services:
     name: english-life-lms-backend
     runtime: python
     rootDir: backend
-    buildCommand: pip install -r requirements.txt && alembic upgrade head
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && alembic upgrade head
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
@@ -11,6 +11,8 @@ services:
       - key: ASYNC_DATABASE_URL
         sync: false
       - key: JWT_SECRET_KEY
+        sync: false
+      - key: SECRET_KEY
         sync: false
       - key: BOOTSTRAP_TEACHER_EMAIL
         sync: false

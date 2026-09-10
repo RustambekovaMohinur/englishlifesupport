@@ -105,7 +105,7 @@ class Settings(BaseSettings):
         "https://englishlifesupport-git-main-rustambekovamohinur.vercel.app,"
         "https://englishlifesupport.vercel.app"
     )
-    CORS_ORIGIN_REGEX: str = r"^https:\/\/(.*\.)?vercel\.app$"
+    CORS_ORIGIN_REGEX: str = r"^https:\/\/(.*\.)?(vercel\.app|onrender\.com)$"
 
     # Uploads & Storage
     UPLOAD_DIR: str = "uploads"

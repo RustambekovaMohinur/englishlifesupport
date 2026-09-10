@@ -17,7 +17,7 @@ export const tokenStorage = {
   },
 };
 
-const RAW_API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, "");
+const RAW_API_URL = ((import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL) as string | undefined)?.replace(/\/+$/, "");
 const API_BASE_URL = RAW_API_URL
   ? (RAW_API_URL.startsWith("http") && !RAW_API_URL.endsWith("/api") ? `${RAW_API_URL}/api` : RAW_API_URL)
   : "/api";

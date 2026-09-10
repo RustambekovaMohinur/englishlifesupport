@@ -1,5 +1,12 @@
 import logging
 import os
+import sys
+from pathlib import Path
+
+# Ensure backend directory is on sys.path so app imports work whether started from repo root or backend/
+_backend_dir = str(Path(__file__).resolve().parent.parent)
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
