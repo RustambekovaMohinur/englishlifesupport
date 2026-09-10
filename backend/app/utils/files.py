@@ -115,26 +115,27 @@ async def save_file_blob(
     norm_path = relative_path.replace("\\", "/").lstrip("/")
     storage_service = get_storage_service()
 
-    # Step 1: Upload to B2 first if configured
-    if storage_service.backend == "b2":
+    # Step 1: Upload to B2 if configured, with graceful fallback to local storage
+    storage_backend = "local"
+    if storage_service.backend == "b2" and getattr(storage_service, "is_configured", False):
         try:
             await storage_service.upload_file(norm_path, data, content_type)
+            storage_backend = "b2"
         except Exception as e:
-            # Re-raise with safe diagnostic info (error type/summary only, NO secrets)
             err_msg = str(e).strip() or type(e).__name__
-            logger.error("Cloud storage upload error for path '%s': %s", norm_path, err_msg)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Cloud storage upload error: {err_msg}",
-            ) from e
+            logger.warning(
+                "Cloud storage upload error for path '%s': %s. Safely falling back to local disk storage.",
+                norm_path, err_msg
+            )
+            storage_backend = "local"
 
-    # Step 2: Only after storage upload succeeds, record metadata in PostgreSQL
+    # Step 2: Record metadata in PostgreSQL
     try:
         existing = (
             await db.execute(select(FileBlob).where(FileBlob.file_path == norm_path))
         ).scalar_one_or_none()
         if existing:
-            existing.storage_backend = storage_service.backend
+            existing.storage_backend = storage_backend
             existing.storage_key = norm_path
             existing.content_type = content_type
             existing.file_name = file_name
@@ -142,7 +143,7 @@ async def save_file_blob(
         else:
             blob = FileBlob(
                 file_path=norm_path,
-                storage_backend=storage_service.backend,
+                storage_backend=storage_backend,
                 storage_key=norm_path,
                 content_type=content_type,
                 file_name=file_name,
@@ -601,20 +602,26 @@ async def save_storage_file_data(
     relative_path: str,
     data: bytes,
     content_type: str | None,
-) -> None:
-    """Uploads file bytes to Backblaze B2 storage without database coupling."""
+) -> str:
+    """
+    Uploads file bytes to Backblaze B2 storage with automatic graceful fallback to local storage.
+    NEVER raises an HTTPException on cloud upload failures.
+    Returns 'b2' if cloud upload succeeded, 'local' if fallen back to local storage.
+    """
     norm_path = relative_path.replace("\\", "/").lstrip("/")
     storage_service = get_storage_service()
-    if storage_service.backend == "b2":
+    if storage_service.backend == "b2" and getattr(storage_service, "is_configured", False):
         try:
             await storage_service.upload_file(norm_path, data, content_type)
+            return "b2"
         except Exception as e:
             err_msg = str(e).strip() or type(e).__name__
-            logger.error("Cloud storage upload error for path '%s': %s", norm_path, err_msg)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Cloud storage upload error: {err_msg}",
-            ) from e
+            logger.warning(
+                "Cloud storage upload warning for path '%s': %s. Safely falling back to local disk storage.",
+                norm_path, err_msg
+            )
+            return "local"
+    return "local"
 
 
 async def record_file_blob(
@@ -623,18 +630,18 @@ async def record_file_blob(
     file_size: int,
     content_type: str | None,
     file_name: str | None,
+    storage_backend: str = "b2",
 ) -> None:
     """
     Records or updates FileBlob metadata in PostgreSQL without early commit,
     enabling it to participate in the surrounding database transaction.
     """
     norm_path = relative_path.replace("\\", "/").lstrip("/")
-    storage_service = get_storage_service()
     existing = (
         await db.execute(select(FileBlob).where(FileBlob.file_path == norm_path))
     ).scalar_one_or_none()
     if existing:
-        existing.storage_backend = storage_service.backend
+        existing.storage_backend = storage_backend
         existing.storage_key = norm_path
         existing.content_type = content_type
         existing.file_name = file_name
@@ -642,7 +649,7 @@ async def record_file_blob(
     else:
         blob = FileBlob(
             file_path=norm_path,
-            storage_backend=storage_service.backend,
+            storage_backend=storage_backend,
             storage_key=norm_path,
             content_type=content_type,
             file_name=file_name,
@@ -654,11 +661,11 @@ async def record_file_blob(
 async def process_submission_file_concurrent(
     file: UploadFile,
     student_id: uuid.UUID,
-) -> tuple[str, str, str, int]:
+) -> tuple[str, str, str, int, str]:
     """
     Validates and saves a primary submission file (voice/doc/audio) to disk and uploads to B2.
     Does NOT touch the database session, making it 100% concurrency-safe for asyncio.gather.
-    Returns (relative_path, original_name, content_type, total_size).
+    Returns (relative_path, original_name, content_type, total_size, storage_backend).
     """
     _assert_safe_extension(file.filename or "")
 
@@ -702,19 +709,19 @@ async def process_submission_file_concurrent(
     original_name = Path(file.filename or "upload").name
     data = destination.read_bytes()
 
-    await save_storage_file_data(relative_path, data, content_type)
-    return relative_path, original_name, content_type, total_size
+    storage_backend = await save_storage_file_data(relative_path, data, content_type)
+    return relative_path, original_name, content_type, total_size, storage_backend
 
 
 async def process_submission_image_concurrent(
     file: UploadFile,
     submission_id: uuid.UUID,
     order_index: int,
-) -> tuple[str, str, str, int, int]:
+) -> tuple[str, str, str, int, int, str]:
     """
     Validates and saves a submission image to disk and uploads to B2.
     Does NOT touch the database session, making it 100% concurrency-safe for asyncio.gather.
-    Returns (relative_path, original_name, content_type, total_size, order_index).
+    Returns (relative_path, original_name, content_type, total_size, order_index, storage_backend).
     """
     _assert_safe_extension(file.filename or "")
 
@@ -756,7 +763,7 @@ async def process_submission_image_concurrent(
     original_name = Path(file.filename or "submission_image").name
     data = destination.read_bytes()
 
-    await save_storage_file_data(relative_path, data, content_type)
-    return relative_path, original_name, content_type, total_size, order_index
+    storage_backend = await save_storage_file_data(relative_path, data, content_type)
+    return relative_path, original_name, content_type, total_size, order_index, storage_backend
 
 

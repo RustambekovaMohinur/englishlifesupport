@@ -264,8 +264,8 @@ async def submit_homework(
     file_size = existing.file_size_bytes if existing else None
 
     if primary_res is not None:
-        file_path, file_original_name, file_content_type, file_size = primary_res
-        await record_file_blob(db, file_path, file_size, file_content_type, file_original_name)
+        file_path, file_original_name, file_content_type, file_size, backend_used = primary_res
+        await record_file_blob(db, file_path, file_size, file_content_type, file_original_name, storage_backend=backend_used)
 
     is_late = as_utc(assignment.deadline) < now
     submission_status = SubmissionStatus.LATE if is_late else SubmissionStatus.SUBMITTED
@@ -309,8 +309,8 @@ async def submit_homework(
             await db.execute(delete(SubmissionImage).where(SubmissionImage.submission_id == submission.id))
 
         for img_res in image_results:
-            img_path, img_orig_name, img_content_type, img_size, img_order_idx = img_res
-            await record_file_blob(db, img_path, img_size, img_content_type, img_orig_name)
+            img_path, img_orig_name, img_content_type, img_size, img_order_idx, img_backend = img_res
+            await record_file_blob(db, img_path, img_size, img_content_type, img_orig_name, storage_backend=img_backend)
             sub_img = SubmissionImage(
                 submission_id=submission.id,
                 file_path=img_path,

@@ -172,9 +172,30 @@ class StorageService:
         except Exception:
             return False
 
+    @property
+    def is_configured(self) -> bool:
+        """Check if cloud storage credentials and endpoint are present."""
+        return bool(self.key_id and self.application_key and self.endpoint_url)
+
     async def upload_file(self, object_key: str, data: bytes, content_type: Optional[str] = None) -> str:
         """Asynchronously upload file data to B2."""
+        if not self.is_configured:
+            raise StorageError("Backblaze B2 credentials (B2_KEY_ID / B2_APPLICATION_KEY) are not configured.")
         return await asyncio.to_thread(self._sync_upload, object_key, data, content_type)
+
+    async def safe_upload_file(self, object_key: str, data: bytes, content_type: Optional[str] = None) -> bool:
+        """
+        Attempts to upload to B2. If credentials are missing or network error occurs,
+        returns False safely without raising an exception.
+        """
+        if not self.is_configured:
+            return False
+        try:
+            await self.upload_file(object_key, data, content_type)
+            return True
+        except Exception as e:
+            logger.warning("B2 upload failed for key '%s': %s. Falling back to local storage.", object_key, e)
+            return False
 
     async def download_file(self, object_key: str) -> Tuple[bytes, Optional[str]]:
         """Asynchronously download file data from B2."""
