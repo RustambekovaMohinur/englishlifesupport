@@ -458,6 +458,8 @@ export default function AssignmentsPage() {
       console.error("Save assignment error details:", err?.response?.data || err);
       if (err?.code === "ECONNABORTED" || err?.message?.includes("timeout")) {
         toast.error("Server javob berish vaqti tugadi (Timeout). Iltimos fayl hajmini tekshiring va qayta urinib ko'ring.");
+      } else if (err?.message === "Network Error" && !err?.response) {
+        toast.error("Tarmoq xatoligi (Network Error): Server bilan aloqa uzildi yoki server ishga tushmoqda. Bir necha soniyadan keyin qayta urinib ko'ring.");
       } else {
         const detail = err?.response?.data?.detail;
         const errorMsg =

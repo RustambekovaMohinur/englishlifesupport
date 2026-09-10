@@ -96,9 +96,9 @@ export const removeMyAvatar = () => api.delete<UserProfileOut>("/profile/me/avat
 export const listAssignments = (group_id?: string) =>
   api.get<AssignmentOut[]>("/assignments", { params: { group_id } }).then((r) => r.data);
 export const createAssignment = (formData: FormData) =>
-  api.post<AssignmentOut>("/assignments", formData, { timeout: 60000 }).then((r) => r.data);
+  api.post<AssignmentOut>("/assignments", formData, { timeout: 120000 }).then((r) => r.data);
 export const updateAssignmentInPlace = (id: string, formData: FormData) =>
-  api.put<AssignmentOut>(`/assignments/${id}`, formData, { timeout: 60000 }).then((r) => r.data);
+  api.put<AssignmentOut>(`/assignments/${id}`, formData, { timeout: 120000 }).then((r) => r.data);
 export const updateAssignment = (id: string, body: Partial<{ title: string; description: string; deadline: string; group_id: string; status: string }>) =>
   api.patch<AssignmentOut>(`/assignments/${id}`, body).then((r) => r.data);
 export const deleteAssignment = (id: string) => api.delete(`/assignments/${id}`);

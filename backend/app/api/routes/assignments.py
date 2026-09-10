@@ -123,15 +123,16 @@ async def list_assignments(
 
 
 @router.post("", response_model=AssignmentOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_teacher)])
+@router.post("/", response_model=AssignmentOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_teacher)], include_in_schema=False)
 async def create_assignment(
-    group_id: uuid.UUID = Form(...),
+    group_id: str = Form(...),
     title: str = Form(...),
-    description: str = Form(...),
-    deadline: datetime = Form(...),
+    description: str = Form(default="[]"),
+    deadline: str = Form(...),
     is_hard_deadline: bool = Form(default=False),
     status_val: str = Form(default="published", alias="status"),
     order_index: int = Form(default=0),
-    prerequisite_id: uuid.UUID | None = Form(default=None),
+    prerequisite_id: str | None = Form(default=None),
 
     file: UploadFile | None = File(default=None),
     vocab_file: UploadFile | None = File(default=None),
@@ -147,7 +148,54 @@ async def create_assignment(
     - Accepts optional vocabulary CSV file (word,translation format).
     - Accepts up to 10 assignment images (up to 10MB each). Image #11 is rejected with 400.
     """
-    group = (await db.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+    try:
+        group_uuid = uuid.UUID(group_id.strip())
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid group_id format: '{group_id}'",
+        )
+
+    clean_title = (title or "").strip()
+    if not clean_title:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Assignment title cannot be empty",
+        )
+
+    clean_description = (description or "").strip() or "[]"
+
+    # Resilient deadline parsing
+    parsed_deadline: datetime | None = None
+    if isinstance(deadline, datetime):
+        parsed_deadline = deadline
+    elif isinstance(deadline, str):
+        try:
+            parsed_deadline = datetime.fromisoformat(deadline.strip().replace("Z", "+00:00"))
+        except Exception:
+            try:
+                from dateutil import parser as dt_parser
+                parsed_deadline = dt_parser.parse(deadline.strip())
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid deadline format: '{deadline}'",
+                )
+    if not parsed_deadline:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Deadline is required",
+        )
+
+    # Prerequisite ID parsing (treating empty string, 'null', 'none' as None)
+    prereq_uuid: uuid.UUID | None = None
+    if prerequisite_id and prerequisite_id.strip().lower() not in ("null", "none", "undefined", ""):
+        try:
+            prereq_uuid = uuid.UUID(prerequisite_id.strip())
+        except Exception:
+            prereq_uuid = None
+
+    group = (await db.execute(select(Group).where(Group.id == group_uuid))).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Group not found")
     if not group.is_active:
@@ -171,18 +219,18 @@ async def create_assignment(
     file_size = None
 
     if file is not None and file.filename:
-        file_path, file_orig_name, file_content_type, file_size = await save_assignment_file(file, group_id, db=db)
+        file_path, file_orig_name, file_content_type, file_size = await save_assignment_file(file, group_uuid, db=db)
 
     assignment = Assignment(
-        group_id=group_id,
-        title=title.strip(),
-        description=description.strip(),
-        deadline=deadline,
+        group_id=group_uuid,
+        title=clean_title,
+        description=clean_description,
+        deadline=parsed_deadline,
         is_hard_deadline=is_hard_deadline,
         status=assign_status,
         order_index=order_index,
         cycle_number=getattr(group, "current_cycle", 1) or 1,
-        prerequisite_id=prerequisite_id,
+        prerequisite_id=prereq_uuid,
         file_path=file_path,
         file_original_name=file_orig_name,
         file_content_type=file_content_type,
@@ -216,11 +264,11 @@ async def create_assignment(
 
         vocab_assign = VocabularyAssignment(
             teacher_id=current_user.id,
-            group_id=group_id,
+            group_id=group_uuid,
             assignment_id=assignment.id,
             title=f"Vocabulary: {assignment.title}",
             description=f"Vocabulary for assignment: {assignment.title}",
-            deadline=deadline,
+            deadline=parsed_deadline,
             is_active=True,
         )
         db.add(vocab_assign)
@@ -496,15 +544,16 @@ async def download_assignment_file(
 
 
 @router.put("/{assignment_id}", response_model=AssignmentOut, dependencies=[Depends(require_teacher)])
+@router.put("/{assignment_id}/", response_model=AssignmentOut, dependencies=[Depends(require_teacher)], include_in_schema=False)
 async def edit_assignment_in_place(
     assignment_id: uuid.UUID,
     title: str = Form(...),
-    description: str = Form(...),
-    deadline: datetime = Form(...),
+    description: str = Form(default="[]"),
+    deadline: str = Form(...),
     is_hard_deadline: bool | None = Form(default=None),
     status_val: str = Form(default="published", alias="status"),
     order_index: int = Form(default=0),
-    prerequisite_id: uuid.UUID | None = Form(default=None),
+    prerequisite_id: str | None = Form(default=None),
     file: UploadFile | None = File(default=None),
     vocab_file: UploadFile | None = File(default=None),
     images: list[UploadFile] | None = File(default=None),
@@ -515,6 +564,45 @@ async def edit_assignment_in_place(
     Full in-place assignment editing. Preserves exact assignment ID and all linked
     submissions, grades, corrections, stars, comments.
     """
+    clean_title = (title or "").strip()
+    if not clean_title:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Assignment title cannot be empty",
+        )
+
+    clean_description = (description or "").strip() or "[]"
+
+    # Resilient deadline parsing
+    parsed_deadline: datetime | None = None
+    if isinstance(deadline, datetime):
+        parsed_deadline = deadline
+    elif isinstance(deadline, str):
+        try:
+            parsed_deadline = datetime.fromisoformat(deadline.strip().replace("Z", "+00:00"))
+        except Exception:
+            try:
+                from dateutil import parser as dt_parser
+                parsed_deadline = dt_parser.parse(deadline.strip())
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid deadline format: '{deadline}'",
+                )
+    if not parsed_deadline:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Deadline is required",
+        )
+
+    # Prerequisite ID parsing (treating empty string, 'null', 'none' as None)
+    prereq_uuid: uuid.UUID | None = None
+    if prerequisite_id and prerequisite_id.strip().lower() not in ("null", "none", "undefined", ""):
+        try:
+            prereq_uuid = uuid.UUID(prerequisite_id.strip())
+        except Exception:
+            prereq_uuid = None
+
     assignment = (
         await db.execute(
             select(Assignment)
@@ -530,7 +618,7 @@ async def edit_assignment_in_place(
     )
 
     now = utcnow()
-    new_dl_utc = as_utc(deadline)
+    new_dl_utc = as_utc(parsed_deadline)
     old_dl_utc = as_utc(assignment.deadline)
 
     # Detect cycle rollover:
@@ -556,14 +644,14 @@ async def edit_assignment_in_place(
             .values(is_archived=True)
         )
 
-    assignment.title = title.strip()
-    assignment.description = description.strip()
-    assignment.deadline = deadline
+    assignment.title = clean_title
+    assignment.description = clean_description
+    assignment.deadline = parsed_deadline
     if is_hard_deadline is not None:
         assignment.is_hard_deadline = is_hard_deadline
     assignment.status = assign_status
     assignment.order_index = order_index
-    assignment.prerequisite_id = prerequisite_id
+    assignment.prerequisite_id = prereq_uuid
 
     # Handle file replacement if a new one is uploaded
     if file is not None and file.filename:
@@ -620,7 +708,7 @@ async def edit_assignment_in_place(
                 assignment_id=assignment.id,
                 title=f"Vocabulary: {assignment.title}",
                 description=f"Vocabulary for assignment: {assignment.title}",
-                deadline=deadline,
+                deadline=parsed_deadline,
                 is_active=True,
             )
             db.add(vocab_assign)
@@ -657,6 +745,7 @@ async def edit_assignment_in_place(
 
 
 @router.patch("/{assignment_id}", response_model=AssignmentOut, dependencies=[Depends(require_teacher)])
+@router.patch("/{assignment_id}/", response_model=AssignmentOut, dependencies=[Depends(require_teacher)], include_in_schema=False)
 async def update_assignment(
     assignment_id: uuid.UUID,
     body: AssignmentUpdate,

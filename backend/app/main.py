@@ -37,11 +37,32 @@ app = FastAPI(
 app.state.limiter = limiter
 
 
+def get_cors_headers(request: Request) -> dict[str, str]:
+    """
+    Ensure every error response includes explicit CORS headers matching the request origin.
+    This guarantees browsers will never block error payloads with a generic 'Network Error'.
+    """
+    origin = request.headers.get("origin")
+    headers: dict[str, str] = {
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Methods": "*",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Expose-Headers": "Content-Disposition, Content-Length, Content-Type",
+    }
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+    else:
+        headers["Access-Control-Allow-Origin"] = "*"
+        headers.pop("Access-Control-Allow-Credentials", None)
+    return headers
+
+
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         content={"detail": "Too many requests. Please try again shortly."},
+        headers=get_cors_headers(request),
     )
 
 
@@ -51,11 +72,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"detail": "Validation error", "errors": exc.errors()},
+        headers=get_cors_headers(request),
     )
 
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    headers = get_cors_headers(request)
+    if exc.headers:
+        headers.update(exc.headers)
     if isinstance(exc.detail, dict) and "code" in exc.detail:
         return JSONResponse(
             status_code=exc.status_code,
@@ -67,12 +92,12 @@ async def http_exception_handler(request: Request, exc: HTTPException):
                 },
                 "detail": exc.detail.get("message", ""),
             },
-            headers=exc.headers,
+            headers=headers,
         )
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
-        headers=exc.headers,
+        headers=headers,
     )
 
 
@@ -80,9 +105,11 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 async def unhandled_exception_handler(request: Request, exc: Exception):
     # Never leak stack traces to the client, especially in production.
     logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    headers = get_cors_headers(request)
     if settings.ENVIRONMENT == "production":
-        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
-    return JSONResponse(status_code=500, content={"detail": f"Internal server error: {exc}"})
+        return JSONResponse(status_code=500, content={"detail": f"Internal server error: {type(exc).__name__}"}, headers=headers)
+    return JSONResponse(status_code=500, content={"detail": f"Internal server error: {exc}"}, headers=headers)
+
 
 
 app.add_middleware(
