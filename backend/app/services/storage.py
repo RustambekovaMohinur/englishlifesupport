@@ -107,7 +107,19 @@ class StorageService:
             ""
         ).strip()
 
-    def _get_s3_client(self):
+    @property
+    def region_name(self) -> str:
+        import os
+        return (
+            os.getenv("B2_REGION") or
+            os.getenv("AWS_REGION") or
+            os.getenv("BACKBLAZE_REGION") or
+            getattr(settings, "B2_REGION", "us-east-005") or
+            "us-east-005"
+        ).strip()
+
+    def get_s3_client(self):
+        """Returns configured boto3 S3 client for Backblaze B2."""
         key = self.key_id
         app_key = self.application_key
         if not key or not app_key:
@@ -117,17 +129,23 @@ class StorageService:
         if self._s3_client is None:
             try:
                 import os
-                endpoint = self.endpoint_url
-                region = "us-east-005"
-                if ".backblazeb2.com" in endpoint:
-                    parts = endpoint.replace("https://", "").replace("http://", "").split(".")[0]
-                    if parts.startswith("s3."):
-                        region = parts[3:]
-                region = os.getenv("B2_REGION") or os.getenv("AWS_REGION") or region
+                endpoint = (
+                    os.getenv("B2_ENDPOINT_URL") or
+                    os.getenv("ENDPOINT_URL") or
+                    os.getenv("B2_ENDPOINT") or
+                    os.getenv("BACKBLAZE_ENDPOINT_URL") or
+                    os.getenv("BACKBLAZE_ENDPOINT") or
+                    self.endpoint_url or
+                    "https://s3.us-east-005.backblazeb2.com"
+                ).strip().rstrip("/")
+                if not endpoint.startswith("http"):
+                    endpoint = f"https://{endpoint}"
+
+                region = self.region_name
 
                 boto_config = Config(
                     signature_version="s3v4",
-                    s3={"addressing_style": "path"},
+                    s3={"addressing_style": "virtual"},
                     retries={"max_attempts": 3, "mode": "standard"},
                     connect_timeout=15,
                     read_timeout=30,
@@ -145,13 +163,18 @@ class StorageService:
                 raise StorageError(f"Storage client initialization error: {type(e).__name__}") from e
         return self._s3_client
 
+    def _get_s3_client(self):
+        return self.get_s3_client()
+
     def _sync_upload(self, object_key: str, data: bytes, content_type: Optional[str] = None) -> str:
         norm_key = object_key.replace("\\", "/").lstrip("/")
-        extra_args = {}
+        extra_args = {
+            "ServerSideEncryption": "AES256",
+        }
         if content_type:
             extra_args["ContentType"] = content_type
 
-        client = self._get_s3_client()
+        client = self.get_s3_client()
         try:
             client.put_object(
                 Bucket=self.bucket_name,
@@ -264,6 +287,23 @@ class StorageService:
     async def file_exists(self, object_key: str) -> bool:
         """Asynchronously check if an object exists in B2."""
         return await asyncio.to_thread(self._sync_exists, object_key)
+
+    def _sync_generate_presigned_url(self, object_key: str, expires_in: int = 3600) -> str:
+        norm_key = object_key.replace("\\", "/").lstrip("/")
+        client = self.get_s3_client()
+        try:
+            return client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self.bucket_name, "Key": norm_key},
+                ExpiresIn=expires_in,
+            )
+        except Exception as e:
+            logger.error("B2 presigned URL generation failed for key '%s': %s", norm_key, e)
+            raise StorageError(f"Failed to generate presigned URL: {e}") from e
+
+    async def generate_presigned_url(self, object_key: str, expires_in: int = 3600) -> str:
+        """Generates a presigned GET URL for a private B2 object (default 1 hour / 3600s TTL)."""
+        return await asyncio.to_thread(self._sync_generate_presigned_url, object_key, expires_in)
 
 
 _storage_service: Optional[StorageService] = None

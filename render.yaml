@@ -30,6 +30,8 @@ services:
         sync: false
       - key: B2_BUCKET_NAME
         value: english-life-files
+      - key: B2_REGION
+        value: us-east-005
       - key: B2_KEY_ID
         sync: false
       - key: B2_APPLICATION_KEY

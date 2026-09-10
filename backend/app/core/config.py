@@ -78,16 +78,34 @@ class Settings(BaseSettings):
         else:
             self.B2_BUCKET_NAME = "english-life-files"
 
-        if not self.B2_ENDPOINT or self.B2_ENDPOINT == "https://s3.us-east-005.backblazeb2.com":
-            env_endpoint = (
-                os.getenv("B2_ENDPOINT") or
-                os.getenv("B2_ENDPOINT_URL") or
-                os.getenv("BACKBLAZE_ENDPOINT") or
-                os.getenv("BACKBLAZE_ENDPOINT_URL") or
-                os.getenv("S3_ENDPOINT_URL")
-            )
-            if env_endpoint:
-                self.B2_ENDPOINT = env_endpoint.strip()
+        env_region = (
+            os.getenv("B2_REGION") or
+            os.getenv("AWS_REGION") or
+            os.getenv("BACKBLAZE_REGION")
+        )
+        if env_region and env_region.strip():
+            self.B2_REGION = env_region.strip()
+        else:
+            self.B2_REGION = "us-east-005"
+
+        env_endpoint = (
+            os.getenv("B2_ENDPOINT_URL") or
+            os.getenv("ENDPOINT_URL") or
+            os.getenv("B2_ENDPOINT") or
+            os.getenv("BACKBLAZE_ENDPOINT_URL") or
+            os.getenv("BACKBLAZE_ENDPOINT") or
+            os.getenv("S3_ENDPOINT_URL")
+        )
+        if env_endpoint and env_endpoint.strip():
+            ep = env_endpoint.strip()
+            if not ep.startswith("http"):
+                ep = f"https://{ep}"
+            self.B2_ENDPOINT = ep
+        elif self.B2_ENDPOINT:
+            if not self.B2_ENDPOINT.startswith("http"):
+                self.B2_ENDPOINT = f"https://{self.B2_ENDPOINT}"
+        else:
+            self.B2_ENDPOINT = "https://s3.us-east-005.backblazeb2.com"
 
         return self
 
@@ -115,6 +133,7 @@ class Settings(BaseSettings):
     # Storage Backend (b2, database, or local)
     STORAGE_BACKEND: str = "b2"
     B2_ENDPOINT: str = "https://s3.us-east-005.backblazeb2.com"
+    B2_REGION: str = "us-east-005"
     B2_BUCKET_NAME: str = "english-life-files"
     B2_KEY_ID: str = ""
     B2_APPLICATION_KEY: str = ""
