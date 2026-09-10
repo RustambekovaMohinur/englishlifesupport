@@ -148,7 +148,11 @@ async def submit_homework(
     assignment_id: uuid.UUID = Form(...),
     text_answer: str | None = Form(default=None),
     file: UploadFile | None = File(default=None),
+    voice_file: UploadFile | None = File(default=None),
+    doc_file: UploadFile | None = File(default=None),
+    audio: UploadFile | None = File(default=None),
     images: list[UploadFile] | None = File(default=None),
+    image: UploadFile | None = File(default=None),
     profile: StudentProfile = Depends(get_current_student_profile),
     db: AsyncSession = Depends(get_db),
 ):
@@ -172,16 +176,32 @@ async def submit_homework(
             detail=f"Task is locked: {lock_reason}",
         )
 
-    valid_images = [img for img in (images or []) if img.filename]
-    if len(valid_images) > 10:
+    # Multi-modal file resolution: check file, voice_file, doc_file, audio
+    primary_file: UploadFile | None = None
+    for candidate in [file, voice_file, doc_file, audio]:
+        if candidate is not None and getattr(candidate, "filename", None) and len(candidate.filename.strip()) > 0:
+            primary_file = candidate
+            break
+
+    # Collect and validate all image uploads
+    all_images: list[UploadFile] = []
+    if images:
+        for img in images:
+            if img and getattr(img, "filename", None) and len(img.filename.strip()) > 0:
+                all_images.append(img)
+    if image and getattr(image, "filename", None) and len(image.filename.strip()) > 0:
+        if image not in all_images:
+            all_images.append(image)
+
+    valid_images = all_images[:10]
+    if len(all_images) > 10:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Maximum 10 images allowed per submission",
         )
 
-    if not text_answer and not file and not valid_images:
+    if not text_answer and not primary_file and not valid_images:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide a text answer, file, voice audio, or images")
-
 
     now = utcnow()
 
@@ -210,9 +230,9 @@ async def submit_homework(
     file_content_type = existing.file_content_type if existing else None
     file_size = existing.file_size_bytes if existing else None
 
-    if file is not None:
+    if primary_file is not None:
         try:
-            file_path, file_original_name, file_content_type, file_size = await save_submission_file(file, profile.id, db=db)
+            file_path, file_original_name, file_content_type, file_size = await save_submission_file(primary_file, profile.id, db=db)
         except HTTPException:
             raise
         except Exception as e:

@@ -243,7 +243,7 @@ export default function StudentAssignmentSubmitPage() {
   }, [assignmentId]);
 
   // Handle files added (drag-drop, file picker, clipboard paste)
-  function handleFilesAdded(incomingFiles: File[]) {
+  async function handleFilesAdded(incomingFiles: File[]) {
     const allowedDocExts = /\.(pdf|docx?|txt)$/i;
     const allowedImgExts = /\.(png|jpe?g|webp|heic)$/i;
     const allowedAudioExts = /\.(mp3|wav|m4a|ogg|webm)$/i;
@@ -253,8 +253,8 @@ export default function StudentAssignmentSubmitPage() {
     let newAudio: File | null = null;
 
     for (const f of incomingFiles) {
-      if (f.size > 10 * 1024 * 1024) {
-        toast.error(`"${f.name}" fayl hajmi juda katta (maksimal 10 MB). Iltimos, ixchamroq fayl yuklang.`);
+      if (f.size > 20 * 1024 * 1024) {
+        toast.error(`"${f.name}" fayl hajmi juda katta (maksimal 20 MB).`);
         continue;
       }
       const isImg = f.type.startsWith("image/") || allowedImgExts.test(f.name);
@@ -287,36 +287,52 @@ export default function StudentAssignmentSubmitPage() {
 
     if (newImages.length > 0) {
       setIsCompressingImages(true);
-      compressImages(newImages, 1200, 0.62)
-        .then(({ compressedFiles, originalTotalBytes, compressedTotalBytes, savedPercentage }) => {
-          setSubmissionImages((prev) => {
-            if (prev.length >= 10) {
-              toast.error("Maximum 10 images allowed per submission");
-              return prev;
-            }
-            const remainingSlots = 10 - prev.length;
-            const toAdd = compressedFiles.slice(0, remainingSlots);
-            if (compressedFiles.length > remainingSlots) {
-              toast.error(`Faqat ${remainingSlots} ta rasm qo'shildi (maksimal 10 ta)`);
+      try {
+        const compressedList: File[] = [];
+        let origBytes = 0;
+        let compBytes = 0;
+
+        for (const file of newImages) {
+          origBytes += file.size;
+          try {
+            // Guarantee aggressive downscaling: max 1200px, 60% quality (~150KB per workbook page)
+            const compressed = await compressImage(file, 1200, 0.60);
+            compBytes += compressed.size;
+            compressedList.push(compressed);
+          } catch (compErr) {
+            console.warn("Individual image compression error:", compErr);
+            compBytes += file.size;
+            compressedList.push(file);
+          }
+        }
+
+        setSubmissionImages((prev) => {
+          if (prev.length >= 10) {
+            toast.error("Maksimal 10 ta rasm biriktirish mumkin");
+            return prev;
+          }
+          const remainingSlots = 10 - prev.length;
+          const toAdd = compressedList.slice(0, remainingSlots);
+          if (compressedList.length > remainingSlots) {
+            toast.error(`Faqat ${remainingSlots} ta rasm qo'shildi (maksimal 10 ta)`);
+          } else {
+            const origMb = (origBytes / (1024 * 1024)).toFixed(1);
+            const compMb = (compBytes / (1024 * 1024)).toFixed(1);
+            const saved = origBytes > 0 ? Math.round(((origBytes - compBytes) / origBytes) * 100) : 0;
+            if (saved >= 20) {
+              toast.success(`${toAdd.length} ta rasm tayyorlandi (${origMb} MB ➔ ${compMb} MB, -${saved}% tejandi) ⚡`, { duration: 4000 });
             } else {
-              const origMb = (originalTotalBytes / (1024 * 1024)).toFixed(1);
-              const compMb = (compressedTotalBytes / (1024 * 1024)).toFixed(1);
-              if (savedPercentage >= 20) {
-                toast.success(`${toAdd.length} ta rasm siqildi (${origMb} MB ➔ ${compMb} MB, -${savedPercentage}% tejandi) ⚡`, { duration: 4000 });
-              } else {
-                toast.success(`${toAdd.length} ta rasm qo'shildi`);
-              }
+              toast.success(`${toAdd.length} ta rasm qo'shildi`);
             }
-            return [...prev, ...toAdd];
-          });
-        })
-        .catch((err) => {
-          console.error("Compression fallback error:", err);
-          setSubmissionImages((prev) => [...prev, ...newImages.slice(0, 10 - prev.length)]);
-        })
-        .finally(() => {
-          setIsCompressingImages(false);
+          }
+          return [...prev, ...toAdd];
         });
+      } catch (err) {
+        console.error("Compression failed:", err);
+        toast.error("Rasmlarni qayta ishlashda xatolik yuz berdi.");
+      } finally {
+        setIsCompressingImages(false);
+      }
     }
   }
 
@@ -383,14 +399,15 @@ export default function StudentAssignmentSubmitPage() {
       return;
     }
 
-    // Determine single file payload: prioritize voiceFile if present, else docFile
-    const effectiveFile = voiceFile || docFile || null;
+    const primaryFile = docFile || voiceFile || null;
 
-    if (effectiveFile) {
-      if (effectiveFile.size > 10 * 1024 * 1024) {
-        toast.error(`"${effectiveFile.name}" fayl hajmi juda katta (maksimal 10 MB). Iltimos, ixchamroq audio yoki hujjat yuklang.`);
-        return;
-      }
+    if (voiceFile && voiceFile.size > 20 * 1024 * 1024) {
+      toast.error(`Audio fayl hajmi juda katta (maksimal 20 MB).`);
+      return;
+    }
+    if (docFile && docFile.size > 20 * 1024 * 1024) {
+      toast.error(`Hujjat hajmi juda katta (maksimal 20 MB).`);
+      return;
     }
 
     setIsSubmitting(true);
@@ -400,7 +417,7 @@ export default function StudentAssignmentSubmitPage() {
       for (const img of submissionImages) {
         if (img.size > 300 * 1024) {
           try {
-            const comp = await compressImage(img, 1200, 0.62);
+            const comp = await compressImage(img, 1200, 0.60);
             finalImages.push(comp);
           } catch {
             finalImages.push(img);
@@ -410,22 +427,6 @@ export default function StudentAssignmentSubmitPage() {
         }
       }
 
-      // Pre-flight file size and payload validation on the actual compressed payload
-      let totalSizeBytes = effectiveFile ? effectiveFile.size : 0;
-      for (const img of finalImages) {
-        totalSizeBytes += img.size;
-      }
-
-      const VERCEL_PAYLOAD_LIMIT = 4.5 * 1024 * 1024; // 4.5 MB serverless limit
-      if (totalSizeBytes > VERCEL_PAYLOAD_LIMIT) {
-        toast.error(
-          `Yuklanayotgan fayllarning umumiy hajmi (${(totalSizeBytes / (1024 * 1024)).toFixed(1)} MB) ruxsat etilgan 4.5 MB server limitidan oshmoqda. Iltimos, rasmlar yoki audio hajmini kamaytiring.`,
-          { duration: 6000 }
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
       // Cleanly bundle externalLink into text_answer if present
       let combinedText = textAnswer.trim();
       if (externalLink.trim()) {
@@ -433,7 +434,7 @@ export default function StudentAssignmentSubmitPage() {
         combinedText = combinedText ? `${linkBlock}\n\n${combinedText}` : linkBlock;
       }
 
-      await submitHomework(assignment.id, combinedText, effectiveFile, finalImages);
+      await submitHomework(assignment.id, combinedText, primaryFile, finalImages, voiceFile, docFile);
       toast.success("Homework submitted successfully! 🚀", { id: "submit-success" });
       navigate("/student/assignments");
     } catch (err: any) {
@@ -447,7 +448,7 @@ export default function StudentAssignmentSubmitPage() {
       } else if (Array.isArray(detail)) {
         errorMsg = detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
       } else if (status === 413) {
-        errorMsg = "Yuklangan fayllar hajmi ruxsat etilgan limitdan oshdi (maksimal 4.5 MB). Iltimos, ixchamroq fayl yuklang.";
+        errorMsg = "Yuklangan fayllar hajmi ruxsat etilgan limitdan oshdi. Iltimos, ixchamroq fayl yuklang.";
       } else if (status === 403) {
         errorMsg = "Ushbu topshiriqqa javob yuborish huquqi yo'q yoki muddat tugagan.";
       } else if (status === 409) {
@@ -458,9 +459,9 @@ export default function StudentAssignmentSubmitPage() {
         errorMsg = "Tarmoq sekinligi tufayli vaqt tugadi. Internet yaxshiroq joyda qayta urining.";
       } else if (!err.response) {
         if (typeof window !== "undefined" && !window.navigator.onLine) {
-          errorMsg = "Internet aloqasini tekshiring. Tarmoqqa ulanish mavjud emas.";
+          errorMsg = "Internet aloqasini tekshiring. Qurilma oflayn holatda.";
         } else {
-          errorMsg = "Server qabul qila olmadi. Iltimos, fayl hajmini tekshiring (maksimal 4.5 MB) yoki qayta urinib ko'ring.";
+          errorMsg = "Serverga ulanishda xatolik yuz berdi. Iltimos internetni tekshirib qayta urining.";
         }
       }
 

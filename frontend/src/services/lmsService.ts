@@ -118,16 +118,30 @@ export const listSubmissions = (params: SubmissionQuery) =>
 export const listMySubmissions = () => api.get<SubmissionOut[]>("/submissions/mine").then((r) => r.data);
 export const getSubmission = (id: string) => api.get<SubmissionOut>(`/submissions/${id}`).then((r) => r.data);
 
-export const submitHomework = (assignment_id: string, text_answer: string, file: File | null, images?: File[]) => {
+export const submitHomework = (
+  assignment_id: string,
+  text_answer: string,
+  file: File | null,
+  images?: File[],
+  voice_file?: File | null,
+  doc_file?: File | null
+) => {
   const form = new FormData();
   form.append("assignment_id", assignment_id);
-  if (text_answer) form.append("text_answer", text_answer);
-  if (file) form.append("file", file);
+  if (text_answer && text_answer.trim()) form.append("text_answer", text_answer.trim());
+  if (file && file instanceof File && file.size > 0) form.append("file", file);
+  if (voice_file && voice_file instanceof File && voice_file.size > 0) form.append("voice_file", voice_file);
+  if (doc_file && doc_file instanceof File && doc_file.size > 0) form.append("doc_file", doc_file);
   if (images && images.length > 0) {
-    images.forEach((img) => form.append("images", img));
+    for (const img of images) {
+      if (img instanceof File && img.size > 0) {
+        form.append("images", img);
+      }
+    }
   }
   return api.post<SubmissionOut>("/submissions", form, {
     timeout: 120000, // 2 full minutes for slow mobile connections
+    headers: { "Content-Type": undefined },
   }).then((r) => r.data);
 };
 
