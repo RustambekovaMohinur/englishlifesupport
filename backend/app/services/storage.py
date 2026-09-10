@@ -32,51 +32,98 @@ class StorageError(Exception):
 
 class StorageService:
     def __init__(self):
-        self.backend = (settings.STORAGE_BACKEND or "b2").lower().strip()
-        # Ensure B2 bucket name is always english-life-files for Backblaze B2
-        configured_bucket = (settings.B2_BUCKET_NAME or "").strip()
-        if not configured_bucket or "r2" in configured_bucket.lower():
-            self.bucket_name = "english-life-files"
-        else:
-            self.bucket_name = configured_bucket
-
-        self.endpoint_url = settings.B2_ENDPOINT
-        self.key_id = settings.B2_KEY_ID
-        self.application_key = settings.B2_APPLICATION_KEY
+        self._backend = (settings.STORAGE_BACKEND or "b2").lower().strip()
+        self._bucket_name = (settings.B2_BUCKET_NAME or "").strip()
+        self._endpoint_url = settings.B2_ENDPOINT
+        self._key_id = settings.B2_KEY_ID
+        self._application_key = settings.B2_APPLICATION_KEY
         self._s3_client = None
 
-        # Log safe initialization info without secrets
-        endpoint_host = ""
-        try:
-            from urllib.parse import urlparse
-            endpoint_host = urlparse(self.endpoint_url).hostname or ""
-        except Exception:
-            pass
-        logger.info(
-            "Initialized StorageService (backend=%s, bucket=%s, endpoint_host=%s, credentials_present=%s)",
-            self.backend,
-            self.bucket_name,
-            endpoint_host,
-            bool(self.key_id and self.application_key),
-        )
+    @property
+    def backend(self) -> str:
+        import os
+        return (os.getenv("STORAGE_BACKEND") or self._backend or "b2").lower().strip()
+
+    @property
+    def bucket_name(self) -> str:
+        import os
+        configured = (
+            os.getenv("B2_BUCKET_NAME") or
+            os.getenv("B2_BUCKET") or
+            os.getenv("BACKBLAZE_BUCKET") or
+            os.getenv("BACKBLAZE_BUCKET_NAME") or
+            os.getenv("AWS_BUCKET_NAME") or
+            self._bucket_name or
+            "english-life-files"
+        ).strip()
+        if not configured or "r2" in configured.lower():
+            return "english-life-files"
+        return configured
+
+    @property
+    def endpoint_url(self) -> str:
+        import os
+        endpoint = (
+            os.getenv("B2_ENDPOINT") or
+            os.getenv("B2_ENDPOINT_URL") or
+            os.getenv("BACKBLAZE_ENDPOINT") or
+            os.getenv("BACKBLAZE_ENDPOINT_URL") or
+            os.getenv("S3_ENDPOINT_URL") or
+            self._endpoint_url or
+            "https://s3.us-east-005.backblazeb2.com"
+        ).strip().rstrip("/")
+        if endpoint and not endpoint.startswith("http"):
+            endpoint = f"https://{endpoint}"
+        return endpoint
+
+    @property
+    def key_id(self) -> str:
+        import os
+        return (
+            os.getenv("B2_KEY_ID") or
+            os.getenv("B2_APPLICATION_KEY_ID") or
+            os.getenv("B2_APP_KEY_ID") or
+            os.getenv("BACKBLAZE_KEY_ID") or
+            os.getenv("BACKBLAZE_APPLICATION_KEY_ID") or
+            os.getenv("AWS_ACCESS_KEY_ID") or
+            self._key_id or
+            settings.B2_KEY_ID or
+            ""
+        ).strip()
+
+    @property
+    def application_key(self) -> str:
+        import os
+        return (
+            os.getenv("B2_APPLICATION_KEY") or
+            os.getenv("B2_APPLICATION_KEY_SECRET") or
+            os.getenv("B2_APP_KEY") or
+            os.getenv("B2_SECRET_ACCESS_KEY") or
+            os.getenv("BACKBLAZE_APPLICATION_KEY") or
+            os.getenv("BACKBLAZE_SECRET_KEY") or
+            os.getenv("AWS_SECRET_ACCESS_KEY") or
+            self._application_key or
+            settings.B2_APPLICATION_KEY or
+            ""
+        ).strip()
 
     def _get_s3_client(self):
+        key = self.key_id
+        app_key = self.application_key
+        if not key or not app_key:
+            raise StorageError(
+                "Backblaze B2 credentials (B2_KEY_ID / B2_APPLICATION_KEY) are not configured."
+            )
         if self._s3_client is None:
-            if not self.key_id or not self.application_key:
-                raise StorageError(
-                    "Backblaze B2 credentials (B2_KEY_ID / B2_APPLICATION_KEY) are not configured."
-                )
             try:
-                # Backblaze B2 endpoint region (e.g. us-east-005 from https://s3.us-east-005.backblazeb2.com)
-                endpoint = (self.endpoint_url or "").strip().rstrip("/")
-                if not endpoint.startswith("http"):
-                    endpoint = f"https://{endpoint}"
-
+                import os
+                endpoint = self.endpoint_url
                 region = "us-east-005"
                 if ".backblazeb2.com" in endpoint:
                     parts = endpoint.replace("https://", "").replace("http://", "").split(".")[0]
                     if parts.startswith("s3."):
                         region = parts[3:]
+                region = os.getenv("B2_REGION") or os.getenv("AWS_REGION") or region
 
                 boto_config = Config(
                     signature_version="s3v4",
@@ -88,8 +135,8 @@ class StorageService:
                 self._s3_client = boto3.client(
                     "s3",
                     endpoint_url=endpoint,
-                    aws_access_key_id=self.key_id,
-                    aws_secret_access_key=self.application_key,
+                    aws_access_key_id=key,
+                    aws_secret_access_key=app_key,
                     region_name=region,
                     config=boto_config,
                 )
@@ -178,10 +225,19 @@ class StorageService:
         return bool(self.key_id and self.application_key and self.endpoint_url)
 
     async def upload_file(self, object_key: str, data: bytes, content_type: Optional[str] = None) -> str:
-        """Asynchronously upload file data to B2."""
+        """Asynchronously upload file data to B2 with retry."""
         if not self.is_configured:
             raise StorageError("Backblaze B2 credentials (B2_KEY_ID / B2_APPLICATION_KEY) are not configured.")
-        return await asyncio.to_thread(self._sync_upload, object_key, data, content_type)
+        last_err = None
+        for attempt in range(3):
+            try:
+                return await asyncio.to_thread(self._sync_upload, object_key, data, content_type)
+            except Exception as e:
+                last_err = e
+                logger.warning("B2 upload attempt %d failed for key '%s': %s", attempt + 1, object_key, e)
+                if attempt < 2:
+                    await asyncio.sleep(0.5 * (attempt + 1))
+        raise last_err
 
     async def safe_upload_file(self, object_key: str, data: bytes, content_type: Optional[str] = None) -> bool:
         """

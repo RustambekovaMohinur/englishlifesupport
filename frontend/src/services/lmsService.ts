@@ -120,26 +120,53 @@ export const getSubmission = (id: string) => api.get<SubmissionOut>(`/submission
 
 export const submitHomework = (
   assignment_id: string,
-  text_answer: string,
-  file: File | null,
+  text_answer?: string | null,
+  file?: File | null,
   images?: File[],
   voice_file?: File | null,
   doc_file?: File | null
 ) => {
-  const form = new FormData();
-  form.append("assignment_id", assignment_id);
-  if (text_answer && text_answer.trim()) form.append("text_answer", text_answer.trim());
-  if (file && file instanceof File && file.size > 0) form.append("file", file);
-  if (voice_file && voice_file instanceof File && voice_file.size > 0) form.append("voice_file", voice_file);
-  if (doc_file && doc_file instanceof File && doc_file.size > 0) form.append("doc_file", doc_file);
-  if (images && images.length > 0) {
-    for (const img of images) {
-      if (img instanceof File && img.size > 0) {
-        form.append("images", img);
-      }
-    }
+  const formData = new FormData();
+  formData.append("assignment_id", String(assignment_id));
+
+  const textContent = (text_answer || "").trim();
+  if (textContent) {
+    formData.append("content", textContent);
+    formData.append("text_answer", textContent);
   }
-  return api.post<SubmissionOut>("/submissions", form, {
+
+  // Audio: send "audio_file", "voice_file", and "audio"
+  const audioBlobOrFile = voice_file || (file && (file.type.startsWith("audio/") || /\.(mp3|wav|ogg|webm|m4a)$/i.test(file.name)) ? file : null);
+  if (audioBlobOrFile && audioBlobOrFile instanceof File && audioBlobOrFile.size > 0) {
+    formData.append("audio_file", audioBlobOrFile);
+    formData.append("voice_file", audioBlobOrFile);
+    formData.append("audio", audioBlobOrFile);
+  }
+
+  // Documents: send "document_file" and "doc_file"
+  const documentFile = doc_file || (file && !audioBlobOrFile && !(file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(file.name)) ? file : null);
+  if (documentFile && documentFile instanceof File && documentFile.size > 0) {
+    formData.append("document_file", documentFile);
+    formData.append("doc_file", documentFile);
+  }
+
+  // Images: append under 'images' and handle legacy primary 'file'
+  const attachedPhotos = (images && images.length > 0) ? images : (file && !audioBlobOrFile && !documentFile && (file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(file.name)) ? [file] : []);
+  if (attachedPhotos && attachedPhotos.length > 0) {
+    attachedPhotos.forEach((photo) => {
+      if (photo instanceof File && photo.size > 0) {
+        formData.append("images", photo);
+      }
+    });
+    // If legacy backend expects the first photo as 'file':
+    if (attachedPhotos[0] instanceof File && attachedPhotos[0].size > 0) {
+      formData.append("file", attachedPhotos[0]);
+    }
+  } else if (file && file instanceof File && file.size > 0 && !audioBlobOrFile && !documentFile) {
+    formData.append("file", file);
+  }
+
+  return api.post<SubmissionOut>("/submissions", formData, {
     timeout: 120000, // 2 full minutes for slow mobile connections
     headers: { "Content-Type": undefined },
   }).then((r) => r.data);

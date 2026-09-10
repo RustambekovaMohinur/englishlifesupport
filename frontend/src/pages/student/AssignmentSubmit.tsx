@@ -1286,6 +1286,21 @@ export default function StudentAssignmentSubmitPage() {
                 </FileDownloadButton>
               </div>
             )}
+            {existingSubmission.images && existingSubmission.images.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">Attached Photos ({existingSubmission.images.length}):</span>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {existingSubmission.images.map((img, idx) => (
+                    <AuthenticatedImage
+                      key={img.id || idx}
+                      url={`/api/submissions/${existingSubmission.id}/images/${img.id}`}
+                      alt={`Submitted Photo ${idx + 1}`}
+                      className="rounded-lg object-cover aspect-square border border-zinc-200 dark:border-zinc-800 w-full"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
       </main>

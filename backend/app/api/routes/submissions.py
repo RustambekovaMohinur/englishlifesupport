@@ -155,12 +155,18 @@ def _submission_to_out(sub: Submission) -> SubmissionOut:
 async def submit_homework(
     assignment_id: uuid.UUID = Form(...),
     text_answer: str | None = Form(default=None),
+    content: str | None = Form(default=None),
     file: UploadFile | None = File(default=None),
     voice_file: UploadFile | None = File(default=None),
-    doc_file: UploadFile | None = File(default=None),
+    audio_file: UploadFile | None = File(default=None),
     audio: UploadFile | None = File(default=None),
+    doc_file: UploadFile | None = File(default=None),
+    document_file: UploadFile | None = File(default=None),
     images: list[UploadFile] | None = File(default=None),
     image: UploadFile | None = File(default=None),
+    image_files: list[UploadFile] | None = File(default=None),
+    photos: list[UploadFile] | None = File(default=None),
+    photo: UploadFile | None = File(default=None),
     profile: StudentProfile = Depends(get_current_student_profile),
     db: AsyncSession = Depends(get_db),
 ):
@@ -184,22 +190,41 @@ async def submit_homework(
             detail=f"Task is locked: {lock_reason}",
         )
 
-    # Multi-modal file resolution: check file, voice_file, doc_file, audio
+    # Harmonize text answer from content or text_answer
+    raw_text = (content or text_answer or "").strip() or None
+
+    # Collect and validate all image uploads across all potential form field keys
+    all_images: list[UploadFile] = []
+    for img_group in [images, image_files, photos]:
+        if img_group:
+            for img in img_group:
+                if img and getattr(img, "filename", None) and len(img.filename.strip()) > 0:
+                    all_images.append(img)
+    for single_img in [image, photo]:
+        if single_img and getattr(single_img, "filename", None) and len(single_img.filename.strip()) > 0:
+            if single_img not in all_images:
+                all_images.append(single_img)
+
+    # Multi-modal file resolution: check audio_file, voice_file, audio, document_file, doc_file
     primary_file: UploadFile | None = None
-    for candidate in [file, voice_file, doc_file, audio]:
+    for candidate in [audio_file, voice_file, audio, document_file, doc_file]:
         if candidate is not None and getattr(candidate, "filename", None) and len(candidate.filename.strip()) > 0:
             primary_file = candidate
             break
 
-    # Collect and validate all image uploads
-    all_images: list[UploadFile] = []
-    if images:
-        for img in images:
-            if img and getattr(img, "filename", None) and len(img.filename.strip()) > 0:
-                all_images.append(img)
-    if image and getattr(image, "filename", None) and len(image.filename.strip()) > 0:
-        if image not in all_images:
-            all_images.append(image)
+    # If no audio or doc, check general file
+    if primary_file is None and file is not None and getattr(file, "filename", None) and len(file.filename.strip()) > 0:
+        if not all_images:
+            primary_file = file
+        else:
+            # If all_images is present, only treat 'file' as primary if it's NOT the first photo passed for legacy compatibility
+            first_img = all_images[0]
+            is_same = (
+                file.filename == first_img.filename and
+                getattr(file, "size", None) == getattr(first_img, "size", None)
+            )
+            if not is_same:
+                primary_file = file
 
     valid_images = all_images[:10]
     if len(all_images) > 10:
@@ -208,7 +233,7 @@ async def submit_homework(
             detail="Maximum 10 images allowed per submission",
         )
 
-    if not text_answer and not primary_file and not valid_images:
+    if not raw_text and not primary_file and not valid_images:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide a text answer, file, voice audio, or images")
 
     now = utcnow()
@@ -270,8 +295,8 @@ async def submit_homework(
     is_late = as_utc(assignment.deadline) < now
     submission_status = SubmissionStatus.LATE if is_late else SubmissionStatus.SUBMITTED
 
-    # If text_answer is sent, update it; otherwise retain existing
-    resolved_text = text_answer if (text_answer is not None and text_answer.strip()) else (existing.text_answer if existing else text_answer)
+    # If text_answer/content is sent, update it; otherwise retain existing
+    resolved_text = raw_text if (raw_text is not None and raw_text.strip()) else (existing.text_answer if existing else raw_text)
 
     if existing is not None:
         existing.is_archived = False

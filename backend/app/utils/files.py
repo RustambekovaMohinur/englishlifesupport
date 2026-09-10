@@ -87,9 +87,24 @@ def _assert_safe_extension(filename: str) -> None:
 
 
 def get_upload_root() -> Path:
-    root = Path(settings.UPLOAD_DIR).resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    return root
+    """
+    Returns the root directory for uploaded files.
+    On serverless environments (e.g. Vercel, AWS Lambda) where the app root is read-only,
+    gracefully falls back to /tmp/uploads to avoid OSError(30) Read-only file system.
+    """
+    env_dir = getattr(settings, "UPLOAD_DIR", "uploads")
+    root = Path(env_dir).resolve()
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        # Probe writability
+        probe = root / f".probe_{uuid.uuid4().hex}"
+        probe.touch()
+        probe.unlink()
+        return root
+    except (OSError, PermissionError):
+        tmp_root = Path("/tmp") / "uploads"
+        tmp_root.mkdir(parents=True, exist_ok=True)
+        return tmp_root
 
 
 from app.services.storage import StorageError, get_storage_service
@@ -107,15 +122,14 @@ async def save_file_blob(
     metadata in the PostgreSQL file_blobs table.
 
     CRITICAL RULES:
-    1. Upload to B2 MUST succeed before the database record is written/committed.
-    2. In production (STORAGE_BACKEND=b2), if B2 upload fails, do not write to DB.
-    3. New files store raw bytes ONLY in B2; file_blobs.file_data is set to NULL.
-    4. Database contains only metadata: storage_backend='b2', storage_key, file_size, etc.
+    1. Upload directly to B2 when configured.
+    2. New files store raw bytes in B2.
+    3. Database contains only metadata: storage_backend, storage_key, file_size, etc.
     """
     norm_path = relative_path.replace("\\", "/").lstrip("/")
     storage_service = get_storage_service()
 
-    # Step 1: Upload to B2 if configured, with graceful fallback to local storage
+    # Step 1: Upload directly to B2 if configured
     storage_backend = "local"
     if storage_service.backend == "b2" and getattr(storage_service, "is_configured", False):
         try:
