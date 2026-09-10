@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -44,7 +45,14 @@ from app.services.gamification_service import (
     update_student_streak,
 )
 from app.utils.datetimes import as_utc, utcnow
-from app.utils.files import resolve_submission_file, resolve_submission_file_async, save_submission_file
+from app.utils.files import (
+    process_submission_file_concurrent,
+    process_submission_image_concurrent,
+    record_file_blob,
+    resolve_submission_file,
+    resolve_submission_file_async,
+    save_submission_file,
+)
 
 router = APIRouter(prefix="/api/submissions", tags=["submissions"])
 
@@ -225,22 +233,41 @@ async def submit_homework(
             status_code=status.HTTP_409_CONFLICT, detail="This submission has already been graded and can no longer be edited"
         )
 
+    sub_id = existing.id if existing else uuid.uuid4()
+
+    # Step 1: Concurrently process and upload ALL files (audio, doc, and up to 10 images) in parallel
+    upload_tasks = []
+    has_primary = primary_file is not None
+    if has_primary:
+        upload_tasks.append(process_submission_file_concurrent(primary_file, profile.id))
+
+    for idx, img in enumerate(valid_images):
+        upload_tasks.append(process_submission_image_concurrent(img, sub_id, idx))
+
+    upload_results = []
+    if upload_tasks:
+        try:
+            upload_results = await asyncio.gather(*upload_tasks)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception("Failed during concurrent storage upload: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Fayl yoki rasmlarni serverga yuklashda xatolik yuz berdi. Iltimos qayta urinib ko'ring.",
+            ) from e
+
+    primary_res = upload_results[0] if has_primary else None
+    image_results = upload_results[1:] if has_primary else upload_results
+
     file_path = existing.file_path if existing else None
     file_original_name = existing.file_original_name if existing else None
     file_content_type = existing.file_content_type if existing else None
     file_size = existing.file_size_bytes if existing else None
 
-    if primary_file is not None:
-        try:
-            file_path, file_original_name, file_content_type, file_size = await save_submission_file(primary_file, profile.id, db=db)
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.exception("Failed to save submission file: %s", e)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Fayl yoki audio faylni saqlashda xatolik yuz berdi. Iltimos, qayta yuklang.",
-            ) from e
+    if primary_res is not None:
+        file_path, file_original_name, file_content_type, file_size = primary_res
+        await record_file_blob(db, file_path, file_size, file_content_type, file_original_name)
 
     is_late = as_utc(assignment.deadline) < now
     submission_status = SubmissionStatus.LATE if is_late else SubmissionStatus.SUBMITTED
@@ -256,6 +283,7 @@ async def submit_homework(
         submission = existing
     else:
         submission = Submission(
+            id=sub_id,
             assignment_id=assignment_id,
             student_id=profile.id,
             cycle_number=curr_cycle,
@@ -271,28 +299,19 @@ async def submit_homework(
         db.add(submission)
     await db.flush()
 
-    if valid_images:
+    if image_results:
         from app.models.submission import SubmissionImage
-        from app.utils.files import save_submission_image
 
-        for idx, img_file in enumerate(valid_images):
-            try:
-                img_path, img_orig_name, img_content_type, img_size = await save_submission_image(img_file, submission.id, db=db)
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.exception("Failed to save submission image: %s", e)
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Rasmni saqlashda xatolik yuz berdi. Iltimos qayta urinib ko'ring.",
-                ) from e
+        for img_res in image_results:
+            img_path, img_orig_name, img_content_type, img_size, img_order_idx = img_res
+            await record_file_blob(db, img_path, img_size, img_content_type, img_orig_name)
             sub_img = SubmissionImage(
                 submission_id=submission.id,
                 file_path=img_path,
                 file_original_name=img_orig_name,
                 file_content_type=img_content_type,
                 file_size_bytes=img_size,
-                order_index=idx,
+                order_index=img_order_idx,
             )
             db.add(sub_img)
 

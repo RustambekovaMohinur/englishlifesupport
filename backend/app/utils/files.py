@@ -596,3 +596,167 @@ async def save_submission_image(
 
     return relative_path, original_name, content_type, total_size
 
+
+async def save_storage_file_data(
+    relative_path: str,
+    data: bytes,
+    content_type: str | None,
+) -> None:
+    """Uploads file bytes to Backblaze B2 storage without database coupling."""
+    norm_path = relative_path.replace("\\", "/").lstrip("/")
+    storage_service = get_storage_service()
+    if storage_service.backend == "b2":
+        try:
+            await storage_service.upload_file(norm_path, data, content_type)
+        except Exception as e:
+            err_msg = str(e).strip() or type(e).__name__
+            logger.error("Cloud storage upload error for path '%s': %s", norm_path, err_msg)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Cloud storage upload error: {err_msg}",
+            ) from e
+
+
+async def record_file_blob(
+    db: AsyncSession,
+    relative_path: str,
+    file_size: int,
+    content_type: str | None,
+    file_name: str | None,
+) -> None:
+    """
+    Records or updates FileBlob metadata in PostgreSQL without early commit,
+    enabling it to participate in the surrounding database transaction.
+    """
+    norm_path = relative_path.replace("\\", "/").lstrip("/")
+    storage_service = get_storage_service()
+    existing = (
+        await db.execute(select(FileBlob).where(FileBlob.file_path == norm_path))
+    ).scalar_one_or_none()
+    if existing:
+        existing.storage_backend = storage_service.backend
+        existing.storage_key = norm_path
+        existing.content_type = content_type
+        existing.file_name = file_name
+        existing.file_size = file_size
+    else:
+        blob = FileBlob(
+            file_path=norm_path,
+            storage_backend=storage_service.backend,
+            storage_key=norm_path,
+            content_type=content_type,
+            file_name=file_name,
+            file_size=file_size,
+        )
+        db.add(blob)
+
+
+async def process_submission_file_concurrent(
+    file: UploadFile,
+    student_id: uuid.UUID,
+) -> tuple[str, str, str, int]:
+    """
+    Validates and saves a primary submission file (voice/doc/audio) to disk and uploads to B2.
+    Does NOT touch the database session, making it 100% concurrency-safe for asyncio.gather.
+    Returns (relative_path, original_name, content_type, total_size).
+    """
+    _assert_safe_extension(file.filename or "")
+
+    content_type = file.content_type or ""
+    extension = ALLOWED_CONTENT_TYPES.get(content_type)
+    if not extension:
+        ext = Path(file.filename or "").suffix.lower()
+        if ext in set(ALLOWED_CONTENT_TYPES.values()):
+            extension = ext
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Unsupported file type. Allowed: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, JPG, PNG, MP3, WAV, M4A",
+            )
+
+    student_dir = get_upload_root() / "submissions" / str(student_id)
+    student_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_filename = f"{uuid.uuid4().hex}{extension}"
+    destination = student_dir / safe_filename
+
+    is_audio = extension in {".mp3", ".wav", ".m4a", ".webm", ".ogg"} or (content_type and content_type.startswith("audio/"))
+    limit_mb = settings.AUDIO_MAX_SIZE_MB if is_audio else settings.MAX_UPLOAD_SIZE_MB
+    max_bytes = limit_mb * 1024 * 1024
+    total_size = 0
+    chunk_size = 1024 * 1024
+
+    with destination.open("wb") as out_file:
+        while chunk := await file.read(chunk_size):
+            total_size += len(chunk)
+            if total_size > max_bytes:
+                out_file.close()
+                destination.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"File exceeds the {limit_mb}MB limit",
+                )
+            out_file.write(chunk)
+
+    relative_path = str(destination.relative_to(get_upload_root())).replace("\\", "/")
+    original_name = Path(file.filename or "upload").name
+    data = destination.read_bytes()
+
+    await save_storage_file_data(relative_path, data, content_type)
+    return relative_path, original_name, content_type, total_size
+
+
+async def process_submission_image_concurrent(
+    file: UploadFile,
+    submission_id: uuid.UUID,
+    order_index: int,
+) -> tuple[str, str, str, int, int]:
+    """
+    Validates and saves a submission image to disk and uploads to B2.
+    Does NOT touch the database session, making it 100% concurrency-safe for asyncio.gather.
+    Returns (relative_path, original_name, content_type, total_size, order_index).
+    """
+    _assert_safe_extension(file.filename or "")
+
+    content_type = file.content_type or ""
+    extension = ALLOWED_IMAGE_TYPES.get(content_type)
+    if not extension:
+        ext = Path(file.filename or "").suffix.lower()
+        if ext in set(ALLOWED_IMAGE_TYPES.values()):
+            extension = ext
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid image format. Allowed formats: JPG, PNG, WEBP, HEIC",
+            )
+
+    img_dir = get_upload_root() / "submissions" / str(submission_id) / "images"
+    img_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_filename = f"{uuid.uuid4().hex}{extension}"
+    destination = img_dir / safe_filename
+
+    max_bytes = 10 * 1024 * 1024  # 10MB
+    total_size = 0
+    chunk_size = 512 * 1024
+
+    with destination.open("wb") as out_file:
+        while chunk := await file.read(chunk_size):
+            total_size += len(chunk)
+            if total_size > max_bytes:
+                out_file.close()
+                destination.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="Image exceeds the 10MB limit",
+                )
+            out_file.write(chunk)
+
+    relative_path = str(destination.relative_to(get_upload_root())).replace("\\", "/")
+    original_name = Path(file.filename or "submission_image").name
+    data = destination.read_bytes()
+
+    await save_storage_file_data(relative_path, data, content_type)
+    return relative_path, original_name, content_type, total_size, order_index
+
+

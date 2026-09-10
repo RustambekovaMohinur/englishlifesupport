@@ -455,6 +455,8 @@ export default function StudentAssignmentSubmitPage() {
         errorMsg = "Ushbu topshiriq allaqachon baholangan, uni qayta yuborib bo'lmaydi.";
       } else if (status === 500 || status === 502) {
         errorMsg = "Server faylni qabul qilishda xatolikka uchradi. Iltimos, qayta urinib ko'ring.";
+      } else if (status === 504) {
+        errorMsg = "Server javob berish vaqti tugadi (504 Gateway Timeout). Iltimos, qayta urinib ko'ring.";
       } else if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
         errorMsg = "Tarmoq sekinligi tufayli vaqt tugadi. Internet yaxshiroq joyda qayta urining.";
       } else if (!err.response) {
