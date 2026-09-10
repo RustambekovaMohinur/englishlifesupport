@@ -152,8 +152,9 @@ def _submission_to_out(sub: Submission) -> SubmissionOut:
 
 
 @router.post("", response_model=SubmissionOut, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=SubmissionOut, status_code=status.HTTP_201_CREATED)
 async def submit_homework(
-    assignment_id: uuid.UUID = Form(...),
+    assignment_id: str = Form(...),
     text_answer: str | None = Form(default=None),
     content: str | None = Form(default=None),
     file: UploadFile | None = File(default=None),
@@ -175,7 +176,17 @@ async def submit_homework(
     assignment belonging to their own group. Text, file, audio, and/or up to 10 images accepted.
     Image #11 rejected with 400.
     """
-    assignment = (await db.execute(select(Assignment).where(Assignment.id == assignment_id))).scalar_one_or_none()
+    # Accept UUID string and parse cleanly
+    clean_id = str(assignment_id).strip().strip("'\"")
+    try:
+        assignment_uuid = uuid.UUID(clean_id)
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid assignment_id format: '{assignment_id}'. Expected a valid UUID.",
+        ) from exc
+
+    assignment = (await db.execute(select(Assignment).where(Assignment.id == assignment_uuid))).scalar_one_or_none()
     if assignment is None or assignment.status != AssignmentStatus.PUBLISHED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
     if assignment.group_id != profile.group_id:
@@ -183,7 +194,7 @@ async def submit_homework(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This assignment is not for your group")
 
     # Enforce sequential task lock strictly on backend
-    is_locked, lock_reason = await is_assignment_locked_for_student(db, assignment_id, profile.id)
+    is_locked, lock_reason = await is_assignment_locked_for_student(db, assignment_uuid, profile.id)
     if is_locked:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -245,7 +256,7 @@ async def submit_homework(
         select(Submission)
         .options(selectinload(Submission.grade))
         .where(
-            Submission.assignment_id == assignment_id,
+            Submission.assignment_id == assignment_uuid,
             Submission.student_id == profile.id,
             Submission.cycle_number == curr_cycle,
         )
@@ -311,7 +322,7 @@ async def submit_homework(
     else:
         submission = Submission(
             id=sub_id,
-            assignment_id=assignment_id,
+            assignment_id=assignment_uuid,
             student_id=profile.id,
             cycle_number=curr_cycle,
             is_archived=False,
@@ -355,11 +366,11 @@ async def submit_homework(
                 student_id=profile.id,
                 amount=-20,
                 reason=StarTransactionReason.LATE_PENALTY,
-                reference_id=str(assignment_id),
+                reference_id=str(assignment_uuid),
                 description=f"Late submission penalty for '{assignment.title}'",
             )
             # Check comeback achievement if student completed a previously late task
-            await check_comeback_achievement(db, profile.id, assignment_id)
+            await check_comeback_achievement(db, profile.id, assignment_uuid)
         else:
             # +10 ⭐ on-time assignment completion
             await award_stars(
@@ -367,7 +378,7 @@ async def submit_homework(
                 student_id=profile.id,
                 amount=10,
                 reason=StarTransactionReason.ON_TIME_SUBMISSION,
-                reference_id=str(assignment_id),
+                reference_id=str(assignment_uuid),
                 description=f"On-time completion for '{assignment.title}'",
             )
             # +25 XP for assignment completion
@@ -376,14 +387,14 @@ async def submit_homework(
                 student_id=profile.id,
                 amount=25,
                 activity_type="assignment_completed",
-                reference_id=str(assignment_id),
+                reference_id=str(assignment_uuid),
                 description=f"XP for completing '{assignment.title}'",
             )
             # 100% completion awards 1 ⚡ lightning (idempotent, never duplicates)
             await award_lightning(
                 db,
                 student_id=profile.id,
-                assignment_id=assignment_id,
+                assignment_id=assignment_uuid,
             )
             # Unlock assignment completion achievement
             await unlock_achievement(
@@ -402,7 +413,7 @@ async def submit_homework(
                     student_id=profile.id,
                     amount=5,
                     reason=StarTransactionReason.EARLY_SUBMISSION,
-                    reference_id=str(assignment_id),
+                    reference_id=str(assignment_uuid),
                     description=f"Early bird bonus for '{assignment.title}'",
                 )
                 if awarded_early:
@@ -442,6 +453,7 @@ async def submit_homework(
 
 
 @router.get("", response_model=PaginatedSubmissions, dependencies=[Depends(require_teacher)])
+@router.get("/", response_model=PaginatedSubmissions, dependencies=[Depends(require_teacher)])
 async def list_submissions(
     db: AsyncSession = Depends(get_db),
     group_id: uuid.UUID | None = Query(default=None),
