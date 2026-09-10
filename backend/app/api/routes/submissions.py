@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -215,25 +215,22 @@ async def submit_homework(
 
     curr_cycle = getattr(assignment, "cycle_number", 1) or 1
 
-    existing = (
-        await db.execute(
-            select(Submission)
-            .options(selectinload(Submission.grade))
-            .where(
-                Submission.assignment_id == assignment_id,
-                Submission.student_id == profile.id,
-                Submission.cycle_number == curr_cycle,
-                Submission.is_archived == False,
-            )
+    # Query for existing submission for this student, assignment, and cycle
+    stmt = (
+        select(Submission)
+        .options(selectinload(Submission.grade))
+        .where(
+            Submission.assignment_id == assignment_id,
+            Submission.student_id == profile.id,
+            Submission.cycle_number == curr_cycle,
         )
-    ).scalar_one_or_none()
-
-    if existing is not None and existing.grade is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="This submission has already been graded and can no longer be edited"
-        )
+        .order_by(Submission.is_archived.asc(), Submission.submitted_at.desc())
+        .limit(1)
+    )
+    existing = (await db.execute(stmt)).scalar_one_or_none()
 
     sub_id = existing.id if existing else uuid.uuid4()
+    is_new_submission = existing is None
 
     # Step 1: Concurrently process and upload ALL files (audio, doc, and up to 10 images) in parallel
     upload_tasks = []
@@ -260,6 +257,7 @@ async def submit_homework(
     primary_res = upload_results[0] if has_primary else None
     image_results = upload_results[1:] if has_primary else upload_results
 
+    # Retain existing files if no new file is uploaded
     file_path = existing.file_path if existing else None
     file_original_name = existing.file_original_name if existing else None
     file_content_type = existing.file_content_type if existing else None
@@ -272,8 +270,12 @@ async def submit_homework(
     is_late = as_utc(assignment.deadline) < now
     submission_status = SubmissionStatus.LATE if is_late else SubmissionStatus.SUBMITTED
 
+    # If text_answer is sent, update it; otherwise retain existing
+    resolved_text = text_answer if (text_answer is not None and text_answer.strip()) else (existing.text_answer if existing else text_answer)
+
     if existing is not None:
-        existing.text_answer = text_answer
+        existing.is_archived = False
+        existing.text_answer = resolved_text
         existing.file_path = file_path
         existing.file_original_name = file_original_name
         existing.file_content_type = file_content_type
@@ -288,7 +290,7 @@ async def submit_homework(
             student_id=profile.id,
             cycle_number=curr_cycle,
             is_archived=False,
-            text_answer=text_answer,
+            text_answer=resolved_text,
             file_path=file_path,
             file_original_name=file_original_name,
             file_content_type=file_content_type,
@@ -301,6 +303,10 @@ async def submit_homework(
 
     if image_results:
         from app.models.submission import SubmissionImage
+
+        # Replace previous images on update with the new batch
+        if not is_new_submission:
+            await db.execute(delete(SubmissionImage).where(SubmissionImage.submission_id == submission.id))
 
         for img_res in image_results:
             img_path, img_orig_name, img_content_type, img_size, img_order_idx = img_res
@@ -315,81 +321,84 @@ async def submit_homework(
             )
             db.add(sub_img)
 
-
     # Gamification calculations
-    if is_late:
-        # -20 ⭐ late/missed deadline (idempotent, only applied once per assignment)
-        await award_stars(
-            db,
-            student_id=profile.id,
-            amount=-20,
-            reason=StarTransactionReason.LATE_PENALTY,
-            reference_id=str(assignment_id),
-            description=f"Late submission penalty for '{assignment.title}'",
-        )
-        # Check comeback achievement if student completed a previously late task
-        await check_comeback_achievement(db, profile.id, assignment_id)
-    else:
-        # +10 ⭐ on-time assignment completion
-        await award_stars(
-            db,
-            student_id=profile.id,
-            amount=10,
-            reason=StarTransactionReason.ON_TIME_SUBMISSION,
-            reference_id=str(assignment_id),
-            description=f"On-time completion for '{assignment.title}'",
-        )
-        # +25 XP for assignment completion
-        await award_xp(
-            db,
-            student_id=profile.id,
-            amount=25,
-            activity_type="assignment_completed",
-            reference_id=str(assignment_id),
-            description=f"XP for completing '{assignment.title}'",
-        )
-        # 100% completion awards 1 ⚡ lightning (idempotent, never duplicates)
-        await award_lightning(
-            db,
-            student_id=profile.id,
-            assignment_id=assignment_id,
-        )
-        # Unlock assignment completion achievement
-        await unlock_achievement(
-            db,
-            student_id=profile.id,
-            badge_key="first_assignment",
-            title="Homework Hero",
-            description="Completed and submitted an assignment on time!",
-            icon="📝",
-        )
-
-        # Early submission check: submitted at least 24 hours before deadline gives +5 ⭐ and Early Bird
-        if as_utc(assignment.deadline) - now >= timedelta(hours=24):
-            awarded_early = await award_stars(
+    if is_new_submission:
+        if is_late:
+            # -20 ⭐ late/missed deadline (idempotent, only applied once per assignment)
+            await award_stars(
                 db,
                 student_id=profile.id,
-                amount=5,
-                reason=StarTransactionReason.EARLY_SUBMISSION,
+                amount=-20,
+                reason=StarTransactionReason.LATE_PENALTY,
                 reference_id=str(assignment_id),
-                description=f"Early bird bonus for '{assignment.title}'",
+                description=f"Late submission penalty for '{assignment.title}'",
             )
-            if awarded_early:
-                await unlock_achievement(
+            # Check comeback achievement if student completed a previously late task
+            await check_comeback_achievement(db, profile.id, assignment_id)
+        else:
+            # +10 ⭐ on-time assignment completion
+            await award_stars(
+                db,
+                student_id=profile.id,
+                amount=10,
+                reason=StarTransactionReason.ON_TIME_SUBMISSION,
+                reference_id=str(assignment_id),
+                description=f"On-time completion for '{assignment.title}'",
+            )
+            # +25 XP for assignment completion
+            await award_xp(
+                db,
+                student_id=profile.id,
+                amount=25,
+                activity_type="assignment_completed",
+                reference_id=str(assignment_id),
+                description=f"XP for completing '{assignment.title}'",
+            )
+            # 100% completion awards 1 ⚡ lightning (idempotent, never duplicates)
+            await award_lightning(
+                db,
+                student_id=profile.id,
+                assignment_id=assignment_id,
+            )
+            # Unlock assignment completion achievement
+            await unlock_achievement(
+                db,
+                student_id=profile.id,
+                badge_key="first_assignment",
+                title="Homework Hero",
+                description="Completed and submitted an assignment on time!",
+                icon="📝",
+            )
+
+            # Early submission check: submitted at least 24 hours before deadline gives +5 ⭐ and Early Bird
+            if as_utc(assignment.deadline) - now >= timedelta(hours=24):
+                awarded_early = await award_stars(
                     db,
                     student_id=profile.id,
-                    badge_key="early_bird",
-                    title="Early Bird",
-                    description="Submitted homework at least 24 hours before deadline!",
-                    icon="🚀",
+                    amount=5,
+                    reason=StarTransactionReason.EARLY_SUBMISSION,
+                    reference_id=str(assignment_id),
+                    description=f"Early bird bonus for '{assignment.title}'",
                 )
+                if awarded_early:
+                    await unlock_achievement(
+                        db,
+                        student_id=profile.id,
+                        badge_key="early_bird",
+                        title="Early Bird",
+                        description="Submitted homework at least 24 hours before deadline!",
+                        icon="🚀",
+                    )
 
-        # Update ⚡ streak
+            # Update ⚡ streak
+            await update_student_streak(db, profile.id, now.strftime("%Y-%m-%d"))
+
+            # Check Perfect Week
+            if profile.group_id:
+                await check_and_award_perfect_week(db, profile.id, profile.group_id)
+    else:
+        # On resubmission/update, maintain streak without duplicating stars/XP
         await update_student_streak(db, profile.id, now.strftime("%Y-%m-%d"))
-
-        # Check Perfect Week
-        if profile.group_id:
-            await check_and_award_perfect_week(db, profile.id, profile.group_id)
 
     await db.commit()
     result = await db.execute(

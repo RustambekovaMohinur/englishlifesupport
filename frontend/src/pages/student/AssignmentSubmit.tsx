@@ -439,32 +439,39 @@ export default function StudentAssignmentSubmitPage() {
       navigate("/student/assignments");
     } catch (err: any) {
       console.error("Submission error diagnostics:", err);
-      let errorMsg = "Topshiriqni yuborishda xatolik yuz berdi.";
       const status = err?.response?.status;
-      const detail = err?.response?.data?.detail;
+      const resData = err?.response?.data;
+      const detail = resData?.detail;
+      const serverMessage = resData?.message || resData?.error;
 
-      if (typeof detail === "string") {
+      let errorMsg = "";
+
+      if (typeof detail === "string" && detail.trim()) {
         errorMsg = detail;
       } else if (Array.isArray(detail)) {
-        errorMsg = detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
+        errorMsg = detail
+          .map((d: any) => (typeof d === "string" ? d : d?.msg || JSON.stringify(d)))
+          .join(", ");
+      } else if (typeof serverMessage === "string" && serverMessage.trim()) {
+        errorMsg = serverMessage;
       } else if (status === 413) {
         errorMsg = "Yuklangan fayllar hajmi ruxsat etilgan limitdan oshdi. Iltimos, ixchamroq fayl yuklang.";
       } else if (status === 403) {
-        errorMsg = "Ushbu topshiriqqa javob yuborish huquqi yo'q yoki muddat tugagan.";
+        errorMsg = "Ushbu topshiriqqa javob yuborish huquqi yo'q yoki topshiriq qulflangan.";
       } else if (status === 409) {
-        errorMsg = "Ushbu topshiriq allaqachon baholangan, uni qayta yuborib bo'lmaydi.";
+        errorMsg = "Ushbu topshiriq allaqachon topshirilgan yoki ziddiyat yuz berdi.";
       } else if (status === 500 || status === 502) {
-        errorMsg = "Server faylni qabul qilishda xatolikka uchradi. Iltimos, qayta urinib ko'ring.";
+        errorMsg = "Serverda xatolik yuz berdi (500/502). Iltimos, qayta urinib ko'ring.";
       } else if (status === 504) {
         errorMsg = "Server javob berish vaqti tugadi (504 Gateway Timeout). Iltimos, qayta urinib ko'ring.";
-      } else if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
+      } else if (err.code === "ECONNABORTED" || err.message?.toLowerCase().includes("timeout")) {
         errorMsg = "Tarmoq sekinligi tufayli vaqt tugadi. Internet yaxshiroq joyda qayta urining.";
-      } else if (!err.response) {
-        if (typeof window !== "undefined" && !window.navigator.onLine) {
-          errorMsg = "Internet aloqasini tekshiring. Qurilma oflayn holatda.";
-        } else {
-          errorMsg = "Serverga ulanishda xatolik yuz berdi. Iltimos internetni tekshirib qayta urining.";
-        }
+      } else if (typeof window !== "undefined" && !window.navigator.onLine) {
+        errorMsg = "Internet aloqasini tekshiring. Qurilma oflayn holatda.";
+      } else if (err?.message && !err.message.includes("Network Error")) {
+        errorMsg = `Xatolik yuz berdi: ${err.message}`;
+      } else {
+        errorMsg = "Topshiriqni yuborishda xatolik yuz berdi. Iltimos qayta urinib ko'ring.";
       }
 
       toast.error(errorMsg, { id: "submit-homework-error", duration: 5000 });
