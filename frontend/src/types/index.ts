@@ -321,6 +321,18 @@ export interface PlatformFeedback {
   created_at: string;
 }
 
+export interface FeedbackReplyItem {
+  id: string;
+  feedback_id: string;
+  user_id: string;
+  author_name: string;
+  author_avatar?: string | null;
+  author_role: string;
+  message: string;
+  created_at: string;
+  is_mine?: boolean;
+}
+
 export interface PublicFeedbackItem {
   id: string;
   rating: number;
@@ -332,7 +344,11 @@ export interface PublicFeedbackItem {
   author_avatar?: string | null;
   created_at: string | null;
   is_mine?: boolean;
+  likes_count: number;
+  has_liked: boolean;
+  replies: FeedbackReplyItem[];
 }
+
 
 export interface PlatformFeedbackSummary {
   average_rating: number;

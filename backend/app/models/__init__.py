@@ -11,7 +11,7 @@ from app.models.teacher import TeacherProfile  # noqa: F401
 from app.models.group import Group, EnglishLevel  # noqa: F401
 from app.models.student import StudentProfile  # noqa: F401
 from app.models.assignment import Assignment, AssignmentComment  # noqa: F401
-from app.models.feedback import PlatformFeedback  # noqa: F401
+from app.models.feedback import FeedbackLike, FeedbackReply, PlatformFeedback  # noqa: F401
 from app.models.submission import (  # noqa: F401
     Submission,
     SubmissionComment,
@@ -49,6 +49,8 @@ __all__ = [
     "Assignment",
     "AssignmentComment",
     "PlatformFeedback",
+    "FeedbackReply",
+    "FeedbackLike",
     "Submission",
     "SubmissionStatus",
     "SubmissionCorrection",

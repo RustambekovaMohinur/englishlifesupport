@@ -38,3 +38,24 @@ class PlatformFeedbackStats(BaseModel):
     average_rating: float = 5.0
     total_reviews: int = 0
     rating_distribution: dict[str, int] = {}
+
+
+class FeedbackReplyCreate(BaseModel):
+    message: str = Field(min_length=1, max_length=3000)
+
+
+class FeedbackReplyOut(BaseModel):
+    id: str
+    feedback_id: str
+    user_id: str
+    author_name: str
+    author_avatar: str | None = None
+    author_role: str
+    message: str
+    created_at: str
+
+
+class FeedbackLikeToggleOut(BaseModel):
+    liked: bool
+    likes_count: int
+

@@ -2,15 +2,19 @@ import uuid
 from collections import Counter
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_teacher
 from app.db.session import get_db
-from app.models.feedback import PlatformFeedback
+from app.models.feedback import FeedbackLike, FeedbackReply, PlatformFeedback
 from app.models.student import StudentProfile
+from app.models.teacher import TeacherProfile
 from app.models.user import User, UserRole
 from app.schemas.feedback import (
+    FeedbackLikeToggleOut,
+    FeedbackReplyCreate,
+    FeedbackReplyOut,
     PlatformFeedbackCreate,
     PlatformFeedbackOut,
     PlatformFeedbackStats,
@@ -280,6 +284,133 @@ async def get_platform_feedback_stats(
     )
 
 
+@router.post("/{feedback_id}/like", response_model=FeedbackLikeToggleOut)
+async def toggle_feedback_like(
+    feedback_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Toggle like on a platform feedback post.
+    If already liked -> unlike and return liked=False.
+    If not liked -> insert like and return liked=True.
+    """
+    # 1. Verify feedback exists
+    exists = (
+        await db.execute(select(PlatformFeedback.id).where(PlatformFeedback.id == feedback_id))
+    ).scalar_one_or_none()
+    if not exists:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feedback post not found")
+
+    # 2. Check if user already liked
+    existing_like = (
+        await db.execute(
+            select(FeedbackLike.id).where(
+                FeedbackLike.feedback_id == feedback_id, FeedbackLike.user_id == current_user.id
+            )
+        )
+    ).scalar_one_or_none()
+
+    if existing_like:
+        await db.execute(delete(FeedbackLike).where(FeedbackLike.id == existing_like))
+        liked = False
+    else:
+        new_like = FeedbackLike(
+            id=uuid.uuid4(),
+            feedback_id=feedback_id,
+            user_id=current_user.id,
+        )
+        db.add(new_like)
+        liked = True
+
+    await db.commit()
+
+    # 3. Get fresh likes count
+    count = (
+        await db.execute(
+            select(func.count(FeedbackLike.id)).where(FeedbackLike.feedback_id == feedback_id)
+        )
+    ).scalar() or 0
+
+    return FeedbackLikeToggleOut(liked=liked, likes_count=count)
+
+
+@router.post("/{feedback_id}/replies", response_model=FeedbackReplyOut, status_code=status.HTTP_201_CREATED)
+async def add_feedback_reply(
+    feedback_id: uuid.UUID,
+    payload: FeedbackReplyCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Add a reply to a platform feedback post.
+    Decoupled from lazy-loaded ORM attributes to prevent greenlet_spawn crashes.
+    """
+    # 1. Verify feedback exists
+    exists = (
+        await db.execute(select(PlatformFeedback.id).where(PlatformFeedback.id == feedback_id))
+    ).scalar_one_or_none()
+    if not exists:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feedback post not found")
+
+    clean_msg = payload.message.strip()
+    if not clean_msg:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Reply message cannot be empty")
+
+    reply_id = uuid.uuid4()
+    reply = FeedbackReply(
+        id=reply_id,
+        feedback_id=feedback_id,
+        user_id=current_user.id,
+        message=clean_msg,
+    )
+    db.add(reply)
+    await db.commit()
+
+    # 2. Fetch author display info via joined query
+    user_role_str = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    author_name = getattr(current_user, "username", "Foydalanuvchi")
+    author_avatar = f"/api/profile/{current_user.id}/avatar"
+
+    if user_role_str == "student":
+        sp = (
+            await db.execute(
+                select(StudentProfile.full_name, StudentProfile.avatar_url).where(
+                    StudentProfile.user_id == current_user.id
+                )
+            )
+        ).first()
+        if sp:
+            if sp.full_name:
+                author_name = sp.full_name
+            if sp.avatar_url:
+                author_avatar = sp.avatar_url
+    elif user_role_str in ["teacher", "admin", "superadmin"]:
+        tp = (
+            await db.execute(
+                select(TeacherProfile.full_name, TeacherProfile.avatar_url).where(
+                    TeacherProfile.user_id == current_user.id
+                )
+            )
+        ).first()
+        if tp:
+            if tp.full_name:
+                author_name = tp.full_name
+            if tp.avatar_url:
+                author_avatar = tp.avatar_url
+
+    return FeedbackReplyOut(
+        id=str(reply_id),
+        feedback_id=str(feedback_id),
+        user_id=str(current_user.id),
+        author_name=author_name,
+        author_avatar=author_avatar,
+        author_role=user_role_str,
+        message=clean_msg,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
 @router.get("/public")
 async def get_public_feedbacks(
     db: AsyncSession = Depends(get_db),
@@ -288,8 +419,10 @@ async def get_public_feedbacks(
     """
     Public Community Reviews Feed:
     Accessible to all authenticated students and teachers.
+    Enriched with likes_count, has_liked, and threaded replies.
     Uses pure joined queries with zero ORM relationship lazy loading to avoid greenlet_spawn crashes.
     """
+    # 1. Fetch feedbacks
     stmt = (
         select(
             PlatformFeedback.id,
@@ -311,7 +444,73 @@ async def get_public_feedbacks(
         .limit(50)
     )
     rows = (await db.execute(stmt)).all()
+    if not rows:
+        return []
 
+    feedback_ids = [r.id for r in rows]
+
+    # 2. Fetch likes stats for these feedbacks
+    likes_rows = (
+        await db.execute(
+            select(FeedbackLike.feedback_id, FeedbackLike.user_id).where(
+                FeedbackLike.feedback_id.in_(feedback_ids)
+            )
+        )
+    ).all()
+
+    likes_count_map: dict[uuid.UUID, int] = {}
+    user_liked_set: set[uuid.UUID] = set()
+    for l_fb_id, l_u_id in likes_rows:
+        likes_count_map[l_fb_id] = likes_count_map.get(l_fb_id, 0) + 1
+        if l_u_id == current_user.id:
+            user_liked_set.add(l_fb_id)
+
+    # 3. Fetch replies for these feedbacks
+    replies_stmt = (
+        select(
+            FeedbackReply.id,
+            FeedbackReply.feedback_id,
+            FeedbackReply.user_id,
+            FeedbackReply.message,
+            FeedbackReply.created_at,
+            User.username,
+            User.role,
+            StudentProfile.full_name.label("student_name"),
+            StudentProfile.avatar_url.label("student_avatar"),
+            TeacherProfile.full_name.label("teacher_name"),
+            TeacherProfile.avatar_url.label("teacher_avatar"),
+        )
+        .join(User, FeedbackReply.user_id == User.id, isouter=True)
+        .join(StudentProfile, User.id == StudentProfile.user_id, isouter=True)
+        .join(TeacherProfile, User.id == TeacherProfile.user_id, isouter=True)
+        .where(FeedbackReply.feedback_id.in_(feedback_ids))
+        .order_by(FeedbackReply.created_at.asc())
+    )
+    reply_rows = (await db.execute(replies_stmt)).all()
+
+    replies_map: dict[uuid.UUID, list] = {fb_id: [] for fb_id in feedback_ids}
+    for rep in reply_rows:
+        role_val = rep.role.value if hasattr(rep.role, "value") else str(rep.role or "student")
+        if role_val == "teacher" or role_val in ["admin", "superadmin"]:
+            rep_author_name = rep.teacher_name or rep.username or "O'qituvchi"
+            rep_author_avatar = rep.teacher_avatar or f"/api/profile/{rep.user_id}/avatar"
+        else:
+            rep_author_name = rep.student_name or rep.username or "O'quvchi"
+            rep_author_avatar = rep.student_avatar or f"/api/profile/{rep.user_id}/avatar"
+
+        replies_map[rep.feedback_id].append({
+            "id": str(rep.id),
+            "feedback_id": str(rep.feedback_id),
+            "user_id": str(rep.user_id),
+            "author_name": rep_author_name,
+            "author_avatar": rep_author_avatar,
+            "author_role": role_val,
+            "message": rep.message,
+            "created_at": rep.created_at.isoformat() if rep.created_at else None,
+            "is_mine": (rep.user_id == current_user.id),
+        })
+
+    # 4. Build final response
     output = []
     for r in rows:
         author_name = r.student_name or r.username or "O'quvchi"
@@ -328,8 +527,12 @@ async def get_public_feedbacks(
             "author_avatar": author_avatar,
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "is_mine": (r.user_id == current_user.id),
+            "likes_count": likes_count_map.get(r.id, 0),
+            "has_liked": (r.id in user_liked_set),
+            "replies": replies_map.get(r.id, []),
         })
 
     return output
+
 
 

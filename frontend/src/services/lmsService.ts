@@ -12,6 +12,7 @@ import {
   PlatformFeedbackStats,
   PlatformFeedbackSummary,
   PublicFeedbackItem,
+  FeedbackReplyItem,
   StudentDashboard,
   StudentGamificationSummary,
   StudentHistoryOut,
@@ -256,5 +257,12 @@ export const getTeacherPlatformFeedbackStats = () =>
 
 export const getPublicFeedbacks = () =>
   api.get<PublicFeedbackItem[]>("/feedback/public").then((r) => r.data);
+
+export const toggleFeedbackLike = (feedbackId: string) =>
+  api.post<{ liked: boolean; likes_count: number }>(`/feedback/${feedbackId}/like`).then((r) => r.data);
+
+export const addFeedbackReply = (feedbackId: string, message: string) =>
+  api.post<FeedbackReplyItem>(`/feedback/${feedbackId}/replies`, { message }).then((r) => r.data);
+
 
 
