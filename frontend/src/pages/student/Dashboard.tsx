@@ -5,18 +5,20 @@ import { ArrowRight, CheckCircle2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { EmptyState, LoadingRows, StatCard } from "@/components/ui";
 import { UserAvatar } from "@/components/common/UserAvatar";
-import { PlatformFeedbackModal } from "@/components/PlatformFeedbackModal";
+import { PlatformFeedbackModal, PublicCommunityReviewsWall } from "@/components/PlatformFeedbackModal";
 import {
   getStudentDashboard,
   getGamificationSummary,
   getWeeklyLeaderboard,
   getPlatformFeedbackSummary,
+  getPublicFeedbacks,
 } from "@/services/lmsService";
 import {
   StudentDashboard,
   StudentGamificationSummary,
   WeeklyLeaderboardOut,
   PlatformFeedbackSummary,
+  PublicFeedbackItem,
 } from "@/types";
 
 function getGreeting(name: string): string {
@@ -79,6 +81,16 @@ export default function StudentDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [feedbackSummary, setFeedbackSummary] = useState<PlatformFeedbackSummary | null>(null);
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
+  const [publicFeedbacks, setPublicFeedbacks] = useState<PublicFeedbackItem[]>([]);
+  const [isLoadingPublicFeedbacks, setIsLoadingPublicFeedbacks] = useState(true);
+
+  const fetchReviews = () => {
+    setIsLoadingPublicFeedbacks(true);
+    getPublicFeedbacks()
+      .then(setPublicFeedbacks)
+      .catch(() => null)
+      .finally(() => setIsLoadingPublicFeedbacks(false));
+  };
 
   useEffect(() => {
     getStudentDashboard()
@@ -89,6 +101,7 @@ export default function StudentDashboardPage() {
     getGamificationSummary().then(setGamify).catch(() => null);
     getWeeklyLeaderboard().then(setLeaderboard).catch(() => null);
     getPlatformFeedbackSummary().then(setFeedbackSummary).catch(() => null);
+    fetchReviews();
   }, []);
 
   useEffect(() => {
@@ -570,11 +583,20 @@ export default function StudentDashboardPage() {
         </div>
       </div>
 
+      {/* Transparent Community Reviews Wall */}
+      <PublicCommunityReviewsWall
+        feedbacks={publicFeedbacks}
+        isLoading={isLoadingPublicFeedbacks}
+        onOpenFeedbackModal={() => setFeedbackModalOpen(true)}
+        userHasReviewed={feedbackSummary?.user_has_reviewed}
+      />
+
       <PlatformFeedbackModal
         isOpen={feedbackModalOpen}
         onClose={() => setFeedbackModalOpen(false)}
         onSubmitted={() => {
           getPlatformFeedbackSummary().then(setFeedbackSummary).catch(() => null);
+          fetchReviews();
         }}
       />
     </div>

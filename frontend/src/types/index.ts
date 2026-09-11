@@ -321,6 +321,19 @@ export interface PlatformFeedback {
   created_at: string;
 }
 
+export interface PublicFeedbackItem {
+  id: string;
+  rating: number;
+  what_works_well?: string | null;
+  what_to_improve?: string | null;
+  message?: string | null;
+  category?: string | null;
+  author_name: string;
+  author_avatar?: string | null;
+  created_at: string | null;
+  is_mine?: boolean;
+}
+
 export interface PlatformFeedbackSummary {
   average_rating: number;
   total_reviews: number;

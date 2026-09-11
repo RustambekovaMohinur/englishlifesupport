@@ -279,3 +279,57 @@ async def get_platform_feedback_stats(
         rating_distribution=distribution,
     )
 
+
+@router.get("/public")
+async def get_public_feedbacks(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Public Community Reviews Feed:
+    Accessible to all authenticated students and teachers.
+    Uses pure joined queries with zero ORM relationship lazy loading to avoid greenlet_spawn crashes.
+    """
+    stmt = (
+        select(
+            PlatformFeedback.id,
+            PlatformFeedback.user_id,
+            PlatformFeedback.rating,
+            PlatformFeedback.what_works_well,
+            PlatformFeedback.what_to_improve,
+            PlatformFeedback.category,
+            PlatformFeedback.message,
+            PlatformFeedback.created_at,
+            User.username,
+            User.role,
+            StudentProfile.full_name.label("student_name"),
+            StudentProfile.avatar_url.label("student_avatar"),
+        )
+        .join(User, PlatformFeedback.user_id == User.id, isouter=True)
+        .join(StudentProfile, User.id == StudentProfile.user_id, isouter=True)
+        .order_by(PlatformFeedback.created_at.desc())
+        .limit(50)
+    )
+    rows = (await db.execute(stmt)).all()
+
+    output = []
+    for r in rows:
+        author_name = r.student_name or r.username or "O'quvchi"
+        author_avatar = r.student_avatar or f"/api/profile/{r.user_id}/avatar"
+
+        output.append({
+            "id": str(r.id),
+            "rating": r.rating,
+            "what_works_well": r.what_works_well,
+            "what_to_improve": r.what_to_improve,
+            "message": r.message,
+            "category": r.category,
+            "author_name": author_name,
+            "author_avatar": author_avatar,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "is_mine": (r.user_id == current_user.id),
+        })
+
+    return output
+
+

@@ -11,6 +11,7 @@ import {
   PlatformFeedback,
   PlatformFeedbackStats,
   PlatformFeedbackSummary,
+  PublicFeedbackItem,
   StudentDashboard,
   StudentGamificationSummary,
   StudentHistoryOut,
@@ -252,5 +253,8 @@ export const getTeacherPlatformFeedback = (params?: { rating?: number; limit?: n
 
 export const getTeacherPlatformFeedbackStats = () =>
   api.get<PlatformFeedbackStats>("/feedback/stats").then((r) => r.data);
+
+export const getPublicFeedbacks = () =>
+  api.get<PublicFeedbackItem[]>("/feedback/public").then((r) => r.data);
 
 

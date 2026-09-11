@@ -241,3 +241,201 @@ export function PlatformFeedbackFloatingTrigger() {
     </>
   );
 }
+
+/**
+ * Public Community Reviews Wall / Feed
+ * Accessible to students and teachers for full transparency.
+ */
+export function PublicCommunityReviewsWall({
+  feedbacks,
+  isLoading,
+  onOpenFeedbackModal,
+  userHasReviewed,
+}: {
+  feedbacks: import("@/types").PublicFeedbackItem[];
+  isLoading?: boolean;
+  onOpenFeedbackModal?: () => void;
+  userHasReviewed?: boolean;
+}) {
+  const [ratingFilter, setRatingFilter] = useState<number | null>(null);
+
+  const filteredFeedbacks = ratingFilter
+    ? feedbacks.filter((f) => f.rating === ratingFilter)
+    : feedbacks;
+
+  const avgRating =
+    feedbacks.length > 0
+      ? (feedbacks.reduce((acc, f) => acc + f.rating, 0) / feedbacks.length).toFixed(1)
+      : "5.0";
+
+  return (
+    <div className="card border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)] space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 flex items-center justify-center text-lg shrink-0">
+            💬
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-zinc-900 dark:text-white tracking-tight">
+                O'quvchilar Fikrlari & Sharhlar
+              </h2>
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                ⭐ {avgRating} / 5.0
+              </span>
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Platforma sifatini oshirish bo'yicha jamoamiz a'zolarining ochiq fikrlari
+            </p>
+          </div>
+        </div>
+
+        {onOpenFeedbackModal && (
+          <button
+            type="button"
+            onClick={onOpenFeedbackModal}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 active:scale-95 text-white shadow-xs transition shrink-0 self-start sm:self-auto"
+          >
+            <span>{userHasReviewed ? "Fikrimni yangilash" : "⭐ Fikr bildirish (+5 XP)"}</span>
+          </button>
+        )}
+      </div>
+
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        <button
+          type="button"
+          onClick={() => setRatingFilter(null)}
+          className={`px-3 py-1 rounded-lg text-xs font-semibold transition shrink-0 ${
+            ratingFilter === null
+              ? "bg-brand-600 text-white shadow-xs"
+              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+          }`}
+        >
+          Barchasi ({feedbacks.length})
+        </button>
+        {[5, 4, 3, 2, 1].map((star) => {
+          const count = feedbacks.filter((f) => f.rating === star).length;
+          return (
+            <button
+              key={star}
+              type="button"
+              onClick={() => setRatingFilter(ratingFilter === star ? null : star)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition shrink-0 flex items-center gap-1 ${
+                ratingFilter === star
+                  ? "bg-amber-500 text-white shadow-xs"
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+              }`}
+            >
+              <span>{star} ★</span>
+              <span className="opacity-70 text-[10px]">({count})</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Reviews Cards Grid */}
+      {isLoading ? (
+        <div className="py-8 text-center text-xs text-zinc-400">Sharhlar yuklanmoqda...</div>
+      ) : filteredFeedbacks.length === 0 ? (
+        <div className="text-center py-8 px-4 bg-zinc-50/50 dark:bg-zinc-900/30 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800">
+          <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+            {ratingFilter ? `${ratingFilter} yulduzli sharhlar topilmadi` : "Hozircha sharhlar mavjud emas"}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          {filteredFeedbacks.map((item) => (
+            <div
+              key={item.id}
+              className={`p-4 rounded-2xl bg-white dark:bg-[#111827] border shadow-xs space-y-3 flex flex-col justify-between transition ${
+                item.is_mine
+                  ? "border-amber-300 dark:border-amber-700/60 bg-amber-50/20 dark:bg-amber-950/10"
+                  : "border-zinc-200/80 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
+              }`}
+            >
+              {/* Card Header */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand-600 to-indigo-500 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
+                    {item.author_name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">
+                        {item.author_name}
+                      </p>
+                      {item.is_mine && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                          Siz
+                        </span>
+                      )}
+                    </div>
+                    {item.created_at && (
+                      <p className="text-[10px] text-zinc-400 font-mono">
+                        {new Date(item.created_at).toLocaleDateString("uz-UZ", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Stars Badge */}
+                <div className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/40 text-amber-500 shrink-0">
+                  {"★".repeat(item.rating)}
+                  <span className="text-zinc-300 dark:text-zinc-700">
+                    {"★".repeat(Math.max(0, 5 - item.rating))}
+                  </span>
+                  <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 ml-1 font-mono">
+                    {item.rating}/5
+                  </span>
+                </div>
+              </div>
+
+              {/* Feedback Content */}
+              <div className="space-y-2 flex-1 text-xs">
+                {item.what_works_well && (
+                  <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-800/50">
+                    <p className="font-bold text-emerald-800 dark:text-emerald-300 text-[11px] mb-0.5 flex items-center gap-1">
+                      <span>💚</span> <span>Yoqqan jihatlari:</span>
+                    </p>
+                    <p className="text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                      {item.what_works_well}
+                    </p>
+                  </div>
+                )}
+
+                {item.what_to_improve && (
+                  <div className="p-2.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/50">
+                    <p className="font-bold text-amber-800 dark:text-amber-300 text-[11px] mb-0.5 flex items-center gap-1">
+                      <span>🔧</span> <span>Taklif va yaxshilanishlar:</span>
+                    </p>
+                    <p className="text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                      {item.what_to_improve}
+                    </p>
+                  </div>
+                )}
+
+                {!item.what_works_well && !item.what_to_improve && item.message && (
+                  <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800">
+                    <p className="text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                      {item.message}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Named alias export for compatibility
+export { PlatformFeedbackModal as FeedbackModal };
+
