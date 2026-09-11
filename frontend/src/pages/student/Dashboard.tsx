@@ -4,8 +4,20 @@ import { format } from "date-fns";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { EmptyState, LoadingRows, StatCard } from "@/components/ui";
-import { getStudentDashboard, getGamificationSummary, getWeeklyLeaderboard } from "@/services/lmsService";
-import { StudentDashboard, StudentGamificationSummary, WeeklyLeaderboardOut } from "@/types";
+import { UserAvatar } from "@/components/common/UserAvatar";
+import { PlatformFeedbackModal } from "@/components/PlatformFeedbackModal";
+import {
+  getStudentDashboard,
+  getGamificationSummary,
+  getWeeklyLeaderboard,
+  getPlatformFeedbackSummary,
+} from "@/services/lmsService";
+import {
+  StudentDashboard,
+  StudentGamificationSummary,
+  WeeklyLeaderboardOut,
+  PlatformFeedbackSummary,
+} from "@/types";
 
 function getGreeting(name: string): string {
   const hour = new Date().getHours();
@@ -65,6 +77,8 @@ export default function StudentDashboardPage() {
   const [leaderboard, setLeaderboard] = useState<WeeklyLeaderboardOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [feedbackSummary, setFeedbackSummary] = useState<PlatformFeedbackSummary | null>(null);
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
 
   useEffect(() => {
     getStudentDashboard()
@@ -74,6 +88,7 @@ export default function StudentDashboardPage() {
 
     getGamificationSummary().then(setGamify).catch(() => null);
     getWeeklyLeaderboard().then(setLeaderboard).catch(() => null);
+    getPlatformFeedbackSummary().then(setFeedbackSummary).catch(() => null);
   }, []);
 
   useEffect(() => {
@@ -178,6 +193,41 @@ export default function StudentDashboardPage() {
           </Link>
         </div>
       )}
+
+      {/* Community Satisfaction & Feedback Banner */}
+      <div className="rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-950/30 dark:via-zinc-900/40 border border-amber-300/60 dark:border-amber-800/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 flex items-center justify-center text-lg shrink-0">
+            ⭐
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-zinc-900 dark:text-white">
+                {feedbackSummary?.average_rating ? `${feedbackSummary.average_rating} / 5.0` : "4.9 / 5.0"}
+              </span>
+              <div className="flex items-center text-amber-400 text-xs">
+                {"★".repeat(Math.round(feedbackSummary?.average_rating || 5))}
+              </div>
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                ({feedbackSummary?.total_reviews ?? 0} ta o'quvchi baholadi)
+              </span>
+            </div>
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 truncate">
+              {feedbackSummary?.user_has_reviewed
+                ? "Siz platformani baholagansiz. Fikringizni istalgan vaqtda yangilashingiz mumkin!"
+                : "Platformani baholang, takliflaringizni yozing va +5 XP bonusiga ega bo'ling!"}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setFeedbackModalOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 active:scale-95 text-white shadow-xs transition shrink-0 self-end sm:self-auto"
+        >
+          <span>{feedbackSummary?.user_has_reviewed ? "Fikrni yangilash" : "⭐ Baholash"}</span>
+        </button>
+      </div>
+
       {/* Hero Banner & Gamification Streak Grid (Desktop: 12-col span-8/span-4, Tablet: 2-col, Mobile: 1-col) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-stretch">
         {/* Left Hero Card (Desktop span-8, Tablet span-1, Mobile full) */}
@@ -446,9 +496,9 @@ export default function StudentDashboardPage() {
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2 min-w-0">
                           <span
-                            className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${
+                            className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${
                               rank === 1
                                 ? "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200"
                                 : rank === 2
@@ -460,7 +510,12 @@ export default function StudentDashboardPage() {
                           >
                             {rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : rank}
                           </span>
-                          <span className="truncate max-w-[120px] font-semibold text-neutral-900 dark:text-white">
+                          <UserAvatar
+                            src={entry.avatar_url}
+                            name={entry.student_name}
+                            size="xs"
+                          />
+                          <span className="truncate max-w-[130px] font-semibold text-neutral-900 dark:text-white">
                             {entry.student_name} {entry.is_current_user && "(You)"}
                           </span>
                         </div>
@@ -514,6 +569,14 @@ export default function StudentDashboardPage() {
           )}
         </div>
       </div>
+
+      <PlatformFeedbackModal
+        isOpen={feedbackModalOpen}
+        onClose={() => setFeedbackModalOpen(false)}
+        onSubmitted={() => {
+          getPlatformFeedbackSummary().then(setFeedbackSummary).catch(() => null);
+        }}
+      />
     </div>
   );
 }

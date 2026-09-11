@@ -10,6 +10,7 @@ import {
   PendingStudentItem,
   PlatformFeedback,
   PlatformFeedbackStats,
+  PlatformFeedbackSummary,
   StudentDashboard,
   StudentGamificationSummary,
   StudentHistoryOut,
@@ -230,12 +231,24 @@ export const toggleLikeAssignmentComment = (assignmentId: string, commentId: str
   api.post<AssignmentComment>(`/assignments/${assignmentId}/comments/${commentId}/like`).then((r) => r.data);
 
 // --- Platform Feedback & Reviews ---
-export const submitPlatformFeedback = (rating: number, category: string, message: string) =>
-  api.post<PlatformFeedback>("/feedback/platform", { rating, category, message }).then((r) => r.data);
+export const submitPlatformFeedback = (data: {
+  rating: number;
+  what_works_well?: string;
+  what_to_improve?: string;
+  category?: string;
+  message?: string;
+}) => api.post<PlatformFeedback>("/feedback", data).then((r) => r.data);
+
+export const getPlatformFeedbackSummary = () =>
+  api.get<PlatformFeedbackSummary>("/feedback/summary").then((r) => r.data);
+
+export const getAllPlatformFeedback = () =>
+  api.get<PlatformFeedback[]>("/feedback/all").then((r) => r.data);
 
 export const getTeacherPlatformFeedback = () =>
   api.get<PlatformFeedback[]>("/feedback/teacher/platform").then((r) => r.data);
 
 export const getTeacherPlatformFeedbackStats = () =>
   api.get<PlatformFeedbackStats>("/feedback/teacher/platform/stats").then((r) => r.data);
+
 

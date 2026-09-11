@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ExternalLink, Loader2, X, Star, FileText, CheckCircle2, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import StudentDetailModal from "@/components/StudentDetailModal";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import {
   EmptyState,
   LoadingRows,
@@ -494,13 +495,11 @@ export default function GroupDetailPage() {
                         <td className="px-4 py-3 sticky left-0 bg-white dark:bg-[#111827] z-10 font-medium text-neutral-900 dark:text-white border-r border-black/[0.08] dark:border-white/[0.08] shadow-[4px_0_8px_rgba(0,0,0,0.08)]">
                           <div className="flex items-center gap-2.5">
                             <div className="relative">
-                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 font-bold text-brand-700 text-xs overflow-hidden">
-                                {st.avatar_url ? (
-                                  <img src={st.avatar_url} alt={st.full_name} className="h-full w-full object-cover" />
-                                ) : (
-                                  st.full_name.slice(0, 2).toUpperCase()
-                                )}
-                              </div>
+                              <UserAvatar
+                                src={st.avatar_url}
+                                name={st.full_name}
+                                size="xs"
+                              />
                               <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-900" title="Active" />
                             </div>
                             <div className="min-w-0">

@@ -14,7 +14,9 @@ class PlatformFeedback(UUIDPKMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True
     )
     rating: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    category: Mapped[str] = mapped_column(String(50), nullable=False)
-    message: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    what_works_well: Mapped[str | None] = mapped_column(Text, nullable=True)
+    what_to_improve: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped['User'] = relationship()

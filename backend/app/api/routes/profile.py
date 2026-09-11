@@ -1,8 +1,11 @@
+import logging
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
+
+logger = logging.getLogger("app.api.routes.profile")
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -437,13 +440,32 @@ async def remove_my_avatar(
     )
 
 
+users_avatar_router = APIRouter(prefix="/api/users", tags=["users"])
+
+
 @router.get("/{user_id}/avatar")
+@users_avatar_router.get("/{user_id}/avatar")
 async def get_user_avatar(
     user_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
 ):
-    """Serve uploaded avatar photo directly."""
-    profile_dir = get_upload_root() / "profiles" / str(user_id)
+    """Serve uploaded avatar photo directly with B2 presigned redirect and local fallback."""
+    target_user_id = user_id
+
+    # Check if passed ID is a StudentProfile ID
+    sp_res = await db.execute(select(StudentProfile.user_id).where(StudentProfile.id == user_id))
+    sp_user_id = sp_res.scalars().first()
+    if sp_user_id:
+        target_user_id = sp_user_id
+    else:
+        # Check if passed ID is a TeacherProfile ID
+        tp_res = await db.execute(select(TeacherProfile.user_id).where(TeacherProfile.id == user_id))
+        tp_user_id = tp_res.scalars().first()
+        if tp_user_id:
+            target_user_id = tp_user_id
+
+    # 1. Check local container disk
+    profile_dir = get_upload_root() / "profiles" / str(target_user_id)
     if profile_dir.exists():
         for match in profile_dir.glob("avatar.*"):
             if match.is_file():
@@ -459,10 +481,26 @@ async def get_user_avatar(
                     headers={"Cache-Control": "public, max-age=86400"},
                 )
 
-    # If missing from ephemeral container disk, restore from B2 or FileBlob database
-    res = await db.execute(select(FileBlob).where(FileBlob.file_path.like(f"profiles/{user_id}/avatar%")))
-    blob = res.scalar_one_or_none()
+    # 2. Check FileBlob metadata (B2 or saved object)
+    res = await db.execute(select(FileBlob).where(FileBlob.file_path.like(f"profiles/{target_user_id}/avatar%")))
+    blob = res.scalars().first()
     if blob:
+        # Try direct B2 Presigned URL redirect for high performance
+        if blob.storage_backend == "b2" or blob.storage_key:
+            try:
+                from app.services.storage import get_storage_service
+                storage = get_storage_service()
+                if storage.is_configured:
+                    presigned_url = await storage.generate_presigned_url(blob.storage_key or blob.file_path, expires_in=86400)
+                    return RedirectResponse(
+                        url=presigned_url,
+                        status_code=307,
+                        headers={"Cache-Control": "public, max-age=86400"},
+                    )
+            except Exception as e:
+                logger.warning("B2 presigned avatar redirect failed, falling back to download: %s", e)
+
+        # Download from B2 and cache locally
         dest = get_upload_root() / blob.file_path
         dest.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -474,7 +512,8 @@ async def get_user_avatar(
                 media_type=blob.content_type or "image/jpeg",
                 headers={"Cache-Control": "public, max-age=86400"},
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error("Failed to restore avatar from storage: %s", e)
 
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")
+

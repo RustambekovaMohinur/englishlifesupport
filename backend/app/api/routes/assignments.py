@@ -1039,6 +1039,12 @@ def _format_comment_out(c: AssignmentComment, current_user_id: uuid.UUID) -> Ass
             or u.username
         )
         role_str = u.role.value if hasattr(u.role, "value") else str(u.role)
+        avatar_val = (
+            (sp.avatar_url if sp and sp.avatar_url else None)
+            or (tp.avatar_url if tp and tp.avatar_url else None)
+        )
+    else:
+        avatar_val = None
 
     liked_by = [str(uid) for uid in (c.liked_by_users or [])]
     is_liked = str(current_user_id) in liked_by
@@ -1056,7 +1062,7 @@ def _format_comment_out(c: AssignmentComment, current_user_id: uuid.UUID) -> Ass
         likes=c.likes or len(liked_by),
         liked_by_users=liked_by,
         is_liked_by_me=is_liked,
-        user_avatar_url=None,
+        user_avatar_url=avatar_val,
     )
 
 
@@ -1135,7 +1141,10 @@ async def create_assignment_comment(
             )
             .where(AssignmentComment.id == new_comment.id)
         )
-    ).scalar_one()
+    ).scalars().first()
+
+    if not refetched:
+        raise HTTPException(status_code=500, detail="Failed to retrieve created comment")
 
     return _format_comment_out(refetched, current_user.id)
 

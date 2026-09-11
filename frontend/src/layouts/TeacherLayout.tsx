@@ -13,6 +13,8 @@ import {
 import { Logo, ThemeToggle } from "@/components/ui";
 import { MarqueeTicker } from "@/components/MarqueeTicker";
 import { useAuth } from "@/hooks/useAuth";
+import { UserAvatar } from "@/components/common/UserAvatar";
+import { PlatformFeedbackFloatingTrigger } from "@/components/PlatformFeedbackModal";
 
 const sidebarNavItems = [
   { to: "/teacher", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -184,9 +186,11 @@ export default function TeacherLayout() {
               className="flex items-center active:scale-95 transition-transform"
               title="Teacher Profile"
             >
-              <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
-                {(user?.full_name?.charAt(0) || user?.email?.charAt(0) || "T").toUpperCase()}
-              </div>
+              <UserAvatar
+                src={user?.avatar_url}
+                name={user?.full_name || user?.username || user?.email}
+                size="sm"
+              />
             </NavLink>
             <button
               type="button"
@@ -208,9 +212,25 @@ export default function TeacherLayout() {
             </span>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300 font-mono">
-              {user?.email}
-            </span>
+            <NavLink
+              to="/teacher/profile"
+              className="flex items-center gap-2.5 group active:scale-95 transition-transform"
+              title="View Teacher Profile"
+            >
+              <UserAvatar
+                src={user?.avatar_url}
+                name={user?.full_name || user?.username || user?.email}
+                size="sm"
+              />
+              <div className="text-left hidden xl:block">
+                <p className="text-xs font-semibold text-zinc-900 dark:text-white leading-tight group-hover:text-brand-600 transition">
+                  {user?.full_name || user?.username || "Instructor"}
+                </p>
+                <p className="text-[10px] text-zinc-400 font-mono">
+                  {user?.email}
+                </p>
+              </div>
+            </NavLink>
             <ThemeToggle />
             <button
               onClick={() => logout()}
@@ -276,6 +296,9 @@ export default function TeacherLayout() {
           ))}
         </div>
       </nav>
+
+      {/* Platform Feedback Floating Trigger */}
+      <PlatformFeedbackFloatingTrigger />
     </div>
   );
 }

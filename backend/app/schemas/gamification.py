@@ -51,6 +51,7 @@ class LeaderboardEntry(BaseModel):
     rank: int
     student_id: uuid.UUID
     student_name: str
+    avatar_url: str | None = None
     weekly_xp: int
     weekly_stars: int
     streak: int

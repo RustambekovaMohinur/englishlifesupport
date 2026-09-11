@@ -21,6 +21,7 @@ import {
   deleteAssignmentComment,
   toggleLikeAssignmentComment,
 } from "@/services/lmsService";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 interface Props {
   assignmentId: string;
@@ -217,9 +218,11 @@ export function AssignmentDiscussionDrawer({
                 >
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 flex items-center justify-center text-[10px] font-bold shrink-0">
-                        {authorName ? authorName.charAt(0).toUpperCase() : "U"}
-                      </span>
+                      <UserAvatar
+                        src={c.user_avatar_url}
+                        name={authorName}
+                        size="xs"
+                      />
                       <span className="font-semibold text-zinc-900 dark:text-white truncate">
                         {authorName}
                       </span>

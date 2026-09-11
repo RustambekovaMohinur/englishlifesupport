@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { FileDownloadButton, LoadingRows, Modal, TelegramLink } from "@/components/ui";
 import { getStudent, getStudentHistory, listSubmissions, resetStudentPassword } from "@/services/lmsService";
 import { StudentHistoryOut, StudentOut, SubmissionOut } from "@/types";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 interface StudentDetailModalProps {
   studentId: string | null;
@@ -110,13 +111,11 @@ export default function StudentDetailModal({ studentId, onClose }: StudentDetail
           {/* Header Profile Info Card */}
           <div className="rounded-xl border border-[#EAE9E5] dark:border-[#30363D] bg-zinc-50/80 dark:bg-zinc-900/80 p-4 shadow-sm">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-950/60 font-bold text-brand-700 dark:text-brand-400 text-xl overflow-hidden border border-brand-200 dark:border-brand-800">
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt={fullName} className="h-full w-full object-cover" />
-                ) : (
-                  fullName.slice(0, 2).toUpperCase()
-                )}
-              </div>
+              <UserAvatar
+                src={profile?.avatar_url}
+                name={fullName}
+                size="xl"
+              />
 
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">

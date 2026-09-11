@@ -9,6 +9,7 @@ export interface CurrentUser {
   approval_status?: string;
   full_name?: string;
   first_name?: string;
+  avatar_url?: string | null;
 }
 
 export interface GroupBrief {
@@ -312,9 +313,19 @@ export interface PlatformFeedback {
   user_full_name: string;
   user_role: string;
   rating: number;
-  category: string;
-  message: string;
+  what_works_well?: string | null;
+  what_to_improve?: string | null;
+  category?: string;
+  message?: string;
   created_at: string;
+}
+
+export interface PlatformFeedbackSummary {
+  average_rating: number;
+  total_reviews: number;
+  rating_distribution: Record<string, number>;
+  user_has_reviewed: boolean;
+  user_review?: PlatformFeedback | null;
 }
 
 export interface PlatformFeedbackStats {
@@ -448,6 +459,7 @@ export interface LeaderboardEntry {
   rank: number;
   student_id: string;
   student_name: string;
+  avatar_url?: string | null;
   weekly_xp: number;
   weekly_stars: number;
   streak: number;

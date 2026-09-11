@@ -854,6 +854,34 @@ export default function StudentAssignmentSubmitPage() {
           )}
         </section>
 
+        {/* Discussion & Questions Prompt Card */}
+        <div className="rounded-2xl border border-indigo-200/60 dark:border-indigo-900/40 bg-gradient-to-r from-indigo-50/70 via-white to-purple-50/70 dark:from-indigo-950/20 dark:via-zinc-900 dark:to-purple-950/20 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl shrink-0">
+              💬
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                <span>Topshiriq yuzasidan savolingiz bormi?</span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-mono">
+                  {assignment.comment_count ?? 0} ta fikr
+                </span>
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Tushunarsiz joylar bo'yicha o'qituvchiga savol yo'llang yoki guruhdoshlar fikrini ko'ring
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDiscussionOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-xs transition shrink-0 self-end sm:self-auto"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Savollar & Muhokama</span>
+          </button>
+        </div>
+
         {/* Section B: Universal 4-Way Submission Suite */}
         {!isTaskLocked && !isGraded && (
           <section className="card bg-white dark:bg-[#161B22] border border-zinc-200/80 dark:border-zinc-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-xs">

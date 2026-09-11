@@ -33,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         approval_status: profile.approval_status || baseUser.approval_status || "approved",
         full_name: profile.full_name || baseUser.full_name,
         first_name: profile.first_name || baseUser.first_name,
+        avatar_url: profile.avatar_url || baseUser.avatar_url || null,
       };
     } catch {
       return baseUser;

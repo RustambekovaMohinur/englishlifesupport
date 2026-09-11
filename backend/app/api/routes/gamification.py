@@ -285,6 +285,7 @@ async def get_weekly_leaderboard(
         entries_data.append({
             "student_id": s.id,
             "student_name": s.full_name,
+            "avatar_url": s.avatar_url,
             "weekly_xp": int(w_xp),
             "weekly_stars": max(0, int(w_stars)),
             "streak": streak_val,
@@ -305,6 +306,7 @@ async def get_weekly_leaderboard(
                 rank=idx,
                 student_id=e["student_id"],
                 student_name=e["student_name"],
+                avatar_url=e.get("avatar_url"),
                 weekly_xp=e["weekly_xp"],
                 weekly_stars=e["weekly_stars"],
                 streak=e["streak"],
