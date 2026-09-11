@@ -240,51 +240,63 @@ export function ImageLightbox({
   onClose: () => void;
 }) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [displayUrl, setDisplayUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [rotation, setRotation] = useState(0);
+  const [scale, setScale] = useState(1);
+  const [triedBlobFallback, setTriedBlobFallback] = useState(false);
 
   useEffect(() => {
     setCurrentIndex(initialIndex);
+    setRotation(0);
+    setScale(1);
   }, [initialIndex, isOpen]);
 
   const currentImage = images[currentIndex];
 
   useEffect(() => {
     if (!isOpen || !currentImage) {
-      setBlobUrl(null);
+      setDisplayUrl(null);
+      setLoading(false);
+      setHasError(false);
+      setTriedBlobFallback(false);
       return;
     }
-    let active = true;
+
     setLoading(true);
-    let objUrl: string | null = null;
+    setHasError(false);
+    setTriedBlobFallback(false);
+    setRotation(0);
+    setScale(1);
 
     if (currentImage.url.startsWith("blob:") || currentImage.url.startsWith("data:")) {
-      setBlobUrl(currentImage.url);
+      setDisplayUrl(currentImage.url);
       setLoading(false);
-    } else {
-      fetchAuthenticatedBlobUrl(currentImage.url)
-        .then((url) => {
-          objUrl = url;
-          if (active) {
-            setBlobUrl(url);
-            setLoading(false);
-          } else {
-            URL.revokeObjectURL(url);
-          }
-        })
-        .catch(() => {
-          if (active) {
-            setLoading(false);
-            toast.error("Failed to load image");
-          }
-        });
+      return;
     }
 
-    return () => {
-      active = false;
-      if (objUrl) URL.revokeObjectURL(objUrl);
+    const direct = getAuthenticatedImageUrl(currentImage.url);
+    setDisplayUrl(direct);
+  }, [isOpen, currentIndex, currentImage?.url]);
+
+  // Keyboard navigation: Esc, Left, Right, Rotate
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      } else if (e.key === "ArrowLeft") {
+        setCurrentIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1));
+      } else if (e.key === "ArrowRight") {
+        setCurrentIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0));
+      } else if (e.key === "r" || e.key === "R") {
+        setRotation((prev) => (prev + 90) % 360);
+      }
     };
-  }, [isOpen, currentImage?.url]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, images.length, onClose]);
 
   if (!isOpen || !currentImage) return null;
 
@@ -298,61 +310,192 @@ export function ImageLightbox({
     setCurrentIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0));
   };
 
+  const handleImageLoad = () => {
+    setLoading(false);
+    setHasError(false);
+  };
+
+  const handleImageError = () => {
+    if (!triedBlobFallback && currentImage && !currentImage.url.startsWith("blob:") && !currentImage.url.startsWith("data:")) {
+      setTriedBlobFallback(true);
+      fetchAuthenticatedBlobUrl(currentImage.url)
+        .then((blobUrl) => {
+          setDisplayUrl(blobUrl);
+          setLoading(false);
+          setHasError(false);
+        })
+        .catch(() => {
+          setHasError(true);
+          setLoading(false);
+        });
+    } else {
+      setHasError(true);
+      setLoading(false);
+    }
+  };
+
+  const handleRetry = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLoading(true);
+    setHasError(false);
+    setTriedBlobFallback(false);
+    fetchAuthenticatedBlobUrl(currentImage.url)
+      .then((blobUrl) => {
+        setDisplayUrl(blobUrl);
+        setLoading(false);
+        setHasError(false);
+      })
+      .catch(() => {
+        setHasError(true);
+        setLoading(false);
+        toast.error("Rasm yuklanmadi");
+      });
+  };
+
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (currentImage?.url) {
+      downloadAuthenticatedFile(currentImage.url, currentImage.name || `scan_${currentIndex + 1}.jpg`)
+        .catch(() => toast.error("Yuklab olishda xatolik yuz berdi"));
+    }
+  };
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 select-none"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/92 backdrop-blur-md p-2 sm:p-4 select-none"
       onClick={onClose}
     >
-      <div className="absolute top-4 right-4 flex items-center gap-3 z-10" onClick={(e) => e.stopPropagation()}>
-        <span className="text-sm font-medium text-white/80">
-          {currentIndex + 1} / {images.length}
-        </span>
-        <button
-          onClick={onClose}
-          className="rounded-full bg-white/20 p-2 text-white hover:bg-white/30 transition-colors"
-          title="Close (Esc)"
-        >
-          ✕
-        </button>
+      {/* Top Header Bar */}
+      <div
+        className="absolute top-3 left-4 right-4 flex items-center justify-between z-20 pointer-events-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-white">
+          <span className="text-xs font-semibold">
+            {currentIndex + 1} / {images.length}
+          </span>
+          {currentImage.name && (
+            <span className="text-xs text-white/70 max-w-[160px] sm:max-w-xs truncate border-l border-white/20 pl-2">
+              {currentImage.name}
+            </span>
+          )}
+        </div>
+
+        {/* Action Controls */}
+        <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md p-1 rounded-full border border-white/10 text-white">
+          <button
+            type="button"
+            onClick={() => setRotation((r) => (r + 90) % 360)}
+            className="p-1.5 rounded-full hover:bg-white/20 transition-colors text-white text-xs flex items-center gap-1 px-2.5"
+            title="Rotate 90° (R)"
+          >
+            🔄 <span className="hidden sm:inline">Rotate</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setScale((s) => (s < 2.5 ? s + 0.25 : 1))}
+            className="p-1.5 rounded-full hover:bg-white/20 transition-colors text-white text-xs flex items-center gap-1 px-2.5"
+            title="Zoom (+)"
+          >
+            🔍 {Math.round(scale * 100)}%
+          </button>
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="p-1.5 rounded-full hover:bg-white/20 transition-colors text-white text-xs flex items-center gap-1 px-2.5"
+            title="Download scan"
+          >
+            ⬇️ <span className="hidden sm:inline">Download</span>
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-full hover:bg-white/20 transition-colors text-white ml-1 px-2.5 font-bold text-sm"
+            title="Close (Esc)"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
+      {/* Prev / Next Arrows */}
       {images.length > 1 && (
         <>
           <button
+            type="button"
             onClick={handlePrev}
-            className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/20 p-3 text-white hover:bg-white/30 transition-colors z-10"
-            title="Previous image"
+            className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 rounded-full bg-white/15 hover:bg-white/30 text-white text-2xl w-11 h-11 flex items-center justify-center transition-all z-20 backdrop-blur-sm"
+            title="Previous image (←)"
           >
             ‹
           </button>
           <button
+            type="button"
             onClick={handleNext}
-            className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/20 p-3 text-white hover:bg-white/30 transition-colors z-10"
-            title="Next image"
+            className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 rounded-full bg-white/15 hover:bg-white/30 text-white text-2xl w-11 h-11 flex items-center justify-center transition-all z-20 backdrop-blur-sm"
+            title="Next image (→)"
           >
             ›
           </button>
         </>
       )}
 
-      <div className="relative max-h-[85vh] max-w-[90vw] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
-        {loading ? (
-          <div className="flex h-64 w-64 items-center justify-center">
-            <Spinner className="h-10 w-10 text-white" />
+      {/* Main Image Stage */}
+      <div
+        className="relative max-h-[86vh] max-w-[92vw] flex flex-col items-center justify-center overflow-auto pointer-events-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <div className="flex flex-col items-center gap-3 bg-black/60 backdrop-blur-md px-5 py-4 rounded-2xl border border-white/10 text-white">
+              <Spinner className="h-8 w-8 text-white" />
+              <span className="text-xs text-white/80 font-medium">Rasm yuklanmoqda...</span>
+            </div>
           </div>
-        ) : blobUrl ? (
-          <img
-            src={blobUrl}
-            alt={currentImage.name || "Preview"}
-            className="max-h-[80vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
-          />
-        ) : (
-          <p className="text-white">Unable to display image</p>
         )}
-        {currentImage.name && (
-          <p className="mt-3 text-center text-xs text-white/70 truncate max-w-md">
-            {currentImage.name}
-          </p>
+
+        {displayUrl && !hasError ? (
+          <img
+            src={displayUrl}
+            alt={currentImage.name || "Preview"}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
+            style={{
+              transform: `rotate(${rotation}deg) scale(${scale})`,
+              transition: "transform 0.2s ease-out",
+            }}
+            className={`max-h-[82vh] max-w-[90vw] rounded-xl object-contain shadow-2xl transition-opacity duration-200 ${
+              loading ? "opacity-30" : "opacity-100"
+            }`}
+          />
+        ) : null}
+
+        {hasError && (
+          <div className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-zinc-900/90 border border-zinc-700 text-white max-w-sm text-center">
+            <span className="text-3xl">🖼️</span>
+            <div className="space-y-1">
+              <p className="font-semibold text-sm">Rasmni to'g'ridan-to'g'ri ko'rsatib bo'lmadi</p>
+              <p className="text-xs text-zinc-400">
+                Internet uzilishi yoki rasm serverda qayta yuklanayotgan bo'lishi mumkin.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="px-3.5 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs font-medium transition"
+              >
+                Qayta urinish
+              </button>
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium transition"
+              >
+                Faylni yuklab olish
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -381,13 +524,11 @@ export function AuthenticatedImage({
   });
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setHasError(false);
-    setTimedOut(false);
 
     if (!url) {
       setLoading(false);
@@ -409,28 +550,18 @@ export function AuthenticatedImage({
     const directUrl = getAuthenticatedImageUrl(url);
     setSrc(directUrl);
 
-    // Timeout: if image doesn't load within 3s, show clean fallback thumbnail state
-    const timer = setTimeout(() => {
-      if (active) {
-        setTimedOut(true);
-        setLoading(false);
-      }
-    }, 3000);
-
     return () => {
       active = false;
-      clearTimeout(timer);
     };
   }, [url]);
 
   const handleLoad = () => {
     setLoading(false);
-    setTimedOut(false);
     setHasError(false);
   };
 
   const handleError = () => {
-    // If direct token URL failed and we haven't tried blob fetch yet
+    // If direct token URL failed, try fallback to fetchAuthenticatedBlobUrl
     if (url && !imageBlobCache.has(url) && !url.startsWith("blob:") && !url.startsWith("data:")) {
       fetchAuthenticatedBlobUrl(url)
         .then((blobUrl) => {
@@ -449,17 +580,7 @@ export function AuthenticatedImage({
     }
   };
 
-  // If loading and not timed out yet
-  if (loading && !timedOut && !hasError) {
-    return (
-      <div className={`flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 rounded-lg animate-pulse ${className}`}>
-        <Spinner className="h-4 w-4 text-zinc-400" />
-      </div>
-    );
-  }
-
-  // If timed out (> 3s) or errored, render clean, lightweight thumbnail card with expand on click
-  if (timedOut || hasError || !src) {
+  if (hasError || !src) {
     return (
       <button
         type="button"
@@ -479,16 +600,24 @@ export function AuthenticatedImage({
   }
 
   return (
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      onClick={onClick}
-      onLoad={handleLoad}
-      onError={handleError}
-      loading="lazy"
-      decoding="async"
-    />
+    <div className={`relative ${className} overflow-hidden`} onClick={onClick}>
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 animate-pulse">
+          <Spinner className="h-4 w-4 text-zinc-400" />
+        </div>
+      )}
+      <img
+        src={src}
+        alt={alt}
+        className={`w-full h-full object-cover transition-opacity duration-200 ${
+          loading ? "opacity-0" : "opacity-100"
+        }`}
+        onLoad={handleLoad}
+        onError={handleError}
+        loading="lazy"
+        decoding="async"
+      />
+    </div>
   );
 }
 

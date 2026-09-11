@@ -60,15 +60,21 @@ router = APIRouter(prefix="/api/submissions", tags=["submissions"])
 
 
 async def _authorize_submission_access(submission: Submission, current_user: User, db: AsyncSession) -> None:
-    """A teacher may access any submission. A student may only access their
-    own - we verify by joining through student_profiles.user_id, never by
-    trusting anything the client sends."""
-    if current_user.role == UserRole.TEACHER:
+    """
+    A teacher or admin may access any submission.
+    A student may only access their own - verified by joining through student_profiles.user_id.
+    """
+    user_role_str = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if user_role_str in ["teacher", "admin", "superadmin"] or current_user.role == UserRole.TEACHER:
         return
+
     result = await db.execute(select(StudentProfile).where(StudentProfile.id == submission.student_id))
     student = result.scalar_one_or_none()
     if student is None or student.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You may only access your own submissions")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sizda ushbu topshiriq yoki rasmni ko'rish huquqi yo'q.",
+        )
 
 
 from app.models.submission import (
@@ -852,6 +858,7 @@ async def delete_submission_image(
 async def get_submission_image(
     submission_id: uuid.UUID,
     image_id: uuid.UUID,
+    redirect: bool = Query(True, description="Whether to redirect to cloud storage or stream directly"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -872,7 +879,7 @@ async def get_submission_image(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
 
     # Fast Path: Redirect to Backblaze B2 presigned URL for direct high-speed CDN delivery
-    if img.file_path:
+    if redirect and img.file_path:
         try:
             blob = (
                 await db.execute(
@@ -888,7 +895,10 @@ async def get_submission_image(
                     return RedirectResponse(
                         url=presigned_url,
                         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-                        headers={"Cache-Control": "private, max-age=600"},
+                        headers={
+                            "Cache-Control": "private, max-age=600",
+                            "Access-Control-Allow-Origin": "*",
+                        },
                     )
         except Exception as e:
             logger.warning("B2 presigned redirect failed for image %s: %s", image_id, e)
@@ -898,7 +908,10 @@ async def get_submission_image(
         path=path,
         media_type=img.file_content_type or "image/jpeg",
         filename=img.file_original_name,
-        headers={"Cache-Control": "private, max-age=86400, immutable"},
+        headers={
+            "Cache-Control": "private, max-age=86400, immutable",
+            "Access-Control-Allow-Origin": "*",
+        },
     )
 
 

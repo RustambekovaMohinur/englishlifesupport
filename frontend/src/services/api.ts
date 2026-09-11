@@ -53,22 +53,53 @@ api.interceptors.request.use((config) => {
 export function getFileUrl(path: string | null | undefined): string {
   if (!path) return "";
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  if (path.startsWith("blob:") || path.startsWith("data:")) return path;
+
+  let cleanPath = path;
+  if (cleanPath.startsWith("/submissions/") || cleanPath.startsWith("/assignments/") || cleanPath.startsWith("/users/")) {
+    cleanPath = `/api${cleanPath}`;
+  } else if (
+    !cleanPath.startsWith("/api/") &&
+    !cleanPath.startsWith("/media/") &&
+    !cleanPath.startsWith("/static/") &&
+    !cleanPath.startsWith("/uploads/")
+  ) {
+    cleanPath = cleanPath.startsWith("/") ? `/api${cleanPath}` : `/api/${cleanPath}`;
+  }
+
   if (RAW_API_URL && RAW_API_URL.startsWith("http")) {
     const origin = new URL(RAW_API_URL).origin;
-    return `${origin}${path.startsWith("/") ? "" : "/"}${path}`;
+    return `${origin}${cleanPath.startsWith("/") ? "" : "/"}${cleanPath}`;
   }
-  return path;
+  return cleanPath;
 }
 
 export function getAuthenticatedImageUrl(url: string | null | undefined): string {
   if (!url) return "";
   if (url.startsWith("blob:") || url.startsWith("data:")) return url;
+
   if (url.startsWith("http://") || url.startsWith("https://")) {
-    return url;
+    if (RAW_API_URL && RAW_API_URL.startsWith("http")) {
+      try {
+        const backendOrigin = new URL(RAW_API_URL).origin;
+        if (!url.startsWith(backendOrigin)) {
+          return url;
+        }
+      } catch {}
+    } else {
+      try {
+        const parsed = new URL(url);
+        if (parsed.origin !== window.location.origin) {
+          return url;
+        }
+      } catch {}
+    }
   }
+
   const token = tokenStorage.getAccess();
   const fullUrl = getFileUrl(url);
   if (!token) return fullUrl;
+  if (fullUrl.includes("token=")) return fullUrl;
   const separator = fullUrl.includes("?") ? "&" : "?";
   return `${fullUrl}${separator}token=${encodeURIComponent(token)}`;
 }
@@ -120,7 +151,31 @@ export async function downloadAuthenticatedFile(fileUrl: string, filename?: stri
 }
 
 export async function fetchAuthenticatedBlobUrl(fileUrl: string): Promise<string> {
-  const { data } = await api.get<Blob>(toApiPath(fileUrl), { responseType: "blob" });
+  if (!fileUrl) throw new Error("Empty file URL");
+  if (fileUrl.startsWith("blob:") || fileUrl.startsWith("data:")) return fileUrl;
+
+  // If it's an external URL (e.g. presigned S3 / B2 URL), fetch directly without adding /api or bearer token
+  if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
+    let isOurBackend = false;
+    if (RAW_API_URL && RAW_API_URL.startsWith("http")) {
+      try {
+        isOurBackend = fileUrl.startsWith(new URL(RAW_API_URL).origin);
+      } catch {}
+    }
+    if (!isOurBackend) {
+      const resp = await axios.get<Blob>(fileUrl, { responseType: "blob" });
+      return URL.createObjectURL(resp.data);
+    }
+  }
+
+  const path = toApiPath(fileUrl);
+  // For submission / assignment image endpoints, pass redirect=false to stream bytes directly from backend
+  const sep = path.includes("?") ? "&" : "?";
+  const finalPath = path.includes("/images/") && !path.includes("redirect=")
+    ? `${path}${sep}redirect=false`
+    : path;
+
+  const { data } = await api.get<Blob>(finalPath, { responseType: "blob" });
   return URL.createObjectURL(data);
 }
 
