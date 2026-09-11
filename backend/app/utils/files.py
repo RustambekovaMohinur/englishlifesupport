@@ -35,6 +35,11 @@ ALLOWED_CONTENT_TYPES = {
     "image/png": ".png",
     "image/webp": ".webp",
     "image/heic": ".heic",
+    "image/heif": ".heif",
+    "image/gif": ".gif",
+    "image/bmp": ".bmp",
+    "image/tiff": ".tiff",
+    "image/svg+xml": ".svg",
     "application/pdf": ".pdf",
     "application/msword": ".doc",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
@@ -42,6 +47,13 @@ ALLOWED_CONTENT_TYPES = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
     "application/vnd.ms-powerpoint": ".ppt",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "application/zip": ".zip",
+    "application/x-zip-compressed": ".zip",
+    "application/x-rar-compressed": ".rar",
+    "application/vnd.rar": ".rar",
+    "application/x-7z-compressed": ".7z",
+    "application/rtf": ".rtf",
+    "application/octet-stream": ".bin",
     "audio/mpeg": ".mp3",
     "audio/mp3": ".mp3",
     "audio/wav": ".wav",
@@ -49,9 +61,17 @@ ALLOWED_CONTENT_TYPES = {
     "audio/m4a": ".m4a",
     "audio/x-m4a": ".m4a",
     "audio/mp4": ".m4a",
-    "audio/aac": ".m4a",
+    "audio/aac": ".aac",
+    "audio/flac": ".flac",
+    "audio/opus": ".opus",
+    "audio/amr": ".amr",
+    "audio/3gpp": ".3gp",
     "audio/webm": ".webm",
     "audio/ogg": ".ogg",
+    "video/mp4": ".mp4",
+    "video/quicktime": ".mov",
+    "video/webm": ".webm",
+    "video/x-matroska": ".mkv",
     "text/csv": ".csv",
     "text/plain": ".txt",
 }
@@ -84,6 +104,24 @@ def _assert_safe_extension(filename: str) -> None:
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=f"File type '{suffix}' is not allowed for security reasons",
         )
+
+
+def _get_safe_extension(file: UploadFile, default_ext: str = ".bin") -> str:
+    """
+    Safely resolves file extension for uploads.
+    Blocks known malicious executable extensions, but permits any valid document/media file.
+    """
+    _assert_safe_extension(file.filename or "")
+    content_type = file.content_type or ""
+    extension = ALLOWED_CONTENT_TYPES.get(content_type)
+    if extension:
+        return extension
+
+    orig_ext = Path(file.filename or "").suffix.lower()
+    if orig_ext and orig_ext not in BLOCKED_EXTENSIONS:
+        return orig_ext
+
+    return default_ext
 
 
 def get_upload_root() -> Path:
@@ -181,17 +219,8 @@ async def save_submission_file(
     """
     _assert_safe_extension(file.filename or "")
 
-    content_type = file.content_type or ""
-    extension = ALLOWED_CONTENT_TYPES.get(content_type)
-    if not extension:
-        ext = Path(file.filename or "").suffix.lower()
-        if ext in set(ALLOWED_CONTENT_TYPES.values()):
-            extension = ext
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                detail="Unsupported file type. Allowed: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, JPG, PNG, MP3, WAV",
-            )
+    extension = _get_safe_extension(file, default_ext=".bin")
+    content_type = file.content_type or "application/octet-stream"
 
     student_dir = get_upload_root() / "submissions" / str(student_id)
     student_dir.mkdir(parents=True, exist_ok=True)
@@ -199,7 +228,7 @@ async def save_submission_file(
     safe_filename = f"{uuid.uuid4().hex}{extension}"
     destination = student_dir / safe_filename
 
-    is_audio = extension in {".mp3", ".wav", ".m4a", ".webm", ".ogg"} or (content_type and content_type.startswith("audio/"))
+    is_audio = extension in {".mp3", ".wav", ".m4a", ".webm", ".ogg", ".aac", ".flac", ".opus"} or (content_type and content_type.startswith("audio/"))
     limit_mb = settings.AUDIO_MAX_SIZE_MB if is_audio else settings.MAX_UPLOAD_SIZE_MB
     max_bytes = limit_mb * 1024 * 1024
     total_size = 0
@@ -264,17 +293,8 @@ async def save_assignment_file(
     """
     _assert_safe_extension(file.filename or "")
 
-    content_type = file.content_type or ""
-    extension = ALLOWED_CONTENT_TYPES.get(content_type)
-    if not extension:
-        ext = Path(file.filename or "").suffix.lower()
-        if ext in set(ALLOWED_CONTENT_TYPES.values()):
-            extension = ext
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                detail="Unsupported file type. Allowed: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, JPG, PNG, MP3, WAV",
-            )
+    extension = _get_safe_extension(file, default_ext=".bin")
+    content_type = file.content_type or "application/octet-stream"
 
     group_dir = get_upload_root() / "assignments" / str(group_id)
     group_dir.mkdir(parents=True, exist_ok=True)
@@ -497,6 +517,11 @@ ALLOWED_IMAGE_TYPES = {
     "image/png": ".png",
     "image/webp": ".webp",
     "image/heic": ".heic",
+    "image/heif": ".heif",
+    "image/gif": ".gif",
+    "image/bmp": ".bmp",
+    "image/tiff": ".tiff",
+    "image/svg+xml": ".svg",
 }
 
 
@@ -512,17 +537,14 @@ async def save_assignment_image(
     """
     _assert_safe_extension(file.filename or "")
 
-    content_type = file.content_type or ""
+    content_type = file.content_type or "image/jpeg"
     extension = ALLOWED_IMAGE_TYPES.get(content_type)
     if not extension:
         ext = Path(file.filename or "").suffix.lower()
-        if ext in set(ALLOWED_IMAGE_TYPES.values()):
+        if ext and ext not in BLOCKED_EXTENSIONS:
             extension = ext
         else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid image format. Allowed formats: JPG, PNG, WEBP, HEIC",
-            )
+            extension = ".jpg"
 
     img_dir = get_upload_root() / "assignments" / str(assignment_id) / "images"
     img_dir.mkdir(parents=True, exist_ok=True)
@@ -568,17 +590,14 @@ async def save_submission_image(
     """
     _assert_safe_extension(file.filename or "")
 
-    content_type = file.content_type or ""
+    content_type = file.content_type or "image/jpeg"
     extension = ALLOWED_IMAGE_TYPES.get(content_type)
     if not extension:
         ext = Path(file.filename or "").suffix.lower()
-        if ext in set(ALLOWED_IMAGE_TYPES.values()):
+        if ext and ext not in BLOCKED_EXTENSIONS:
             extension = ext
         else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid image format. Allowed formats: JPG, PNG, WEBP, HEIC",
-            )
+            extension = ".jpg"
 
     img_dir = get_upload_root() / "submissions" / str(submission_id) / "images"
     img_dir.mkdir(parents=True, exist_ok=True)
@@ -683,17 +702,8 @@ async def process_submission_file_concurrent(
     """
     _assert_safe_extension(file.filename or "")
 
-    content_type = file.content_type or ""
-    extension = ALLOWED_CONTENT_TYPES.get(content_type)
-    if not extension:
-        ext = Path(file.filename or "").suffix.lower()
-        if ext in set(ALLOWED_CONTENT_TYPES.values()):
-            extension = ext
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                detail="Unsupported file type. Allowed: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, JPG, PNG, MP3, WAV, M4A",
-            )
+    extension = _get_safe_extension(file, default_ext=".bin")
+    content_type = file.content_type or "application/octet-stream"
 
     student_dir = get_upload_root() / "submissions" / str(student_id)
     student_dir.mkdir(parents=True, exist_ok=True)
@@ -701,7 +711,7 @@ async def process_submission_file_concurrent(
     safe_filename = f"{uuid.uuid4().hex}{extension}"
     destination = student_dir / safe_filename
 
-    is_audio = extension in {".mp3", ".wav", ".m4a", ".webm", ".ogg"} or (content_type and content_type.startswith("audio/"))
+    is_audio = extension in {".mp3", ".wav", ".m4a", ".webm", ".ogg", ".aac", ".flac", ".opus"} or (content_type and content_type.startswith("audio/"))
     limit_mb = settings.AUDIO_MAX_SIZE_MB if is_audio else settings.MAX_UPLOAD_SIZE_MB
     max_bytes = limit_mb * 1024 * 1024
     total_size = 0
@@ -739,17 +749,14 @@ async def process_submission_image_concurrent(
     """
     _assert_safe_extension(file.filename or "")
 
-    content_type = file.content_type or ""
+    content_type = file.content_type or "image/jpeg"
     extension = ALLOWED_IMAGE_TYPES.get(content_type)
     if not extension:
         ext = Path(file.filename or "").suffix.lower()
-        if ext in set(ALLOWED_IMAGE_TYPES.values()):
+        if ext and ext not in BLOCKED_EXTENSIONS:
             extension = ext
         else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid image format. Allowed formats: JPG, PNG, WEBP, HEIC",
-            )
+            extension = ".jpg"
 
     img_dir = get_upload_root() / "submissions" / str(submission_id) / "images"
     img_dir.mkdir(parents=True, exist_ok=True)

@@ -260,10 +260,10 @@ async def submit_homework(
             Submission.student_id == profile.id,
             Submission.cycle_number == curr_cycle,
         )
-        .order_by(Submission.is_archived.asc(), Submission.submitted_at.desc())
+        .order_by(Submission.is_archived.asc(), Submission.submitted_at.desc(), Submission.id.desc())
         .limit(1)
     )
-    existing = (await db.execute(stmt)).scalar_one_or_none()
+    existing = (await db.execute(stmt)).scalars().first()
 
     sub_id = existing.id if existing else uuid.uuid4()
     is_new_submission = existing is None
@@ -449,7 +449,13 @@ async def submit_homework(
         )
         .where(Submission.id == submission.id)
     )
-    return _submission_to_out(result.scalar_one())
+    sub = result.scalars().first()
+    if not sub:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Submission not found after creation",
+        )
+    return _submission_to_out(sub)
 
 
 @router.get("", response_model=PaginatedSubmissions, dependencies=[Depends(require_teacher)])
@@ -527,7 +533,7 @@ async def _get_submission_or_404(submission_id: uuid.UUID, db: AsyncSession) -> 
         )
         .where(Submission.id == submission_id)
     )
-    submission = result.scalar_one_or_none()
+    submission = result.scalars().first()
     if submission is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
     return submission

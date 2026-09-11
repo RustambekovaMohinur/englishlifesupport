@@ -342,12 +342,15 @@ async def is_assignment_locked_for_student(
     # Check if student has submitted prerequisite assignment
     prereq_sub = (
         await db.execute(
-            select(Submission).where(
+            select(Submission)
+            .where(
                 Submission.assignment_id == prereq_id,
                 Submission.student_id == student_id,
             )
+            .order_by(Submission.submitted_at.desc(), Submission.id.desc())
+            .limit(1)
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
 
     if prereq_sub is not None:
         # Completed -> next unlocks!
@@ -561,12 +564,15 @@ async def check_and_award_perfect_week(
     for a in assignments:
         sub = (
             await db.execute(
-                select(Submission).where(
+                select(Submission)
+                .where(
                     Submission.assignment_id == a.id,
                     Submission.student_id == student_id,
                 )
+                .order_by(Submission.submitted_at.desc(), Submission.id.desc())
+                .limit(1)
             )
-        ).scalar_one_or_none()
+        ).scalars().first()
 
         if not sub:
             return False
@@ -614,12 +620,15 @@ async def check_comeback_achievement(
     """
     sub = (
         await db.execute(
-            select(Submission).where(
+            select(Submission)
+            .where(
                 Submission.student_id == student_id,
                 Submission.assignment_id == assignment_id,
             )
+            .order_by(Submission.submitted_at.desc(), Submission.id.desc())
+            .limit(1)
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
     if sub and sub.status == SubmissionStatus.LATE:
         await unlock_achievement(
             db,
