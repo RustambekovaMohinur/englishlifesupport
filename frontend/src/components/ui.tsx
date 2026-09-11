@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { downloadAuthenticatedFile, fetchAuthenticatedBlobUrl } from "@/services/api";
+import { downloadAuthenticatedFile, fetchAuthenticatedBlobUrl, getAuthenticatedImageUrl } from "@/services/api";
 
 export function Logo({ className = "h-9 w-9" }: { className?: string }) {
   return (
@@ -359,6 +359,8 @@ export function ImageLightbox({
   );
 }
 
+const imageBlobCache = new Map<string, string>();
+
 export function AuthenticatedImage({
   url,
   alt = "Image",
@@ -370,53 +372,109 @@ export function AuthenticatedImage({
   className?: string;
   onClick?: () => void;
 }) {
-  const [src, setSrc] = useState<string | null>(null);
+  const [src, setSrc] = useState<string | null>(() => {
+    if (!url) return null;
+    if (url.startsWith("blob:") || url.startsWith("data:")) return url;
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    if (imageBlobCache.has(url)) return imageBlobCache.get(url)!;
+    return getAuthenticatedImageUrl(url);
+  });
   const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     let active = true;
-    let objUrl: string | null = null;
     setLoading(true);
+    setHasError(false);
+    setTimedOut(false);
 
-    if (url.startsWith("blob:") || url.startsWith("data:")) {
+    if (!url) {
+      setLoading(false);
+      return;
+    }
+
+    if (url.startsWith("blob:") || url.startsWith("data:") || (url.startsWith("http") && !url.includes("/api/"))) {
       setSrc(url);
       setLoading(false);
       return;
     }
 
-    fetchAuthenticatedBlobUrl(url)
-      .then((blobUrl) => {
-        objUrl = blobUrl;
-        if (active) {
-          setSrc(blobUrl);
-          setLoading(false);
-        } else {
-          URL.revokeObjectURL(blobUrl);
-        }
-      })
-      .catch(() => {
-        if (active) setLoading(false);
-      });
+    if (imageBlobCache.has(url)) {
+      setSrc(imageBlobCache.get(url)!);
+      setLoading(false);
+      return;
+    }
+
+    const directUrl = getAuthenticatedImageUrl(url);
+    setSrc(directUrl);
+
+    // Timeout: if image doesn't load within 3s, show clean fallback thumbnail state
+    const timer = setTimeout(() => {
+      if (active) {
+        setTimedOut(true);
+        setLoading(false);
+      }
+    }, 3000);
 
     return () => {
       active = false;
-      if (objUrl) URL.revokeObjectURL(objUrl);
+      clearTimeout(timer);
     };
   }, [url]);
 
-  if (loading) {
+  const handleLoad = () => {
+    setLoading(false);
+    setTimedOut(false);
+    setHasError(false);
+  };
+
+  const handleError = () => {
+    // If direct token URL failed and we haven't tried blob fetch yet
+    if (url && !imageBlobCache.has(url) && !url.startsWith("blob:") && !url.startsWith("data:")) {
+      fetchAuthenticatedBlobUrl(url)
+        .then((blobUrl) => {
+          imageBlobCache.set(url, blobUrl);
+          setSrc(blobUrl);
+          setLoading(false);
+          setHasError(false);
+        })
+        .catch(() => {
+          setHasError(true);
+          setLoading(false);
+        });
+    } else {
+      setHasError(true);
+      setLoading(false);
+    }
+  };
+
+  // If loading and not timed out yet
+  if (loading && !timedOut && !hasError) {
     return (
-      <div className={`flex items-center justify-center bg-neutral-100 rounded-lg animate-pulse ${className}`}>
-        <Spinner className="h-4 w-4 text-neutral-400" />
+      <div className={`flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 rounded-lg animate-pulse ${className}`}>
+        <Spinner className="h-4 w-4 text-zinc-400" />
       </div>
     );
   }
 
-  if (!src) {
+  // If timed out (> 3s) or errored, render clean, lightweight thumbnail card with expand on click
+  if (timedOut || hasError || !src) {
     return (
-      <div className={`flex items-center justify-center bg-neutral-100 rounded-lg text-xs text-neutral-400 ${className}`}>
-        🖼️
-      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        title={alt || "View Photo"}
+        className={`flex flex-col items-center justify-center gap-1 bg-zinc-100/90 hover:bg-zinc-200/90 dark:bg-zinc-800/90 dark:hover:bg-zinc-700/90 text-zinc-600 dark:text-zinc-300 rounded-lg p-2 transition active:scale-95 group text-center cursor-pointer border border-zinc-200 dark:border-zinc-700 ${className}`}
+      >
+        <span className="text-xl group-hover:scale-110 transition-transform">🖼️</span>
+        <span className="text-[10px] font-semibold truncate max-w-full px-1">
+          {alt || "Photo"}
+        </span>
+        <span className="text-[9px] text-brand-600 dark:text-brand-400 group-hover:underline">
+          🔍 Click to view
+        </span>
+      </button>
     );
   }
 
@@ -426,7 +484,10 @@ export function AuthenticatedImage({
       alt={alt}
       className={className}
       onClick={onClick}
+      onLoad={handleLoad}
+      onError={handleError}
       loading="lazy"
+      decoding="async"
     />
   );
 }

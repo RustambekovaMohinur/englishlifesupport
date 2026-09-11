@@ -6,15 +6,17 @@ from datetime import datetime, timedelta, timezone
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_student_profile, get_current_user, require_teacher
 from app.db.session import get_db
+from app.models.file_blob import FileBlob
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.grade import Grade
+from app.services.storage import get_storage_service
 from app.models.student import StudentProfile
 from app.models.submission import (
     Submission,
@@ -865,15 +867,38 @@ async def get_submission_image(
                 SubmissionImage.submission_id == submission_id,
             )
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
     if not img:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+    # Fast Path: Redirect to Backblaze B2 presigned URL for direct high-speed CDN delivery
+    if img.file_path:
+        try:
+            blob = (
+                await db.execute(
+                    select(FileBlob).where(FileBlob.file_path == img.file_path)
+                )
+            ).scalars().first()
+            if blob and (blob.storage_backend == "b2" or blob.storage_key):
+                storage_service = get_storage_service()
+                if storage_service.is_configured:
+                    presigned_url = await storage_service.generate_presigned_url(
+                        blob.storage_key or blob.file_path, expires_in=3600
+                    )
+                    return RedirectResponse(
+                        url=presigned_url,
+                        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+                        headers={"Cache-Control": "private, max-age=600"},
+                    )
+        except Exception as e:
+            logger.warning("B2 presigned redirect failed for image %s: %s", image_id, e)
 
     path = await resolve_submission_file_async(img.file_path, db=db, fallback_name=img.file_original_name)
     return FileResponse(
         path=path,
         media_type=img.file_content_type or "image/jpeg",
         filename=img.file_original_name,
+        headers={"Cache-Control": "private, max-age=86400, immutable"},
     )
 
 

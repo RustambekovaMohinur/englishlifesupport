@@ -60,6 +60,19 @@ export function getFileUrl(path: string | null | undefined): string {
   return path;
 }
 
+export function getAuthenticatedImageUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  if (url.startsWith("blob:") || url.startsWith("data:")) return url;
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  const token = tokenStorage.getAccess();
+  const fullUrl = getFileUrl(url);
+  if (!token) return fullUrl;
+  const separator = fullUrl.includes("?") ? "&" : "?";
+  return `${fullUrl}${separator}token=${encodeURIComponent(token)}`;
+}
+
 function toApiPath(fileUrl: string): string {
   if (!fileUrl) return "";
   try {

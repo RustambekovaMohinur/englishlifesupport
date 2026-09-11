@@ -180,7 +180,7 @@ export default function StudentLayout() {
                 <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Candidate Portal</span>
               </div>
             </div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2">
               <ThemeToggle />
               <NavLink
                 to="/student/profile"
@@ -191,6 +191,15 @@ export default function StudentLayout() {
                   {(user?.full_name?.charAt(0) || user?.email?.charAt(0) || "U").toUpperCase()}
                 </div>
               </NavLink>
+              <button
+                type="button"
+                onClick={() => logout()}
+                className="p-2 rounded-xl text-zinc-500 hover:text-rose-600 dark:text-zinc-400 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition active:scale-95"
+                title="Tizimdan chiqish (Logout)"
+                aria-label="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
           </header>
         )}

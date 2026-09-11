@@ -20,6 +20,12 @@ export default function StudentSubmissionsPage() {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [selectedImages, setSelectedImages] = useState<{ url: string; name?: string }[]>([]);
 
+  // Pagination state: show 8 submissions per page
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 8;
+  const totalPages = Math.ceil(submissions.length / pageSize);
+  const pagedSubmissions = submissions.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   useEffect(() => {
     listMySubmissions()
       .then(setSubmissions)
@@ -29,9 +35,16 @@ export default function StudentSubmissionsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">My Submissions</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Everything you've turned in and teacher feedback</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">My Submissions</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Everything you've turned in and teacher feedback</p>
+        </div>
+        {submissions.length > 0 && (
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 w-fit">
+            {submissions.length} Total Submissions
+          </span>
+        )}
       </div>
 
       {isLoading ? (
@@ -40,7 +53,7 @@ export default function StudentSubmissionsPage() {
         <EmptyState title="No submissions yet" description="Submit your first assignment to see it here." />
       ) : (
         <div className="space-y-4">
-          {submissions.map((s) => (
+          {pagedSubmissions.map((s) => (
             <div key={s.id} className="card space-y-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2.5">
                 <div>
@@ -191,6 +204,57 @@ export default function StudentSubmissionsPage() {
               )}
             </div>
           ))}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-zinc-200 dark:border-zinc-800 pt-4 mt-4 text-xs text-zinc-500 dark:text-zinc-400">
+              <span>
+                Page {currentPage} of {totalPages} ({submissions.length} submissions)
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={currentPage <= 1}
+                  onClick={() => {
+                    setCurrentPage((p) => Math.max(1, p - 1));
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                >
+                  ← Prev
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => {
+                        setCurrentPage(p);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      className={`h-7 w-7 rounded-lg text-xs font-semibold transition ${
+                        p === currentPage
+                          ? "bg-indigo-600 text-white shadow-xs"
+                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => {
+                    setCurrentPage((p) => Math.min(totalPages, p + 1));
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

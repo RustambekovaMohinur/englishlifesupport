@@ -7,10 +7,13 @@ import {
   updateMyUnifiedProfile,
   uploadMyAvatar,
 } from "@/services/lmsService";
+import { LogOut } from "lucide-react";
 import { getFileUrl } from "@/services/api";
+import { useAuth } from "@/hooks/useAuth";
 import { UserProfileOut } from "@/types";
 
 export default function StudentProfilePage() {
+  const { logout } = useAuth();
   const [profile, setProfile] = useState<UserProfileOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -223,6 +226,22 @@ export default function StudentProfilePage() {
             <span className="text-zinc-500 dark:text-zinc-400">System ID</span>
             <span className="font-mono text-xs text-zinc-400 dark:text-zinc-500">{profile.user_id}</span>
           </div>
+        </div>
+
+        {/* Mobile & Quick Sign Out Action */}
+        <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-white">Tizimdan chiqish</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Joriy hisobdan xavfsiz chiqish</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => logout()}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 font-semibold text-xs transition active:scale-95 border border-red-200 dark:border-red-800/60 shadow-xs w-full sm:w-auto"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Tizimdan chiqish (Log Out)</span>
+          </button>
         </div>
       </div>
 

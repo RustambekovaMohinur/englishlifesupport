@@ -9,7 +9,7 @@ rather than only after the access token expires.
 """
 import uuid
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy import select
@@ -32,12 +32,14 @@ CREDENTIALS_EXCEPTION = HTTPException(
 
 async def get_current_user(
     token: str | None = Depends(oauth2_scheme),
+    token_query: str | None = Query(default=None, alias="token"),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    if token is None:
+    auth_token = token or token_query
+    if auth_token is None:
         raise CREDENTIALS_EXCEPTION
     try:
-        payload = decode_token(token)
+        payload = decode_token(auth_token)
     except JWTError:
         raise CREDENTIALS_EXCEPTION
 

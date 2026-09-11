@@ -171,32 +171,32 @@ export default function TeacherDashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Teacher Hero Banner with Ambient Gradient (Sleek Frosted Titanium) */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-[#151D2F] to-slate-900 text-white border border-slate-800/80 shadow-xl p-7">
-        <div className="absolute -right-16 -top-16 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
-        <div className="absolute -left-16 -bottom-16 h-72 w-72 rounded-full bg-sky-500/15 blur-3xl pointer-events-none" />
+      {/* Teacher Hero Banner with Vibrant Blue-Indigo Gradient (High-contrast in light & dark modes) */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 text-white border border-blue-500/30 shadow-xl p-7">
+        <div className="absolute -right-16 -top-16 h-72 w-72 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 h-72 w-72 rounded-full bg-sky-400/20 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider bg-white/10 backdrop-blur-md px-2.5 py-0.5 rounded-full text-indigo-200 border border-white/10">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-white border border-white/20">
                 Examiner Desk
               </span>
-              <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-400/25 text-emerald-100 border border-emerald-300/30">
                 Active Cohort
               </span>
             </div>
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-white flex items-center gap-2">
               <span>Good morning, Mr. Asadbek!</span>
-              <Sparkles className="w-5 h-5 text-amber-400 inline shrink-0" />
+              <Sparkles className="w-5 h-5 text-amber-300 inline shrink-0" />
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300">
+            <p className="text-xs sm:text-sm text-blue-100">
               Here&apos;s what&apos;s happening with your classes and student submissions today.
             </p>
           </div>
 
-          <div className="self-start sm:self-auto flex items-center gap-2 bg-white/[0.08] backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 text-xs font-mono font-semibold text-indigo-200 shadow-inner tabular-nums">
-            <Calendar className="w-3.5 h-3.5 text-indigo-300" />
+          <div className="self-start sm:self-auto flex items-center gap-2 bg-white/15 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/20 text-xs font-mono font-semibold text-white shadow-inner tabular-nums">
+            <Calendar className="w-3.5 h-3.5 text-blue-200" />
             <span>{format(new Date(), "EEE, d MMM yyyy")}</span>
           </div>
         </div>
@@ -294,42 +294,42 @@ export default function TeacherDashboardPage() {
             ) : groupReport ? (
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                  <div className="p-3 bg-zinc-50/50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Group Completion</p>
-                    <p className="text-lg font-bold font-mono text-zinc-900 dark:text-white tabular-nums">{groupReport.completion_rate}%</p>
+                  <div className="p-3.5 bg-white dark:bg-slate-800/90 text-slate-800 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-xs">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Group Completion</p>
+                    <p className="text-lg font-bold font-mono text-slate-900 dark:text-white tabular-nums mt-0.5">{groupReport.completion_rate}%</p>
                   </div>
-                  <div className="p-3 bg-zinc-50/50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Average Score</p>
-                    <p className="text-lg font-bold font-mono text-zinc-900 dark:text-white tabular-nums">{groupReport.average_score ?? "—"}/10</p>
+                  <div className="p-3.5 bg-white dark:bg-slate-800/90 text-slate-800 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-xs">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Average Score</p>
+                    <p className="text-lg font-bold font-mono text-slate-900 dark:text-white tabular-nums mt-0.5">{groupReport.average_score ?? "—"}/10</p>
                   </div>
-                  <div className="p-3 bg-zinc-50/50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Late Submissions</p>
-                    <p className="text-lg font-bold font-mono text-rose-600 dark:text-rose-400 tabular-nums">{groupReport.late_submissions}</p>
+                  <div className="p-3.5 bg-white dark:bg-slate-800/90 text-slate-800 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-xs">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Late Submissions</p>
+                    <p className="text-lg font-bold font-mono text-rose-600 dark:text-rose-400 tabular-nums mt-0.5">{groupReport.late_submissions}</p>
                   </div>
-                  <div className="p-3 bg-zinc-50/50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Perfect Week</p>
-                    <p className="text-lg font-bold font-mono text-amber-600 dark:text-amber-400 tabular-nums">{groupReport.perfect_week_students} students</p>
+                  <div className="p-3.5 bg-white dark:bg-slate-800/90 text-slate-800 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-xs">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Perfect Week</p>
+                    <p className="text-lg font-bold font-mono text-amber-600 dark:text-amber-400 tabular-nums mt-0.5">{groupReport.perfect_week_students} students</p>
                   </div>
-                  <div className="p-3 bg-zinc-50/50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Top Performer</p>
-                    <p className="text-sm font-bold text-zinc-900 dark:text-white truncate">{groupReport.top_performer ?? "—"}</p>
+                  <div className="p-3.5 bg-white dark:bg-slate-800/90 text-slate-800 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-xs">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Top Performer</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate mt-0.5">{groupReport.top_performer ?? "—"}</p>
                   </div>
                 </div>
 
                 {/* Locked Students & Quick Recovery */}
                 {groupReport.locked_students.length > 0 && (
-                  <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2">
-                    <h3 className="text-xs font-bold uppercase text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                  <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl space-y-2">
+                    <h3 className="text-xs font-bold uppercase text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
                       <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                       <span>Locked Students ({groupReport.locked_students.length})</span>
                     </h3>
-                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                    <p className="text-xs text-amber-800 dark:text-amber-400">
                       These students have not completed prerequisite tasks and their next assignment is locked.
                     </p>
                     <div className="flex flex-wrap gap-2 pt-1">
                       {groupReport.locked_students.map((st) => (
-                        <div key={st.id} className="flex items-center gap-2 bg-white dark:bg-zinc-800 px-2.5 py-1 rounded border border-amber-200/60 dark:border-amber-800/60 text-xs">
-                          <span className="font-medium text-zinc-900 dark:text-white">{st.name}</span>
+                        <div key={st.id} className="flex items-center gap-2 bg-white dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-amber-200 dark:border-amber-700/60 text-xs shadow-2xs">
+                          <span className="font-semibold text-slate-900 dark:text-white">{st.name}</span>
                           <button
                             type="button"
                             onClick={() => handleUnlockStudent(st.id, st.name)}
@@ -344,24 +344,24 @@ export default function TeacherDashboardPage() {
                 )}
 
                 {/* Student of the Week Section */}
-                <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                <div className="p-4 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/50 rounded-xl">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-bold text-purple-900 dark:text-purple-300 flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-purple-950 dark:text-purple-200 flex items-center gap-2">
                       <Trophy className="w-5 h-5 text-amber-500" />
                       <span>Student of the Week</span>
-                      <span className="text-xs bg-purple-200/70 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 px-2 py-0.5 rounded-full">
+                      <span className="text-xs bg-purple-200/80 dark:bg-purple-900/60 text-purple-900 dark:text-purple-200 px-2 py-0.5 rounded-full font-medium">
                         1 per group/week
                       </span>
                     </h3>
                   </div>
 
                   {groupReport.student_of_the_week ? (
-                    <div className="bg-white dark:bg-zinc-800 p-3.5 rounded-xl border border-purple-100 dark:border-purple-900/50 flex items-center justify-between">
+                    <div className="bg-white dark:bg-slate-800/90 p-3.5 rounded-xl border border-purple-200/80 dark:border-purple-800/60 flex items-center justify-between shadow-xs">
                       <div>
-                        <p className="font-bold text-sm text-zinc-900 dark:text-white">
+                        <p className="font-bold text-sm text-slate-900 dark:text-white">
                           {groupReport.student_of_the_week.student_name}
                         </p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                           Reason: {groupReport.student_of_the_week.reason || "High weekly performance"}
                         </p>
                       </div>
@@ -372,10 +372,10 @@ export default function TeacherDashboardPage() {
                       </span>
                     </div>
                   ) : (
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-zinc-800/80 p-3.5 rounded-xl border border-purple-100 dark:border-purple-900/50">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-slate-800/90 p-3.5 rounded-xl border border-purple-200/80 dark:border-purple-800/60 shadow-xs">
                       <div>
-                        <p className="font-semibold text-sm text-zinc-900 dark:text-white">Award this week's top performer</p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                        <p className="font-semibold text-sm text-slate-900 dark:text-white">Award this week's top performer</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                           Recognize a standout student in this cohort with between 50 and 100 bonus stars.
                         </p>
                       </div>

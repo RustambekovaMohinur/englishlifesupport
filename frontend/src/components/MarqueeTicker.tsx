@@ -10,19 +10,19 @@ export const MarqueeTicker: React.FC = () => {
   ];
 
   return (
-    <div className="relative w-full overflow-hidden bg-slate-900/90 text-slate-300 text-xs font-medium py-2 border-y border-slate-800/60 backdrop-blur-md select-none">
+    <div className="relative w-full overflow-hidden bg-slate-100/90 text-slate-700 dark:bg-slate-900/90 dark:text-slate-300 text-xs font-medium py-2 border-y border-slate-200/90 dark:border-slate-800/60 backdrop-blur-md select-none transition-colors">
       {/* Gradient edge fades */}
-      <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-slate-900 to-transparent z-10 pointer-events-none" />
-      <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-slate-900 to-transparent z-10 pointer-events-none" />
+      <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-slate-100 dark:from-slate-900 to-transparent z-10 pointer-events-none" />
+      <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-slate-100 dark:from-slate-900 to-transparent z-10 pointer-events-none" />
 
       <div className="flex w-max animate-marquee space-x-12 whitespace-nowrap">
         {[...items, ...items, ...items].map((item, index) => {
           const Icon = item.icon;
           return (
-            <div key={index} className="flex items-center gap-2 text-slate-300">
-              <Icon className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <div key={index} className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+              <Icon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
               <span>{item.text}</span>
-              <span className="text-slate-600 mx-2">•</span>
+              <span className="text-slate-400 dark:text-slate-600 mx-2">•</span>
             </div>
           );
         })}
