@@ -44,7 +44,7 @@ class Assignment(UUIDPKMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("assignments.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
-    group: Mapped["Group"] = relationship(back_populates="assignments")
+    group: Mapped["Group"] = relationship(back_populates="assignments", lazy="selectin")
     prerequisite: Mapped["Assignment | None"] = relationship(remote_side="Assignment.id")
     submissions: Mapped[list["Submission"]] = relationship(
         back_populates="assignment", cascade="all, delete-orphan"

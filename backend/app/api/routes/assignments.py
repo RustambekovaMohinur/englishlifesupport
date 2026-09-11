@@ -3,9 +3,10 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select, update
+from sqlalchemy import func, inspect as sa_inspect, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.base import NO_VALUE
 
 from app.api.deps import get_current_student_profile, get_current_user, require_teacher
 from app.db.session import get_db
@@ -39,6 +40,22 @@ from app.utils.files import (
 router = APIRouter(prefix="/api/assignments", tags=["assignments"])
 
 
+async def _get_assignment_with_relations(db: AsyncSession, assignment_id: uuid.UUID) -> Assignment | None:
+    """
+    Eagerly loads an Assignment and all linked relationships via selectinload.
+    Completely eliminates lazy loading greenlet_spawn exceptions in async contexts.
+    """
+    query = (
+        select(Assignment)
+        .options(
+            selectinload(Assignment.group),
+            selectinload(Assignment.images),
+            selectinload(Assignment.comments),
+        )
+        .where(Assignment.id == assignment_id)
+    )
+    return (await db.execute(query)).scalar_one_or_none()
+
 
 def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, vocab_words: list[VocabularyWord] | None = None) -> AssignmentOut:
     vocab_items = [
@@ -50,6 +67,14 @@ def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, 
         )
         for w in (vocab_words or [])
     ]
+
+    # Safe inspection of relationships without triggering lazy-load greenlet exceptions
+    insp = sa_inspect(assignment)
+
+    raw_images = []
+    if insp is not None and "images" in insp.attrs and insp.attrs.images.loaded_value is not NO_VALUE:
+        raw_images = assignment.images or []
+
     images_out = [
         AssignmentImageOut(
             id=img.id,
@@ -59,8 +84,13 @@ def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, 
             order_index=img.order_index,
             created_at=img.created_at,
         )
-        for img in (getattr(assignment, "images", None) or [])
+        for img in raw_images
     ]
+
+    comment_count = 0
+    if insp is not None and "comments" in insp.attrs and insp.attrs.comments.loaded_value is not NO_VALUE:
+        comment_count = len(assignment.comments or [])
+
     return AssignmentOut(
         id=assignment.id,
         group_id=assignment.group_id,
@@ -76,7 +106,7 @@ def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, 
         images=images_out,
         created_at=assignment.created_at,
         submission_count=sub_count,
-        comment_count=len(getattr(assignment, "comments", []) or []),
+        comment_count=comment_count,
         order_index=getattr(assignment, "order_index", 0) or 0,
         cycle_number=getattr(assignment, "cycle_number", 1) or 1,
         prerequisite_id=getattr(assignment, "prerequisite_id", None),
@@ -284,9 +314,16 @@ async def create_assignment(
             vocab_words.append(vw)
 
     await db.commit()
-    await db.refresh(assignment, attribute_names=["images"])
 
-    return _assignment_to_out(assignment, group.name, 0, vocab_words)
+    reloaded = await _get_assignment_with_relations(db, assignment.id)
+    if reloaded is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load newly created assignment",
+        )
+
+    group_name = reloaded.group.name if reloaded.group else group.name
+    return _assignment_to_out(reloaded, group_name, 0, vocab_words)
 
 
 
@@ -392,6 +429,11 @@ async def list_my_assignments(
             for w in vocab_words
         ]
 
+        insp = sa_inspect(assignment)
+        raw_images = []
+        if insp is not None and "images" in insp.attrs and insp.attrs.images.loaded_value is not NO_VALUE:
+            raw_images = assignment.images or []
+
         images_out = [
             AssignmentImageOut(
                 id=img.id,
@@ -401,7 +443,7 @@ async def list_my_assignments(
                 order_index=img.order_index,
                 created_at=img.created_at,
             )
-            for img in (getattr(assignment, "images", None) or [])
+            for img in raw_images
         ]
 
         # Fast in-memory sequential lock evaluation
@@ -436,6 +478,10 @@ async def list_my_assignments(
         is_past_dl = as_utc(assignment.deadline) < now
         is_overdue = is_past_dl and (submission is None)
 
+        comment_cnt = 0
+        if insp is not None and "comments" in insp.attrs and insp.attrs.comments.loaded_value is not NO_VALUE:
+            comment_cnt = len(assignment.comments or [])
+
         result.append(
             AssignmentForStudent(
                 id=assignment.id,
@@ -460,7 +506,7 @@ async def list_my_assignments(
                 prerequisite_id=getattr(assignment, "prerequisite_id", None),
                 is_locked=is_locked,
                 lock_reason=lock_reason,
-                comment_count=len(getattr(assignment, "comments", []) or []),
+                comment_count=comment_cnt,
             )
         )
     return result
@@ -472,13 +518,7 @@ async def get_assignment(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    assignment = (
-        await db.execute(
-            select(Assignment)
-            .options(selectinload(Assignment.images), selectinload(Assignment.comments))
-            .where(Assignment.id == assignment_id)
-        )
-    ).scalar_one_or_none()
+    assignment = await _get_assignment_with_relations(db, assignment_id)
 
     if assignment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
@@ -493,7 +533,6 @@ async def get_assignment(
         if assignment.status != AssignmentStatus.PUBLISHED:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
 
-    group = (await db.execute(select(Group).where(Group.id == assignment.group_id))).scalar_one()
     sub_count = (
         await db.execute(select(func.count()).select_from(Submission).where(Submission.assignment_id == assignment.id))
     ).scalar_one()
@@ -509,7 +548,10 @@ async def get_assignment(
     if vocab_assoc:
         vocab_words = vocab_assoc.words
 
-    return _assignment_to_out(assignment, group.name, sub_count, vocab_words)
+    group_name = assignment.group.name if assignment.group else (
+        (await db.execute(select(Group.name).where(Group.id == assignment.group_id))).scalar_one_or_none() or ""
+    )
+    return _assignment_to_out(assignment, group_name, sub_count, vocab_words)
 
 
 @router.get("/{assignment_id}/file")
@@ -734,14 +776,22 @@ async def edit_assignment_in_place(
             vocab_words = vocab_assoc.words
 
     await db.commit()
-    await db.refresh(assignment, attribute_names=["images"])
 
-    group = (await db.execute(select(Group).where(Group.id == assignment.group_id))).scalar_one()
+    reloaded = await _get_assignment_with_relations(db, assignment.id)
+    if reloaded is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load updated assignment",
+        )
+
     sub_count = (
         await db.execute(select(func.count()).select_from(Submission).where(Submission.assignment_id == assignment.id))
     ).scalar_one()
 
-    return _assignment_to_out(assignment, group.name, sub_count, vocab_words)
+    group_name = reloaded.group.name if reloaded.group else (
+        (await db.execute(select(Group.name).where(Group.id == assignment.group_id))).scalar_one_or_none() or ""
+    )
+    return _assignment_to_out(reloaded, group_name, sub_count, vocab_words)
 
 
 @router.patch("/{assignment_id}", response_model=AssignmentOut, dependencies=[Depends(require_teacher)])
@@ -770,9 +820,14 @@ async def update_assignment(
         setattr(assignment, field, value)
 
     await db.commit()
-    await db.refresh(assignment)
 
-    group = (await db.execute(select(Group).where(Group.id == assignment.group_id))).scalar_one()
+    reloaded = await _get_assignment_with_relations(db, assignment.id)
+    if reloaded is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load updated assignment",
+        )
+
     sub_count = (
         await db.execute(select(func.count()).select_from(Submission).where(Submission.assignment_id == assignment.id))
     ).scalar_one()
@@ -788,7 +843,10 @@ async def update_assignment(
     if vocab_assoc:
         vocab_words = vocab_assoc.words
 
-    return _assignment_to_out(assignment, group.name, sub_count, vocab_words)
+    group_name = reloaded.group.name if reloaded.group else (
+        (await db.execute(select(Group.name).where(Group.id == assignment.group_id))).scalar_one_or_none() or ""
+    )
+    return _assignment_to_out(reloaded, group_name, sub_count, vocab_words)
 
 
 @router.delete("/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_teacher)])
@@ -965,12 +1023,14 @@ async def _verify_assignment_access(
 
 
 def _format_comment_out(c: AssignmentComment, current_user_id: uuid.UUID) -> AssignmentCommentOut:
-    u = c.user
+    insp = sa_inspect(c)
+    u = c.user if (insp is not None and "user" in insp.attrs and insp.attrs.user.loaded_value is not NO_VALUE) else None
     display_name = "User"
     role_str = "student"
     if u:
-        sp = getattr(u, "student_profile", None)
-        tp = getattr(u, "teacher_profile", None)
+        u_insp = sa_inspect(u)
+        sp = u.student_profile if (u_insp is not None and "student_profile" in u_insp.attrs and u_insp.attrs.student_profile.loaded_value is not NO_VALUE) else None
+        tp = u.teacher_profile if (u_insp is not None and "teacher_profile" in u_insp.attrs and u_insp.attrs.teacher_profile.loaded_value is not NO_VALUE) else None
         display_name = (
             (sp.full_name if sp and sp.full_name else None)
             or (tp.full_name if tp and tp.full_name else None)
@@ -1119,9 +1179,19 @@ async def update_assignment_comment(
     comment.content = content_clean
     comment.updated_at = utcnow()
     await db.commit()
-    await db.refresh(comment)
 
-    return _format_comment_out(comment, current_user.id)
+    refetched = (
+        await db.execute(
+            select(AssignmentComment)
+            .options(
+                selectinload(AssignmentComment.user).selectinload(User.student_profile),
+                selectinload(AssignmentComment.user).selectinload(User.teacher_profile),
+            )
+            .where(AssignmentComment.id == comment.id)
+        )
+    ).scalar_one()
+
+    return _format_comment_out(refetched, current_user.id)
 
 
 @router.delete("/{assignment_id}/comments/{comment_id}")
@@ -1195,9 +1265,19 @@ async def toggle_like_assignment_comment(
     comment.liked_by_users = liked_by
     comment.likes = len(liked_by)
     await db.commit()
-    await db.refresh(comment)
 
-    return _format_comment_out(comment, current_user.id)
+    refetched = (
+        await db.execute(
+            select(AssignmentComment)
+            .options(
+                selectinload(AssignmentComment.user).selectinload(User.student_profile),
+                selectinload(AssignmentComment.user).selectinload(User.teacher_profile),
+            )
+            .where(AssignmentComment.id == comment.id)
+        )
+    ).scalar_one()
+
+    return _format_comment_out(refetched, current_user.id)
 
 
 
