@@ -14,8 +14,11 @@ import {
   BookOpen,
   CheckCircle2,
   Star,
+  MessageSquare,
+  RefreshCw,
 } from "lucide-react";
 import { StatCard, StatusBadge, LoadingRows, EmptyState, Modal, TelegramLink } from "@/components/ui";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import {
   getTeacherDashboard,
   listGroups,
@@ -26,8 +29,18 @@ import {
   listPendingStudents,
   approveStudent,
   rejectStudent,
+  getTeacherPlatformFeedback,
+  getTeacherPlatformFeedbackStats,
 } from "@/services/lmsService";
-import { TeacherDashboard, Group, TeacherGroupReport, StudentListItem, PendingStudentItem } from "@/types";
+import {
+  TeacherDashboard,
+  Group,
+  TeacherGroupReport,
+  StudentListItem,
+  PendingStudentItem,
+  PlatformFeedback,
+  PlatformFeedbackStats,
+} from "@/types";
 
 export default function TeacherDashboardPage() {
   const [data, setData] = useState<TeacherDashboard | null>(null);
@@ -66,6 +79,24 @@ export default function TeacherDashboardPage() {
       .finally(() => setIsLoadingPending(false));
   }
 
+  // Feedback reviews state
+  const [feedbacks, setFeedbacks] = useState<PlatformFeedback[]>([]);
+  const [feedbackStats, setFeedbackStats] = useState<PlatformFeedbackStats | null>(null);
+  const [feedbackRatingFilter, setFeedbackRatingFilter] = useState<number | null>(null);
+  const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
+
+  function loadFeedbackData(rating = feedbackRatingFilter) {
+    setIsLoadingFeedback(true);
+    getTeacherPlatformFeedback({ rating: rating ?? undefined })
+      .then(setFeedbacks)
+      .catch(() => {})
+      .finally(() => setIsLoadingFeedback(false));
+
+    getTeacherPlatformFeedbackStats()
+      .then(setFeedbackStats)
+      .catch(() => {});
+  }
+
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
 
   useEffect(() => {
@@ -85,7 +116,12 @@ export default function TeacherDashboardPage() {
       .finally(() => setIsLoadingGroups(false));
 
     loadPendingList(1);
+    loadFeedbackData(null);
   }, []);
+
+  useEffect(() => {
+    loadFeedbackData(feedbackRatingFilter);
+  }, [feedbackRatingFilter]);
 
   async function handleQuickApprove(st: PendingStudentItem) {
     setActionInProgress((prev) => ({ ...prev, [st.id]: true }));
@@ -697,6 +733,163 @@ export default function TeacherDashboardPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Platform Reviews & Student Feedback Inbox */}
+          <div className="card space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-100 dark:border-zinc-800 pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🌟</span>
+                  <h2 className="text-base font-bold text-zinc-900 dark:text-white">
+                    Student Platform Feedback & Reviews
+                  </h2>
+                  {feedbackStats && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-mono">
+                      ⭐ {feedbackStats.average_rating} / 5.0 ({feedbackStats.total_reviews} reviews)
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Real-time student thoughts, what is working well, and ideas for platform improvement
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => loadFeedbackData(feedbackRatingFilter)}
+                  disabled={isLoadingFeedback}
+                  className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
+                  title="Refresh reviews"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingFeedback ? "animate-spin" : ""}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Rating Filter Tabs */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setFeedbackRatingFilter(null)}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                  feedbackRatingFilter === null
+                    ? "bg-brand-600 text-white shadow-xs"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                }`}
+              >
+                All ({feedbackStats?.total_reviews ?? feedbacks.length})
+              </button>
+              {[5, 4, 3, 2, 1].map((star) => {
+                const count = feedbackStats?.rating_distribution?.[String(star)] ?? 0;
+                return (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setFeedbackRatingFilter(feedbackRatingFilter === star ? null : star)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1 ${
+                      feedbackRatingFilter === star
+                        ? "bg-amber-500 text-white shadow-xs"
+                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                    }`}
+                  >
+                    <span>{star} ★</span>
+                    <span className="opacity-70 text-[10px]">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Reviews Feed */}
+            {isLoadingFeedback ? (
+              <LoadingRows rows={3} />
+            ) : feedbacks.length === 0 ? (
+              <div className="text-center py-10 px-4 space-y-2 bg-zinc-50/50 dark:bg-zinc-900/30 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800">
+                <div className="text-2xl">📝</div>
+                <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  {feedbackRatingFilter !== null
+                    ? `No ${feedbackRatingFilter}-star reviews found`
+                    : "No student feedback submitted yet"}
+                </p>
+                <p className="text-[11px] text-zinc-400 max-w-sm mx-auto">
+                  When students evaluate the platform from their dashboard or assignment submit pages, their feedback and ratings will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                {feedbacks.map((f) => (
+                  <div
+                    key={f.id}
+                    className="p-4 rounded-2xl bg-white dark:bg-[#111827] border border-zinc-200/80 dark:border-zinc-800 shadow-xs space-y-3 flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition"
+                  >
+                    {/* Header: Student Info + Rating */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <UserAvatar
+                          name={f.user_full_name}
+                          src={`/api/profile/${f.user_id}/avatar`}
+                          size="sm"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">
+                            {f.user_full_name}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 font-mono">
+                            {format(new Date(f.created_at), "MMM d, yyyy · HH:mm")}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Star Rating Badge */}
+                      <div className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/40 text-amber-500 shrink-0">
+                        {"★".repeat(f.rating)}
+                        <span className="text-zinc-300 dark:text-zinc-700">
+                          {"★".repeat(Math.max(0, 5 - f.rating))}
+                        </span>
+                        <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 ml-1 font-mono">
+                          {f.rating}/5
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Feedback Content Boxes */}
+                    <div className="space-y-2 flex-1 text-xs">
+                      {f.what_works_well && (
+                        <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-800/50">
+                          <p className="font-bold text-emerald-800 dark:text-emerald-300 text-[11px] mb-0.5 flex items-center gap-1">
+                            <span>💚</span> <span>Highlights / What Works:</span>
+                          </p>
+                          <p className="text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                            {f.what_works_well}
+                          </p>
+                        </div>
+                      )}
+
+                      {f.what_to_improve && (
+                        <div className="p-2.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/50">
+                          <p className="font-bold text-amber-800 dark:text-amber-300 text-[11px] mb-0.5 flex items-center gap-1">
+                            <span>🔧</span> <span>Suggestions for Improvement:</span>
+                          </p>
+                          <p className="text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                            {f.what_to_improve}
+                          </p>
+                        </div>
+                      )}
+
+                      {!f.what_works_well && !f.what_to_improve && f.message && (
+                        <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800">
+                          <p className="text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                            {f.message}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

@@ -247,10 +247,10 @@ export const getPlatformFeedbackSummary = () =>
 export const getAllPlatformFeedback = () =>
   api.get<PlatformFeedback[]>("/feedback/all").then((r) => r.data);
 
-export const getTeacherPlatformFeedback = () =>
-  api.get<PlatformFeedback[]>("/feedback/teacher/platform").then((r) => r.data);
+export const getTeacherPlatformFeedback = (params?: { rating?: number; limit?: number; offset?: number }) =>
+  api.get<PlatformFeedback[]>("/feedback", { params }).then((r) => r.data);
 
 export const getTeacherPlatformFeedbackStats = () =>
-  api.get<PlatformFeedbackStats>("/feedback/teacher/platform/stats").then((r) => r.data);
+  api.get<PlatformFeedbackStats>("/feedback/stats").then((r) => r.data);
 
 

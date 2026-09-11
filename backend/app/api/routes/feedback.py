@@ -1,9 +1,9 @@
 import uuid
 from collections import Counter
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, require_teacher
 from app.db.session import get_db
@@ -21,66 +21,44 @@ from app.services.gamification_service import award_xp
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
 
-def _to_out(
-    feedback: PlatformFeedback,
-    user: User | None = None,
-    user_full_name: str | None = None,
-    user_role: str | None = None,
-) -> PlatformFeedbackOut:
-    full_name = user_full_name
-    role_str = user_role
-    if not full_name and user:
-        full_name = getattr(user, "full_name", None) or getattr(user, "username", "User")
-    if not role_str and user:
-        role_str = user.role.value if hasattr(user.role, "value") else str(user.role)
-    if not full_name:
-        full_name = "Anonymous User"
-    if not role_str:
-        role_str = "student"
-
-    return PlatformFeedbackOut(
-        id=feedback.id,
-        user_id=feedback.user_id,
-        user_full_name=full_name,
-        user_role=role_str,
-        rating=feedback.rating,
-        what_works_well=feedback.what_works_well,
-        what_to_improve=feedback.what_to_improve,
-        category=feedback.category,
-        message=feedback.message,
-        created_at=feedback.created_at,
-    )
-
-
-@router.post("", response_model=PlatformFeedbackOut, status_code=status.HTTP_201_CREATED)
-@router.post("/platform", response_model=PlatformFeedbackOut, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("/platform", status_code=status.HTTP_201_CREATED)
 async def submit_platform_feedback(
     payload: PlatformFeedbackCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Capture user attributes BEFORE commit to prevent greenlet lazy-loading on expired models
+    """
+    Submits or updates platform feedback.
+    Completely decoupled from ORM relationship traversal to prevent greenlet_spawn crashes.
+    """
+    # 1. Extract all primitive values before DB session operations
+    user_id = current_user.id
     user_full_name = getattr(current_user, "full_name", None) or getattr(current_user, "username", "User")
     user_role_str = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
-    user_id = current_user.id
-
-    # Check if user already submitted feedback (upsert)
-    res = await db.execute(
-        select(PlatformFeedback)
-        .where(PlatformFeedback.user_id == current_user.id)
-        .order_by(PlatformFeedback.created_at.desc())
-    )
-    feedback = res.scalars().first()
-    is_new = False
 
     what_works = payload.what_works_well.strip() if payload.what_works_well else None
     what_improve = payload.what_to_improve.strip() if payload.what_to_improve else None
     cat = (payload.category or "Platform Experience").strip()
     msg = payload.message.strip() if payload.message else (what_works or what_improve or "")
+    now = datetime.now(timezone.utc)
 
-    if not feedback:
+    # 2. Check if user already submitted feedback (upsert by user_id)
+    existing_id = (
+        await db.execute(
+            select(PlatformFeedback.id)
+            .where(PlatformFeedback.user_id == user_id)
+            .order_by(PlatformFeedback.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    is_new = False
+    if existing_id is None:
+        feedback_id = uuid.uuid4()
         feedback = PlatformFeedback(
-            user_id=current_user.id,
+            id=feedback_id,
+            user_id=user_id,
             rating=payload.rating,
             what_works_well=what_works,
             what_to_improve=what_improve,
@@ -90,43 +68,59 @@ async def submit_platform_feedback(
         db.add(feedback)
         is_new = True
     else:
-        feedback.rating = payload.rating
-        feedback.what_works_well = what_works
-        feedback.what_to_improve = what_improve
-        feedback.category = cat
-        feedback.message = msg
+        feedback_id = existing_id
+        await db.execute(
+            update(PlatformFeedback)
+            .where(PlatformFeedback.id == feedback_id)
+            .values(
+                rating=payload.rating,
+                what_works_well=what_works,
+                what_to_improve=what_improve,
+                category=cat,
+                message=msg,
+                updated_at=now,
+            )
+        )
 
-    await db.flush()
-
-    # Award +5 XP bonus if student and first review
-    if is_new and current_user.role == UserRole.STUDENT:
-        sp_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
-        sp = sp_res.scalars().first()
-        if sp:
-            try:
-                await award_xp(
-                    db,
-                    student_id=sp.id,
-                    amount=5,
-                    activity_type="platform_feedback",
-                    reference_id=str(feedback.id),
-                    description="Bonus XP for platform feedback",
+    # 3. Retrieve student full_name and award +5 XP bonus if first review
+    if user_role_str == "student":
+        try:
+            sp_info = (
+                await db.execute(
+                    select(StudentProfile.id, StudentProfile.full_name).where(StudentProfile.user_id == user_id)
                 )
-            except Exception:
-                pass
+            ).first()
+            if sp_info:
+                if sp_info.full_name:
+                    user_full_name = sp_info.full_name
+                if is_new:
+                    await award_xp(
+                        db,
+                        student_id=sp_info.id,
+                        amount=5,
+                        activity_type="platform_feedback",
+                        reference_id=str(feedback_id),
+                        description="Bonus XP for platform feedback",
+                    )
+        except Exception:
+            pass
 
     await db.commit()
 
-    # Re-fetch feedback with user eagerly loaded
-    stmt = (
-        select(PlatformFeedback)
-        .options(selectinload(PlatformFeedback.user))
-        .where(PlatformFeedback.id == feedback.id)
-    )
-    res = await db.execute(stmt)
-    feedback_out = res.scalars().first() or feedback
-
-    return _to_out(feedback_out, user_full_name=user_full_name, user_role=user_role_str)
+    # 4. Return pure primitive dictionary (Zero ORM relationship traversal!)
+    return {
+        "status": "success",
+        "message": "Fikringiz uchun rahmat! Tizimni yanada yaxshilaymiz! 🌟",
+        "id": str(feedback_id),
+        "user_id": str(user_id),
+        "user_full_name": user_full_name,
+        "user_role": user_role_str,
+        "rating": payload.rating,
+        "what_works_well": what_works,
+        "what_to_improve": what_improve,
+        "category": cat,
+        "created_at": now.isoformat(),
+    }
 
 
 @router.get("/summary", response_model=PlatformFeedbackSummary)
@@ -134,14 +128,31 @@ async def get_platform_feedback_summary(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return public community rating summary and user's review status."""
-    feedbacks = (
-        await db.execute(
-            select(PlatformFeedback)
-            .options(selectinload(PlatformFeedback.user))
+    """
+    Return community rating summary and user's review status using pure joined queries.
+    Immune to greenlet_spawn / lazy-loading IO.
+    """
+    stmt = (
+        select(
+            PlatformFeedback.id,
+            PlatformFeedback.user_id,
+            PlatformFeedback.rating,
+            PlatformFeedback.what_works_well,
+            PlatformFeedback.what_to_improve,
+            PlatformFeedback.category,
+            PlatformFeedback.message,
+            PlatformFeedback.created_at,
+            User.username,
+            User.role,
+            StudentProfile.full_name.label("student_name"),
         )
-    ).scalars().all()
-    if not feedbacks:
+        .join(User, PlatformFeedback.user_id == User.id, isouter=True)
+        .join(StudentProfile, User.id == StudentProfile.user_id, isouter=True)
+        .order_by(PlatformFeedback.created_at.desc())
+    )
+    rows = (await db.execute(stmt)).all()
+
+    if not rows:
         return PlatformFeedbackSummary(
             average_rating=5.0,
             total_reviews=0,
@@ -150,58 +161,116 @@ async def get_platform_feedback_summary(
             user_review=None,
         )
 
-    total = len(feedbacks)
-    avg = sum(f.rating for f in feedbacks) / total
-    counts = Counter(str(f.rating) for f in feedbacks)
+    total = len(rows)
+    avg = sum(r.rating for r in rows) / total
+    counts = Counter(str(r.rating) for r in rows)
     distribution = {str(star): counts.get(str(star), 0) for star in range(1, 6)}
 
-    # User review
-    user_feedbacks = [f for f in feedbacks if f.user_id == current_user.id]
+    # Check for current user's review
     user_review = None
-    if user_feedbacks:
-        latest = sorted(user_feedbacks, key=lambda x: x.created_at, reverse=True)[0]
-        user_review = _to_out(latest, latest.user)
+    for r in rows:
+        if r.user_id == current_user.id:
+            role_val = r.role.value if hasattr(r.role, "value") else str(r.role or "student")
+            name_val = r.student_name or r.username or "Anonymous"
+            user_review = PlatformFeedbackOut(
+                id=r.id,
+                user_id=r.user_id,
+                user_full_name=name_val,
+                user_role=role_val,
+                rating=r.rating,
+                what_works_well=r.what_works_well,
+                what_to_improve=r.what_to_improve,
+                category=r.category,
+                message=r.message,
+                created_at=r.created_at,
+            )
+            break
 
     return PlatformFeedbackSummary(
         average_rating=round(avg, 1),
         total_reviews=total,
         rating_distribution=distribution,
-        user_has_reviewed=bool(user_review),
+        user_has_reviewed=user_review is not None,
         user_review=user_review,
     )
 
 
+@router.get("", response_model=list[PlatformFeedbackOut], dependencies=[Depends(require_teacher)])
 @router.get("/all", response_model=list[PlatformFeedbackOut], dependencies=[Depends(require_teacher)])
 @router.get("/teacher/platform", response_model=list[PlatformFeedbackOut], dependencies=[Depends(require_teacher)])
 async def list_platform_feedback(
+    rating: int | None = Query(None, ge=1, le=5, description="Filter by star rating"),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
-    feedbacks = (
-        await db.execute(
-            select(PlatformFeedback)
-            .options(selectinload(PlatformFeedback.user))
-            .order_by(PlatformFeedback.created_at.desc())
+    """
+    Teacher Feedback Review Panel: retrieves student reviews with rating filters and pagination.
+    Uses pure joined columns with zero lazy-loading IO.
+    """
+    stmt = (
+        select(
+            PlatformFeedback.id,
+            PlatformFeedback.user_id,
+            PlatformFeedback.rating,
+            PlatformFeedback.what_works_well,
+            PlatformFeedback.what_to_improve,
+            PlatformFeedback.category,
+            PlatformFeedback.message,
+            PlatformFeedback.created_at,
+            User.username,
+            User.role,
+            StudentProfile.full_name.label("student_name"),
         )
-    ).scalars().all()
+        .join(User, PlatformFeedback.user_id == User.id, isouter=True)
+        .join(StudentProfile, User.id == StudentProfile.user_id, isouter=True)
+    )
 
-    return [_to_out(f, f.user) for f in feedbacks]
+    if rating is not None:
+        stmt = stmt.where(PlatformFeedback.rating == rating)
+
+    stmt = stmt.order_by(PlatformFeedback.created_at.desc()).offset(offset).limit(limit)
+    rows = (await db.execute(stmt)).all()
+
+    items = []
+    for r in rows:
+        role_val = r.role.value if hasattr(r.role, "value") else str(r.role or "student")
+        name_val = r.student_name or r.username or "Student"
+        items.append(
+            PlatformFeedbackOut(
+                id=r.id,
+                user_id=r.user_id,
+                user_full_name=name_val,
+                user_role=role_val,
+                rating=r.rating,
+                what_works_well=r.what_works_well,
+                what_to_improve=r.what_to_improve,
+                category=r.category,
+                message=r.message,
+                created_at=r.created_at,
+            )
+        )
+
+    return items
 
 
+@router.get("/stats", response_model=PlatformFeedbackStats, dependencies=[Depends(require_teacher)])
 @router.get("/teacher/platform/stats", response_model=PlatformFeedbackStats, dependencies=[Depends(require_teacher)])
 async def get_platform_feedback_stats(
     db: AsyncSession = Depends(get_db),
 ):
-    feedbacks = (await db.execute(select(PlatformFeedback))).scalars().all()
-    if not feedbacks:
+    """Aggregated stats for the teacher dashboard review panel."""
+    ratings = (await db.execute(select(PlatformFeedback.rating))).scalars().all()
+    if not ratings:
         return PlatformFeedbackStats(
             average_rating=5.0,
             total_reviews=0,
             rating_distribution={"1": 0, "2": 0, "3": 0, "4": 0, "5": 0},
         )
 
-    total = len(feedbacks)
-    avg = sum(f.rating for f in feedbacks) / total
-    counts = Counter(str(f.rating) for f in feedbacks)
+    total = len(ratings)
+    avg = sum(ratings) / total
+    counts = Counter(str(r) for r in ratings)
     distribution = {str(star): counts.get(str(star), 0) for star in range(1, 6)}
 
     return PlatformFeedbackStats(

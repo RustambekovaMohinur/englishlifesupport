@@ -52,10 +52,16 @@ class User(UUIDPKMixin, TimestampMixin, Base):
 
     @property
     def full_name(self) -> str:
-        if self.student_profile and self.student_profile.full_name:
-            return self.student_profile.full_name
-        if self.teacher_profile and self.teacher_profile.full_name:
-            return self.teacher_profile.full_name
+        from sqlalchemy.orm import attributes
+        state = attributes.instance_state(self)
+        if "student_profile" in state.dict:
+            sp = state.dict["student_profile"]
+            if sp and getattr(sp, "full_name", None):
+                return sp.full_name
+        if "teacher_profile" in state.dict:
+            tp = state.dict["teacher_profile"]
+            if tp and getattr(tp, "full_name", None):
+                return tp.full_name
         return self.username or self.email
 
     @property

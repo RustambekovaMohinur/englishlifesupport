@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState, useMemo } from "react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { EmptyState, LoadingRows, useConfirm, FileDownloadButton } from "@/components/ui";
+import { AssignmentDiscussionDrawer } from "@/components/AssignmentDiscussionDrawer";
 import { createAssignment, deleteAssignment, listAssignments, listGroups, updateAssignmentInPlace } from "@/services/lmsService";
 import { AssignmentOut, Group } from "@/types";
 import { compressImage } from "@/utils/imageCompressor";
@@ -75,6 +76,7 @@ export default function AssignmentsPage() {
   const [groupFilter, setGroupFilter] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [showBuilder, setShowBuilder] = useState(false);
+  const [discussionAssignment, setDiscussionAssignment] = useState<AssignmentOut | null>(null);
   const { confirm, ConfirmDialog } = useConfirm();
 
   // Builder state
@@ -1251,8 +1253,16 @@ export default function AssignmentsPage() {
                 </div>
               </div>
 
-              {/* Action Buttons: Edit, View Submissions, Delete */}
+              {/* Action Buttons: Q&A Discussion, Edit, View Submissions, Delete */}
               <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setDiscussionAssignment(a)}
+                  className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 border-purple-200 dark:border-purple-800 font-semibold"
+                  title="View and participate in student Q&A discussion"
+                >
+                  💬 Q&A {a.comment_count ? `(${a.comment_count})` : ""}
+                </button>
                 <button
                   type="button"
                   onClick={() => handleOpenEdit(a)}
@@ -1279,6 +1289,22 @@ export default function AssignmentsPage() {
           );
           })}
         </div>
+      )}
+
+      {/* Teacher Q&A Discussion Drawer */}
+      {discussionAssignment && (
+        <AssignmentDiscussionDrawer
+          assignmentId={discussionAssignment.id}
+          assignmentTitle={discussionAssignment.title}
+          isOpen={true}
+          onClose={() => setDiscussionAssignment(null)}
+          onCommentAdded={() => {
+            // refresh assignment comment count in background
+            listAssignments(groupFilter || undefined)
+              .then(setAssignments)
+              .catch(() => {});
+          }}
+        />
       )}
 
       <ConfirmDialog />

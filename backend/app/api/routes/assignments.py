@@ -1007,11 +1007,21 @@ async def _verify_assignment_access(
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
-    # Strict Group Privacy Isolation Gate
-    if current_user.role == UserRole.STUDENT:
+    # Role-based authorization gate
+    user_role_str = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if user_role_str in ["teacher", "admin", "superadmin"] or current_user.role == UserRole.TEACHER:
+        return a_id, assignment
+
+    # Strict Group Privacy Isolation Gate for students
+    if user_role_str == "student" or current_user.role == UserRole.STUDENT:
         sp_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
         sp = sp_res.scalar_one_or_none()
-        if not sp or sp.group_id != assignment.group_id:
+        if not sp:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Student profile not found",
+            )
+        if assignment.group_id is not None and sp.group_id != assignment.group_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied. You are not enrolled in this cohort.",
