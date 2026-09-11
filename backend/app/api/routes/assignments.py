@@ -1042,6 +1042,7 @@ def _format_comment_out(c: AssignmentComment, current_user_id: uuid.UUID) -> Ass
         avatar_val = (
             (sp.avatar_url if sp and sp.avatar_url else None)
             or (tp.avatar_url if tp and tp.avatar_url else None)
+            or f"/api/profile/{u.id}/avatar"
         )
     else:
         avatar_val = None
@@ -1063,6 +1064,7 @@ def _format_comment_out(c: AssignmentComment, current_user_id: uuid.UUID) -> Ass
         liked_by_users=liked_by,
         is_liked_by_me=is_liked,
         user_avatar_url=avatar_val,
+        avatar_url=avatar_val,
     )
 
 

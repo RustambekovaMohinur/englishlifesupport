@@ -4,6 +4,7 @@ import { ExternalLink, Loader2, X, Star, FileText, CheckCircle2, AlertCircle } f
 import toast from "react-hot-toast";
 import StudentDetailModal from "@/components/StudentDetailModal";
 import { UserAvatar } from "@/components/common/UserAvatar";
+import { StudentProgressMatrix } from "@/components/StudentProgressMatrix";
 import {
   EmptyState,
   LoadingRows,
@@ -415,193 +416,13 @@ export default function GroupDetailPage() {
           })}
         </div>
       ) : (
-        /* ================= 2. GROUP ASSIGNMENT MATRIX VIEW (HIGH DENSITY) ================= */
-        <div className="space-y-4">
-          {/* Cycle Filter Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#161B22] p-3 rounded-xl border border-[#EAE9E5] dark:border-[#30363D] shadow-xs">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Progression Cycle:</span>
-              {(() => {
-                const currentCycle = groupDetail.current_cycle ?? 1;
-                const cycleSet = new Set(groupDetail.assignments.map((a) => a.cycle_number ?? 1));
-                cycleSet.add(currentCycle);
-                const cycles = Array.from(cycleSet).sort((a, b) => a - b);
-                const activeCycle = selectedCycle ?? currentCycle;
-
-                return cycles.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setSelectedCycle(c)}
-                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                      activeCycle === c
-                        ? "bg-indigo-600 text-white shadow-xs"
-                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-                    }`}
-                  >
-                    Cycle {c} {c === currentCycle && "• Active"}
-                  </button>
-                ));
-              })()}
-            </div>
-
-            <p className="text-xs text-zinc-400 dark:text-zinc-500">
-              💡 Click any cell to inspect homework, grade submissions, and award stars.
-            </p>
-          </div>
-
-          {/* Spreadsheet Table with Sticky Left Column */}
-          <div className="overflow-x-auto touch-pan-x rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
-            {(() => {
-              const currentCycle = groupDetail.current_cycle ?? 1;
-              const activeCycle = selectedCycle ?? currentCycle;
-              const cycleAssignments = groupDetail.assignments.filter(
-                (a) => (a.cycle_number ?? 1) === activeCycle
-              );
-
-              return (
-                <table className="w-full text-left text-sm border-collapse">
-                  <thead className="sticky top-0 z-20 backdrop-blur-md bg-white/90 dark:bg-[#161B22]/90 text-xs uppercase text-neutral-600 dark:text-neutral-400 border-b border-black/[0.08] dark:border-white/[0.08]">
-                    <tr>
-                      <th className="px-4 py-3.5 sticky left-0 bg-white/95 dark:bg-[#161B22]/95 z-30 font-bold border-r border-black/[0.08] dark:border-white/[0.08] shadow-[4px_0_8px_rgba(0,0,0,0.08)]">
-                        Student Identity
-                      </th>
-                      <th className="px-3 py-3.5 font-semibold text-xs text-neutral-500 dark:text-neutral-400">Telegram</th>
-                      <th className="px-3 py-3.5 text-center font-semibold text-xs text-amber-600 dark:text-amber-400">⭐ Stars</th>
-                      <th className="px-3 py-3.5 text-center font-semibold text-xs text-yellow-600 dark:text-yellow-400">⚡ Lightning</th>
-                      <th className="px-3 py-3.5 text-center font-semibold text-xs text-neutral-600 dark:text-neutral-400">Cycle %</th>
-                      {cycleAssignments.length === 0 ? (
-                        <th className="px-4 py-3 text-neutral-400 font-normal italic text-xs">
-                          No assignments in Cycle {activeCycle}
-                        </th>
-                      ) : (
-                        cycleAssignments.map((a) => (
-                          <th key={a.id} className="px-3 py-3.5 min-w-[135px] text-center border-l border-black/[0.04] dark:border-white/[0.06]">
-                            <div className="font-bold truncate max-w-[150px] text-xs text-neutral-900 dark:text-white" title={a.title}>
-                              {a.title}
-                            </div>
-                            <div className="text-[10px] text-neutral-400 font-normal tabular-nums font-mono mt-0.5">
-                              Due: {new Date(a.deadline).toLocaleDateString()}
-                            </div>
-                          </th>
-                        ))
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
-                    {groupDetail.students.map((st) => (
-                      <tr key={st.student_id} className="hover:bg-neutral-50/70 dark:hover:bg-zinc-800/40 transition-colors">
-                        {/* Sticky Left Column: Student identity with status dot & shadow */}
-                        <td className="px-4 py-3 sticky left-0 bg-white dark:bg-[#111827] z-10 font-medium text-neutral-900 dark:text-white border-r border-black/[0.08] dark:border-white/[0.08] shadow-[4px_0_8px_rgba(0,0,0,0.08)]">
-                          <div className="flex items-center gap-2.5">
-                            <div className="relative">
-                              <UserAvatar
-                                src={st.avatar_url}
-                                name={st.full_name}
-                                size="xs"
-                              />
-                              <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-900" title="Active" />
-                            </div>
-                            <div className="min-w-0">
-                              <p
-                                onClick={() => setSelectedStudentId(st.student_id)}
-                                className="font-semibold text-neutral-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 cursor-pointer truncate max-w-[140px] text-xs underline decoration-dotted"
-                                title={st.full_name}
-                              >
-                                {st.full_name}
-                              </p>
-                              <p className="text-[10px] text-neutral-400 font-mono">@{st.username}</p>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Telegram Link */}
-                        <td className="px-3 py-3 text-xs">
-                          {st.telegram_username ? (
-                            <a
-                              href={
-                                st.telegram_username.startsWith("http")
-                                  ? st.telegram_username
-                                  : `https://t.me/${st.telegram_username.replace("@", "").trim()}`
-                              }
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 font-mono"
-                              title={`Open Telegram: @${st.telegram_username.replace("@", "")}`}
-                            >
-                              <span>@{st.telegram_username.replace("@", "")}</span>
-                              <ExternalLink className="h-3 w-3 text-blue-400" />
-                            </a>
-                          ) : (
-                            <span className="text-neutral-400 font-mono text-xs">—</span>
-                          )}
-                        </td>
-
-                        {/* Stars */}
-                        <td className="px-3 py-3 text-center font-bold text-amber-500 tabular-nums font-mono text-xs">
-                          ⭐ {st.total_stars}
-                        </td>
-
-                        {/* Lightning */}
-                        <td className="px-3 py-3 text-center font-bold text-yellow-600 dark:text-yellow-400 tabular-nums font-mono text-xs">
-                          ⚡ {st.total_lightning}
-                        </td>
-
-                        {/* Cycle Completion % */}
-                        <td className="px-3 py-3 text-center tabular-nums font-mono text-xs">
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
-                              (st.cycle_completion_percentage ?? st.overall_completion_percentage) >= 80
-                                ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200"
-                                : (st.cycle_completion_percentage ?? st.overall_completion_percentage) >= 50
-                                ? "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200"
-                                : "bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-200"
-                            }`}
-                          >
-                            {st.cycle_completion_percentage ?? st.overall_completion_percentage}%
-                          </span>
-                        </td>
-
-                        {/* Assignment Status Cells with Refined Luxury Glass Pills */}
-                        {cycleAssignments.map((a) => {
-                          const item = st.assignments.find((asg) => asg.assignment_id === a.id);
-                          const isDone = item?.has_submission && item.score !== null;
-                          const isPending = item?.has_submission && item.score === null;
-
-                          return (
-                            <td
-                              key={a.id}
-                              className="px-3 py-3 text-center border-l border-black/[0.04] dark:border-white/[0.06] cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-950/30 transition-colors"
-                              onClick={() => setActiveGradingCell({ student: st, assignment: a, item })}
-                            >
-                              {isDone ? (
-                                <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-mono font-medium rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1 shadow-xs">
-                                  ✓ DONE {item.score !== null ? `${item.score}/10` : ""}
-                                </span>
-                              ) : isPending ? (
-                                <span className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-mono font-medium rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1.5 shadow-xs">
-                                  <span className="relative flex h-2 w-2 mr-0.5">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                                  </span>
-                                  PENDING
-                                </span>
-                              ) : (
-                                <span className="bg-zinc-100/70 dark:bg-zinc-800/40 text-zinc-400 border border-zinc-200/50 dark:border-zinc-700/50 font-mono font-medium rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1">
-                                  ○ NOT YET
-                                </span>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              );
-            })()}
-          </div>
-        </div>
+        /* ================= 2. GROUP ASSIGNMENT MATRIX VIEW (REFERENCE IMAGE 3) ================= */
+        <StudentProgressMatrix
+          groupDetail={groupDetail}
+          isTeacher={true}
+          onStudentClick={(id) => setSelectedStudentId(id)}
+          onCellClick={(student, assignment, item) => setActiveGradingCell({ student, assignment, item })}
+        />
       )}
 
       {/* Polish Responsive StudentDetailModal */}

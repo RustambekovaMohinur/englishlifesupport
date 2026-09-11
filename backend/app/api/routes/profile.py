@@ -484,6 +484,17 @@ async def get_user_avatar(
     # 2. Check FileBlob metadata (B2 or saved object)
     res = await db.execute(select(FileBlob).where(FileBlob.file_path.like(f"profiles/{target_user_id}/avatar%")))
     blob = res.scalars().first()
+    if not blob:
+        # Check if student with same phone/telegram has an avatar blob (alias accounts)
+        sp_obj = (await db.execute(select(StudentProfile).where(StudentProfile.user_id == target_user_id))).scalars().first()
+        if sp_obj and sp_obj.phone:
+            peers = (await db.execute(select(StudentProfile).where(StudentProfile.phone == sp_obj.phone, StudentProfile.user_id != target_user_id))).scalars().all()
+            for peer in peers:
+                peer_blob_res = await db.execute(select(FileBlob).where(FileBlob.file_path.like(f"profiles/{peer.user_id}/avatar%")))
+                blob = peer_blob_res.scalars().first()
+                if blob:
+                    break
+
     if blob:
         # Try direct B2 Presigned URL redirect for high performance
         if blob.storage_backend == "b2" or blob.storage_key:

@@ -70,6 +70,7 @@ class AssignmentCommentOut(BaseModel):
     user_full_name: str | None = None
     user_role: str
     user_avatar_url: str | None = None
+    avatar_url: str | None = None
 
     model_config = {"from_attributes": True}
 

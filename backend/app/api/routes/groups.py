@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import require_teacher
+from app.api.deps import get_current_user, require_teacher
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.assignment import Assignment, AssignmentStatus
@@ -26,7 +26,7 @@ from app.schemas.group import (
 )
 from app.utils.datetimes import as_utc, utcnow
 
-router = APIRouter(prefix="/api/groups", tags=["groups"], dependencies=[Depends(require_teacher)])
+router = APIRouter(prefix="/api/groups", tags=["groups"])
 
 
 async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
@@ -134,23 +134,9 @@ async def get_group(group_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return await _to_group_out(db, group)
 
 
-@router.get("/{group_id}/detail", response_model=GroupDetailOut)
-async def get_group_detail(
-    group_id: uuid.UUID,
-    current_user: User = Depends(require_teacher),
-    db: AsyncSession = Depends(get_db),
-):
-    """Teacher views full group details, including all students and their assignment completion grid."""
-    group = (await db.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
-    if group is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
-
-    is_owner = (
-        group.created_by == current_user.id
-        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
-    )
-    if not is_owner:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this group")
+async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetailOut:
+    """Builds GroupDetailOut including student details and assignment completion matrix."""
+    group_id = group.id
 
     # Fetch published assignments for this group ordered by deadline/order_index
     assignments_res = await db.execute(
@@ -321,6 +307,54 @@ async def get_group_detail(
         assignments=headers,
         students=student_details,
     )
+
+
+@router.get("/my/matrix", response_model=GroupDetailOut)
+async def get_my_group_matrix(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Enables authenticated students to view their cohort's Progress Matrix
+    (matching Reference Image 3: Student Progress Table with Sticky Left Column).
+    """
+    # Find student profile
+    profile_res = await db.execute(
+        select(StudentProfile).where(StudentProfile.user_id == current_user.id)
+    )
+    profile = profile_res.scalar_one_or_none()
+    if not profile or not profile.group_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="You are not currently enrolled in any class group.",
+        )
+
+    group = (await db.execute(select(Group).where(Group.id == profile.group_id))).scalar_one_or_none()
+    if group is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+
+    return await _build_group_detail_out(db, group)
+
+
+@router.get("/{group_id}/detail", response_model=GroupDetailOut)
+async def get_group_detail(
+    group_id: uuid.UUID,
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    """Teacher views full group details, including all students and their assignment completion grid."""
+    group = (await db.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+    if group is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+
+    is_owner = (
+        group.created_by == current_user.id
+        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+    )
+    if not is_owner:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this group")
+
+    return await _build_group_detail_out(db, group)
 
 
 @router.post("/{group_id}/start-cycle", response_model=GroupOut)

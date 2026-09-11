@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { LoadingRows, StatCard } from "@/components/ui";
-import { getStudentDashboard, getGamificationSummary } from "@/services/lmsService";
-import { StudentDashboard, StudentGamificationSummary } from "@/types";
+import { StudentProgressMatrix } from "@/components/StudentProgressMatrix";
+import { getStudentDashboard, getGamificationSummary, getMyCohortMatrix } from "@/services/lmsService";
+import { StudentDashboard, StudentGamificationSummary, GroupDetailOut } from "@/types";
 
 export default function StudentProgressPage() {
   const [data, setData] = useState<StudentDashboard | null>(null);
   const [gamify, setGamify] = useState<StudentGamificationSummary | null>(null);
+  const [cohortMatrix, setCohortMatrix] = useState<GroupDetailOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       getStudentDashboard().then(setData),
       getGamificationSummary().then(setGamify).catch(() => null),
+      getMyCohortMatrix().then(setCohortMatrix).catch(() => null),
     ])
       .catch(() => toast.error("Failed to load progress"))
       .finally(() => setIsLoading(false));
@@ -111,6 +114,16 @@ export default function StudentProgressPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Cohort Progress Matrix (Reference Image 3) */}
+      {cohortMatrix && (
+        <div className="space-y-3 pt-2">
+          <StudentProgressMatrix
+            groupDetail={cohortMatrix}
+            isTeacher={false}
+          />
         </div>
       )}
     </div>

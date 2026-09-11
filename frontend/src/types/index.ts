@@ -304,6 +304,7 @@ export interface AssignmentComment {
   user_full_name?: string;
   user_role: string;
   user_avatar_url?: string | null;
+  avatar_url?: string | null;
 }
 
 

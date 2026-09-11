@@ -68,6 +68,8 @@ export const listGroups = (include_archived: boolean = false) =>
   api.get<Group[]>("/groups", { params: { include_archived } }).then((r) => r.data);
 export const getGroupDetail = (group_id: string) =>
   api.get<GroupDetailOut>(`/groups/${group_id}/detail`).then((r) => r.data);
+export const getMyCohortMatrix = () =>
+  api.get<GroupDetailOut>("/groups/my/matrix").then((r) => r.data);
 export const createGroup = (body: { name: string; english_level: string; schedule?: string; default_homework_time?: string }) =>
   api.post<Group>("/groups", body).then((r) => r.data);
 export const updateGroup = (id: string, body: Partial<{ name: string; english_level: string; schedule: string; default_homework_time?: string; is_active: boolean }>) =>

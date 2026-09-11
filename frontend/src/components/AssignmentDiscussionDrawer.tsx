@@ -219,7 +219,7 @@ export function AssignmentDiscussionDrawer({
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <UserAvatar
-                        src={c.user_avatar_url}
+                        src={c.avatar_url || c.user_avatar_url}
                         name={authorName}
                         size="xs"
                       />

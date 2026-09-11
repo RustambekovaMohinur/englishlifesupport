@@ -21,10 +21,23 @@ from app.services.gamification_service import award_xp
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
 
-def _to_out(feedback: PlatformFeedback, user: User | None = None) -> PlatformFeedbackOut:
-    u = user or getattr(feedback, "user", None)
-    full_name = u.full_name if u else "Anonymous User"
-    role_str = u.role.value if (u and hasattr(u.role, "value")) else str(u.role if u else "student")
+def _to_out(
+    feedback: PlatformFeedback,
+    user: User | None = None,
+    user_full_name: str | None = None,
+    user_role: str | None = None,
+) -> PlatformFeedbackOut:
+    full_name = user_full_name
+    role_str = user_role
+    if not full_name and user:
+        full_name = getattr(user, "full_name", None) or getattr(user, "username", "User")
+    if not role_str and user:
+        role_str = user.role.value if hasattr(user.role, "value") else str(user.role)
+    if not full_name:
+        full_name = "Anonymous User"
+    if not role_str:
+        role_str = "student"
+
     return PlatformFeedbackOut(
         id=feedback.id,
         user_id=feedback.user_id,
@@ -46,6 +59,11 @@ async def submit_platform_feedback(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Capture user attributes BEFORE commit to prevent greenlet lazy-loading on expired models
+    user_full_name = getattr(current_user, "full_name", None) or getattr(current_user, "username", "User")
+    user_role_str = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    user_id = current_user.id
+
     # Check if user already submitted feedback (upsert)
     res = await db.execute(
         select(PlatformFeedback)
@@ -98,9 +116,17 @@ async def submit_platform_feedback(
                 pass
 
     await db.commit()
-    await db.refresh(feedback)
 
-    return _to_out(feedback, current_user)
+    # Re-fetch feedback with user eagerly loaded
+    stmt = (
+        select(PlatformFeedback)
+        .options(selectinload(PlatformFeedback.user))
+        .where(PlatformFeedback.id == feedback.id)
+    )
+    res = await db.execute(stmt)
+    feedback_out = res.scalars().first() or feedback
+
+    return _to_out(feedback_out, user_full_name=user_full_name, user_role=user_role_str)
 
 
 @router.get("/summary", response_model=PlatformFeedbackSummary)
@@ -109,7 +135,12 @@ async def get_platform_feedback_summary(
     db: AsyncSession = Depends(get_db),
 ):
     """Return public community rating summary and user's review status."""
-    feedbacks = (await db.execute(select(PlatformFeedback))).scalars().all()
+    feedbacks = (
+        await db.execute(
+            select(PlatformFeedback)
+            .options(selectinload(PlatformFeedback.user))
+        )
+    ).scalars().all()
     if not feedbacks:
         return PlatformFeedbackSummary(
             average_rating=5.0,
@@ -129,7 +160,7 @@ async def get_platform_feedback_summary(
     user_review = None
     if user_feedbacks:
         latest = sorted(user_feedbacks, key=lambda x: x.created_at, reverse=True)[0]
-        user_review = _to_out(latest, current_user)
+        user_review = _to_out(latest, latest.user)
 
     return PlatformFeedbackSummary(
         average_rating=round(avg, 1),
