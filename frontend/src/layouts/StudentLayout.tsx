@@ -199,7 +199,7 @@ export default function StudentLayout() {
                 type="button"
                 onClick={() => logout()}
                 className="p-2 rounded-xl text-zinc-500 hover:text-rose-600 dark:text-zinc-400 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition active:scale-95"
-                title="Tizimdan chiqish (Logout)"
+                title="Sign Out (Logout)"
                 aria-label="Logout"
               >
                 <LogOut className="w-4 h-4" />

@@ -438,11 +438,11 @@ export default function AssignmentsPage() {
       if (editingAssignment) {
         const updated = await updateAssignmentInPlace(editingAssignment.id, formData);
         setAssignments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
-        toast.success("Vazifa muvaffaqiyatli saqlandi va yangilandi! ⚡");
+        toast.success("Assignment saved and updated successfully! ⚡");
       } else {
         const created = await createAssignment(formData);
         setAssignments((prev) => [created, ...prev]);
-        toast.success("Vazifa muvaffaqiyatli yaratildi! ⚡");
+        toast.success("Assignment created successfully! ⚡");
       }
       setEditingAssignment(null);
       setTitle("");
@@ -459,9 +459,9 @@ export default function AssignmentsPage() {
     } catch (err: any) {
       console.error("Save assignment error details:", err?.response?.data || err);
       if (err?.code === "ECONNABORTED" || err?.message?.includes("timeout")) {
-        toast.error("Server javob berish vaqti tugadi (Timeout). Iltimos fayl hajmini tekshiring va qayta urinib ko'ring.");
+        toast.error("Server request timed out. Please check file sizes and try again.");
       } else if (err?.message === "Network Error" && !err?.response) {
-        toast.error("Tarmoq xatoligi (Network Error): Server bilan aloqa uzildi yoki server ishga tushmoqda. Bir necha soniyadan keyin qayta urinib ko'ring.");
+        toast.error("Network Error: Connection lost or server is starting up. Please try again in a few seconds.");
       } else {
         const detail = err?.response?.data?.detail;
         const errorMsg =
@@ -469,7 +469,7 @@ export default function AssignmentsPage() {
             ? detail
             : Array.isArray(detail)
             ? detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ")
-            : err?.message || "Vazifani saqlashda xatolik yuz berdi";
+            : err?.message || "Failed to save assignment";
         toast.error(errorMsg);
       }
     } finally {

@@ -46,13 +46,13 @@ export function UserAvatar({
   if (resolvedUrl && !hasError) {
     return (
       <div
-        className={`relative shrink-0 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 ${baseSize} ${borderStyle} ${className}`}
+        className={`relative shrink-0 rounded-full overflow-hidden aspect-square bg-zinc-100 dark:bg-zinc-800 ${baseSize} ${borderStyle} ${className}`}
         title={name}
       >
         <img
           src={resolvedUrl}
           alt={name}
-          className="h-full w-full object-cover"
+          className="h-full w-full object-cover rounded-full aspect-square block"
           loading="lazy"
           onError={() => setHasError(true)}
         />
@@ -62,7 +62,7 @@ export function UserAvatar({
 
   return (
     <div
-      className={`shrink-0 rounded-full flex items-center justify-center select-none bg-gradient-to-br from-indigo-500/15 to-brand-500/20 dark:from-indigo-900/40 dark:to-brand-900/40 text-indigo-700 dark:text-indigo-300 font-bold ${baseSize} ${borderStyle} ${className}`}
+      className={`shrink-0 rounded-full aspect-square flex items-center justify-center select-none bg-gradient-to-br from-indigo-500/15 to-brand-500/20 dark:from-indigo-900/40 dark:to-brand-900/40 text-indigo-700 dark:text-indigo-300 font-bold ${baseSize} ${borderStyle} ${className}`}
       title={name}
       aria-label={name}
     >
@@ -70,3 +70,4 @@ export function UserAvatar({
     </div>
   );
 }
+

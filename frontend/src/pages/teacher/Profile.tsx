@@ -171,22 +171,27 @@ export default function TeacherProfilePage() {
       <div className="card space-y-6">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-5">
-            <div className="relative">
+            <div className="w-24 h-24 rounded-full overflow-hidden shrink-0 border-2 border-indigo-500/20 dark:border-indigo-400/20 shadow-md relative bg-zinc-100 dark:bg-zinc-800">
               {profile.avatar_url ? (
                 <img
                   src={getFileUrl(profile.avatar_url)}
                   alt={profile.full_name}
-                  className="h-24 w-24 rounded-full border-2 border-brand-100 object-cover shadow-sm"
+                  className="w-full h-full object-cover rounded-full aspect-square block"
                   onError={(e) => {
                     (e.target as HTMLElement).style.display = "none";
+                    const fallback = (e.target as HTMLElement).nextElementSibling;
+                    if (fallback) (fallback as HTMLElement).style.display = "flex";
                   }}
                 />
-              ) : (
-                <div className="flex h-24 w-24 items-center justify-center rounded-full bg-brand-600 text-2xl font-bold text-white shadow-sm">
-                  {initials}
-                </div>
-              )}
+              ) : null}
+              <div
+                style={{ display: profile.avatar_url ? "none" : "flex" }}
+                className="w-full h-full rounded-full items-center justify-center bg-brand-600 text-2xl font-bold text-white shadow-sm select-none"
+              >
+                {initials}
+              </div>
             </div>
+
 
 
             <div>

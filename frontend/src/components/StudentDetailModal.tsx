@@ -38,12 +38,12 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
     setIsResetting(true);
     try {
       const res = await resetStudentPassword(studentId, newPassword);
-      toast.success(res.message || "Parol muvaffaqiyatli tiklandi!");
+      toast.success(res.message || "Password reset successfully!");
       setResetModalOpen(false);
       setNewPassword("");
       setConfirmPassword("");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "Parolni tiklashda xatolik yuz berdi");
+      toast.error(err?.response?.data?.detail ?? "Failed to reset password");
     } finally {
       setIsResetting(false);
     }
@@ -55,10 +55,10 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
     try {
       const updated = await updateStudentPlacement(studentId, newGroupId || null);
       setProfile(updated);
-      toast.success("O'quvchi guruhi muvaffaqiyatli o'zgartirildi!");
+      toast.success("Student cohort updated successfully!");
       if (onStudentUpdated) onStudentUpdated();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "Guruhni o'zgartirishda xatolik");
+      toast.error(err?.response?.data?.detail ?? "Failed to update cohort");
     } finally {
       setIsUpdatingGroup(false);
     }
@@ -112,10 +112,10 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
 
   if (!studentId) return null;
 
-  const fullName = profile?.full_name || history?.full_name || "O'quvchi tafsilotlari";
+  const fullName = profile?.full_name || history?.full_name || "Student Profile";
   const username = profile?.username || history?.username || "";
   const telegram = profile?.phone || history?.telegram_username || "";
-  const groupName = profile?.group?.name || history?.group_name || "Guruhsiz";
+  const groupName = profile?.group?.name || history?.group_name || "No Cohort Assigned";
   const level = profile?.group?.english_level || history?.level || "";
   const totalStars = profile?.total_stars ?? history?.total_stars ?? 0;
   const totalLightning = history?.total_lightning ?? 0;
@@ -124,7 +124,7 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
   const overallPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (
-    <Modal open={!!studentId} onClose={onClose} title={`O'quvchi: ${fullName}`}>
+    <Modal open={!!studentId} onClose={onClose} title={`Student: ${fullName}`}>
       {isLoading && !profile && !history ? (
         <LoadingRows rows={5} />
       ) : (
@@ -158,14 +158,14 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
                   <div className="flex items-center gap-2">
                     {/* Quick Group Placement Selector */}
                     <div className="flex items-center gap-1">
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Guruh:</span>
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Cohort:</span>
                       <select
                         disabled={isUpdatingGroup}
                         value={profile?.group?.id || ""}
                         onChange={(e) => handleQuickGroupChange(e.target.value)}
                         className="text-xs font-semibold py-1 px-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-[#161B22] text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
                       >
-                        <option value="">Guruhsiz</option>
+                        <option value="">No Cohort</option>
                         {groups.map((g) => (
                           <option key={g.id} value={g.id}>
                             {g.name}
@@ -200,16 +200,17 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
                     Telegram: <TelegramLink username={telegram} />
                   </span>
                   <span>
-                    Guruh: <strong className="text-zinc-900 dark:text-white font-medium">{groupName}</strong>
+                    Cohort: <strong className="text-zinc-900 dark:text-white font-medium">{groupName}</strong>
                   </span>
                   {level && (
                     <span>
-                      Daraja: <strong className="capitalize text-zinc-900 dark:text-white font-medium">{level.replace("_", " ")}</strong>
+                      Level: <strong className="capitalize text-zinc-900 dark:text-white font-medium">{level.replace("_", " ")}</strong>
                     </span>
                   )}
                 </div>
               </div>
             </div>
+
 
 
             {profile?.bio && (
