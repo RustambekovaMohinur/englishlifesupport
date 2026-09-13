@@ -148,9 +148,12 @@ app.include_router(feedback.router)
 
 
 
+@app.get("/")
+@app.get("/health")
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "service": "English Life LMS API"}
+
 
 
 async def bootstrap_teacher_account(max_retries: int = 5, retry_delay: float = 2.0):
