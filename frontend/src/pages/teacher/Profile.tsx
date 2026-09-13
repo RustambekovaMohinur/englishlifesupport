@@ -1,8 +1,9 @@
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
+import { KeyRound, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  changeTeacherPassword,
+  changeUserPassword,
   getMyUnifiedProfile,
   removeMyAvatar,
   updateMyUnifiedProfile,
@@ -13,7 +14,7 @@ import { LoadingRows, StatCard } from "@/components/ui";
 import { UserProfileOut } from "@/types";
 
 export default function TeacherProfilePage() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
   const [profile, setProfile] = useState<UserProfileOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -21,6 +22,7 @@ export default function TeacherProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [username, setUsername] = useState("");
   const [telegram, setTelegram] = useState("");
   const [bio, setBio] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -29,8 +31,9 @@ export default function TeacherProfilePage() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Password Change state
-  const [currentPassword, setCurrentPassword] = useState("");
+  // Password Change modal state
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -42,6 +45,7 @@ export default function TeacherProfilePage() {
         setProfile(data);
         setFirstName(data.first_name || "");
         setLastName(data.last_name || "");
+        setUsername(data.username || "");
         setTelegram(data.telegram_username || data.phone || "");
         setBio(data.bio || "");
       })
@@ -104,11 +108,13 @@ export default function TeacherProfilePage() {
       const updated = await updateMyUnifiedProfile({
         first_name: firstName.trim(),
         last_name: lastName.trim(),
+        username: username.trim() || undefined,
         telegram_username: telegram.trim(),
         bio: bio.trim(),
       });
       setProfile(updated);
       updateUser({
+        username: updated.username,
         full_name: updated.full_name,
         first_name: updated.first_name,
       });
@@ -121,35 +127,39 @@ export default function TeacherProfilePage() {
     }
   }
 
-  async function handleChangePassword(e: FormEvent) {
+  async function handleChangePasswordSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!oldPassword) {
+      toast.error("Current password is required");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("New password must be at least 6 characters");
+      return;
+    }
     if (newPassword !== confirmPassword) {
       toast.error("New passwords do not match");
       return;
     }
 
-    if (newPassword.length < 8) {
-      toast.error("Password must be at least 8 characters long");
-      return;
-    }
-    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/\d/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
-      toast.error("Password must contain uppercase, lowercase, number, and special character");
-      return;
-    }
-
     setIsChangingPassword(true);
     try {
-      await changeTeacherPassword({
-        current_password: currentPassword,
+      const res = await changeUserPassword({
+        old_password: oldPassword,
         new_password: newPassword,
-        confirm_password: confirmPassword,
       });
-      toast.success("Password changed successfully!");
-      setCurrentPassword("");
+      toast.success(res.message || "Password updated successfully!");
+      setIsPasswordModalOpen(false);
+      setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "Failed to change password");
+      const detail = err?.response?.data?.detail;
+      if (detail && typeof detail === "string" && (detail.includes("noto'g'ri") || detail.includes("incorrect"))) {
+        toast.error("Current password is incorrect");
+      } else {
+        toast.error(detail ?? "Failed to change password");
+      }
     } finally {
       setIsChangingPassword(false);
     }
@@ -237,7 +247,14 @@ export default function TeacherProfilePage() {
             )}
             <button
               type="button"
-              onClick={() => setIsEditing(true)}
+              onClick={() => {
+                setFirstName(profile.first_name || "");
+                setLastName(profile.last_name || "");
+                setUsername(profile.username || "");
+                setTelegram(profile.telegram_username || profile.phone || "");
+                setBio(profile.bio || "");
+                setIsEditing(true);
+              }}
               className="btn-primary text-xs"
             >
               Edit Profile
@@ -257,7 +274,7 @@ export default function TeacherProfilePage() {
         <div className="divide-y divide-zinc-200 dark:divide-zinc-800 border-t border-zinc-200 dark:border-zinc-800 pt-2 text-sm">
           <div className="flex justify-between py-2.5">
             <span className="text-zinc-500 dark:text-zinc-400">Username</span>
-            <span className="font-semibold text-zinc-800 dark:text-zinc-200">{profile.username}</span>
+            <span className="font-semibold text-zinc-800 dark:text-zinc-200 font-mono">@{profile.username}</span>
           </div>
           <div className="flex justify-between py-2.5">
             <span className="text-zinc-500 dark:text-zinc-400">Email</span>
@@ -271,6 +288,43 @@ export default function TeacherProfilePage() {
             <span className="text-zinc-500 dark:text-zinc-400">Role</span>
             <span className="font-medium capitalize text-zinc-800 dark:text-zinc-200">{profile.role}</span>
           </div>
+        </div>
+
+        {/* Password & Security Card */}
+        <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-white">Security &amp; Password</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Ensure your account is using a secure password</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setOldPassword("");
+              setNewPassword("");
+              setConfirmPassword("");
+              setIsPasswordModalOpen(true);
+            }}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 font-semibold text-xs transition active:scale-95 border border-amber-300 dark:border-amber-700/60 shadow-xs"
+          >
+            <KeyRound className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <span>Change Password</span>
+          </button>
+        </div>
+
+        {/* Mobile & Quick Sign Out Action */}
+        <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-white">Sign Out</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Log out of your current session</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => logout()}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 font-semibold text-xs transition active:scale-95 border border-red-200 dark:border-red-800/60 shadow-xs w-full sm:w-auto"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sign Out</span>
+          </button>
         </div>
       </div>
 
@@ -323,6 +377,21 @@ export default function TeacherProfilePage() {
               </div>
 
               <div>
+                <label className="label">Username *</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-zinc-400 font-mono text-sm">@</span>
+                  <input
+                    required
+                    minLength={3}
+                    className="input pl-7 font-mono text-sm"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                    placeholder="username"
+                  />
+                </div>
+              </div>
+
+              <div>
                 <label className="label">Telegram Username / Contact</label>
                 <input
                   className="input"
@@ -366,56 +435,84 @@ export default function TeacherProfilePage() {
         </div>
       )}
 
-      {/* Password Change Card */}
-      <div className="card space-y-4">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-white border-b border-zinc-200 dark:border-zinc-800 pb-2">Change Password</h2>
-        <form onSubmit={handleChangePassword} className="space-y-4">
-          <div>
-            <label className="label">Current Password</label>
-            <input
-              required
-              type="password"
-              className="input"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="Current password"
-            />
-          </div>
+      {/* Change Password Modal */}
+      {isPasswordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="card w-full max-w-md space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                <span>🔑</span>
+                <span>Change Password</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsPasswordModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              >
+                ✕
+              </button>
+            </div>
 
-          <div>
-            <label className="label">New Password</label>
-            <input
-              required
-              type="password"
-              className="input"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="New password (min 8 chars, A-Z, a-z, 0-9, special)"
-            />
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-              Must include at least 8 characters, 1 uppercase, 1 lowercase, 1 digit, and 1 special character.
-            </p>
-          </div>
+            <form onSubmit={handleChangePasswordSubmit} className="space-y-4">
+              <div>
+                <label className="label">Current Password *</label>
+                <input
+                  type="password"
+                  required
+                  className="input"
+                  placeholder="Enter your current password"
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                />
+              </div>
 
-          <div>
-            <label className="label">Confirm New Password</label>
-            <input
-              required
-              type="password"
-              className="input"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm new password"
-            />
-          </div>
+              <div>
+                <label className="label">New Password *</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  className="input"
+                  placeholder="At least 6 characters"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </div>
 
-          <div className="flex justify-end pt-2">
-            <button type="submit" disabled={isChangingPassword} className="btn-primary">
-              {isChangingPassword ? "Updating Password..." : "Update Password"}
-            </button>
+              <div>
+                <label className="label">Confirm New Password *</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  className="input"
+                  placeholder="Re-enter your new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordModalOpen(false)}
+                  className="btn-secondary"
+                  disabled={isChangingPassword}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={isChangingPassword}
+                >
+                  {isChangingPassword ? "Updating..." : "Update Password"}
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
