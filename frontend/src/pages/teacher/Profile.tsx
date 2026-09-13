@@ -177,6 +177,9 @@ export default function TeacherProfilePage() {
                   src={getFileUrl(profile.avatar_url)}
                   alt={profile.full_name}
                   className="h-24 w-24 rounded-full border-2 border-brand-100 object-cover shadow-sm"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = "none";
+                  }}
                 />
               ) : (
                 <div className="flex h-24 w-24 items-center justify-center rounded-full bg-brand-600 text-2xl font-bold text-white shadow-sm">
@@ -184,6 +187,7 @@ export default function TeacherProfilePage() {
                 </div>
               )}
             </div>
+
 
             <div>
               <div className="flex items-center gap-2">

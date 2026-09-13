@@ -63,6 +63,11 @@ class StudentStatusUpdate(BaseModel):
     is_active: bool
 
 
+class StudentPlacementUpdate(BaseModel):
+    group_id: uuid.UUID | None = None
+
+
+
 class StudentApprovalAction(BaseModel):
     action: str = Field(description="approve or reject")
 

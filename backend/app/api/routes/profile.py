@@ -18,8 +18,9 @@ from app.models.group import Group
 from app.models.student import StudentProfile
 from app.models.submission import Submission, SubmissionStatus
 from app.models.teacher import TeacherProfile
-from app.models.user import User, UserRole
-from app.schemas.profile import UserProfileOut, UserProfileUpdate
+from app.core.security import hash_password, verify_password
+from app.models.user import RefreshToken, User, UserRole
+from app.schemas.profile import ChangePasswordRequest, UserProfileOut, UserProfileUpdate
 from app.utils.files import (
     get_upload_root,
     resolve_profile_avatar,
@@ -161,11 +162,24 @@ async def get_my_profile(
 
 
 @router.patch("/me", response_model=UserProfileOut)
+@router.put("/me", response_model=UserProfileOut)
+@users_avatar_router.patch("/me/profile", response_model=UserProfileOut)
+@users_avatar_router.put("/me/profile", response_model=UserProfileOut)
 async def update_my_profile(
     body: UserProfileUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Handle username update if provided
+    if body.username is not None:
+        new_username = body.username.strip().lower()
+        if new_username and new_username != current_user.username:
+            # Check uniqueness
+            existing = (await db.execute(select(User).where(User.username == new_username, User.id != current_user.id))).scalar_one_or_none()
+            if existing:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bu username allaqachon band. Iltimos, boshqa username tanlang.")
+            current_user.username = new_username
+
     if current_user.role == UserRole.STUDENT:
         res = await db.execute(
             select(StudentProfile)
@@ -206,6 +220,7 @@ async def update_my_profile(
 
         await db.commit()
         await db.refresh(profile)
+        await db.refresh(current_user)
 
         first_name, last_name = _split_full_name(profile.full_name)
         stats = await _get_student_stats(db, profile)
@@ -263,6 +278,7 @@ async def update_my_profile(
 
     await db.commit()
     await db.refresh(profile)
+    await db.refresh(current_user)
 
     first_name, last_name = _split_full_name(profile.full_name)
     stats = await _get_teacher_stats(db)
@@ -282,6 +298,41 @@ async def update_my_profile(
         stats=stats,
         approval_status=current_user.approval_status.value if hasattr(current_user.approval_status, "value") else str(current_user.approval_status),
     )
+
+
+@router.post("/me/change-password")
+@router.put("/me/password")
+@users_avatar_router.put("/me/password")
+async def change_my_password(
+    body: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Secure self password update for both student and teacher accounts."""
+    if not verify_password(body.old_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Hozirgi parol noto'g'ri kiritildi",
+        )
+
+    if len(body.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Yangi parol kamida 6 belgidan iborat bo'lishi kerak",
+        )
+
+    current_user.password_hash = hash_password(body.new_password)
+
+    # Invalidate all active refresh tokens for safety
+    tokens = (
+        await db.execute(select(RefreshToken).where(RefreshToken.user_id == current_user.id))
+    ).scalars().all()
+    for t in tokens:
+        t.revoked = True
+
+    await db.commit()
+    return {"success": True, "message": "Parol muvaffaqiyatli yangilandi!"}
+
 
 
 @router.post("/me/avatar", response_model=UserProfileOut)

@@ -28,6 +28,13 @@ class UserProfileUpdate(BaseModel):
     first_name: str | None = Field(default=None, max_length=128)
     last_name: str | None = Field(default=None, max_length=128)
     full_name: str | None = Field(default=None, max_length=255)
+    username: str | None = Field(default=None, min_length=3, max_length=64)
     telegram_username: str | None = Field(default=None, max_length=64)
     phone: str | None = Field(default=None, max_length=64)
     bio: str | None = Field(default=None, max_length=2000)
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=6, max_length=128)
+

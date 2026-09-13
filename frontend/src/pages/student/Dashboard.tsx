@@ -92,16 +92,22 @@ export default function StudentDashboardPage() {
       .finally(() => setIsLoadingPublicFeedbacks(false));
   };
 
-  useEffect(() => {
+  const loadDashboard = () => {
+    setIsLoading(true);
+    setError(null);
     getStudentDashboard()
       .then(setData)
-      .catch(() => setError("Could not load your dashboard."))
+      .catch(() => setError("Bosh sahifani yuklashda xatolik yuz berdi."))
       .finally(() => setIsLoading(false));
 
     getGamificationSummary().then(setGamify).catch(() => null);
     getWeeklyLeaderboard().then(setLeaderboard).catch(() => null);
     getPlatformFeedbackSummary().then(setFeedbackSummary).catch(() => null);
     fetchReviews();
+  };
+
+  useEffect(() => {
+    loadDashboard();
   }, []);
 
   useEffect(() => {
@@ -116,7 +122,24 @@ export default function StudentDashboardPage() {
   }, [location.pathname, location.hash, data]);
 
   if (isLoading) return <LoadingRows rows={4} />;
-  if (error || !data) return <EmptyState title="Something went wrong" description={error ?? undefined} />;
+  if (error || !data) {
+    return (
+      <div className="card text-center p-8 space-y-4 max-w-lg mx-auto my-12 border border-zinc-200 dark:border-zinc-800">
+        <div className="text-4xl">⚠️</div>
+        <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Boshqaruv panelini yuklab bo&apos;lmadi</h2>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          {error || "Tarmoq yoki hisobingiz holatida vaqtinchalik uzilish yuz berdi. Qayta urinib ko'ring."}
+        </p>
+        <button
+          type="button"
+          onClick={loadDashboard}
+          className="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm mx-auto"
+        >
+          <span>Qayta urinish (Retry)</span>
+        </button>
+      </div>
+    );
+  }
 
   const streakVal = gamify?.streak ?? data.streak ?? 0;
   const xpVal = gamify?.total_xp ?? data.total_xp ?? 0;

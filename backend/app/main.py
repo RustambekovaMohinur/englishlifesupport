@@ -136,6 +136,7 @@ async def security_headers_middleware(request: Request, call_next):
 
 app.include_router(auth.router)
 app.include_router(students.router)
+app.include_router(students.teacher_students_router)
 app.include_router(teachers.router)
 app.include_router(groups.router)
 app.include_router(assignments.router)

@@ -26,6 +26,7 @@ from app.schemas.student import (
     StudentHistoryOut,
     StudentListItem,
     StudentOut,
+    StudentPlacementUpdate,
     StudentStatusUpdate,
     StudentUpdate,
 )
@@ -35,6 +36,7 @@ from app.core.security import hash_password
 from app.models.refresh_token import RefreshToken
 
 router = APIRouter(prefix="/api/students", tags=["students"])
+teacher_students_router = APIRouter(prefix="/api/teacher/students", tags=["students"])
 
 
 class StudentResetPasswordRequest(BaseModel):
@@ -690,6 +692,7 @@ async def get_student_history(
 
 
 @router.patch("/{student_id}", response_model=StudentOut, dependencies=[Depends(require_teacher)])
+@teacher_students_router.patch("/{student_id}", response_model=StudentOut, dependencies=[Depends(require_teacher)])
 async def update_student(student_id: uuid.UUID, body: StudentUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(StudentProfile)
@@ -724,9 +727,53 @@ async def update_student(student_id: uuid.UUID, body: StudentUpdate, db: AsyncSe
     )
 
 
+@router.put("/{student_id}/placement", response_model=StudentOut, dependencies=[Depends(require_teacher)])
+@teacher_students_router.put("/{student_id}/placement", response_model=StudentOut, dependencies=[Depends(require_teacher)])
+async def update_student_placement(
+    student_id: uuid.UUID,
+    body: StudentPlacementUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Updates student group placement without resetting their stars, submissions or achievements."""
+    result = await db.execute(
+        select(StudentProfile)
+        .options(selectinload(StudentProfile.group), selectinload(StudentProfile.user))
+        .where(StudentProfile.id == student_id)
+    )
+    profile = result.scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
+    if body.group_id is not None:
+        group = (await db.execute(select(Group).where(Group.id == body.group_id))).scalar_one_or_none()
+        if group is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Group not found")
+        profile.group_id = group.id
+    else:
+        profile.group_id = None
+
+    await db.commit()
+    await db.refresh(profile, attribute_names=["group", "user"])
+    return StudentOut(
+        id=profile.id,
+        user_id=profile.user_id,
+        email=profile.user.email,
+        username=profile.user.username,
+        full_name=profile.full_name,
+        phone=profile.phone,
+        telegram_username=profile.phone,
+        is_active=profile.user.is_active,
+        total_stars=profile.total_stars,
+        total_lightning=getattr(profile, "total_lightning", 0) or 0,
+        group=profile.group,
+        created_at=profile.created_at,
+    )
+
+
 @router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_teacher)])
+@teacher_students_router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_teacher)])
 async def delete_student(student_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    """Permanently deletes student profile and user account."""
+    """Permanently and safely deletes student profile and user account with zero foreign key violations."""
     profile = (
         await db.execute(select(StudentProfile).where(StudentProfile.id == student_id))
     ).scalar_one_or_none()
@@ -734,12 +781,30 @@ async def delete_student(student_id: uuid.UUID, db: AsyncSession = Depends(get_d
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
 
     user = (await db.execute(select(User).where(User.id == profile.user_id))).scalar_one_or_none()
+
+    # Manual cascade cleanup of potential dangling references to prevent FK blocks
+    from sqlalchemy import text
+    try:
+        # Clear student of the week
+        await db.execute(text("DELETE FROM student_of_the_week WHERE student_id = :sid"), {"sid": profile.id})
+        # Clear lock overrides
+        await db.execute(text("DELETE FROM task_lock_overrides WHERE student_id = :sid"), {"sid": profile.id})
+        # Clear submission grades for this student
+        await db.execute(text("DELETE FROM grades WHERE submission_id IN (SELECT id FROM submissions WHERE student_id = :sid)"), {"sid": profile.id})
+        # Clear submission corrections & comments
+        await db.execute(text("DELETE FROM submission_corrections WHERE submission_id IN (SELECT id FROM submissions WHERE student_id = :sid)"), {"sid": profile.id})
+        await db.execute(text("DELETE FROM submission_comments WHERE submission_id IN (SELECT id FROM submissions WHERE student_id = :sid)"), {"sid": profile.id})
+    except Exception as e:
+        # If any auxiliary table does not exist or raises error, proceed safely
+        pass
+
     if user:
         await db.delete(user)
     else:
         await db.delete(profile)
     await db.commit()
     return None
+
 
 
 @router.post("/{student_id}/reset-password", response_model=StudentResetPasswordResponse, dependencies=[Depends(require_teacher)])

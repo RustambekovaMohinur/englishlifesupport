@@ -1,20 +1,23 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { FileDownloadButton, LoadingRows, Modal, TelegramLink } from "@/components/ui";
-import { getStudent, getStudentHistory, listSubmissions, resetStudentPassword } from "@/services/lmsService";
-import { StudentHistoryOut, StudentOut, SubmissionOut } from "@/types";
+import { getStudent, getStudentHistory, listGroups, listSubmissions, resetStudentPassword, updateStudentPlacement } from "@/services/lmsService";
+import { Group, StudentHistoryOut, StudentOut, SubmissionOut } from "@/types";
 import { UserAvatar } from "@/components/common/UserAvatar";
 
 interface StudentDetailModalProps {
   studentId: string | null;
   onClose: () => void;
+  onStudentUpdated?: () => void;
 }
 
-export default function StudentDetailModal({ studentId, onClose }: StudentDetailModalProps) {
+export default function StudentDetailModal({ studentId, onClose, onStudentUpdated }: StudentDetailModalProps) {
   const [profile, setProfile] = useState<StudentOut | null>(null);
   const [history, setHistory] = useState<StudentHistoryOut | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionOut[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUpdatingGroup, setIsUpdatingGroup] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -24,27 +27,46 @@ export default function StudentDetailModal({ studentId, onClose }: StudentDetail
     e.preventDefault();
     if (!studentId) return;
     if (newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters");
+      toast.error("Parol kamida 6 belgidan iborat bo'lishi kerak");
       return;
     }
     if (newPassword !== confirmPassword) {
-      toast.error("Passwords do not match");
+      toast.error("Yangi parollar mos kelmadi");
       return;
     }
 
     setIsResetting(true);
     try {
       const res = await resetStudentPassword(studentId, newPassword);
-      toast.success(res.message || "Password reset successfully!");
+      toast.success(res.message || "Parol muvaffaqiyatli tiklandi!");
       setResetModalOpen(false);
       setNewPassword("");
       setConfirmPassword("");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "Failed to reset password");
+      toast.error(err?.response?.data?.detail ?? "Parolni tiklashda xatolik yuz berdi");
     } finally {
       setIsResetting(false);
     }
   }
+
+  async function handleQuickGroupChange(newGroupId: string) {
+    if (!studentId) return;
+    setIsUpdatingGroup(true);
+    try {
+      const updated = await updateStudentPlacement(studentId, newGroupId || null);
+      setProfile(updated);
+      toast.success("O'quvchi guruhi muvaffaqiyatli o'zgartirildi!");
+      if (onStudentUpdated) onStudentUpdated();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Guruhni o'zgartirishda xatolik");
+    } finally {
+      setIsUpdatingGroup(false);
+    }
+  }
+
+  useEffect(() => {
+    listGroups().then(setGroups).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!studentId) {
@@ -68,7 +90,7 @@ export default function StudentDetailModal({ studentId, onClose }: StudentDetail
         if (profRes.status === "fulfilled") {
           setProfile(profRes.value);
         } else {
-          toast.error("Failed to load student profile");
+          toast.error("O'quvchi ma'lumotlarini yuklab bo'lmadi");
         }
 
         if (histRes.status === "fulfilled") {
@@ -90,20 +112,19 @@ export default function StudentDetailModal({ studentId, onClose }: StudentDetail
 
   if (!studentId) return null;
 
-  const fullName = profile?.full_name || history?.full_name || "Student Details";
+  const fullName = profile?.full_name || history?.full_name || "O'quvchi tafsilotlari";
   const username = profile?.username || history?.username || "";
   const telegram = profile?.phone || history?.telegram_username || "";
-  const groupName = profile?.group?.name || history?.group_name || "Unassigned";
+  const groupName = profile?.group?.name || history?.group_name || "Guruhsiz";
   const level = profile?.group?.english_level || history?.level || "";
   const totalStars = profile?.total_stars ?? history?.total_stars ?? 0;
   const totalLightning = history?.total_lightning ?? 0;
-
   const totalTasks = history?.history?.length ?? 0;
   const completedTasks = history?.history?.filter((h) => h.completion_percentage >= 100).length ?? 0;
   const overallPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (
-    <Modal open={!!studentId} onClose={onClose} title={`Student: ${fullName}`}>
+    <Modal open={!!studentId} onClose={onClose} title={`O'quvchi: ${fullName}`}>
       {isLoading && !profile && !history ? (
         <LoadingRows rows={5} />
       ) : (
@@ -134,22 +155,42 @@ export default function StudentDetailModal({ studentId, onClose }: StudentDetail
                       </span>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewPassword("");
-                      setConfirmPassword("");
-                      setResetModalOpen(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40 transition shadow-xs"
-                    title="Set temporary password for student"
-                  >
-                    <span>🔑</span>
-                    <span>Reset Password</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* Quick Group Placement Selector */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Guruh:</span>
+                      <select
+                        disabled={isUpdatingGroup}
+                        value={profile?.group?.id || ""}
+                        onChange={(e) => handleQuickGroupChange(e.target.value)}
+                        className="text-xs font-semibold py-1 px-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-[#161B22] text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
+                      >
+                        <option value="">Guruhsiz</option>
+                        {groups.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewPassword("");
+                        setConfirmPassword("");
+                        setResetModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40 transition shadow-xs"
+                      title="Set temporary password for student"
+                    >
+                      <span>🔑</span>
+                      <span>Reset Password</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600 dark:text-zinc-400">
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600 dark:text-zinc-400">
                   {profile?.email && (
                     <span>
                       Email: <strong className="text-zinc-800 dark:text-zinc-200 font-medium">{profile.email}</strong>
@@ -159,16 +200,17 @@ export default function StudentDetailModal({ studentId, onClose }: StudentDetail
                     Telegram: <TelegramLink username={telegram} />
                   </span>
                   <span>
-                    Group: <strong className="text-zinc-900 dark:text-white font-medium">{groupName}</strong>
+                    Guruh: <strong className="text-zinc-900 dark:text-white font-medium">{groupName}</strong>
                   </span>
                   {level && (
                     <span>
-                      Level: <strong className="capitalize text-zinc-900 dark:text-white font-medium">{level.replace("_", " ")}</strong>
+                      Daraja: <strong className="capitalize text-zinc-900 dark:text-white font-medium">{level.replace("_", " ")}</strong>
                     </span>
                   )}
                 </div>
               </div>
             </div>
+
 
             {profile?.bio && (
               <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-700 dark:text-zinc-300">

@@ -22,6 +22,7 @@ import {
   listSubmissions,
 } from "@/services/lmsService";
 import { Group, SubmissionCommentOut, SubmissionCorrectionOut, SubmissionOut } from "@/types";
+import StudentDetailModal from "@/components/StudentDetailModal";
 
 const PAGE_SIZE = 15;
 
@@ -34,6 +35,8 @@ export default function SubmissionsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [grading, setGrading] = useState<SubmissionOut | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+
 
   useEffect(() => {
     listGroups().then(setGroups).catch(() => {});
@@ -116,9 +119,19 @@ export default function SubmissionsPage() {
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
                 {submissions.map((s) => (
-                  <tr key={s.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition">
-                    <td className="py-3.5 px-4 font-medium text-zinc-900 dark:text-white">{s.student_name}</td>
-                    <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">{s.assignment_title}</td>
+                   <tr key={s.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition">
+                     <td className="py-3.5 px-4 font-medium text-zinc-900 dark:text-white">
+                       <button
+                         type="button"
+                         onClick={() => setSelectedStudentId(s.student_id)}
+                         className="text-left font-semibold hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline decoration-dotted transition cursor-pointer"
+                         title="O'quvchi ma'lumotlarini ko'rish"
+                       >
+                         {s.student_name}
+                       </button>
+                     </td>
+                     <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">{s.assignment_title}</td>
+
                     <td className="py-3.5 px-4 text-zinc-500 dark:text-zinc-400 font-mono text-xs">{format(new Date(s.submitted_at), "MMM d, HH:mm")}</td>
                     <td className="py-3.5 px-4">
                       <StatusBadge status={s.status} />
@@ -149,6 +162,14 @@ export default function SubmissionsPage() {
           </>
         )}
       </div>
+
+      {/* Student Inspector Modal */}
+      <StudentDetailModal
+        studentId={selectedStudentId}
+        onClose={() => setSelectedStudentId(null)}
+        onStudentUpdated={refresh}
+      />
+
 
       <GradeModal
         submission={grading}

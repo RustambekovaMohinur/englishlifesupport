@@ -120,149 +120,195 @@ async def student_dashboard(
     profile: StudentProfile = Depends(get_current_student_profile),
     db: AsyncSession = Depends(get_db),
 ):
-    group_name = None
-    teacher_name = None
-    english_level = None
-    if profile.group_id:
-        group = (await db.execute(select(Group).where(Group.id == profile.group_id))).scalar_one_or_none()
-        if group:
-            group_name = group.name
-            if group.english_level:
-                english_level = (
-                    group.english_level.value
-                    if hasattr(group.english_level, "value")
-                    else str(group.english_level)
+    try:
+        group_name = None
+        teacher_name = None
+        english_level = "Beginner"
+        if profile.group_id:
+            group = (await db.execute(select(Group).where(Group.id == profile.group_id))).scalar_one_or_none()
+            if group:
+                group_name = group.name
+                if group.english_level:
+                    english_level = (
+                        group.english_level.value
+                        if hasattr(group.english_level, "value")
+                        else str(group.english_level)
+                    )
+
+        # Single-teacher system: show the (only) teacher's name.
+        teacher = (await db.execute(select(TeacherProfile).limit(1))).scalar_one_or_none()
+        teacher_name = teacher.full_name if teacher else "Teacher"
+
+        # Gamification stats with safe defaults
+        streak_val = 0
+        try:
+            strk = (await db.execute(select(StudentStreak).where(StudentStreak.student_id == profile.id))).scalar_one_or_none()
+            if strk:
+                streak_val = strk.current_streak or 0
+        except Exception:
+            pass
+
+        total_xp = 0
+        try:
+            xp_row = (await db.execute(select(StudentXP).where(StudentXP.student_id == profile.id))).scalar_one_or_none()
+            if xp_row:
+                total_xp = xp_row.total_xp or 0
+        except Exception:
+            pass
+
+        level, level_title = calculate_level(total_xp)
+
+        free_pass_available = True
+        try:
+            month_key = utcnow().strftime("%Y-%m")
+            fp = await get_or_create_monthly_free_pass(db, profile.id, month_key)
+            if fp:
+                free_pass_available = not fp.is_used
+        except Exception:
+            pass
+
+        submissions = []
+        try:
+            submissions = (
+                (
+                    await db.execute(
+                        select(Submission)
+                        .options(selectinload(Submission.grade))
+                        .where(Submission.student_id == profile.id)
+                    )
                 )
-
-    # Single-teacher system: show the (only) teacher's name.
-    teacher = (await db.execute(select(TeacherProfile).limit(1))).scalar_one_or_none()
-    teacher_name = teacher.full_name if teacher else None
-
-    # Gamification stats
-    strk = (await db.execute(select(StudentStreak).where(StudentStreak.student_id == profile.id))).scalar_one_or_none()
-    streak_val = strk.current_streak if strk else 0
-
-    xp_row = (await db.execute(select(StudentXP).where(StudentXP.student_id == profile.id))).scalar_one_or_none()
-    total_xp = xp_row.total_xp if xp_row else 0
-    level, level_title = calculate_level(total_xp)
-
-    month_key = utcnow().strftime("%Y-%m")
-    fp = await get_or_create_monthly_free_pass(db, profile.id, month_key)
-
-    submissions = (
-        (
-            await db.execute(
-                select(Submission)
-                .options(selectinload(Submission.grade))
-                .where(Submission.student_id == profile.id)
+                .scalars()
+                .all()
             )
-        )
-        .scalars()
-        .all()
-    )
+        except Exception:
+            pass
 
-    graded = [s for s in submissions if s.grade is not None]
-    average_score = round(sum(s.grade.score for s in graded) / len(graded), 2) if graded else None
+        graded = [s for s in submissions if s.grade is not None]
+        average_score = round(sum(s.grade.score for s in graded) / len(graded), 2) if graded else None
 
-    total_assignments = 0
-    completed_assignments = 0
-    now_dt = datetime.now(timezone.utc)
-    upcoming = []
+        total_assignments = 0
+        completed_assignments = 0
+        now_dt = datetime.now(timezone.utc)
+        upcoming = []
 
-    if profile.group_id:
-        group_obj = (await db.execute(select(Group).where(Group.id == profile.group_id))).scalar_one_or_none()
-        current_cycle = getattr(group_obj, "current_cycle", 1) or 1
+        if profile.group_id:
+            group_obj = (await db.execute(select(Group).where(Group.id == profile.group_id))).scalar_one_or_none()
+            current_cycle = getattr(group_obj, "current_cycle", 1) or 1
 
-        # Current cycle assignments for the student's cohort
-        cycle_assignments = (
-            await db.execute(
-                select(Assignment)
-                .where(
-                    Assignment.group_id == profile.group_id,
-                    Assignment.status == AssignmentStatus.PUBLISHED,
-                    Assignment.cycle_number == current_cycle,
-                )
-            )
-        ).scalars().all()
-
-        # If no assignments tagged with current_cycle, fallback to all published
-        if not cycle_assignments:
+            # Current cycle assignments for the student's cohort
             cycle_assignments = (
                 await db.execute(
                     select(Assignment)
                     .where(
                         Assignment.group_id == profile.group_id,
                         Assignment.status == AssignmentStatus.PUBLISHED,
+                        Assignment.cycle_number == current_cycle,
                     )
                 )
             ).scalars().all()
 
-        total_assignments = len(cycle_assignments)
-        cycle_assign_ids = {a.id for a in cycle_assignments}
+            # If no assignments tagged with current_cycle, fallback to all published
+            if not cycle_assignments:
+                cycle_assignments = (
+                    await db.execute(
+                        select(Assignment)
+                        .where(
+                            Assignment.group_id == profile.group_id,
+                            Assignment.status == AssignmentStatus.PUBLISHED,
+                        )
+                    )
+                ).scalars().all()
 
-        # Active, non-archived submissions for the current cycle
-        active_cycle_subs = [
-            s for s in submissions
-            if s.assignment_id in cycle_assign_ids
-            and (getattr(s, "cycle_number", 1) or 1) == current_cycle
-            and not getattr(s, "is_archived", False)
-        ]
-        completed_assignments = len(active_cycle_subs)
-        submitted_cycle_ids = {s.assignment_id for s in active_cycle_subs}
+            total_assignments = len(cycle_assignments)
+            cycle_assign_ids = {a.id for a in cycle_assignments}
 
-        upcoming_assignments = (
-            await db.execute(
-                select(Assignment)
-                .where(
-                    Assignment.group_id == profile.group_id,
-                    Assignment.status == AssignmentStatus.PUBLISHED,
-                    Assignment.deadline >= now_dt,
+            # Active, non-archived submissions for the current cycle
+            active_cycle_subs = [
+                s for s in submissions
+                if s.assignment_id in cycle_assign_ids
+                and (getattr(s, "cycle_number", 1) or 1) == current_cycle
+                and not getattr(s, "is_archived", False)
+            ]
+            completed_assignments = len(active_cycle_subs)
+            submitted_cycle_ids = {s.assignment_id for s in active_cycle_subs}
+
+            upcoming_assignments = (
+                await db.execute(
+                    select(Assignment)
+                    .where(
+                        Assignment.group_id == profile.group_id,
+                        Assignment.status == AssignmentStatus.PUBLISHED,
+                        Assignment.deadline >= now_dt,
+                    )
+                    .order_by(Assignment.deadline)
+                    .limit(5)
                 )
-                .order_by(Assignment.deadline)
-                .limit(5)
-            )
-        ).scalars().all()
+            ).scalars().all()
 
-        upcoming = [
-            UpcomingAssignmentItem(id=a.id, title=a.title, deadline=a.deadline, submitted=a.id in submitted_cycle_ids)
-            for a in upcoming_assignments
-        ]
+            upcoming = [
+                UpcomingAssignmentItem(id=a.id, title=a.title, deadline=a.deadline, submitted=a.id in submitted_cycle_ids)
+                for a in upcoming_assignments
+            ]
 
-    recent_grades_query = (
-        await db.execute(
-            select(Grade, Submission)
-            .join(Submission, Grade.submission_id == Submission.id)
-            .options(selectinload(Submission.assignment))
-            .where(Submission.student_id == profile.id)
-            .order_by(Grade.graded_at.desc())
-            .limit(5)
+        recent_grades = []
+        try:
+            recent_grades_query = (
+                await db.execute(
+                    select(Grade, Submission)
+                    .join(Submission, Grade.submission_id == Submission.id)
+                    .options(selectinload(Submission.assignment))
+                    .where(Submission.student_id == profile.id)
+                    .order_by(Grade.graded_at.desc())
+                    .limit(5)
+                )
+            ).all()
+
+            recent_grades = [
+                RecentGradeItem(
+                    assignment_title=submission.assignment.title if submission and submission.assignment else "Assignment",
+                    score=grade.score,
+                    stars=grade.stars,
+                    graded_at=grade.graded_at,
+                )
+                for grade, submission in recent_grades_query
+                if submission
+            ]
+        except Exception:
+            pass
+
+        return StudentDashboard(
+            full_name=profile.full_name or "Student",
+            group_name=group_name or "No Group",
+            teacher_name=teacher_name,
+            english_level=english_level,
+            total_stars=getattr(profile, "total_stars", 0) or 0,
+            streak=streak_val,
+            total_xp=total_xp,
+            level=level,
+            level_title=level_title,
+            free_pass_available=free_pass_available,
+            average_score=average_score,
+            total_assignments=total_assignments,
+            completed_assignments=completed_assignments,
+            upcoming_deadlines=upcoming,
+            recent_grades=recent_grades,
         )
-    ).all()
-
-    recent_grades = [
-        RecentGradeItem(
-            assignment_title=submission.assignment.title,
-            score=grade.score,
-            stars=grade.stars,
-            graded_at=grade.graded_at,
+    except Exception as exc:
+        logger.exception("Error preparing student dashboard: %s", exc)
+        return StudentDashboard(
+            full_name=profile.full_name or "Student",
+            group_name="No Group",
+            teacher_name="Teacher",
+            english_level="Beginner",
+            total_stars=getattr(profile, "total_stars", 0) or 0,
+            streak=0,
+            total_xp=0,
+            level=1,
+            level_title="Novice",
+            free_pass_available=True,
+            average_score=None,
+            total_assignments=0,
+            completed_assignments=0,
+            upcoming_deadlines=[],
+            recent_grades=[],
         )
-        for grade, submission in recent_grades_query
-    ]
-
-    return StudentDashboard(
-        full_name=profile.full_name,
-        group_name=group_name,
-        teacher_name=teacher_name,
-        english_level=english_level,
-        total_stars=profile.total_stars,
-        streak=streak_val,
-        total_xp=total_xp,
-        level=level,
-        level_title=level_title,
-        free_pass_available=not fp.is_used,
-        average_score=average_score,
-        total_assignments=total_assignments,
-        completed_assignments=completed_assignments,
-        upcoming_deadlines=upcoming,
-        recent_grades=recent_grades,
-    )

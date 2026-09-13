@@ -1047,7 +1047,12 @@ export default function StudentsPage() {
       <StudentDetailModal
         studentId={selectedStudentId}
         onClose={() => setSelectedStudentId(null)}
+        onStudentUpdated={() => {
+          refreshDirectory();
+          if (selectedCohortId) loadCohortMatrix(selectedCohortId);
+        }}
       />
+
 
       {/* Edit Student Modal */}
       <EditStudentModal

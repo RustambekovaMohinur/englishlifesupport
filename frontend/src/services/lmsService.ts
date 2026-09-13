@@ -80,6 +80,9 @@ export const deleteGroup = (id: string) => api.delete(`/groups/${id}`);
 export const startGroupCycle = (group_id: string) =>
   api.post<{ message: string; group_id: string; previous_cycle: number; current_cycle: number }>(`/groups/${group_id}/start-cycle`).then((r) => r.data);
 
+export const updateStudentPlacement = (student_id: string, group_id: string | null) =>
+  api.put<StudentOut>(`/teacher/students/${student_id}/placement`, { group_id }).then((r) => r.data);
+
 // --- Teacher Profile ---
 export const getMyTeacherProfile = () => api.get<TeacherProfileOut>("/teachers/me").then((r) => r.data);
 export const updateTeacherProfile = (body: Partial<{ full_name: string; phone: string; bio: string; email: string; current_password?: string }>) =>
@@ -90,12 +93,15 @@ export const changeTeacherPassword = (body: { current_password: string; new_pass
 // --- Unified User Profile (Students & Teachers) ---
 export const getMyUnifiedProfile = () => api.get<UserProfileOut>("/profile/me").then((r) => r.data);
 export const updateMyUnifiedProfile = (body: UserProfileUpdate) => api.patch<UserProfileOut>("/profile/me", body).then((r) => r.data);
+export const changeUserPassword = (body: { old_password: string; new_password: string }) =>
+  api.put<{ success: boolean; message: string }>("/users/me/password", body).then((r) => r.data);
 export const uploadMyAvatar = (file: File) => {
   const formData = new FormData();
   formData.append("file", file);
   return api.post<UserProfileOut>("/profile/me/avatar", formData).then((r) => r.data);
 };
 export const removeMyAvatar = () => api.delete<UserProfileOut>("/profile/me/avatar").then((r) => r.data);
+
 
 // --- Assignments ---
 export const listAssignments = (group_id?: string) =>

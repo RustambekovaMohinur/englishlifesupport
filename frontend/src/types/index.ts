@@ -190,10 +190,12 @@ export interface UserProfileUpdate {
   first_name?: string;
   last_name?: string;
   full_name?: string;
+  username?: string;
   telegram_username?: string;
   phone?: string;
   bio?: string;
 }
+
 
 export interface Paginated<T> {
   items: T[];
