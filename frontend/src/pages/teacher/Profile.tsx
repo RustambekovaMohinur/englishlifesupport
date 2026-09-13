@@ -13,7 +13,7 @@ import { LoadingRows, StatCard } from "@/components/ui";
 import { UserProfileOut } from "@/types";
 
 export default function TeacherProfilePage() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [profile, setProfile] = useState<UserProfileOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -108,6 +108,10 @@ export default function TeacherProfilePage() {
         bio: bio.trim(),
       });
       setProfile(updated);
+      updateUser({
+        full_name: updated.full_name,
+        first_name: updated.first_name,
+      });
       setIsEditing(false);
       toast.success("Profile updated successfully!");
     } catch (err: any) {

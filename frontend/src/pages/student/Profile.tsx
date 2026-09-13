@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { UserProfileOut } from "@/types";
 
 export default function StudentProfilePage() {
-  const { logout } = useAuth();
+  const { logout, updateUser } = useAuth();
   const [profile, setProfile] = useState<UserProfileOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -113,6 +113,11 @@ export default function StudentProfilePage() {
         bio: bio.trim(),
       });
       setProfile(updated);
+      updateUser({
+        username: updated.username,
+        full_name: updated.full_name,
+        first_name: updated.first_name,
+      });
       setIsEditing(false);
       toast.success("Profile updated successfully!");
     } catch (err: any) {

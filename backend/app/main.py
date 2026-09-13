@@ -145,8 +145,8 @@ app.include_router(dashboard.router)
 app.include_router(gamification.router)
 app.include_router(profile.router)
 app.include_router(profile.users_avatar_router)
+app.include_router(profile.v1_profile_router)
 app.include_router(feedback.router)
-
 
 
 @app.get("/")

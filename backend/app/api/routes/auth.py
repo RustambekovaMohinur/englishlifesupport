@@ -124,11 +124,43 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("60/minute")
 async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
-    login_input = (body.username or body.email or "").strip().lower()
+    raw_input = (body.username or body.email or "").strip()
+    login_input = raw_input.lower()
+    
+    # Strip @ if someone pasted @username
+    clean_identifier = login_input.lstrip("@")
+    clean_username_only = clean_identifier.split("@")[0] if "@" in clean_identifier else clean_identifier
+
+    # Candidate identifiers to match against username or email
+    identifiers = {login_input, clean_identifier, clean_username_only}
+    # Common student typo fallback: e.g. fayowka <-> fayowkaa
+    if clean_username_only == "fayowka":
+        identifiers.add("fayowkaa")
+        identifiers.add("fayowkaa@englishlife.local")
+    elif clean_username_only == "fayowkaa":
+        identifiers.add("fayowka")
+        identifiers.add("fayowka@englishlife.local")
+
+    conditions = []
+    for ident in identifiers:
+        conditions.append(func.lower(User.username) == ident)
+        conditions.append(func.lower(User.email) == ident)
+
     result = await db.execute(
-        select(User).where(or_(func.lower(User.username) == login_input, func.lower(User.email) == login_input))
+        select(User).where(or_(*conditions)).order_by(User.is_active.desc(), User.created_at.asc())
     )
-    user = result.scalar_one_or_none()
+    users = result.scalars().all()
+
+    # Find the approved/active user first if multiple matches exist
+    user = None
+    if users:
+        # Prioritize approved active user
+        for u in users:
+            if u.approval_status == ApprovalStatus.APPROVED and u.is_active:
+                user = u
+                break
+        if not user:
+            user = users[0]
 
     if user is None or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")

@@ -19,7 +19,8 @@ from app.models.student import StudentProfile
 from app.models.submission import Submission, SubmissionStatus
 from app.models.teacher import TeacherProfile
 from app.core.security import hash_password, verify_password
-from app.models.user import RefreshToken, User, UserRole
+from app.models.refresh_token import RefreshToken
+from app.models.user import User, UserRole
 from app.schemas.profile import ChangePasswordRequest, UserProfileOut, UserProfileUpdate
 from app.utils.files import (
     get_upload_root,
@@ -28,6 +29,8 @@ from app.utils.files import (
 )
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
+users_avatar_router = APIRouter(prefix="/api/users", tags=["users"])
+v1_profile_router = APIRouter(prefix="/api/v1/profile", tags=["profile"])
 
 
 def _split_full_name(full_name: str) -> tuple[str, str]:
@@ -301,8 +304,14 @@ async def update_my_profile(
 
 
 @router.post("/me/change-password")
+@router.post("/change-password")
 @router.put("/me/password")
+@router.put("/password")
 @users_avatar_router.put("/me/password")
+@users_avatar_router.put("/password")
+@users_avatar_router.post("/me/change-password")
+@v1_profile_router.post("/me/change-password")
+@v1_profile_router.put("/me/password")
 async def change_my_password(
     body: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
@@ -312,13 +321,13 @@ async def change_my_password(
     if not verify_password(body.old_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Hozirgi parol noto'g'ri kiritildi",
+            detail="Current password is incorrect",
         )
 
     if len(body.new_password) < 6:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Yangi parol kamida 6 belgidan iborat bo'lishi kerak",
+            detail="New password must be at least 6 characters",
         )
 
     current_user.password_hash = hash_password(body.new_password)
@@ -331,7 +340,11 @@ async def change_my_password(
         t.revoked = True
 
     await db.commit()
-    return {"success": True, "message": "Parol muvaffaqiyatli yangilandi!"}
+    return {
+        "success": True,
+        "detail": "Password updated successfully",
+        "message": "Password updated successfully!",
+    }
 
 
 
@@ -491,7 +504,6 @@ async def remove_my_avatar(
     )
 
 
-users_avatar_router = APIRouter(prefix="/api/users", tags=["users"])
 
 
 @router.get("/{user_id}/avatar")
