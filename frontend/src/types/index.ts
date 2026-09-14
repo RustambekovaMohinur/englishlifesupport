@@ -59,10 +59,14 @@ export interface StudentListItem {
   approval_status?: string;
   total_stars: number;
   total_lightning?: number;
+  avatar_url?: string | null;
   group_id?: string | null;
   group_name: string | null;
   level?: string | null;
   created_at?: string | null;
+  completed_assignments_count?: number;
+  total_assignments_count?: number;
+  overall_completion_percentage?: number;
 }
 
 export interface AssignmentItemOverview {

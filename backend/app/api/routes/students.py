@@ -132,26 +132,64 @@ async def list_students(
     query = query.order_by(StudentProfile.full_name).offset((page - 1) * page_size).limit(page_size)
     rows = (await db.execute(query)).all()
 
-    items = [
-        StudentListItem(
-            id=profile.id,
-            user_id=profile.user_id,
-            full_name=profile.full_name,
-            email=email,
-            username=username or "",
-            phone=profile.phone,
-            telegram_username=profile.phone,
-            is_active=is_active if is_active is not None else True,
-            approval_status=appr_status.value if hasattr(appr_status, "value") else str(appr_status) if appr_status else "approved",
-            total_stars=profile.total_stars,
-            total_lightning=getattr(profile, "total_lightning", 0) or 0,
-            group_id=grp_id,
-            group_name=grp_name,
-            level=grp_level.value if hasattr(grp_level, "value") else str(grp_level) if grp_level else None,
-            created_at=user_created_at,
+    # Calculate assignment counts and completed submissions for the fetched students
+    st_ids = [profile.id for profile, *_ in rows]
+    grp_ids = list({grp_id for *_, grp_id, _, _ in rows if grp_id})
+
+    total_assignments_map: dict[uuid.UUID, int] = {}
+    if grp_ids:
+        group_asgn_query = (
+            select(Assignment.group_id, func.count(Assignment.id))
+            .where(Assignment.group_id.in_(grp_ids), Assignment.status == AssignmentStatus.PUBLISHED)
+            .group_by(Assignment.group_id)
         )
-        for profile, email, username, is_active, appr_status, user_created_at, grp_id, grp_name, grp_level in rows
-    ]
+        group_asgn_res = await db.execute(group_asgn_query)
+        total_assignments_map = {gid: count for gid, count in group_asgn_res.all()}
+
+    completed_submissions_map: dict[uuid.UUID, int] = {}
+    if st_ids:
+        st_sub_query = (
+            select(Submission.student_id, func.count(func.distinct(Submission.assignment_id)))
+            .where(
+                Submission.student_id.in_(st_ids),
+                Submission.is_archived == False,
+            )
+            .group_by(Submission.student_id)
+        )
+        st_sub_res = await db.execute(st_sub_query)
+        completed_submissions_map = {sid: count for sid, count in st_sub_res.all()}
+
+    items = []
+    for profile, email, username, is_active, appr_status, user_created_at, grp_id, grp_name, grp_level in rows:
+        total_asgns = total_assignments_map.get(grp_id, 0)
+        completed_asgns = completed_submissions_map.get(profile.id, 0)
+        if completed_asgns > total_asgns and total_asgns > 0:
+            completed_asgns = total_asgns
+        pct = int((completed_asgns / total_asgns) * 100) if total_asgns > 0 else 0
+
+        items.append(
+            StudentListItem(
+                id=profile.id,
+                user_id=profile.user_id,
+                full_name=profile.full_name,
+                email=email,
+                username=username or "",
+                phone=profile.phone,
+                telegram_username=profile.phone,
+                avatar_url=profile.avatar_url,
+                is_active=is_active if is_active is not None else True,
+                approval_status=appr_status.value if hasattr(appr_status, "value") else str(appr_status) if appr_status else "approved",
+                total_stars=profile.total_stars,
+                total_lightning=getattr(profile, "total_lightning", 0) or 0,
+                group_id=grp_id,
+                group_name=grp_name,
+                level=grp_level.value if hasattr(grp_level, "value") else str(grp_level) if grp_level else None,
+                created_at=user_created_at,
+                completed_assignments_count=completed_asgns,
+                total_assignments_count=total_asgns,
+                overall_completion_percentage=pct,
+            )
+        )
     return PaginatedStudents(items=items, total=total, page=page, page_size=page_size)
 
 

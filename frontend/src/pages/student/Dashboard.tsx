@@ -260,7 +260,7 @@ export default function StudentDashboardPage() {
           onClick={() => setFeedbackModalOpen(true)}
           className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 active:scale-95 text-white shadow-xs transition shrink-0 self-end sm:self-auto"
         >
-          <span>{feedbackSummary?.user_has_reviewed ? "Fikrni yangilash" : "⭐ Baholash"}</span>
+          <span>{feedbackSummary?.user_has_reviewed ? "Update Review" : "⭐ Review Platform"}</span>
         </button>
       </div>
 

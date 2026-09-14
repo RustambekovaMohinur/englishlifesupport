@@ -44,10 +44,14 @@ class StudentListItem(BaseModel):
     approval_status: str = "approved"
     total_stars: int
     total_lightning: int = 0
+    avatar_url: str | None = None
     group_id: uuid.UUID | None = None
     group_name: str | None = None
     level: str | None = None
     created_at: datetime | None = None
+    completed_assignments_count: int = 0
+    total_assignments_count: int = 0
+    overall_completion_percentage: int = 0
 
     model_config = {"from_attributes": True}
 

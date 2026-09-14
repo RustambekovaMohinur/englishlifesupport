@@ -23,7 +23,11 @@ import {
   GraduationCap,
   ExternalLink,
   Filter,
+  ArrowRightLeft,
+  Key,
+  Trash2,
 } from "lucide-react";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import StudentDetailModal from "@/components/StudentDetailModal";
 import { SubmissionReviewDrawer } from "@/components/SubmissionReviewDrawer";
 import { EmptyState, LoadingRows, Modal, useConfirm, TelegramLink } from "@/components/ui";
@@ -38,6 +42,7 @@ import {
   rejectStudent,
   resetStudentPassword,
   updateStudent,
+  updateStudentPlacement,
 } from "@/services/lmsService";
 import {
   Group,
@@ -104,7 +109,7 @@ function getSkillBadge(title: string) {
 }
 
 export default function StudentsPage() {
-  const [activeTab, setActiveTab] = useState<"matrix" | "all" | "pending">("matrix");
+  const [activeTab, setActiveTab] = useState<"all" | "matrix" | "pending">("all");
 
   // Groups state
   const [groups, setGroups] = useState<Group[]>([]);
@@ -138,12 +143,14 @@ export default function StudentsPage() {
 
   // Modals state
   const [editing, setEditing] = useState<StudentListItem | null>(null);
+  const [placementStudent, setPlacementStudent] = useState<StudentListItem | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [resettingStudent, setResettingStudent] = useState<StudentListItem | null>(null);
   const { confirm, ConfirmDialog } = useConfirm();
 
-  // Load groups and initial pending data
+  // Load directory, groups, and initial pending data on mount
   useEffect(() => {
+    refreshDirectory();
     listGroups()
       .then((gList) => {
         setGroups(gList);
@@ -154,6 +161,34 @@ export default function StudentsPage() {
       .catch(() => {});
     loadPending();
   }, []);
+
+  // Deduplicate student directory rows per cohort, prioritizing active accounts with stars/submissions
+  const dedupedStudents = useMemo(() => {
+    const map = new Map<string, StudentListItem>();
+    for (const s of students) {
+      const normUser = (s.username || "").trim().toLowerCase();
+      const normEmail = (s.email || "").trim().toLowerCase();
+      const key = normUser && normUser !== "none" ? normUser : (normEmail || s.user_id || s.id);
+
+      if (!map.has(key)) {
+        map.set(key, s);
+      } else {
+        const existing = map.get(key)!;
+        const existingScore = (existing.total_stars || 0) * 10 + 
+                              (existing.completed_assignments_count || 0) * 5 + 
+                              (existing.group_name ? 2 : 0) +
+                              (existing.is_active ? 1 : 0);
+        const currentScore = (s.total_stars || 0) * 10 + 
+                             (s.completed_assignments_count || 0) * 5 + 
+                             (s.group_name ? 2 : 0) +
+                             (s.is_active ? 1 : 0);
+        if (currentScore > existingScore) {
+          map.set(key, s);
+        }
+      }
+    }
+    return Array.from(map.values());
+  }, [students]);
 
   // Fetch Cohort Detail whenever selectedCohortId changes
   useEffect(() => {
@@ -339,10 +374,10 @@ export default function StudentsPage() {
   }
 
   function handleDelete(student: StudentListItem) {
-    confirm(`Permanently delete student "${student.full_name}"? Their account, submissions, and progress will be purged.`, async () => {
+    confirm(`Are you sure you want to remove this student (${student.full_name})? All homework submissions and grades will be permanently deleted.`, async () => {
       try {
         await deleteStudent(student.id);
-        toast.success("Student deleted");
+        toast.success("Student deleted successfully");
         refreshDirectory();
         if (selectedCohortId) loadCohortMatrix(selectedCohortId);
       } catch (err: any) {
@@ -373,6 +408,21 @@ export default function StudentsPage() {
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/60 shrink-0 select-none">
           <button
             type="button"
+            onClick={() => {
+              setActiveTab("all");
+              refreshDirectory();
+            }}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === "all"
+                ? "bg-white dark:bg-[#111827] text-indigo-600 dark:text-indigo-400 shadow-xs"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Directory List</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab("matrix")}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               activeTab === "matrix"
@@ -382,21 +432,6 @@ export default function StudentsPage() {
           >
             <LayoutGrid className="w-4 h-4" />
             <span>Progress Matrix</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("all");
-              refreshDirectory();
-            }}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeTab === "all"
-                ? "bg-white dark:bg-[#111827] text-zinc-900 dark:text-white shadow-xs"
-                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Directory List</span>
           </button>
           <button
             type="button"
@@ -827,66 +862,123 @@ export default function StudentsPage() {
               <>
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50">
-                      <th className="py-2.5 px-3 font-medium">Name</th>
-                      <th className="py-2.5 px-3 font-medium">Username</th>
-                      <th className="py-2.5 px-3 font-medium">Telegram</th>
-                      <th className="py-2.5 px-3 font-medium">Group</th>
-                      <th className="py-2.5 px-3 font-medium">Level</th>
-                      <th className="py-2.5 px-3 font-medium text-center">Stars</th>
-                      <th className="py-2.5 px-3 font-medium text-center">Lightning</th>
-                      <th className="py-2.5 px-3 font-medium">Actions</th>
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs">
+                      <th className="py-3 px-3 font-semibold">Student</th>
+                      <th className="py-3 px-3 font-semibold">Cohort & Level</th>
+                      <th className="py-3 px-3 font-semibold text-center">Stars (⭐️)</th>
+                      <th className="py-3 px-3 font-semibold">Homework Progress</th>
+                      <th className="py-3 px-3 font-semibold">Actions</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {students.map((s) => (
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                    {dedupedStudents.map((s) => (
                       <tr
                         key={s.id}
-                        className="border-b border-zinc-100 dark:border-zinc-800/60 last:border-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors"
+                        onClick={() => setSelectedStudentId(s.id)}
+                        className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer group"
+                        title="Click to view student submissions and inspection"
                       >
-                        <td
-                          className="py-3 px-3 font-medium text-zinc-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer underline decoration-dotted"
-                          onClick={() => setSelectedStudentId(s.id)}
-                        >
-                          {s.full_name}
+                        {/* 1. Student Avatar + Name + Username */}
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-3">
+                            <UserAvatar
+                              src={s.avatar_url}
+                              name={s.full_name}
+                              size="sm"
+                              className="w-9 h-9 rounded-full object-cover aspect-square shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <div className="font-semibold text-zinc-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                                {s.full_name}
+                              </div>
+                              <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 truncate">
+                                @{s.username || s.email}
+                              </div>
+                            </div>
+                          </div>
                         </td>
-                        <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 font-mono text-xs">
-                          {s.username || s.email}
+
+                        {/* 2. Cohort & Level */}
+                        <td className="py-3 px-3">
+                          {s.group_name ? (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
+                              <span className="font-semibold">{s.group_name}</span>
+                              {s.level && (
+                                <span className="text-[10px] opacity-80 uppercase tracking-wider font-mono">
+                                  ({s.level.replace("_", " ")})
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-zinc-400 italic">No Cohort</span>
+                          )}
                         </td>
-                        <td className="py-3 px-3 text-xs">
-                          <TelegramLink username={s.telegram_username || s.phone} />
+
+                        {/* 3. Stars (⭐️) */}
+                        <td className="py-3 px-3 text-center">
+                          <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-bold font-mono text-xs tabular-nums">
+                            <span>⭐️</span>
+                            <span>{s.total_stars ?? 0}</span>
+                          </div>
                         </td>
-                        <td className="py-3 px-3 text-zinc-600 dark:text-zinc-300 font-medium text-xs">
-                          {s.group_name ?? "—"}
+
+                        {/* 4. Homework Progress */}
+                        <td className="py-3 px-3">
+                          <div className="w-36 space-y-1">
+                            <div className="flex items-center justify-between text-[11px] font-mono">
+                              <span className="text-zinc-700 dark:text-zinc-300 font-medium">
+                                {s.completed_assignments_count ?? 0}/{s.total_assignments_count ?? 0} Tasks
+                              </span>
+                              <span className="text-zinc-500 dark:text-zinc-400 font-semibold">
+                                {s.overall_completion_percentage ?? 0}%
+                              </span>
+                            </div>
+                            <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-300 ${
+                                  (s.overall_completion_percentage ?? 0) >= 80
+                                    ? "bg-emerald-500"
+                                    : (s.overall_completion_percentage ?? 0) >= 40
+                                    ? "bg-indigo-500"
+                                    : "bg-amber-500"
+                                }`}
+                                style={{ width: `${Math.min(100, s.overall_completion_percentage ?? 0)}%` }}
+                              />
+                            </div>
+                          </div>
                         </td>
-                        <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 capitalize text-xs">
-                          {s.level?.replace("_", " ") ?? "—"}
-                        </td>
-                        <td className="py-3 px-3 text-center font-bold font-mono text-amber-500 text-xs tabular-nums">
-                          +{s.total_stars} ⭐
-                        </td>
-                        <td className="py-3 px-3 text-center font-bold font-mono text-yellow-500 text-xs tabular-nums">
-                          ⚡ {s.total_lightning ?? 0}
-                        </td>
-                        <td className="py-3 px-3 space-x-2 whitespace-nowrap">
-                          <button
-                            className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-                            onClick={() => setEditing(s)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:underline"
-                            onClick={() => setResettingStudent(s)}
-                          >
-                            Reset Pass
-                          </button>
-                          <button
-                            className="text-sm font-medium text-red-600 dark:text-red-400 hover:underline"
-                            onClick={() => handleDelete(s)}
-                          >
-                            Delete
-                          </button>
+
+                        {/* 5. Actions */}
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => setPlacementStudent(s)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800/60 transition"
+                              title="Change Cohort Placement"
+                            >
+                              <ArrowRightLeft className="w-3.5 h-3.5" />
+                              <span>Placement</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setResettingStudent(s)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 transition"
+                              title="Reset Password"
+                            >
+                              <Key className="w-3.5 h-3.5" />
+                              <span>Password</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(s)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800/60 transition"
+                              title="Remove Student"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1053,6 +1145,18 @@ export default function StudentsPage() {
         }}
       />
 
+
+      {/* Edit Placement Modal */}
+      <EditPlacementModal
+        student={placementStudent}
+        groups={groups}
+        onClose={() => setPlacementStudent(null)}
+        onSaved={() => {
+          setPlacementStudent(null);
+          refreshDirectory();
+          if (selectedCohortId) loadCohortMatrix(selectedCohortId);
+        }}
+      />
 
       {/* Edit Student Modal */}
       <EditStudentModal
@@ -1247,3 +1351,89 @@ function EditStudentModal({
     </Modal>
   );
 }
+
+function EditPlacementModal({
+  student,
+  groups,
+  onClose,
+  onSaved,
+}: {
+  student: StudentListItem | null;
+  groups: Group[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [groupId, setGroupId] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (student) {
+      const match = groups.find((g) => g.id === student.group_id || g.name === student.group_name);
+      setGroupId(match ? match.id : (student.group_id || ""));
+    }
+  }, [student, groups]);
+
+  if (!student) return null;
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      await updateStudentPlacement(student!.id, groupId || null);
+      toast.success(`Placement updated for ${student!.full_name}`);
+      onSaved();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Failed to update placement");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const currentGroup = groups.find((g) => g.id === groupId);
+
+  return (
+    <Modal open={!!student} onClose={onClose} title={`Cohort Placement: ${student.full_name}`}>
+      <form onSubmit={handleSave} className="space-y-4 text-sm">
+        <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/30 rounded-xl border border-indigo-100 dark:border-indigo-900/40 space-y-1">
+          <p className="text-xs text-indigo-900 dark:text-indigo-200 font-medium">
+            Moving <span className="font-bold">{student.full_name}</span> (@{student.username || student.email})
+          </p>
+          <p className="text-[11px] text-indigo-700 dark:text-indigo-400">
+            Current earned stars (<span className="font-bold">⭐️ {student.total_stars ?? 0}</span>) and past submissions remain strictly preserved.
+          </p>
+        </div>
+
+        <div>
+          <label className="label">Target Cohort & Level *</label>
+          <select
+            className="input"
+            value={groupId}
+            onChange={(e) => setGroupId(e.target.value)}
+          >
+            <option value="">No Cohort (Unassigned)</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name} ({g.english_level})
+              </option>
+            ))}
+          </select>
+          {currentGroup && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+              Selected Level: <span className="font-semibold capitalize text-zinc-700 dark:text-zinc-300">{currentGroup.english_level}</span>
+            </p>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={isSaving}>
+            Cancel
+          </button>
+          <button type="submit" className="btn-primary" disabled={isSaving}>
+            {isSaving ? "Saving..." : "Update Placement"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+

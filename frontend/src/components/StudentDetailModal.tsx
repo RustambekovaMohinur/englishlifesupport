@@ -27,11 +27,11 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
     e.preventDefault();
     if (!studentId) return;
     if (newPassword.length < 6) {
-      toast.error("Parol kamida 6 belgidan iborat bo'lishi kerak");
+      toast.error("Password must be at least 6 characters");
       return;
     }
     if (newPassword !== confirmPassword) {
-      toast.error("Yangi parollar mos kelmadi");
+      toast.error("Passwords do not match");
       return;
     }
 
@@ -90,7 +90,7 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
         if (profRes.status === "fulfilled") {
           setProfile(profRes.value);
         } else {
-          toast.error("O'quvchi ma'lumotlarini yuklab bo'lmadi");
+          toast.error("Failed to load student profile");
         }
 
         if (histRes.status === "fulfilled") {

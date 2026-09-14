@@ -11,11 +11,11 @@ import { PublicFeedbackItem, FeedbackReplyItem } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 
 const RATING_LABELS: Record<number, { text: string; emoji: string; color: string }> = {
-  1: { text: "Juda yomon — Ko'p xatolar bor", emoji: "😡", color: "text-rose-500" },
-  2: { text: "Yaxshi emas — Kamchiliklar ko'p", emoji: "😕", color: "text-orange-500" },
-  3: { text: "Qoniqarli — Yaxshilanishi kerak", emoji: "😐", color: "text-amber-500" },
-  4: { text: "Yaxshi — Menga yoqdi", emoji: "🙂", color: "text-emerald-500" },
-  5: { text: "A'lo darajada — Ajoyib platforma!", emoji: "🤩", color: "text-brand-500 dark:text-brand-400" },
+  1: { text: "Poor — Many issues", emoji: "😡", color: "text-rose-500" },
+  2: { text: "Fair — Needs improvement", emoji: "😕", color: "text-orange-500" },
+  3: { text: "Good — Acceptable", emoji: "😐", color: "text-amber-500" },
+  4: { text: "Very Good — Really enjoyed it", emoji: "🙂", color: "text-emerald-500" },
+  5: { text: "Excellent — Outstanding platform!", emoji: "🤩", color: "text-brand-500 dark:text-brand-400" },
 };
 
 interface PlatformFeedbackModalProps {
@@ -60,7 +60,7 @@ export function PlatformFeedbackModal({ isOpen, onClose, onSubmitted, onSuccess 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (rating < 1 || rating > 5) {
-      toast.error("Iltimos, yulduzcha tanlab baho bering.");
+      toast.error("Please select a star rating.");
       return;
     }
 
@@ -76,14 +76,14 @@ export function PlatformFeedbackModal({ isOpen, onClose, onSubmitted, onSuccess 
 
       toast.success(
         user?.role === "student" && !isExistingReview
-          ? "🌟 Fikringiz qabul qilindi va +5 XP hisobingizga qo'shildi! Rahmat!"
-          : "🌟 Fikringiz uchun katta rahmat! Tizimni yanada yaxshilaymiz!"
+          ? "🌟 Feedback submitted and +5 XP awarded! Thank you!"
+          : "🌟 Thank you for your feedback! We will continue improving the platform."
       );
       if (onSubmitted) onSubmitted();
       if (onSuccess) onSuccess();
       onClose();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Fikrni yuborishda xatolik yuz berdi");
+      toast.error(err?.response?.data?.detail || "Failed to submit feedback");
     } finally {
       setLoading(false);
     }
@@ -103,10 +103,10 @@ export function PlatformFeedbackModal({ isOpen, onClose, onSubmitted, onSuccess 
             </div>
             <div>
               <h3 className="text-base font-bold text-zinc-900 dark:text-white leading-snug">
-                {isExistingReview ? "Fikringizni yangilash" : "Platformani baholash & Fikr"}
+                {isExistingReview ? "Update Your Review" : "Platform Feedback & Reviews"}
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                O'quv tizimini yaxshilashga o'z hissangizni qo'shing
+                Help us improve the learning experience for everyone
               </p>
             </div>
           </div>
@@ -125,7 +125,7 @@ export function PlatformFeedbackModal({ isOpen, onClose, onSubmitted, onSuccess 
             <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border border-amber-200/80 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs">
               <Sparkles className="w-4 h-4 shrink-0 text-amber-500 animate-pulse" />
               <span>
-                <strong>+5 XP Bonusi:</strong> O'zbekistondagi eng yaxshi LMS bo'lishimiz uchun samimiy fikringiz juda muhim!
+                <strong>+5 XP Bonus:</strong> Your honest feedback helps us make this the best learning platform!
               </span>
             </div>
           )}
@@ -133,7 +133,7 @@ export function PlatformFeedbackModal({ isOpen, onClose, onSubmitted, onSuccess 
           {/* Star Selector */}
           <div className="text-center py-2 bg-zinc-50 dark:bg-zinc-900/60 rounded-xl border border-zinc-200/60 dark:border-zinc-800">
             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-2">
-              Platformadan umumiy mamnunligingizni baholang:
+              Rate your overall platform experience:
             </label>
             <div className="flex items-center justify-center gap-2">
               {[1, 2, 3, 4, 5].map((star) => {
@@ -167,13 +167,13 @@ export function PlatformFeedbackModal({ isOpen, onClose, onSubmitted, onSuccess 
           {/* Section 1: What works well */}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-              💚 Saytda sizga eng yoqqan qulayliklar nima? <span className="text-zinc-400 font-normal">(ixtiyoriy)</span>
+              💚 What do you enjoy most about the platform? <span className="text-zinc-400 font-normal">(optional)</span>
             </label>
             <textarea
               value={whatWorksWell}
               onChange={(e) => setWhatWorksWell(e.target.value)}
               rows={3}
-              placeholder="Masalan: dizayn, audio yozish va eshitish qulayligi, topshiriqlarni tez yuklash, reyting jadvali..."
+              placeholder="e.g., Clean design, audio recording convenience, fast homework upload, leaderboard..."
               className="w-full text-xs rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-hidden transition resize-none"
               maxLength={2000}
             />
@@ -182,13 +182,13 @@ export function PlatformFeedbackModal({ isOpen, onClose, onSubmitted, onSuccess 
           {/* Section 2: What to improve */}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-              🔧 Qanday kamchiliklar bor yoki nimani yaxshilash kerak? <span className="text-zinc-400 font-normal">(ixtiyoriy)</span>
+              🔧 What could be improved or added? <span className="text-zinc-400 font-normal">(optional)</span>
             </label>
             <textarea
               value={whatToImprove}
               onChange={(e) => setWhatToImprove(e.target.value)}
               rows={3}
-              placeholder="Masalan: sayt tezligi, mobil telefonda qulaylik, tushunarsiz tugmalar yoki yangi funksiyalar..."
+              placeholder="e.g., Page load speed, mobile experience, new study tools..."
               className="w-full text-xs rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-hidden transition resize-none"
               maxLength={2000}
             />
@@ -201,7 +201,7 @@ export function PlatformFeedbackModal({ isOpen, onClose, onSubmitted, onSuccess 
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
             >
-              Bekor qilish
+              Cancel
             </button>
             <button
               type="submit"
@@ -211,12 +211,12 @@ export function PlatformFeedbackModal({ isOpen, onClose, onSubmitted, onSuccess 
               {loading ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Yuborilmoqda...</span>
+                  <span>Submitting...</span>
                 </>
               ) : (
                 <>
                   <Check className="w-3.5 h-3.5" />
-                  <span>{isExistingReview ? "Yangilash" : "Yuborish"}</span>
+                  <span>{isExistingReview ? "Update" : "Submit"}</span>
                 </>
               )}
             </button>
