@@ -20,6 +20,7 @@ class TeacherDashboard(BaseModel):
 class RecentSubmissionItem(BaseModel):
     id: uuid.UUID
     student_name: str
+    student_avatar: str | None = None
     assignment_title: str
     submitted_at: datetime
     status: str

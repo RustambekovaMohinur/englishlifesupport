@@ -106,6 +106,7 @@ async def teacher_dashboard(db: AsyncSession = Depends(get_db)):
             RecentSubmissionItem(
                 id=s.id,
                 student_name=s.student.full_name,
+                student_avatar=s.student.avatar_url if s.student else None,
                 assignment_title=s.assignment.title,
                 submitted_at=s.submitted_at,
                 status=s.status.value,

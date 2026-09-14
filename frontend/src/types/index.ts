@@ -428,6 +428,7 @@ export interface TeacherDashboard {
   recent_submissions: {
     id: string;
     student_name: string;
+    student_avatar?: string | null;
     assignment_title: string;
     submitted_at: string;
     status: string;

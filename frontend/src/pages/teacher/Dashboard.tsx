@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import {
@@ -16,6 +17,7 @@ import {
   Star,
   MessageSquare,
   RefreshCw,
+  ArrowRight,
 } from "lucide-react";
 import { StatCard, StatusBadge, LoadingRows, EmptyState, Modal, TelegramLink } from "@/components/ui";
 import { UserAvatar } from "@/components/common/UserAvatar";
@@ -671,71 +673,78 @@ export default function TeacherDashboardPage() {
             )}
           </div>
 
-          {/* Recent Submissions Feed */}
-          <div className="card">
-            <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Recent Submissions</h2>
-            {data.recent_submissions.length === 0 ? (
-              <EmptyState title="No submissions yet" description="Student submissions will appear here." />
-            ) : (
-              <div>
-                {/* Mobile High-Density Submission Rows */}
-                <div className="sm:hidden space-y-2">
-                  {data.recent_submissions.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center justify-between p-3 rounded-xl bg-zinc-50/50 dark:bg-zinc-900/50 border border-zinc-200/70 dark:border-zinc-800/70 gap-3"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
-                          {s.student_name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-bold text-zinc-900 dark:text-white text-xs truncate max-w-[150px]">
-                            {s.student_name}
-                          </p>
-                          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate max-w-[150px] mt-0.5">
-                            {s.assignment_title}
-                          </p>
-                          <p className="text-[9px] text-zinc-400 font-mono">
-                            {format(new Date(s.submitted_at), "MMM d, HH:mm")}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="shrink-0">
-                        <StatusBadge status={s.status} />
-                      </div>
-                    </div>
-                  ))}
+          {/* Streamlined Recent Submissions Card */}
+          {(() => {
+            const recentFive = data.recent_submissions.slice(0, 5);
+            return (
+              <div className="card space-y-3">
+                <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-indigo-500" />
+                    <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Recent Submissions</h2>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono font-medium">
+                      Latest {recentFive.length}
+                    </span>
+                  </div>
+                  <Link
+                    to="/teacher/submissions"
+                    className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 group transition-colors"
+                  >
+                    <span>View All Submissions</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                  </Link>
                 </div>
 
-                {/* Desktop Table (>= 640px) */}
-                <div className="hidden sm:block overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50">
-                        <th className="py-2.5 px-3 font-medium">Student</th>
-                        <th className="py-2.5 px-3 font-medium">Assignment</th>
-                        <th className="py-2.5 px-3 font-medium">Submitted</th>
-                        <th className="py-2.5 px-3 font-medium">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.recent_submissions.map((s) => (
-                        <tr key={s.id} className="border-b border-zinc-100 dark:border-zinc-800/60 last:border-0 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors">
-                          <td className="py-3 px-3 font-medium text-zinc-900 dark:text-white">{s.student_name}</td>
-                          <td className="py-3 px-3 text-zinc-600 dark:text-zinc-300">{s.assignment_title}</td>
-                          <td className="py-3 px-3 text-zinc-500 dark:text-zinc-400 font-mono text-xs">{format(new Date(s.submitted_at), "MMM d, HH:mm")}</td>
-                          <td className="py-3 px-3">
-                            <StatusBadge status={s.status} />
-                          </td>
+                {recentFive.length === 0 ? (
+                  <EmptyState title="No submissions yet" description="Student submissions will appear here." />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs">
+                          <th className="py-2.5 px-3 font-semibold">Student</th>
+                          <th className="py-2.5 px-3 font-semibold">Assignment Task</th>
+                          <th className="py-2.5 px-3 font-semibold">Submitted</th>
+                          <th className="py-2.5 px-3 font-semibold text-right">Status</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                        {recentFive.map((s) => (
+                          <tr
+                            key={s.id}
+                            className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors"
+                          >
+                            <td className="py-2.5 px-3">
+                              <div className="flex items-center gap-2.5">
+                                <UserAvatar
+                                  src={s.student_avatar}
+                                  name={s.student_name}
+                                  size="sm"
+                                  className="w-8 h-8 rounded-full object-cover aspect-square shrink-0"
+                                />
+                                <span className="font-semibold text-zinc-900 dark:text-white text-xs truncate max-w-[170px]">
+                                  {s.student_name}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 text-xs text-zinc-600 dark:text-zinc-300 font-medium truncate max-w-[220px]">
+                              {s.assignment_title}
+                            </td>
+                            <td className="py-2.5 px-3 text-zinc-500 dark:text-zinc-400 font-mono text-xs whitespace-nowrap">
+                              {format(new Date(s.submitted_at), "MMM d, HH:mm")}
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <StatusBadge status={s.status} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })()}
 
           {/* Platform Reviews & Student Feedback Inbox */}
           <div className="card space-y-4">

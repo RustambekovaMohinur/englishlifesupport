@@ -1,6 +1,17 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, useMemo } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ExternalLink, Loader2, X, Star, FileText, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  ExternalLink,
+  Loader2,
+  X,
+  Star,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRightLeft,
+  Key,
+  Trash2,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import StudentDetailModal from "@/components/StudentDetailModal";
 import { UserAvatar } from "@/components/common/UserAvatar";
@@ -23,8 +34,19 @@ import {
   gradeSubmission,
   listSubmissions,
   getSubmission,
+  listGroups,
+  updateStudentPlacement,
+  resetStudentPassword,
+  deleteStudent,
 } from "@/services/lmsService";
-import { GroupDetailOut, GroupStudentDetail, GroupAssignmentHeader, AssignmentItemOverview, SubmissionOut } from "@/types";
+import {
+  Group,
+  GroupDetailOut,
+  GroupStudentDetail,
+  GroupAssignmentHeader,
+  AssignmentItemOverview,
+  SubmissionOut,
+} from "@/types";
 
 const LEVELS = [
   "beginner",
@@ -40,10 +62,13 @@ export default function GroupDetailPage() {
   const navigate = useNavigate();
 
   const [groupDetail, setGroupDetail] = useState<GroupDetailOut | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [placementStudent, setPlacementStudent] = useState<GroupStudentDetail | null>(null);
+  const [resettingStudent, setResettingStudent] = useState<GroupStudentDetail | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [viewTab, setViewTab] = useState<"cards" | "matrix">("cards");
+  const [viewTab, setViewTab] = useState<"table" | "cards" | "matrix">("table");
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
   const [activeGradingCell, setActiveGradingCell] = useState<{
     student: GroupStudentDetail;
@@ -66,6 +91,7 @@ export default function GroupDetailPage() {
 
   useEffect(() => {
     loadDetails();
+    listGroups().then(setGroups).catch(() => {});
   }, [groupId]);
 
   function handleDelete() {
@@ -108,18 +134,78 @@ export default function GroupDetailPage() {
     );
   }
 
-  // Calculate Group Average Progress
-  const totalStudents = groupDetail.students.length;
+  // Deduplicate students per cohort: prioritize active student with more stars/submissions, eliminate ghost stubs
+  const dedupedStudents = useMemo(() => {
+    if (!groupDetail?.students) return [];
+    const map = new Map<string, GroupStudentDetail>();
+    for (const s of groupDetail.students) {
+      const normUser = (s.username || "").trim().toLowerCase();
+      const key = normUser && normUser !== "none" ? normUser : (s.user_id || s.student_id);
+
+      if (!map.has(key)) {
+        map.set(key, s);
+      } else {
+        const existing = map.get(key)!;
+        const existingCompleted =
+          existing.completed_assignments_count ??
+          existing.assignments?.filter((a) => a.completion_percentage >= 100).length ??
+          0;
+        const currentCompleted =
+          s.completed_assignments_count ??
+          s.assignments?.filter((a) => a.completion_percentage >= 100).length ??
+          0;
+        const existingScore = (existing.total_stars || 0) * 10 + existingCompleted * 5 + (existing.assignments?.length || 0);
+        const currentScore = (s.total_stars || 0) * 10 + currentCompleted * 5 + (s.assignments?.length || 0);
+        if (currentScore > existingScore) {
+          map.set(key, s);
+        }
+      }
+    }
+    return Array.from(map.values());
+  }, [groupDetail?.students]);
+
+  // Calculate Group Average Progress using dedupedStudents
+  const totalStudents = dedupedStudents.length;
   const totalAssignments = groupDetail.assignments.length;
   const avgProgress =
     totalStudents > 0
       ? Math.round(
-          groupDetail.students.reduce((sum, s) => sum + s.overall_completion_percentage, 0) / totalStudents
+          dedupedStudents.reduce((sum, s) => sum + s.overall_completion_percentage, 0) / totalStudents
         )
       : 0;
 
-  const totalGroupStars = groupDetail.students.reduce((sum, s) => sum + s.total_stars, 0);
-  const totalGroupLightning = groupDetail.students.reduce((sum, s) => sum + s.total_lightning, 0);
+  const totalGroupStars = dedupedStudents.reduce((sum, s) => sum + s.total_stars, 0);
+  const totalGroupLightning = dedupedStudents.reduce((sum, s) => sum + s.total_lightning, 0);
+
+  function handleRemoveStudent(student: GroupStudentDetail) {
+    confirm(
+      `Remove "${student.full_name}" from cohort "${groupDetail?.name}"? Their account, earned stars (⭐️ ${student.total_stars}), and past submissions will remain 100% preserved.`,
+      async () => {
+        try {
+          await updateStudentPlacement(student.student_id, null);
+          toast.success(`Removed ${student.full_name} from group`);
+          loadDetails();
+        } catch (err: any) {
+          toast.error(err?.response?.data?.detail ?? "Failed to remove student");
+        }
+      }
+    );
+  }
+
+  function handleDeleteStudent(student: GroupStudentDetail) {
+    confirm(
+      `Are you sure you want to permanently delete student "${student.full_name}"? All account records, homework submissions, and grades will be permanently purged.`,
+      async () => {
+        try {
+          await deleteStudent(student.student_id);
+          toast.success("Student deleted successfully");
+          loadDetails();
+        } catch (err: any) {
+          toast.error(err?.response?.data?.detail ?? "Failed to delete student");
+        }
+      }
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -279,6 +365,16 @@ export default function GroupDetailPage() {
 
         <div className="flex gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs font-semibold">
           <button
+            onClick={() => setViewTab("table")}
+            className={`px-3 py-1.5 rounded-md transition ${
+              viewTab === "table"
+                ? "bg-white dark:bg-[#161B22] text-zinc-900 dark:text-white shadow-xs"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+            }`}
+          >
+            📋 Directory Table
+          </button>
+          <button
             onClick={() => setViewTab("cards")}
             className={`px-3 py-1.5 rounded-md transition ${
               viewTab === "cards"
@@ -306,10 +402,150 @@ export default function GroupDetailPage() {
           title="No students in this group yet"
           description="Students can select this group during registration, or you can assign students from the Students page."
         />
+      ) : viewTab === "table" ? (
+        /* ================= 1. CLEAN DIRECTORY TABLE (DEFAULT) ================= */
+        <div className="card overflow-x-auto p-0 border border-[#EAE9E5] dark:border-[#30363D]">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs">
+                <th className="py-3 px-4 font-semibold">Student</th>
+                <th className="py-3 px-4 font-semibold">Homework Progress</th>
+                <th className="py-3 px-4 font-semibold text-center">Stars & Lightning</th>
+                <th className="py-3 px-4 font-semibold text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+              {dedupedStudents.map((student) => {
+                const completedCount =
+                  student.completed_assignments_count ??
+                  student.assignments.filter((a) => a.completion_percentage >= 100).length;
+                const totalCount =
+                  student.total_assignments_count ??
+                  (groupDetail.assignments.length > 0 ? groupDetail.assignments.length : student.assignments.length);
+                const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : student.overall_completion_percentage;
+
+                return (
+                  <tr
+                    key={student.student_id}
+                    onClick={() => setSelectedStudentId(student.student_id)}
+                    className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer group"
+                    title="Click to inspect student progress & submissions"
+                  >
+                    {/* Student Column */}
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-3">
+                        <UserAvatar
+                          src={student.avatar_url}
+                          name={student.full_name}
+                          size="sm"
+                          className="w-9 h-9 rounded-full object-cover aspect-square shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <div className="font-semibold text-zinc-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                            {student.full_name}
+                          </div>
+                          <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 truncate">
+                            @{student.username}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Homework Progress Column */}
+                    <td className="py-3.5 px-4">
+                      <div className="w-44 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs font-mono">
+                          <span className="text-zinc-700 dark:text-zinc-300 font-medium">
+                            {completedCount}/{totalCount} Tasks
+                          </span>
+                          <span className={`font-semibold ${pct >= 80 ? "text-emerald-600 dark:text-emerald-400" : pct >= 40 ? "text-indigo-600 dark:text-indigo-400" : "text-amber-600 dark:text-amber-400"}`}>
+                            {pct}%
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              pct >= 80
+                                ? "bg-emerald-500"
+                                : pct >= 40
+                                ? "bg-indigo-500"
+                                : "bg-amber-500"
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+                          />
+                        </div>
+                        {student.overdue_assignments_count && student.overdue_assignments_count > 0 ? (
+                          <div className="text-[10px] text-rose-600 dark:text-rose-400 font-medium">
+                            🔴 {student.overdue_assignments_count} overdue
+                          </div>
+                        ) : null}
+                      </div>
+                    </td>
+
+                    {/* Stars & Lightning Column */}
+                    <td className="py-3.5 px-4 text-center">
+                      <div className="inline-flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-bold font-mono text-xs tabular-nums">
+                          <span>⭐️</span>
+                          <span>{student.total_stars ?? 0}</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-50 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800/60 font-bold font-mono text-xs tabular-nums">
+                          <span>⚡️</span>
+                          <span>{student.total_lightning ?? 0}</span>
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Actions Column */}
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStudentId(student.student_id)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 transition"
+                          title="Inspect Student Progress & History"
+                        >
+                          <span>Inspect</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPlacementStudent(student)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800/60 transition"
+                          title="Migrate Student to Another Cohort"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5" />
+                          <span>Placement</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setResettingStudent(student)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 transition"
+                          title="Reset Password"
+                        >
+                          <Key className="w-3.5 h-3.5" />
+                          <span>Password</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveStudent(student)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800/60 transition"
+                          title="Remove Student from this Cohort"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       ) : viewTab === "cards" ? (
-        /* ================= 1. STUDENTS LIST / CARDS VIEW ================= */
+        /* ================= 2. STUDENTS LIST / CARDS VIEW ================= */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {groupDetail.students.map((student) => {
+          {dedupedStudents.map((student) => {
             const completedCount =
               student.completed_assignments_count ??
               student.assignments.filter((a) => a.completion_percentage >= 100).length;
@@ -329,17 +565,12 @@ export default function GroupDetailPage() {
                 {/* Status indicator badge in top-right */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-950/60 font-bold text-brand-700 dark:text-brand-400 text-base overflow-hidden border border-brand-200 dark:border-brand-800">
-                      {student.avatar_url ? (
-                        <img
-                          src={student.avatar_url}
-                          alt={student.full_name}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        student.full_name.slice(0, 2).toUpperCase()
-                      )}
-                    </div>
+                    <UserAvatar
+                      src={student.avatar_url}
+                      name={student.full_name}
+                      size="md"
+                      className="w-12 h-12 rounded-full object-cover aspect-square shrink-0"
+                    />
                     <div className="min-w-0">
                       <h3 className="font-bold text-zinc-900 dark:text-white text-sm group-hover:text-brand-600 dark:group-hover:text-brand-400 transition truncate">
                         {student.full_name}
@@ -355,16 +586,15 @@ export default function GroupDetailPage() {
                     </div>
                   </div>
 
-                  {/* Clearly visible GREEN check icon (✓) or RED indicator (✕) */}
                   <span
-                    className={`inline-flex items-center justify-center h-7 w-7 rounded-full text-xs font-black shadow-xs shrink-0 ${
+                    className={`inline-flex items-center justify-center h-6 w-6 rounded-full text-xs font-bold shrink-0 ${
                       isAllCompleted
-                        ? "bg-emerald-500 text-white"
-                        : "bg-rose-500 text-white"
+                        ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700"
                     }`}
                     title={isAllCompleted ? "Completed required work" : "Incomplete homework"}
                   >
-                    {isAllCompleted ? "✓" : "✕"}
+                    {isAllCompleted ? "✓" : "…"}
                   </span>
                 </div>
 
@@ -397,9 +627,9 @@ export default function GroupDetailPage() {
                   </div>
                 </div>
 
-                {/* Stars and Lightning (NOT fire!) */}
+                {/* Stars, Lightning & Actions */}
                 <div className="mt-3.5 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-3 text-xs">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <span className="font-bold text-amber-500 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200/60 dark:border-amber-800/60">
                       ⭐ {student.total_stars}
                     </span>
@@ -407,16 +637,39 @@ export default function GroupDetailPage() {
                       ⚡ {student.total_lightning}
                     </span>
                   </div>
-                  <span className="text-xs font-semibold text-brand-600 dark:text-brand-400 group-hover:underline">
-                    View Details →
-                  </span>
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => setPlacementStudent(student)}
+                      className="p-1.5 rounded-md text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                      title="Migrate Cohort"
+                    >
+                      <ArrowRightLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setResettingStudent(student)}
+                      className="p-1.5 rounded-md text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      title="Reset Password"
+                    >
+                      <Key className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveStudent(student)}
+                      className="p-1.5 rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                      title="Remove from Cohort"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
       ) : (
-        /* ================= 2. GROUP ASSIGNMENT MATRIX VIEW (REFERENCE IMAGE 3) ================= */
+        /* ================= 3. GROUP ASSIGNMENT MATRIX VIEW ================= */
         <StudentProgressMatrix
           groupDetail={groupDetail}
           isTeacher={true}
@@ -429,6 +682,25 @@ export default function GroupDetailPage() {
       <StudentDetailModal
         studentId={selectedStudentId}
         onClose={() => setSelectedStudentId(null)}
+        onStudentUpdated={loadDetails}
+      />
+
+      {/* Edit Student Placement Modal */}
+      <EditStudentPlacementModal
+        student={placementStudent}
+        currentGroupId={groupDetail.id}
+        groups={groups}
+        onClose={() => setPlacementStudent(null)}
+        onSaved={() => {
+          setPlacementStudent(null);
+          loadDetails();
+        }}
+      />
+
+      {/* Reset Student Password Modal */}
+      <ResetPasswordModal
+        student={resettingStudent}
+        onClose={() => setResettingStudent(null)}
       />
 
       {/* Grading Slide-Over Drawer */}
@@ -887,3 +1159,176 @@ function EditGroupModal({
     </Modal>
   );
 }
+
+function EditStudentPlacementModal({
+  student,
+  currentGroupId,
+  groups,
+  onClose,
+  onSaved,
+}: {
+  student: GroupStudentDetail | null;
+  currentGroupId: string;
+  groups: Group[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [groupId, setGroupId] = useState(currentGroupId);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setGroupId(currentGroupId);
+  }, [student, currentGroupId]);
+
+  if (!student) return null;
+
+  async function handleSave(e: FormEvent) {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      await updateStudentPlacement(student!.student_id, groupId || null);
+      toast.success(`Placement updated for ${student!.full_name}`);
+      onSaved();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Failed to update placement");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const targetGroup = groups.find((g) => g.id === groupId);
+
+  return (
+    <Modal open={!!student} onClose={onClose} title={`Cohort Placement: ${student.full_name}`}>
+      <form onSubmit={handleSave} className="space-y-4 text-sm">
+        <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/30 rounded-xl border border-indigo-100 dark:border-indigo-900/40 space-y-1">
+          <p className="text-xs text-indigo-900 dark:text-indigo-200 font-medium">
+            Student: <span className="font-bold">{student.full_name}</span> (@{student.username})
+          </p>
+          <p className="text-[11px] text-indigo-700 dark:text-indigo-400">
+            All accumulated stars (<span className="font-bold">⭐️ {student.total_stars ?? 0}</span>) and past homework submissions remain strictly intact.
+          </p>
+        </div>
+
+        <div>
+          <label className="label">Target Cohort & Level *</label>
+          <select
+            className="input"
+            value={groupId}
+            onChange={(e) => setGroupId(e.target.value)}
+          >
+            <option value="">No Cohort (Unassigned)</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name} ({g.english_level})
+              </option>
+            ))}
+          </select>
+          {targetGroup && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+              Level: <span className="font-semibold capitalize text-zinc-700 dark:text-zinc-300">{targetGroup.english_level}</span>
+            </p>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={isSaving}>
+            Cancel
+          </button>
+          <button type="submit" className="btn-primary" disabled={isSaving}>
+            {isSaving ? "Saving..." : "Save Placement"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function ResetPasswordModal({
+  student,
+  onClose,
+}: {
+  student: GroupStudentDetail | null;
+  onClose: () => void;
+}) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setNewPassword("");
+    setConfirmPassword("");
+  }, [student]);
+
+  if (!student) return null;
+
+  async function handleReset(e: FormEvent) {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await resetStudentPassword(student!.student_id, newPassword);
+      toast.success(res.message || "Password reset successfully!");
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Failed to reset password");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal open={!!student} onClose={onClose} title={`Reset Password: ${student.full_name}`}>
+      <form onSubmit={handleReset} className="space-y-4 text-sm">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Set a new password for <strong className="text-zinc-900 dark:text-zinc-100 font-semibold">{student.full_name}</strong> (@{student.username}).
+          They will immediately be able to log in with this new password.
+        </p>
+
+        <div>
+          <label className="label">New Temporary Password *</label>
+          <input
+            type="password"
+            required
+            minLength={6}
+            className="input"
+            placeholder="At least 6 characters"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="label">Confirm New Password *</label>
+          <input
+            type="password"
+            required
+            minLength={6}
+            className="input"
+            placeholder="Confirm new password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
+        </div>
+
+        <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={isSubmitting}>
+            Cancel
+          </button>
+          <button type="submit" disabled={isSubmitting} className="btn-primary">
+            {isSubmitting ? "Resetting..." : "Set Password"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
