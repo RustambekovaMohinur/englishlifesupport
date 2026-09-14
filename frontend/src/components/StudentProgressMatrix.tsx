@@ -25,34 +25,37 @@ export const StudentProgressMatrix: React.FC<StudentProgressMatrixProps> = ({
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
 
   // Determine available cycles
-  const currentCycle = groupDetail.current_cycle ?? 1;
+  const currentCycle = groupDetail?.current_cycle ?? 1;
+  const assignmentsList = Array.isArray(groupDetail?.assignments) ? groupDetail.assignments : [];
+  const studentsList = Array.isArray(groupDetail?.students) ? groupDetail.students : [];
+
   const cycleSet = useMemo(() => {
     const set = new Set<number>();
     set.add(currentCycle);
-    groupDetail.assignments.forEach((a) => {
-      set.add(a.cycle_number ?? 1);
+    assignmentsList.forEach((a) => {
+      if (a) set.add(a.cycle_number ?? 1);
     });
     return Array.from(set).sort((a, b) => a - b);
-  }, [groupDetail.assignments, currentCycle]);
+  }, [assignmentsList, currentCycle]);
 
   const activeCycle = selectedCycle ?? currentCycle;
 
   // Filter assignments by active cycle
   const cycleAssignments = useMemo(() => {
-    return groupDetail.assignments.filter((a) => (a.cycle_number ?? 1) === activeCycle);
-  }, [groupDetail.assignments, activeCycle]);
+    return assignmentsList.filter((a) => a && (a.cycle_number ?? 1) === activeCycle);
+  }, [assignmentsList, activeCycle]);
 
   // Filter students by search query
   const filteredStudents = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return groupDetail.students;
-    return groupDetail.students.filter(
+    const q = (searchQuery || "").toLowerCase().trim();
+    if (!q) return studentsList;
+    return studentsList.filter(
       (s) =>
-        s.full_name.toLowerCase().includes(q) ||
-        (s.username && s.username.toLowerCase().includes(q)) ||
-        (s.telegram_username && s.telegram_username.toLowerCase().includes(q))
+        (s?.full_name && s.full_name.toLowerCase().includes(q)) ||
+        (s?.username && s.username.toLowerCase().includes(q)) ||
+        (s?.telegram_username && s.telegram_username.toLowerCase().includes(q))
     );
-  }, [groupDetail.students, searchQuery]);
+  }, [studentsList, searchQuery]);
 
   // Helper to pick an intuitive skill icon based on assignment title
   const getAssignmentIcon = (title: string) => {
@@ -216,7 +219,7 @@ export const StudentProgressMatrix: React.FC<StudentProgressMatrixProps> = ({
 
                   {/* Horizontal Assignment Status Badges (DONE / NOT YET / PENDING) */}
                   {cycleAssignments.map((a) => {
-                    const item = st.assignments.find((asg) => asg.assignment_id === a.id);
+                    const item = st.assignments?.find((asg) => asg && asg.assignment_id === a.id);
                     const isDone = item?.has_submission && item.score !== null;
                     const isPending = item?.has_submission && item.score === null;
 

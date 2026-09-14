@@ -97,6 +97,84 @@ export default function GroupDetailPage() {
     listGroups().then(setGroups).catch(() => {});
   }, [groupId]);
 
+  // Deduplicate students per cohort: prioritize active student with more stars/submissions, eliminate ghost stubs
+  // MUST be called before any early returns to strictly comply with React Rules of Hooks!
+  const dedupedStudents = useMemo(() => {
+    if (!groupDetail?.students || !Array.isArray(groupDetail.students)) return [];
+    const map = new Map<string, GroupStudentDetail>();
+    for (const s of groupDetail.students) {
+      if (!s) continue;
+      const normName = (s.full_name || (s as any).name || (s as any).user?.full_name || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+      const normUser = (s.username || (s as any).user?.username || "").trim().toLowerCase();
+      const key = normName || normUser || s.student_id || (s as any).id;
+      if (!key) continue;
+
+      const stars = Number(s.total_stars ?? (s as any).stars ?? 0);
+      const assignmentsList = Array.isArray(s.assignments) ? s.assignments : [];
+      const completed = Number(
+        s.completed_assignments_count ??
+        (s as any).completed_tasks ??
+        assignmentsList.filter((a) => a && a.completion_percentage >= 100).length ??
+        0
+      );
+      const hasSub = completed > 0 || Boolean(assignmentsList.some((a) => a && a.has_submission));
+      const score = stars * 10 + completed * 5 + (hasSub ? 20 : 0);
+
+      if (!map.has(key)) {
+        map.set(key, s);
+      } else {
+        const existing = map.get(key)!;
+        const existingStars = Number(existing.total_stars ?? (existing as any).stars ?? 0);
+        const existingAssignments = Array.isArray(existing.assignments) ? existing.assignments : [];
+        const existingCompleted = Number(
+          existing.completed_assignments_count ??
+          (existing as any).completed_tasks ??
+          existingAssignments.filter((a) => a && a.completion_percentage >= 100).length ??
+          0
+        );
+        const existingHasSub =
+          existingCompleted > 0 || Boolean(existingAssignments.some((a) => a && a.has_submission));
+        const existingScore = existingStars * 10 + existingCompleted * 5 + (existingHasSub ? 20 : 0);
+
+        if (score > existingScore) {
+          map.set(key, s);
+        }
+      }
+    }
+
+    // Strip out any 0-star/0-submission ghost stubs entirely from this UI
+    const activeList = Array.from(map.values()).filter((s) => {
+      const stars = Number(s.total_stars ?? (s as any).stars ?? 0);
+      const assignmentsList = Array.isArray(s.assignments) ? s.assignments : [];
+      const completed = Number(
+        s.completed_assignments_count ??
+        (s as any).completed_tasks ??
+        assignmentsList.filter((a) => a && a.completion_percentage >= 100).length ??
+        0
+      );
+      const hasSub = completed > 0 || Boolean(assignmentsList.some((a) => a && a.has_submission));
+      return stars > 0 || hasSub;
+    });
+
+    return activeList.length > 0 ? activeList : Array.from(map.values());
+  }, [groupDetail?.students]);
+
+  // Calculate Group Average Progress using dedupedStudents with full null safety
+  const totalStudents = dedupedStudents.length;
+  const totalAssignments = groupDetail?.assignments?.length ?? 0;
+  const avgProgress =
+    totalStudents > 0
+      ? Math.round(
+          dedupedStudents.reduce((sum, s) => sum + (Number(s?.overall_completion_percentage) || 0), 0) / totalStudents
+        )
+      : 0;
+
+  const totalGroupStars = dedupedStudents.reduce((sum, s) => sum + (Number(s?.total_stars) || 0), 0);
+  const totalGroupLightning = dedupedStudents.reduce((sum, s) => sum + (Number(s?.total_lightning) || 0), 0);
+
   function handleDelete() {
     if (!groupDetail) return;
     confirm(`Permanently delete group "${groupDetail.name}"? This action cannot be undone.`, async () => {
@@ -108,6 +186,38 @@ export default function GroupDetailPage() {
         toast.error(err?.response?.data?.detail ?? "Failed to delete group");
       }
     });
+  }
+
+  function handleRemoveStudent(student: GroupStudentDetail) {
+    if (!student) return;
+    confirm(
+      `Remove "${student.full_name}" from cohort "${groupDetail?.name}"? Their account, earned stars (⭐️ ${student.total_stars ?? 0}), and past submissions will remain 100% preserved.`,
+      async () => {
+        try {
+          await updateStudentPlacement(student.student_id, null);
+          toast.success(`Removed ${student.full_name} from group`);
+          loadDetails();
+        } catch (err: any) {
+          toast.error(err?.response?.data?.detail ?? "Failed to remove student");
+        }
+      }
+    );
+  }
+
+  function handleDeleteStudent(student: GroupStudentDetail) {
+    if (!student) return;
+    confirm(
+      `Are you sure you want to permanently delete student "${student.full_name}"? All account records, homework submissions, and grades will be permanently purged.`,
+      async () => {
+        try {
+          await deleteStudent(student.student_id);
+          toast.success("Student deleted successfully");
+          loadDetails();
+        } catch (err: any) {
+          toast.error(err?.response?.data?.detail ?? "Failed to delete student");
+        }
+      }
+    );
   }
 
   if (isLoading) {
@@ -133,98 +243,16 @@ export default function GroupDetailPage() {
           title="Group not found"
           description="The requested group does not exist or you do not have permission to view it."
         />
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={() => navigate("/teacher/groups")}
+            className="btn-primary text-sm px-4 py-2"
+          >
+            Return to Groups
+          </button>
+        </div>
       </div>
-    );
-  }
-
-  // Deduplicate students per cohort: prioritize active student with more stars/submissions, eliminate ghost stubs
-  const dedupedStudents = useMemo(() => {
-    if (!groupDetail?.students) return [];
-    const map = new Map<string, GroupStudentDetail>();
-    for (const s of groupDetail.students) {
-      const normName = (s.full_name || "").trim().toLowerCase().replace(/\s+/g, " ");
-      const normUser = (s.username || "").trim().toLowerCase();
-      const key = normName || normUser || s.student_id;
-
-      const stars = s.total_stars ?? 0;
-      const completed =
-        s.completed_assignments_count ??
-        s.assignments?.filter((a) => a.completion_percentage >= 100).length ??
-        0;
-      const hasSub = completed > 0 || (s.assignments?.some((a) => a.has_submission) ?? false);
-      const score = stars * 10 + completed * 5 + (hasSub ? 20 : 0);
-
-      if (!map.has(key)) {
-        map.set(key, s);
-      } else {
-        const existing = map.get(key)!;
-        const existingStars = existing.total_stars ?? 0;
-        const existingCompleted =
-          existing.completed_assignments_count ??
-          existing.assignments?.filter((a) => a.completion_percentage >= 100).length ??
-          0;
-        const existingHasSub =
-          existingCompleted > 0 || (existing.assignments?.some((a) => a.has_submission) ?? false);
-        const existingScore = existingStars * 10 + existingCompleted * 5 + (existingHasSub ? 20 : 0);
-
-        if (score > existingScore) {
-          map.set(key, s);
-        }
-      }
-    }
-
-    // Strip out any 0-star/0-submission ghost stubs entirely from this UI
-    return Array.from(map.values()).filter((s) => {
-      const stars = s.total_stars ?? 0;
-      const completed =
-        s.completed_assignments_count ??
-        s.assignments?.filter((a) => a.completion_percentage >= 100).length ??
-        0;
-      const hasSub = completed > 0 || (s.assignments?.some((a) => a.has_submission) ?? false);
-      return stars > 0 || hasSub;
-    });
-  }, [groupDetail?.students]);
-
-  // Calculate Group Average Progress using dedupedStudents
-  const totalStudents = dedupedStudents.length;
-  const totalAssignments = groupDetail.assignments.length;
-  const avgProgress =
-    totalStudents > 0
-      ? Math.round(
-          dedupedStudents.reduce((sum, s) => sum + s.overall_completion_percentage, 0) / totalStudents
-        )
-      : 0;
-
-  const totalGroupStars = dedupedStudents.reduce((sum, s) => sum + s.total_stars, 0);
-  const totalGroupLightning = dedupedStudents.reduce((sum, s) => sum + s.total_lightning, 0);
-
-  function handleRemoveStudent(student: GroupStudentDetail) {
-    confirm(
-      `Remove "${student.full_name}" from cohort "${groupDetail?.name}"? Their account, earned stars (⭐️ ${student.total_stars}), and past submissions will remain 100% preserved.`,
-      async () => {
-        try {
-          await updateStudentPlacement(student.student_id, null);
-          toast.success(`Removed ${student.full_name} from group`);
-          loadDetails();
-        } catch (err: any) {
-          toast.error(err?.response?.data?.detail ?? "Failed to remove student");
-        }
-      }
-    );
-  }
-
-  function handleDeleteStudent(student: GroupStudentDetail) {
-    confirm(
-      `Are you sure you want to permanently delete student "${student.full_name}"? All account records, homework submissions, and grades will be permanently purged.`,
-      async () => {
-        try {
-          await deleteStudent(student.student_id);
-          toast.success("Student deleted successfully");
-          loadDetails();
-        } catch (err: any) {
-          toast.error(err?.response?.data?.detail ?? "Failed to delete student");
-        }
-      }
     );
   }
 
@@ -440,13 +468,19 @@ export default function GroupDetailPage() {
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
               {dedupedStudents.map((student) => {
+                if (!student) return null;
+                const studentAssignments = Array.isArray(student.assignments) ? student.assignments : [];
                 const completedCount =
                   student.completed_assignments_count ??
-                  student.assignments.filter((a) => a.completion_percentage >= 100).length;
+                  studentAssignments.filter((a) => a && a.completion_percentage >= 100).length;
+                const groupAsgCount = groupDetail?.assignments?.length ?? 0;
                 const totalCount =
                   student.total_assignments_count ??
-                  (groupDetail.assignments.length > 0 ? groupDetail.assignments.length : student.assignments.length);
-                const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : student.overall_completion_percentage;
+                  (groupAsgCount > 0 ? groupAsgCount : studentAssignments.length);
+                const pct =
+                  totalCount > 0
+                    ? Math.round((completedCount / totalCount) * 100)
+                    : (Number(student.overall_completion_percentage) || 0);
 
                 return (
                   <tr
@@ -570,15 +604,18 @@ export default function GroupDetailPage() {
         /* ================= 2. STUDENTS LIST / CARDS VIEW ================= */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {dedupedStudents.map((student) => {
+            if (!student) return null;
+            const studentAssignments = Array.isArray(student.assignments) ? student.assignments : [];
             const completedCount =
               student.completed_assignments_count ??
-              student.assignments.filter((a) => a.completion_percentage >= 100).length;
+              studentAssignments.filter((a) => a && a.completion_percentage >= 100).length;
+            const groupAsgCount = groupDetail?.assignments?.length ?? 0;
             const totalCount =
               student.total_assignments_count ??
-              (groupDetail.assignments.length > 0 ? groupDetail.assignments.length : student.assignments.length);
+              (groupAsgCount > 0 ? groupAsgCount : studentAssignments.length);
 
             const isAllCompleted = totalCount > 0 && completedCount >= totalCount;
-            const pct = student.overall_completion_percentage;
+            const pct = Number(student.overall_completion_percentage) || 0;
 
             return (
               <div
