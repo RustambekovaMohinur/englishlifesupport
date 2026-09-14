@@ -11,6 +11,9 @@ import {
   ArrowRightLeft,
   Key,
   Trash2,
+  Users,
+  LayoutGrid,
+  BarChart3,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import StudentDetailModal from "@/components/StudentDetailModal";
@@ -68,7 +71,7 @@ export default function GroupDetailPage() {
   const [placementStudent, setPlacementStudent] = useState<GroupStudentDetail | null>(null);
   const [resettingStudent, setResettingStudent] = useState<GroupStudentDetail | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [viewTab, setViewTab] = useState<"table" | "cards" | "matrix">("table");
+  const [activeTab, setActiveTab] = useState<"table" | "cards" | "matrix">("table");
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
   const [activeGradingCell, setActiveGradingCell] = useState<{
     student: GroupStudentDetail;
@@ -139,29 +142,47 @@ export default function GroupDetailPage() {
     if (!groupDetail?.students) return [];
     const map = new Map<string, GroupStudentDetail>();
     for (const s of groupDetail.students) {
+      const normName = (s.full_name || "").trim().toLowerCase().replace(/\s+/g, " ");
       const normUser = (s.username || "").trim().toLowerCase();
-      const key = normUser && normUser !== "none" ? normUser : (s.user_id || s.student_id);
+      const key = normName || normUser || s.student_id;
+
+      const stars = s.total_stars ?? 0;
+      const completed =
+        s.completed_assignments_count ??
+        s.assignments?.filter((a) => a.completion_percentage >= 100).length ??
+        0;
+      const hasSub = completed > 0 || (s.assignments?.some((a) => a.has_submission) ?? false);
+      const score = stars * 10 + completed * 5 + (hasSub ? 20 : 0);
 
       if (!map.has(key)) {
         map.set(key, s);
       } else {
         const existing = map.get(key)!;
+        const existingStars = existing.total_stars ?? 0;
         const existingCompleted =
           existing.completed_assignments_count ??
           existing.assignments?.filter((a) => a.completion_percentage >= 100).length ??
           0;
-        const currentCompleted =
-          s.completed_assignments_count ??
-          s.assignments?.filter((a) => a.completion_percentage >= 100).length ??
-          0;
-        const existingScore = (existing.total_stars || 0) * 10 + existingCompleted * 5 + (existing.assignments?.length || 0);
-        const currentScore = (s.total_stars || 0) * 10 + currentCompleted * 5 + (s.assignments?.length || 0);
-        if (currentScore > existingScore) {
+        const existingHasSub =
+          existingCompleted > 0 || (existing.assignments?.some((a) => a.has_submission) ?? false);
+        const existingScore = existingStars * 10 + existingCompleted * 5 + (existingHasSub ? 20 : 0);
+
+        if (score > existingScore) {
           map.set(key, s);
         }
       }
     }
-    return Array.from(map.values());
+
+    // Strip out any 0-star/0-submission ghost stubs entirely from this UI
+    return Array.from(map.values()).filter((s) => {
+      const stars = s.total_stars ?? 0;
+      const completed =
+        s.completed_assignments_count ??
+        s.assignments?.filter((a) => a.completion_percentage >= 100).length ??
+        0;
+      const hasSub = completed > 0 || (s.assignments?.some((a) => a.has_submission) ?? false);
+      return stars > 0 || hasSub;
+    });
   }, [groupDetail?.students]);
 
   // Calculate Group Average Progress using dedupedStudents
@@ -365,34 +386,37 @@ export default function GroupDetailPage() {
 
         <div className="flex gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs font-semibold">
           <button
-            onClick={() => setViewTab("table")}
-            className={`px-3 py-1.5 rounded-md transition ${
-              viewTab === "table"
+            onClick={() => setActiveTab("table")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
+              activeTab === "table"
                 ? "bg-white dark:bg-[#161B22] text-zinc-900 dark:text-white shadow-xs"
                 : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
             }`}
           >
-            📋 Directory Table
+            <Users className="w-4 h-4" />
+            <span>Directory Table</span>
           </button>
           <button
-            onClick={() => setViewTab("cards")}
-            className={`px-3 py-1.5 rounded-md transition ${
-              viewTab === "cards"
+            onClick={() => setActiveTab("cards")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
+              activeTab === "cards"
                 ? "bg-white dark:bg-[#161B22] text-zinc-900 dark:text-white shadow-xs"
                 : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
             }`}
           >
-            📇 Student Cards
+            <LayoutGrid className="w-4 h-4" />
+            <span>Student Cards</span>
           </button>
           <button
-            onClick={() => setViewTab("matrix")}
-            className={`px-3 py-1.5 rounded-md transition ${
-              viewTab === "matrix"
+            onClick={() => setActiveTab("matrix")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
+              activeTab === "matrix"
                 ? "bg-white dark:bg-[#161B22] text-zinc-900 dark:text-white shadow-xs"
                 : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
             }`}
           >
-            📊 Assignment Matrix
+            <BarChart3 className="w-4 h-4" />
+            <span>Assignment Matrix</span>
           </button>
         </div>
       </div>
@@ -402,7 +426,7 @@ export default function GroupDetailPage() {
           title="No students in this group yet"
           description="Students can select this group during registration, or you can assign students from the Students page."
         />
-      ) : viewTab === "table" ? (
+      ) : activeTab === "table" ? (
         /* ================= 1. CLEAN DIRECTORY TABLE (DEFAULT) ================= */
         <div className="card overflow-x-auto p-0 border border-[#EAE9E5] dark:border-[#30363D]">
           <table className="w-full text-sm">
@@ -542,7 +566,7 @@ export default function GroupDetailPage() {
             </tbody>
           </table>
         </div>
-      ) : viewTab === "cards" ? (
+      ) : activeTab === "cards" ? (
         /* ================= 2. STUDENTS LIST / CARDS VIEW ================= */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {dedupedStudents.map((student) => {
