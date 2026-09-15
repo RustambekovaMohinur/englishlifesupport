@@ -28,6 +28,8 @@ import {
   Shield,
   HelpCircle,
   Eye,
+  Camera,
+  Plus,
 } from "lucide-react";
 import {
   LoadingRows,
@@ -47,7 +49,7 @@ import {
   getSubmission,
 } from "@/services/lmsService";
 import { AssignmentForStudent, SubmissionOut } from "@/types";
-import { compressImage, compressImages } from "@/utils/imageCompressor";
+import { compressImage, compressImages, fileToBase64, base64ToFile } from "@/utils/imageCompressor";
 import toast from "react-hot-toast";
 
 type SubmissionTab = "files" | "voice" | "link" | "text";
@@ -149,24 +151,38 @@ function StudentImagePreviewItem({
   const [url, setUrl] = useState<string>("");
 
   useEffect(() => {
-    const objUrl = URL.createObjectURL(file);
-    setUrl(objUrl);
+    let objUrl = "";
+    try {
+      objUrl = URL.createObjectURL(file);
+      setUrl(objUrl);
+    } catch {}
     return () => {
-      URL.revokeObjectURL(objUrl);
+      if (objUrl) {
+        try {
+          URL.revokeObjectURL(objUrl);
+        } catch {}
+      }
     };
   }, [file]);
 
+  const sizeKb = Math.round(file.size / 1024);
+
   return (
-    <div className="relative group rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden aspect-square bg-white dark:bg-zinc-850 shadow-xs">
-      {url && (
+    <div className="relative rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden aspect-square bg-zinc-100 dark:bg-zinc-850 shadow-xs group">
+      {url ? (
         <img
           src={url}
           alt={file.name}
           className="w-full h-full object-cover"
         />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-xs text-zinc-400">
+          Loading...
+        </div>
       )}
-      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2">
-        <span className="text-[10px] text-white font-mono bg-black/60 px-1.5 py-0.5 rounded self-start">
+      {/* Top badges: Index and always-clickable Delete button */}
+      <div className="absolute top-1.5 inset-x-1.5 flex items-center justify-between pointer-events-none">
+        <span className="text-[10px] text-white font-mono font-bold bg-black/70 px-1.5 py-0.5 rounded-md backdrop-blur-xs">
           #{index + 1}
         </span>
         <button
@@ -176,11 +192,17 @@ function StudentImagePreviewItem({
             e.stopPropagation();
             onRemove();
           }}
-          className="self-end rounded-full bg-red-600 text-white p-1 hover:bg-red-700 shadow-sm transition"
+          className="pointer-events-auto rounded-full bg-red-600 hover:bg-red-700 text-white p-1 shadow-md transition active:scale-95"
           title="Remove photo"
         >
           <X className="h-3.5 w-3.5" />
         </button>
+      </div>
+      {/* Bottom badge: file size */}
+      <div className="absolute bottom-1.5 left-1.5 pointer-events-none">
+        <span className="text-[9px] text-white font-mono bg-black/70 px-1.5 py-0.5 rounded backdrop-blur-xs">
+          {sizeKb} KB
+        </span>
       </div>
     </div>
   );
@@ -209,9 +231,72 @@ export default function StudentAssignmentSubmitPage() {
   // Dropzone & Lightbox
   const [isDragging, setIsDragging] = useState(false);
   const dropzoneInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const audioFileInputRef = useRef<HTMLInputElement>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  // Restore active draft on mount (resilient against mobile browser low-memory reload)
+  useEffect(() => {
+    if (!assignmentId) return;
+    try {
+      const raw =
+        sessionStorage.getItem(`lms_draft_${assignmentId}`) ||
+        localStorage.getItem(`lms_draft_${assignmentId}`);
+      if (raw) {
+        const draft = JSON.parse(raw);
+        if (draft.activeTab) setActiveTab(draft.activeTab);
+        if (draft.textAnswer) setTextAnswer(draft.textAnswer);
+        if (draft.externalLink) setExternalLink(draft.externalLink);
+        if (Array.isArray(draft.images) && draft.images.length > 0) {
+          const restoredFiles: File[] = [];
+          for (const item of draft.images) {
+            if (item.base64 && item.name) {
+              restoredFiles.push(base64ToFile(item.base64, item.name, item.type || "image/jpeg"));
+            }
+          }
+          if (restoredFiles.length > 0) {
+            setSubmissionImages(restoredFiles);
+            toast.success("Oldingi qoralama tiklandi 💾", { id: "draft-restored" });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Draft restore failed:", e);
+    }
+  }, [assignmentId]);
+
+  // Debounced auto-save draft to sessionStorage & localStorage
+  useEffect(() => {
+    if (!assignmentId || isLoading || existingSubmission) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        const encodedImages: { name: string; type: string; base64: string }[] = [];
+        for (const file of submissionImages) {
+          try {
+            const b64 = await fileToBase64(file);
+            encodedImages.push({ name: file.name, type: file.type || "image/jpeg", base64: b64 });
+          } catch {}
+        }
+        const payload = JSON.stringify({
+          activeTab,
+          textAnswer,
+          externalLink,
+          images: encodedImages,
+          updatedAt: Date.now(),
+        });
+        sessionStorage.setItem(`lms_draft_${assignmentId}`, payload);
+        try {
+          localStorage.setItem(`lms_draft_${assignmentId}`, payload);
+        } catch {}
+      } catch (e) {
+        console.warn("Auto-save draft failed:", e);
+      }
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [assignmentId, activeTab, textAnswer, externalLink, submissionImages, isLoading, existingSubmission]);
 
   // Fetch Assignment Details
   function loadData() {
@@ -242,7 +327,7 @@ export default function StudentAssignmentSubmitPage() {
     loadData();
   }, [assignmentId]);
 
-  // Handle files added (drag-drop, file picker, clipboard paste)
+  // Handle files added (drag-drop, file picker, camera capture, clipboard paste)
   async function handleFilesAdded(incomingFiles: File[]) {
     const allowedDocExts = /\.(pdf|docx?|txt)$/i;
     const allowedImgExts = /\.(png|jpe?g|webp|heic)$/i;
@@ -253,8 +338,8 @@ export default function StudentAssignmentSubmitPage() {
     let newAudio: File | null = null;
 
     for (const f of incomingFiles) {
-      if (f.size > 20 * 1024 * 1024) {
-        toast.error(`"${f.name}" fayl hajmi juda katta (maksimal 20 MB).`);
+      if (f.size > 25 * 1024 * 1024) {
+        toast.error(`"${f.name}" fayl hajmi juda katta (maksimal 25 MB).`);
         continue;
       }
       const isImg = f.type.startsWith("image/") || allowedImgExts.test(f.name);
@@ -292,11 +377,12 @@ export default function StudentAssignmentSubmitPage() {
         let origBytes = 0;
         let compBytes = 0;
 
+        // Process images sequentially to avoid mobile RAM exhaustion
         for (const file of newImages) {
           origBytes += file.size;
           try {
-            // Guarantee aggressive downscaling: max 1200px, 60% quality (~150KB per workbook page)
-            const compressed = await compressImage(file, 1200, 0.60);
+            // Immediate client-side downscale: max 1280px, 0.78 quality (under 500-800KB per image)
+            const compressed = await compressImage(file, 1280, 0.78);
             compBytes += compressed.size;
             compressedList.push(compressed);
           } catch (compErr) {
@@ -320,7 +406,7 @@ export default function StudentAssignmentSubmitPage() {
             const compMb = (compBytes / (1024 * 1024)).toFixed(1);
             const saved = origBytes > 0 ? Math.round(((origBytes - compBytes) / origBytes) * 100) : 0;
             if (saved >= 20) {
-              toast.success(`${toAdd.length} ta rasm tayyorlandi (${origMb} MB ➔ ${compMb} MB, -${saved}% tejandi) ⚡`, { duration: 4000 });
+              toast.success(`${toAdd.length} ta rasm siqildi (${origMb} MB ➔ ${compMb} MB, -${saved}% tejandi) ⚡`, { duration: 4000 });
             } else {
               toast.success(`${toAdd.length} ta rasm qo'shildi`);
             }
@@ -415,9 +501,9 @@ export default function StudentAssignmentSubmitPage() {
       // Ensure all images are compressed before submission
       const finalImages: File[] = [];
       for (const img of submissionImages) {
-        if (img.size > 300 * 1024) {
+        if (img.size > 800 * 1024) {
           try {
-            const comp = await compressImage(img, 1200, 0.60);
+            const comp = await compressImage(img, 1280, 0.78);
             finalImages.push(comp);
           } catch {
             finalImages.push(img);
@@ -435,6 +521,13 @@ export default function StudentAssignmentSubmitPage() {
       }
 
       await submitHomework(assignment.id, combinedText, primaryFile, finalImages, voiceFile, docFile);
+
+      // Clean up saved draft on successful submission
+      try {
+        sessionStorage.removeItem(`lms_draft_${assignment.id}`);
+        localStorage.removeItem(`lms_draft_${assignment.id}`);
+      } catch {}
+
       toast.success("Homework submitted successfully! 🚀", { id: "submit-success" });
       navigate("/student/assignments");
     } catch (err: any) {
@@ -960,6 +1053,32 @@ export default function StudentAssignmentSubmitPage() {
                     </span>
                   </div>
 
+                  {/* Hidden File Inputs */}
+                  <input
+                    ref={dropzoneInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.txt,image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic"
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length > 0) handleFilesAdded(files);
+                      e.target.value = "";
+                    }}
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length > 0) handleFilesAdded(files);
+                      e.target.value = "";
+                    }}
+                  />
+
                   {/* Dropzone Area */}
                   <div
                     onDragOver={(e) => {
@@ -976,32 +1095,39 @@ export default function StudentAssignmentSubmitPage() {
                       const files = Array.from(e.dataTransfer.files || []);
                       if (files.length > 0) handleFilesAdded(files);
                     }}
-                    onClick={() => dropzoneInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-200 ${
+                    className={`border-2 border-dashed rounded-2xl p-5 sm:p-7 text-center transition-all duration-200 ${
                       isDragging
                         ? "border-indigo-500 bg-indigo-500/[0.08] scale-[1.005] ring-4 ring-indigo-500/10"
-                        : "border-zinc-300 dark:border-zinc-700 hover:border-indigo-500/60 bg-zinc-50/50 dark:bg-zinc-900/40 hover:bg-indigo-500/[0.02]"
+                        : "border-zinc-300 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/40"
                     }`}
                   >
-                    <input
-                      ref={dropzoneInputRef}
-                      type="file"
-                      multiple
-                      accept=".pdf,.doc,.docx,.txt,image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic"
-                      className="hidden"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        if (files.length > 0) handleFilesAdded(files);
-                        e.target.value = "";
-                      }}
-                    />
-                    <UploadCloud className="mx-auto h-10 w-10 text-indigo-500 dark:text-indigo-400 mb-2 transition-transform group-hover:scale-110" />
+                    <UploadCloud className="mx-auto h-9 w-9 text-indigo-500 dark:text-indigo-400 mb-2" />
                     <p className="text-sm font-bold text-zinc-800 dark:text-zinc-200">
-                      Drag & drop workbook photos or documents, or <span className="text-indigo-600 dark:text-indigo-400 underline decoration-indigo-400">browse files</span>
+                      Drag & drop workbook photos or documents
                     </p>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                      PNG, JPG, PDF, DOCX (up to 10MB) · Paste screenshots anytime with <kbd className="px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded text-xs font-mono font-bold">Ctrl+V</kbd>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 mb-4">
+                      PNG, JPG, PDF, DOCX · Instant client-side compression · Paste with <kbd className="px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded text-xs font-mono font-bold">Ctrl+V</kbd>
                     </p>
+
+                    {/* Direct Action Buttons: Camera & File Picker */}
+                    <div className="flex flex-wrap items-center justify-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition active:scale-95"
+                      >
+                        <Camera className="w-4 h-4" />
+                        <span>Take Photo (Camera)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => dropzoneInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 shadow-xs transition active:scale-95"
+                      >
+                        <Plus className="w-4 h-4 text-indigo-500" />
+                        <span>Browse Files</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Attached Document Chip */}
@@ -1025,22 +1151,34 @@ export default function StudentAssignmentSubmitPage() {
                     </div>
                   )}
 
-                  {/* Uploaded Photos Grid */}
+                  {/* Uploaded Photos Grid with Incremental "Add Photo" Card */}
                   {submissionImages.length > 0 && (
-                    <div className="space-y-2.5 pt-2">
+                    <div className="space-y-3 pt-2">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                           <ImageIcon className="h-4 w-4 text-brand-600 dark:text-brand-400" />
                           Uploaded Photos ({submissionImages.length}/10)
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setSubmissionImages([])}
-                          className="text-xs text-red-600 hover:underline"
-                        >
-                          Clear all photos
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => cameraInputRef.current?.click()}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>Take Another</span>
+                          </button>
+                          <span className="text-zinc-300 dark:text-zinc-700">|</span>
+                          <button
+                            type="button"
+                            onClick={() => setSubmissionImages([])}
+                            className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                          >
+                            Clear all
+                          </button>
+                        </div>
                       </div>
+
                       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
                         {submissionImages.map((imgFile, idx) => (
                           <StudentImagePreviewItem
@@ -1050,6 +1188,23 @@ export default function StudentAssignmentSubmitPage() {
                             onRemove={() => setSubmissionImages((prev) => prev.filter((_, i) => i !== idx))}
                           />
                         ))}
+
+                        {/* Incremental "Add Photo" Card inside grid if under 10 photos */}
+                        {submissionImages.length < 10 && (
+                          <div className="flex flex-col gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => cameraInputRef.current?.click()}
+                              className="w-full h-full min-h-[90px] border-2 border-dashed border-emerald-500/40 dark:border-emerald-500/30 rounded-xl aspect-square flex flex-col items-center justify-center p-2 text-center hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 transition group cursor-pointer"
+                              title="Take another photo"
+                            >
+                              <Camera className="w-6 h-6 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
+                              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 mt-1">
+                                + Take Photo
+                              </span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
