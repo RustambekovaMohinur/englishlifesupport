@@ -4,31 +4,40 @@
  * Eliminates mobile OS Low Memory Killer (LMK) crashes by avoiding large base64 memory allocations.
  */
 
-export async function compressImage(file: File, maxWidth = 1280, quality = 0.78): Promise<File> {
-  // If not an image or SVG/GIF, return as is
+export async function safeCompressImage(file: File, maxWidth = 1280, quality = 0.78): Promise<File> {
+  // If not an image or SVG/GIF, return original file instantly
   if (!file.type.startsWith('image/') || file.type.includes('svg') || file.type.includes('gif')) {
     return file;
   }
 
-  return new Promise((resolve) => {
+  // If file is already small (< 1MB), skip compression completely to save battery and avoid hangs
+  if (file.size < 1024 * 1024) {
+    return file;
+  }
+
+  const compressionPromise = new Promise<File>((resolve) => {
     let objectUrl = '';
-    try {
-      objectUrl = URL.createObjectURL(file);
-    } catch {
-      resolve(file);
-      return;
-    }
+    let isSettled = false;
 
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-
-    const cleanup = () => {
+    const safeResolve = (result: File) => {
+      if (isSettled) return;
+      isSettled = true;
       if (objectUrl) {
         try {
           URL.revokeObjectURL(objectUrl);
         } catch {}
       }
+      resolve(result);
     };
+
+    try {
+      objectUrl = URL.createObjectURL(file);
+    } catch {
+      return safeResolve(file);
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
 
     img.onload = () => {
       try {
@@ -36,12 +45,10 @@ export async function compressImage(file: File, maxWidth = 1280, quality = 0.78)
         let height = img.naturalHeight || img.height;
 
         if (!width || !height) {
-          cleanup();
-          resolve(file);
-          return;
+          return safeResolve(file);
         }
 
-        // Clamp maximum resolution to 1280px (maintains handwriting readability while reducing RAM footprint by ~85%)
+        // Clamp maximum resolution to maxWidth (default 1280px)
         if (width > maxWidth || height > maxWidth) {
           if (width > height) {
             height = Math.round((height * maxWidth) / width);
@@ -58,9 +65,7 @@ export async function compressImage(file: File, maxWidth = 1280, quality = 0.78)
         const ctx = canvas.getContext('2d');
 
         if (!ctx) {
-          cleanup();
-          resolve(file);
-          return;
+          return safeResolve(file);
         }
 
         // Enable high-quality image smoothing
@@ -68,17 +73,16 @@ export async function compressImage(file: File, maxWidth = 1280, quality = 0.78)
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Convert to JPEG with targeted 0.75 - 0.8 quality
+        // Convert to JPEG with targeted quality
         const outputType = 'image/jpeg';
         canvas.toBlob(
           (blob) => {
             // Free canvas backing store memory immediately
             canvas.width = 0;
             canvas.height = 0;
-            cleanup();
 
             if (!blob) {
-              resolve(file);
+              safeResolve(file);
             } else {
               const baseName = file.name.replace(/\.[^/.]+$/, '');
               const compressedFile = new File(
@@ -86,7 +90,7 @@ export async function compressImage(file: File, maxWidth = 1280, quality = 0.78)
                 `${baseName}.jpg`,
                 { type: outputType, lastModified: Date.now() }
               );
-              resolve(compressedFile);
+              safeResolve(compressedFile);
             }
           },
           outputType,
@@ -94,19 +98,30 @@ export async function compressImage(file: File, maxWidth = 1280, quality = 0.78)
         );
       } catch (err) {
         console.warn('Image downscaling failed, using original file:', err);
-        cleanup();
-        resolve(file);
+        safeResolve(file);
       }
     };
 
     img.onerror = () => {
-      cleanup();
-      resolve(file);
+      safeResolve(file);
     };
 
     img.src = objectUrl;
   });
+
+  // Strict 4-second timeout promise to guarantee compression never hangs indefinitely on mobile
+  const timeoutPromise = new Promise<File>((resolve) => {
+    setTimeout(() => {
+      console.warn(`Image compression timed out after 4s for "${file.name}". Falling back to original file.`);
+      resolve(file);
+    }, 4000);
+  });
+
+  return Promise.race([compressionPromise, timeoutPromise]);
 }
+
+// Alias for backwards compatibility
+export const compressImage = safeCompressImage;
 
 export async function compressImages(
   files: File[],

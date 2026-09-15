@@ -49,7 +49,7 @@ import {
   getSubmission,
 } from "@/services/lmsService";
 import { AssignmentForStudent, SubmissionOut } from "@/types";
-import { compressImage, compressImages, fileToBase64, base64ToFile } from "@/utils/imageCompressor";
+import { safeCompressImage, compressImage, compressImages, fileToBase64, base64ToFile } from "@/utils/imageCompressor";
 import toast from "react-hot-toast";
 
 type SubmissionTab = "files" | "voice" | "link" | "text";
@@ -231,7 +231,7 @@ export default function StudentAssignmentSubmitPage() {
   // Dropzone & Lightbox
   const [isDragging, setIsDragging] = useState(false);
   const dropzoneInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const audioFileInputRef = useRef<HTMLInputElement>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -1055,10 +1055,10 @@ export default function StudentAssignmentSubmitPage() {
 
                   {/* Hidden File Inputs */}
                   <input
-                    ref={dropzoneInputRef}
+                    ref={imageInputRef}
                     type="file"
+                    accept="image/*"
                     multiple
-                    accept=".pdf,.doc,.docx,.txt,image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic"
                     className="hidden"
                     onChange={(e) => {
                       const files = Array.from(e.target.files || []);
@@ -1067,10 +1067,10 @@ export default function StudentAssignmentSubmitPage() {
                     }}
                   />
                   <input
-                    ref={cameraInputRef}
+                    ref={dropzoneInputRef}
                     type="file"
-                    accept="image/*"
-                    capture="environment"
+                    multiple
+                    accept=".pdf,.doc,.docx,.txt,image/*"
                     className="hidden"
                     onChange={(e) => {
                       const files = Array.from(e.target.files || []);
@@ -1109,23 +1109,23 @@ export default function StudentAssignmentSubmitPage() {
                       PNG, JPG, PDF, DOCX · Instant client-side compression · Paste with <kbd className="px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded text-xs font-mono font-bold">Ctrl+V</kbd>
                     </p>
 
-                    {/* Direct Action Buttons: Camera & File Picker */}
+                    {/* Direct Action Buttons: Photo & Document Picker */}
                     <div className="flex flex-wrap items-center justify-center gap-2.5">
                       <button
                         type="button"
-                        onClick={() => cameraInputRef.current?.click()}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition active:scale-95"
+                        onClick={() => imageInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition active:scale-95 cursor-pointer"
                       >
                         <Camera className="w-4 h-4" />
-                        <span>Take Photo (Camera)</span>
+                        <span>Add Photos (Camera / Gallery)</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => dropzoneInputRef.current?.click()}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 shadow-xs transition active:scale-95"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 shadow-xs transition active:scale-95 cursor-pointer"
                       >
                         <Plus className="w-4 h-4 text-indigo-500" />
-                        <span>Browse Files</span>
+                        <span>Browse Documents</span>
                       </button>
                     </div>
                   </div>
@@ -1162,17 +1162,17 @@ export default function StudentAssignmentSubmitPage() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => cameraInputRef.current?.click()}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+                            onClick={() => imageInputRef.current?.click()}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
                           >
                             <Camera className="w-3.5 h-3.5" />
-                            <span>Take Another</span>
+                            <span>Add More</span>
                           </button>
                           <span className="text-zinc-300 dark:text-zinc-700">|</span>
                           <button
                             type="button"
                             onClick={() => setSubmissionImages([])}
-                            className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                            className="text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer"
                           >
                             Clear all
                           </button>
@@ -1194,13 +1194,13 @@ export default function StudentAssignmentSubmitPage() {
                           <div className="flex flex-col gap-1.5">
                             <button
                               type="button"
-                              onClick={() => cameraInputRef.current?.click()}
+                              onClick={() => imageInputRef.current?.click()}
                               className="w-full h-full min-h-[90px] border-2 border-dashed border-emerald-500/40 dark:border-emerald-500/30 rounded-xl aspect-square flex flex-col items-center justify-center p-2 text-center hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 transition group cursor-pointer"
-                              title="Take another photo"
+                              title="Add more photos"
                             >
                               <Camera className="w-6 h-6 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
                               <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 mt-1">
-                                + Take Photo
+                                + Add Photo
                               </span>
                             </button>
                           </div>
