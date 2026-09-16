@@ -106,6 +106,7 @@ class GroupDetailOut(BaseModel):
     current_cycle: int = 1
     is_active: bool
     student_count: int = 0
+    cycle_completion_percentage: int = 0
     assignments: list[GroupAssignmentHeader] = []
     students: list[GroupStudentDetail] = []
 

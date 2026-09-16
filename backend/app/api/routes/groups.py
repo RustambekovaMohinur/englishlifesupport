@@ -26,22 +26,79 @@ from app.schemas.group import (
 )
 from app.utils.datetimes import as_utc, utcnow
 
+from collections import defaultdict
+
 router = APIRouter(prefix="/api/groups", tags=["groups"])
 
 
-async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
-    count = (
-        await db.execute(
+async def get_active_student_counts(db: AsyncSession, group_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    """
+    Computes deduplicated active student counts across groups.
+    Matches the exact deduplication and active activity criteria used in GroupDetailOut.
+    """
+    if not group_ids:
+        return {}
+
+    subquery = (
+        select(
+            StudentProfile.id,
+            StudentProfile.group_id,
+            StudentProfile.full_name,
+            User.username,
+            StudentProfile.total_stars,
             select(func.count())
-            .select_from(StudentProfile)
-            .join(User, StudentProfile.user_id == User.id)
+            .select_from(Submission)
             .where(
-                StudentProfile.group_id == group.id,
-                or_(User.approval_status == ApprovalStatus.APPROVED, User.approval_status.is_(None)),
-                User.is_active == True,
+                Submission.student_id == StudentProfile.id,
+                Submission.is_archived.is_(False),
             )
+            .correlate(StudentProfile)
+            .scalar_subquery()
+            .label("sub_cnt"),
         )
-    ).scalar_one()
+        .join(User, StudentProfile.user_id == User.id)
+        .where(
+            StudentProfile.group_id.in_(group_ids),
+            or_(User.approval_status == ApprovalStatus.APPROVED, User.approval_status.is_(None)),
+            User.is_active.is_(True),
+        )
+    )
+    res = await db.execute(subquery)
+    rows = res.all()
+
+    by_group = defaultdict(list)
+    for r in rows:
+        by_group[r.group_id].append(r)
+
+    counts_map: dict[uuid.UUID, int] = {}
+    for gid in group_ids:
+        g_rows = by_group.get(gid, [])
+        dedup_map: dict[str, tuple] = {}
+        for r in g_rows:
+            sp_id, _, full_name, username, stars, sub_cnt = r
+            norm_name = " ".join((full_name or "").strip().lower().split())
+            norm_user = (username or "").strip().lower()
+            key = norm_name or norm_user or str(sp_id)
+            score = (stars or 0) * 10 + (sub_cnt or 0) * 5 + (20 if (sub_cnt or 0) > 0 else 0)
+
+            if key not in dedup_map:
+                dedup_map[key] = (r, score)
+            else:
+                _, existing_score = dedup_map[key]
+                if score > existing_score:
+                    dedup_map[key] = (r, score)
+
+        active = [
+            r for r, _ in dedup_map.values()
+            if (r[4] or 0) > 0 or (r[5] or 0) > 0
+        ]
+        counts_map[gid] = len(active) if active else len(dedup_map)
+
+    return counts_map
+
+
+async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
+    counts_map = await get_active_student_counts(db, [group.id])
     return GroupOut(
         id=group.id,
         name=group.name,
@@ -50,7 +107,7 @@ async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
         default_homework_time=group.default_homework_time or "20:00",
         current_cycle=getattr(group, "current_cycle", 1) or 1,
         is_active=group.is_active,
-        student_count=count,
+        student_count=counts_map.get(group.id, 0),
         created_at=group.created_at,
     )
 
@@ -63,7 +120,7 @@ async def list_groups(
 ):
     """
     Returns all groups for the teacher panel belonging to this teacher.
-    Uses a batched GROUP BY query to count students across all groups in 2 queries instead of 1+N.
+    Uses batched active deduplicated student counting across all groups.
     """
     teacher_filter = or_(
         Group.created_by == current_user.id,
@@ -78,18 +135,7 @@ async def list_groups(
         return []
 
     group_ids = [g.id for g in groups]
-    counts_res = await db.execute(
-        select(StudentProfile.group_id, func.count())
-        .select_from(StudentProfile)
-        .join(User, StudentProfile.user_id == User.id)
-        .where(
-            StudentProfile.group_id.in_(group_ids),
-            or_(User.approval_status == ApprovalStatus.APPROVED, User.approval_status.is_(None)),
-            User.is_active == True,
-        )
-        .group_by(StudentProfile.group_id)
-    )
-    counts_map = dict(counts_res.all())
+    counts_map = await get_active_student_counts(db, group_ids)
 
     return [
         GroupOut(
@@ -303,6 +349,41 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
             )
         )
 
+    # Deduplicate student details per cohort: prioritize active student with more stars/submissions, eliminate ghost stubs
+    dedup_map: dict[str, tuple[GroupStudentDetail, int]] = {}
+    for s in student_details:
+        norm_name = " ".join((s.full_name or "").strip().lower().split())
+        norm_user = (s.username or "").strip().lower()
+        key = norm_name or norm_user or str(s.student_id)
+        has_sub = s.completed_assignments_count > 0 or any(a.has_submission for a in s.assignments)
+        score = (s.total_stars or 0) * 10 + s.completed_assignments_count * 5 + (20 if has_sub else 0)
+
+        if key not in dedup_map:
+            dedup_map[key] = (s, score)
+        else:
+            _, existing_score = dedup_map[key]
+            if score > existing_score:
+                dedup_map[key] = (s, score)
+
+    active_students = [
+        s for s, _ in dedup_map.values()
+        if (s.total_stars or 0) > 0 or s.completed_assignments_count > 0 or any(a.has_submission for a in s.assignments)
+    ]
+    final_students = active_students if len(active_students) > 0 else [s for s, _ in dedup_map.values()]
+    final_students.sort(key=lambda x: (x.full_name or "").lower())
+
+    # Harmonized Group Cycle Progress:
+    # (Sum of valid cycle submissions across enrolled active students) / (total_active_students * total_published_tasks_in_cycle) * 100
+    total_active_students = len(final_students)
+    total_cycle_tasks = len(cycle_assignments)
+    cycle_denominator = total_active_students * total_cycle_tasks
+    total_valid_cycle_submissions = sum(s.completed_cycle_count for s in final_students)
+    group_cycle_pct = (
+        int((total_valid_cycle_submissions / cycle_denominator) * 100)
+        if cycle_denominator > 0
+        else 0
+    )
+
     headers = [
         GroupAssignmentHeader(
             id=a.id,
@@ -321,11 +402,12 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
         english_level=group.english_level,
         schedule=group.schedule,
         default_homework_time=group.default_homework_time or "20:00",
-        current_cycle=getattr(group, "current_cycle", 1) or 1,
+        current_cycle=current_cycle,
         is_active=group.is_active,
-        student_count=len(student_rows),
+        student_count=len(final_students),
+        cycle_completion_percentage=group_cycle_pct,
         assignments=headers,
-        students=student_details,
+        students=final_students,
     )
 
 

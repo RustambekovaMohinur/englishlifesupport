@@ -290,7 +290,7 @@ export default function GroupDetailPage() {
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="text-2xl font-black text-zinc-900 dark:text-white">{groupDetail.name}</h1>
-              <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-brand-100 dark:bg-brand-950/60 text-brand-800 dark:text-brand-300 border border-brand-200 dark:border-brand-800">
+              <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60">
                 {groupDetail.english_level.replace("_", " ")}
               </span>
               {!groupDetail.is_active && (

@@ -129,9 +129,11 @@ export default function GroupsPage() {
                     <h3 className="font-semibold text-zinc-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition flex items-center gap-2">
                       {g.name}
                     </h3>
-                    <p className="text-xs font-medium text-brand-600 dark:text-brand-400 uppercase tracking-wider">
-                      {g.english_level.replace("_", " ")}
-                    </p>
+                    <div className="mt-1">
+                      <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60">
+                        {g.english_level.replace("_", " ")}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 {g.schedule && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{g.schedule}</p>}
@@ -175,8 +177,8 @@ export default function GroupsPage() {
               <h2 className="text-xl font-bold text-zinc-900 dark:text-white flex items-center gap-2">
                 <span>📚 {groupDetail?.name ?? "Group"} Overview</span>
                 {groupDetail && (
-                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200">
-                    Level: {groupDetail.english_level.replace("_", " ")}
+                  <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60">
+                    {groupDetail.english_level.replace("_", " ")}
                   </span>
                 )}
               </h2>
