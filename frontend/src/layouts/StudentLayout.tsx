@@ -9,27 +9,31 @@ import {
   User,
   ChevronLeft,
   LogOut,
+  Clock,
 } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/ui";
 import { MarqueeTicker } from "@/components/MarqueeTicker";
 import { useAuth } from "@/hooks/useAuth";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { PlatformFeedbackFloatingTrigger } from "@/components/PlatformFeedbackModal";
+import { listPastDeadlineAssignments } from "@/services/lmsService";
 
 const sidebarNavItems = [
-  { to: "/student", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/student/assignments", label: "My Assignments", icon: BookOpen },
-  { to: "/student/submissions", label: "My Submissions", icon: CheckSquare },
-  { to: "/student/results", label: "My Results", icon: Trophy },
-  { to: "/student/progress", label: "My Progress", icon: Flame },
-  { to: "/student/profile", label: "Profile", icon: User },
+  { to: "/student", label: "Dashboard", icon: LayoutDashboard, end: true, hasBadge: false },
+  { to: "/student/assignments", label: "My Assignments", icon: BookOpen, hasBadge: false },
+  { to: "/student/past-deadlines", label: "Past Deadlines", icon: Clock, hasBadge: true },
+  { to: "/student/submissions", label: "My Submissions", icon: CheckSquare, hasBadge: false },
+  { to: "/student/results", label: "My Results", icon: Trophy, hasBadge: false },
+  { to: "/student/progress", label: "My Progress", icon: Flame, hasBadge: false },
+  { to: "/student/profile", label: "Profile", icon: User, hasBadge: false },
 ];
 
 const bottomNavItems = [
-  { to: "/student", label: "Home", icon: LayoutDashboard, end: true },
-  { to: "/student/assignments", label: "Tasks", icon: BookOpen },
-  { to: "/student/leaderboard", label: "Rank", icon: Trophy },
-  { to: "/student/profile", label: "Profile", icon: User },
+  { to: "/student", label: "Home", icon: LayoutDashboard, end: true, hasBadge: false },
+  { to: "/student/assignments", label: "Tasks", icon: BookOpen, hasBadge: false },
+  { to: "/student/past-deadlines", label: "Past Due", icon: Clock, hasBadge: true },
+  { to: "/student/leaderboard", label: "Rank", icon: Trophy, hasBadge: false },
+  { to: "/student/profile", label: "Profile", icon: User, hasBadge: false },
 ];
 
 export default function StudentLayout() {
@@ -60,6 +64,21 @@ export default function StudentLayout() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // Dynamic Overdue Count for "Past Deadlines" nav badge
+  const [overdueCount, setOverdueCount] = useState<number>(0);
+
+  useEffect(() => {
+    listPastDeadlineAssignments()
+      .then((tasks) => {
+        const pending = tasks.filter((t) => {
+          const isMissing = !t.submission_status && !t.submission_id;
+          return isMissing || t.detailed_status === "OVERDUE / PENDING_LATE";
+        }).length;
+        setOverdueCount(pending);
+      })
+      .catch(() => {});
+  }, [location.pathname]);
 
   return (
     <div className="flex h-screen max-h-screen overflow-hidden bg-[#FBFBFA] dark:bg-[#0B0F19] font-sans antialiased text-zinc-900 dark:text-zinc-100 transition-colors">
@@ -118,13 +137,30 @@ export default function StudentLayout() {
                   }`
                 }
               >
-                <Icon className="w-5 h-5 shrink-0" />
-                {!isCollapsed && <span className="truncate">{item.label}</span>}
+                <div className="relative flex items-center shrink-0">
+                  <Icon className="w-5 h-5" />
+                  {isCollapsed && item.hasBadge && overdueCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+                    </span>
+                  )}
+                </div>
+                {!isCollapsed && (
+                  <div className="flex items-center justify-between flex-1 min-w-0">
+                    <span className="truncate">{item.label}</span>
+                    {item.hasBadge && overdueCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-rose-500 text-white shadow-xs">
+                        {overdueCount}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Floating Tooltip on Hover when Collapsed */}
                 {isCollapsed && (
                   <span className="fixed ml-14 px-2.5 py-1 bg-slate-900 text-white text-xs font-medium rounded-md shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-50 whitespace-nowrap">
-                    {item.label}
+                    {item.label} {item.hasBadge && overdueCount > 0 ? `(${overdueCount} missing)` : ""}
                   </span>
                 )}
               </NavLink>
@@ -287,11 +323,17 @@ export default function StudentLayout() {
                 {({ isActive }) => (
                   <>
                     <div
-                      className={`p-1 rounded-xl transition ${
+                      className={`relative p-1 rounded-xl transition ${
                         isActive ? "bg-indigo-50 dark:bg-indigo-950/50" : ""
                       }`}
                     >
                       <item.icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.5 : 1.75} />
+                      {item.hasBadge && overdueCount > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                        </span>
+                      )}
                     </div>
                     <span className="text-[10px] leading-tight mt-0.5 tracking-tight truncate max-w-full">
                       {item.label}

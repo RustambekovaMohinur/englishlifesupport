@@ -152,6 +152,10 @@ def _submission_to_out(sub: Submission) -> SubmissionOut:
         file_original_name=sub.file_original_name,
         images=images_out,
         status=sub.status.value,
+        is_late=bool(
+            sub.status == SubmissionStatus.LATE
+            or (sub.assignment and as_utc(sub.submitted_at) > as_utc(sub.assignment.deadline))
+        ),
         submitted_at=sub.submitted_at,
         grade=grade_out,
         corrections=corrections_out,

@@ -23,6 +23,7 @@ import StudentSubmissionsPage from "@/pages/student/Submissions";
 import StudentResultsPage from "@/pages/student/Results";
 import StudentProgressPage from "@/pages/student/Progress";
 import StudentProfilePage from "@/pages/student/Profile";
+import StudentPastDeadlinesPage from "@/pages/student/PastDeadlines";
 
 function RootRedirect() {
   const { user, isLoading } = useAuth();
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="/student" element={<StudentLayout />}>
             <Route index element={<StudentDashboardPage />} />
             <Route path="assignments" element={<StudentAssignmentsPage />} />
+            <Route path="past-deadlines" element={<StudentPastDeadlinesPage />} />
             <Route path="assignments/:assignmentId/submit" element={<StudentAssignmentSubmitPage />} />
             <Route path="vocabulary" element={<StudentAssignmentsPage />} />
             <Route path="submissions" element={<StudentSubmissionsPage />} />

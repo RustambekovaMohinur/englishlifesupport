@@ -328,34 +328,12 @@ async def create_assignment(
 
 
 
-@router.get("/mine", response_model=list[AssignmentForStudent])
-async def list_my_assignments(
-    profile: StudentProfile = Depends(get_current_student_profile),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Student-only: returns assignments for the student's own group.
-    CRITICAL SECURITY RULE: Only PUBLISHED assignments are visible.
-    Draft assignments are strictly hidden.
-    """
-    if profile.group_id is None:
-        return []
-
-    from app.services.gamification_service import check_and_apply_overdue_penalties
-    await check_and_apply_overdue_penalties(db, profile.id)
-
-    assignments = (
-        await db.execute(
-            select(Assignment)
-            .options(selectinload(Assignment.images), selectinload(Assignment.comments))
-            .where(
-                Assignment.group_id == profile.group_id,
-                Assignment.status == AssignmentStatus.PUBLISHED,
-            )
-            .order_by(Assignment.deadline.desc())
-        )
-    ).scalars().all()
-
+async def _build_student_assignments(
+    db: AsyncSession,
+    profile: StudentProfile,
+    assignments: list[Assignment],
+    is_past_view: bool = False,
+) -> list[AssignmentForStudent]:
     if not assignments:
         return []
 
@@ -487,6 +465,21 @@ async def list_my_assignments(
         if insp is not None and "comments" in insp.attrs and insp.attrs.comments.loaded_value is not NO_VALUE:
             comment_cnt = len(assignment.comments or [])
 
+        # Determine detailed_status
+        detailed_status = None
+        if is_past_view or is_past_dl:
+            if submission is not None:
+                is_sub_late = (
+                    submission.status == SubmissionStatus.LATE
+                    or as_utc(submission.submitted_at) > as_utc(assignment.deadline)
+                )
+                if is_sub_late:
+                    detailed_status = "SUBMITTED_LATE"
+                else:
+                    detailed_status = "COMPLETED_ON_TIME"
+            else:
+                detailed_status = "OVERDUE / PENDING_LATE"
+
         result.append(
             AssignmentForStudent(
                 id=assignment.id,
@@ -512,9 +505,81 @@ async def list_my_assignments(
                 is_locked=is_locked,
                 lock_reason=lock_reason,
                 comment_count=comment_cnt,
+                detailed_status=detailed_status,
             )
         )
     return result
+
+
+@router.get("/mine", response_model=list[AssignmentForStudent])
+async def list_my_assignments(
+    profile: StudentProfile = Depends(get_current_student_profile),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Student-only: returns ACTIVE assignments for the student's own group.
+    Active criteria:
+    - assignment.status == AssignmentStatus.PUBLISHED
+    - now_utc() <= assignment.deadline
+    If the deadline has passed, it MUST NOT appear in this endpoint.
+    """
+    if profile.group_id is None:
+        return []
+
+    from app.services.gamification_service import check_and_apply_overdue_penalties
+    await check_and_apply_overdue_penalties(db, profile.id)
+
+    now = utcnow()
+    assignments = (
+        await db.execute(
+            select(Assignment)
+            .options(selectinload(Assignment.images), selectinload(Assignment.comments))
+            .where(
+                Assignment.group_id == profile.group_id,
+                Assignment.status == AssignmentStatus.PUBLISHED,
+                Assignment.deadline >= now,
+            )
+            .order_by(Assignment.deadline.asc())
+        )
+    ).scalars().all()
+
+    return await _build_student_assignments(db, profile, assignments, is_past_view=False)
+
+
+@router.get("/past-deadlines", response_model=list[AssignmentForStudent])
+async def list_past_deadline_assignments(
+    profile: StudentProfile = Depends(get_current_student_profile),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Student-only: returns assignments belonging to the student's cohort where:
+    now_utc() > assignment.deadline.
+    Includes detailed submission status:
+    - SUBMITTED_LATE
+    - OVERDUE / PENDING_LATE
+    - COMPLETED_ON_TIME
+    """
+    if profile.group_id is None:
+        return []
+
+    from app.services.gamification_service import check_and_apply_overdue_penalties
+    await check_and_apply_overdue_penalties(db, profile.id)
+
+    now = utcnow()
+    assignments = (
+        await db.execute(
+            select(Assignment)
+            .options(selectinload(Assignment.images), selectinload(Assignment.comments))
+            .where(
+                Assignment.group_id == profile.group_id,
+                Assignment.status == AssignmentStatus.PUBLISHED,
+                Assignment.deadline < now,
+            )
+            .order_by(Assignment.deadline.desc())
+        )
+    ).scalars().all()
+
+    return await _build_student_assignments(db, profile, assignments, is_past_view=True)
 
 
 @router.get("/{assignment_id}", response_model=AssignmentOut)

@@ -123,6 +123,7 @@ class AssignmentForStudent(BaseModel):
     is_locked: bool = False
     lock_reason: str | None = None
     comment_count: int = 0
+    detailed_status: str | None = None  # e.g. 'SUBMITTED_LATE', 'OVERDUE / PENDING_LATE', 'COMPLETED_ON_TIME'
 
     model_config = {"from_attributes": True}
 

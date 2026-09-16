@@ -114,6 +114,8 @@ export const updateAssignment = (id: string, body: Partial<{ title: string; desc
   api.patch<AssignmentOut>(`/assignments/${id}`, body).then((r) => r.data);
 export const deleteAssignment = (id: string) => api.delete(`/assignments/${id}`);
 export const listMyAssignments = () => api.get<AssignmentForStudent[]>("/assignments/mine").then((r) => r.data);
+export const listPastDeadlineAssignments = () =>
+  api.get<AssignmentForStudent[]>("/assignments/past-deadlines").then((r) => r.data);
 
 
 // --- Submissions ---

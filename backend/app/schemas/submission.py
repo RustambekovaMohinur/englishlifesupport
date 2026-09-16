@@ -70,6 +70,7 @@ class SubmissionOut(BaseModel):
     file_original_name: str | None
     images: list[SubmissionImageOut] = []
     status: str
+    is_late: bool = False
     submitted_at: datetime
     grade: GradeOut | None = None
     corrections: list[SubmissionCorrectionOut] = []

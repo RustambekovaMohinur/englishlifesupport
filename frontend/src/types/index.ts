@@ -294,6 +294,7 @@ export interface AssignmentForStudent {
   is_locked?: boolean;
   lock_reason?: string | null;
   comment_count?: number;
+  detailed_status?: "SUBMITTED_LATE" | "OVERDUE / PENDING_LATE" | "COMPLETED_ON_TIME" | string | null;
 }
 
 export interface AssignmentComment {

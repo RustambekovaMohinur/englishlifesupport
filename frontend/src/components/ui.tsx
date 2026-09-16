@@ -41,7 +41,7 @@ export function StatCard({
 
 const statusStyles: Record<string, string> = {
   submitted: "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300",
-  late: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300",
+  late: "bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 font-bold",
   graded: "bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300",
   active: "bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300",
   inactive: "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400",
