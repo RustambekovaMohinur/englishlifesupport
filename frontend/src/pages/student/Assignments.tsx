@@ -153,7 +153,13 @@ export default function StudentAssignmentsPage() {
   function renderAssignmentCard(a: AssignmentForStudent, isArchive = false) {
     const skillBadge = getSkillBadge(a.title);
     const countdown = getCountdownInfo(a.deadline);
+    const hasMySubmission = Boolean(a.submission_status || a.submission_id);
+    const prereqAssignment = a.prerequisite_id ? assignments.find((other) => other.id === a.prerequisite_id) : null;
+    const isPrereqSatisfied = prereqAssignment ? Boolean(prereqAssignment.submission_status || prereqAssignment.submission_id) : false;
+
     const isTaskLocked = Boolean(
+      !hasMySubmission &&
+      !isPrereqSatisfied &&
       a.is_locked &&
       a.prerequisite_id !== a.id &&
       !a.title.toLowerCase().includes("ket listening test2")
@@ -241,7 +247,7 @@ export default function StudentAssignmentsPage() {
                 ) : isPastDue ? (
                   "Submit Late ⚠️"
                 ) : (
-                  "Start 🚀"
+                  "Start Assignment →"
                 )}
               </button>
             </div>
@@ -251,7 +257,7 @@ export default function StudentAssignmentsPage() {
           {isTaskLocked && (
             <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30 p-2 rounded-xl flex items-start gap-1.5 border border-amber-500/20">
               <span className="shrink-0">⚠️</span>
-              <span>{a.lock_reason ? `Prerequisite required: please complete ${a.lock_reason.replace("Oldingi vazifani topshiring: ", "")} first.` : "Please submit the previous prerequisite assignment to unlock this task."}</span>
+              <span>{a.lock_reason || "Please complete the prerequisite assignment first to unlock this task."}</span>
             </div>
           )}
 
@@ -388,7 +394,7 @@ export default function StudentAssignmentsPage() {
                     ? "btn-secondary text-xs px-3.5 py-1.5 opacity-60 cursor-not-allowed flex items-center gap-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400"
                     : isPastDue && !a.submission_status
                     ? "px-3.5 py-1.5 rounded-lg font-semibold text-xs bg-amber-600 hover:bg-amber-500 text-white shadow-xs flex items-center gap-1 transition active:scale-95"
-                    : "btn-primary text-xs px-3.5 py-1.5 shadow-xs flex items-center gap-1"
+                    : "btn-primary text-xs px-3.5 py-1.5 shadow-xs flex items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white"
                 }
                 disabled={isTaskLocked}
                 onClick={() => navigate(`/student/assignments/${a.id}/submit`)}
@@ -407,7 +413,7 @@ export default function StudentAssignmentsPage() {
                           : "Update Submission"
                         : isPastDue
                         ? "Submit Late ⚠️"
-                        : "Start Task 🚀"}
+                        : "Start Assignment →"}
                     </span>
                     <ChevronRight className="w-3 h-3" />
                   </>
@@ -421,7 +427,7 @@ export default function StudentAssignmentsPage() {
             <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800 text-xs text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30 p-2.5 rounded-xl flex items-center gap-2 border border-amber-500/20">
               <span className="text-sm shrink-0">⚠️</span>
               <span className="font-medium">
-                {a.lock_reason ? `Prerequisite required: please complete ${a.lock_reason.replace("Oldingi vazifani topshiring: ", "")} first to unlock this assignment.` : "Please submit the previous prerequisite assignment to unlock this task."}
+                {a.lock_reason || "Please complete the prerequisite assignment first to unlock this task."}
               </span>
             </div>
           )}

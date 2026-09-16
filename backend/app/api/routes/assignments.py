@@ -343,27 +343,49 @@ async def _build_student_assignments(
     assign_ids = [a.id for a in assignments]
     assign_map = {a.id: a for a in assignments}
 
-    # Batch 1: Submissions with grade for this student
+    # Identify any prerequisite IDs that might reside outside the currently loaded assignments (e.g. past cycles or prior assignments)
+    explicit_prereq_ids = {
+        a.prerequisite_id for a in assignments
+        if a.prerequisite_id and a.prerequisite_id != a.id
+    }
+    missing_prereq_ids = explicit_prereq_ids - set(assign_ids)
+    if missing_prereq_ids:
+        extra_assigns = (
+            await db.execute(
+                select(Assignment).where(Assignment.id.in_(missing_prereq_ids))
+            )
+        ).scalars().all()
+        for ea in extra_assigns:
+            assign_map[ea.id] = ea
+
+    all_query_assign_ids = list(set(assign_ids) | explicit_prereq_ids)
+
+    # Batch 1: Submissions for this student (all relevant assignments)
     subs = (
         await db.execute(
             select(Submission)
             .options(selectinload(Submission.grade))
             .where(
-                Submission.assignment_id.in_(assign_ids),
+                Submission.assignment_id.in_(all_query_assign_ids),
                 Submission.student_id == profile.id,
+                Submission.is_archived.is_(False),
             )
+            .order_by(Submission.submitted_at.desc(), Submission.id.desc())
         )
     ).scalars().all()
-    # Active submissions strictly scoped to current assignment cycle (non-archived and submitted >= updated_at)
-    sub_map = {
-        s.assignment_id: s for s in subs
-        if (getattr(s, "cycle_number", 1) or 1) == (getattr(assign_map[s.assignment_id], "cycle_number", 1) or 1)
-        and not getattr(s, "is_archived", False)
-        and (
-            not getattr(assign_map[s.assignment_id], "updated_at", None)
-            or as_utc(s.submitted_at) >= as_utc(assign_map[s.assignment_id].updated_at)
-        )
-    }
+
+    # Build active submission map and record all submitted assignment IDs
+    sub_map = {}
+    submitted_assign_ids = set()
+    for s in subs:
+        submitted_assign_ids.add(s.assignment_id)
+        target_assign = assign_map.get(s.assignment_id)
+        target_cycle = (getattr(target_assign, "cycle_number", 1) or 1) if target_assign else 1
+        if (getattr(s, "cycle_number", 1) or 1) == target_cycle:
+            if s.assignment_id not in sub_map:
+                sub_map[s.assignment_id] = s
+        elif s.assignment_id not in sub_map:
+            sub_map[s.assignment_id] = s
 
     # Batch 2: Vocabulary assignments with words
     vocabs = (
@@ -432,34 +454,53 @@ async def _build_student_assignments(
             for img in raw_images
         ]
 
-        # Fast in-memory sequential lock evaluation
+        # Sequential & prerequisite lock evaluation
         is_locked = False
         lock_reason = None
         ovr = override_map.get(assignment.id)
         if ovr and ovr.is_unlocked:
             is_locked = False
             lock_reason = None
+        elif submission is not None:
+            # If student has already submitted this task, it can never be locked!
+            is_locked = False
+            lock_reason = None
         else:
+            assign_cycle = getattr(assignment, "cycle_number", 1) or 1
             prereq_id = assignment.prerequisite_id
+            if prereq_id == assignment.id:
+                prereq_id = None
+
             if not prereq_id and getattr(assignment, "order_index", 0) > 0:
                 preceding = [
                     a for a in assignments
-                    if getattr(a, "cycle_number", 1) == getattr(assignment, "cycle_number", 1)
-                    and getattr(a, "order_index", 0) < getattr(assignment, "order_index", 0)
+                    if (getattr(a, "cycle_number", 1) or 1) == assign_cycle
+                    and (getattr(a, "order_index", 0) or 0) < (getattr(assignment, "order_index", 0) or 0)
                 ]
                 if preceding:
-                    preceding.sort(key=lambda x: getattr(x, "order_index", 0), reverse=True)
+                    preceding.sort(key=lambda x: getattr(x, "order_index", 0) or 0, reverse=True)
                     prereq_id = preceding[0].id
 
             if prereq_id and prereq_id != assignment.id:
-                if prereq_id in sub_map:
+                # 1. Prerequisite is SATISFIED if student has ANY valid submission (graded, pending, or late)
+                if prereq_id in submitted_assign_ids:
                     is_locked = False
                     lock_reason = None
                 else:
                     prereq = assign_map.get(prereq_id)
-                    is_locked = True
-                    prereq_title = prereq.title if prereq else "previous assignment"
-                    lock_reason = f"Complete prerequisite assignment first: '{prereq_title}'"
+                    prereq_cycle = (getattr(prereq, "cycle_number", 1) or 1) if prereq else assign_cycle
+                    prereq_deadline = ensure_utc(prereq.deadline) if prereq else None
+                    is_prereq_past = prereq_deadline < now if prereq_deadline else False
+
+                    # 2. Cycle Isolation: Dependencies must NOT cross cycle boundaries unless active in current cycle
+                    # An uncompleted task from an expired past cycle or elapsed deadline does NOT lock active tasks!
+                    if prereq_cycle < assign_cycle or is_prereq_past:
+                        is_locked = False
+                        lock_reason = None
+                    else:
+                        is_locked = True
+                        prereq_title = prereq.title if prereq else "previous assignment"
+                        lock_reason = f"Please complete prerequisite assignment first: '{prereq_title}'."
 
         deadline_utc = ensure_utc(assignment.deadline)
         is_past_dl = deadline_utc < now

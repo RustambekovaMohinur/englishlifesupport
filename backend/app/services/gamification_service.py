@@ -20,7 +20,7 @@ from app.models.grade import Grade
 from app.models.student import StudentProfile
 from app.models.submission import Submission, SubmissionStatus
 from app.models.vocabulary import VocabularyAttempt
-from app.utils.datetimes import as_utc, utcnow
+from app.utils.datetimes import as_utc, ensure_utc, utcnow
 
 # Level thresholds:
 # 1 Beginner: 0–100 XP
@@ -318,6 +318,9 @@ async def is_assignment_locked_for_student(
 
     # If assignment itself has explicit prerequisite
     prereq_id = assignment.prerequisite_id
+    if prereq_id == assignment.id:
+        prereq_id = None
+
     # Or if sequential order within same group and cycle
     if not prereq_id and getattr(assignment, "order_index", 0) > 0:
         preceding = (
@@ -336,16 +339,17 @@ async def is_assignment_locked_for_student(
         if preceding:
             prereq_id = preceding.id
 
-    if not prereq_id:
+    if not prereq_id or prereq_id == assignment.id:
         return False, None
 
-    # Check if student has submitted prerequisite assignment
+    # Check if student has submitted prerequisite assignment (ANY active submission, regardless of grade status)
     prereq_sub = (
         await db.execute(
             select(Submission)
             .where(
                 Submission.assignment_id == prereq_id,
                 Submission.student_id == student_id,
+                Submission.is_archived.is_(False),
             )
             .order_by(Submission.submitted_at.desc(), Submission.id.desc())
             .limit(1)
@@ -353,16 +357,26 @@ async def is_assignment_locked_for_student(
     ).scalars().first()
 
     if prereq_sub is not None:
-        # Completed -> next unlocks!
+        # Completed / submitted -> next unlocks immediately!
         return False, None
 
-    # Prerequisite not submitted: strictly lock subsequent tasks until submitted!
+    # Prerequisite not submitted: check cycle isolation and overdue status
     prereq = (
         await db.execute(select(Assignment).where(Assignment.id == prereq_id))
     ).scalar_one_or_none()
     if prereq:
+        assign_cycle = getattr(assignment, "cycle_number", 1) or 1
+        prereq_cycle = getattr(prereq, "cycle_number", 1) or 1
+        prereq_deadline = ensure_utc(prereq.deadline)
+        now_utc = ensure_utc(utcnow())
+        is_prereq_past = prereq_deadline < now_utc
+
+        # Cycle Isolation: an uncompleted task from an expired past cycle or elapsed deadline does NOT lock active tasks
+        if prereq_cycle < assign_cycle or is_prereq_past:
+            return False, None
+
         prereq_title = prereq.title
-        return True, f"Oldingi vazifani topshiring: '{prereq_title}'"
+        return True, f"Please complete prerequisite assignment first: '{prereq_title}'."
 
     return False, None
 
