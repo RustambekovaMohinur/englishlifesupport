@@ -358,7 +358,7 @@ export default function PastDeadlinesPage() {
                     title="Questions & Discussion"
                   >
                     <MessageSquare className="w-4 h-4 text-indigo-500" />
-                    <span>Savollar</span>
+                    <span>Discussion</span>
                     {(a.comment_count ?? 0) > 0 && (
                       <span className="font-mono text-[10px] text-zinc-400">({a.comment_count})</span>
                     )}

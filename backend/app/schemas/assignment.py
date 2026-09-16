@@ -110,8 +110,9 @@ class AssignmentForStudent(BaseModel):
     file_original_name: str | None = None
     vocab_words: list[VocabWordItem] = []
     images: list[AssignmentImageOut] = []
-    is_past_deadline: bool
+    is_past_deadline: bool = False
     is_overdue: bool = False
+    is_late: bool = False
     submission_status: str | None = None  # None if not yet submitted
     score: int | None = None
     stars: int | None = None
@@ -123,7 +124,7 @@ class AssignmentForStudent(BaseModel):
     is_locked: bool = False
     lock_reason: str | None = None
     comment_count: int = 0
-    detailed_status: str | None = None  # e.g. 'SUBMITTED_LATE', 'OVERDUE / PENDING_LATE', 'COMPLETED_ON_TIME'
+    detailed_status: str | None = "OVERDUE / PENDING_LATE"  # e.g. 'SUBMITTED_LATE', 'OVERDUE / PENDING_LATE', 'COMPLETED_ON_TIME'
 
     model_config = {"from_attributes": True}
 

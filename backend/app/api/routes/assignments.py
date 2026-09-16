@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timedelta
 
@@ -14,7 +15,7 @@ from app.models.assignment import Assignment, AssignmentComment, AssignmentStatu
 from app.models.group import Group
 from app.models.student import StudentProfile
 from app.models.teacher import TeacherProfile
-from app.models.submission import Submission
+from app.models.submission import Submission, SubmissionStatus
 from app.models.user import User, UserRole
 from app.models.vocabulary import VocabularyAssignment, VocabularyWord
 from app.schemas.assignment import (
@@ -29,13 +30,15 @@ from app.schemas.assignment import (
     VocabWordItem,
 )
 from app.services.gamification_service import is_assignment_locked_for_student
-from app.utils.datetimes import as_utc, utcnow
+from app.utils.datetimes import as_utc, ensure_utc, utcnow
 from app.utils.files import (
     parse_vocab_csv,
     resolve_submission_file,
     resolve_submission_file_async,
     save_assignment_file,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/assignments", tags=["assignments"])
 teacher_assignments_router = APIRouter(prefix="/api/teacher/assignments", tags=["assignments"])
@@ -386,7 +389,7 @@ async def _build_student_assignments(
     override_map = {o.assignment_id: o for o in overrides}
 
     result = []
-    now = utcnow()
+    now = ensure_utc(utcnow())
     for assignment in assignments:
         submission = sub_map.get(assignment.id)
         score = None
@@ -455,30 +458,46 @@ async def _build_student_assignments(
                 else:
                     prereq = assign_map.get(prereq_id)
                     is_locked = True
-                    prereq_title = prereq.title if prereq else "oldingi vazifa"
-                    lock_reason = f"Oldingi vazifani topshiring: '{prereq_title}'"
+                    prereq_title = prereq.title if prereq else "previous assignment"
+                    lock_reason = f"Complete prerequisite assignment first: '{prereq_title}'"
 
-        is_past_dl = as_utc(assignment.deadline) < now
+        deadline_utc = ensure_utc(assignment.deadline)
+        is_past_dl = deadline_utc < now
         is_overdue = is_past_dl and (submission is None)
 
         comment_cnt = 0
         if insp is not None and "comments" in insp.attrs and insp.attrs.comments.loaded_value is not NO_VALUE:
             comment_cnt = len(assignment.comments or [])
 
-        # Determine detailed_status
-        detailed_status = None
+        # Determine detailed_status & is_late
+        is_late = False
+        detailed_status = "OVERDUE / PENDING_LATE" if is_past_dl else None
         if is_past_view or is_past_dl:
             if submission is not None:
+                sub_time = ensure_utc(submission.submitted_at) if getattr(submission, "submitted_at", None) else now
                 is_sub_late = (
-                    submission.status == SubmissionStatus.LATE
-                    or as_utc(submission.submitted_at) > as_utc(assignment.deadline)
+                    getattr(submission, "status", None) == SubmissionStatus.LATE
+                    or sub_time > deadline_utc
                 )
+                is_late = is_sub_late
                 if is_sub_late:
                     detailed_status = "SUBMITTED_LATE"
                 else:
                     detailed_status = "COMPLETED_ON_TIME"
             else:
+                is_late = True
                 detailed_status = "OVERDUE / PENDING_LATE"
+        elif submission is not None:
+            sub_time = ensure_utc(submission.submitted_at) if getattr(submission, "submitted_at", None) else now
+            is_sub_late = (
+                getattr(submission, "status", None) == SubmissionStatus.LATE
+                or sub_time > deadline_utc
+            )
+            is_late = is_sub_late
+            if is_sub_late:
+                detailed_status = "SUBMITTED_LATE"
+            else:
+                detailed_status = "COMPLETED_ON_TIME"
 
         result.append(
             AssignmentForStudent(
@@ -494,6 +513,7 @@ async def _build_student_assignments(
                 images=images_out,
                 is_past_deadline=is_past_dl,
                 is_overdue=is_overdue,
+                is_late=is_late,
                 submission_status=submission.status.value if submission else None,
                 score=score,
                 stars=stars,
@@ -526,24 +546,34 @@ async def list_my_assignments(
     if profile.group_id is None:
         return []
 
-    from app.services.gamification_service import check_and_apply_overdue_penalties
-    await check_and_apply_overdue_penalties(db, profile.id)
+    try:
+        from app.services.gamification_service import check_and_apply_overdue_penalties
+        await check_and_apply_overdue_penalties(db, profile.id)
+    except Exception as e:
+        logger.warning(f"Error applying overdue penalties in list_my_assignments: {e}")
 
-    now = utcnow()
-    assignments = (
-        await db.execute(
-            select(Assignment)
-            .options(selectinload(Assignment.images), selectinload(Assignment.comments))
-            .where(
-                Assignment.group_id == profile.group_id,
-                Assignment.status == AssignmentStatus.PUBLISHED,
-                Assignment.deadline >= now,
+    try:
+        now = ensure_utc(utcnow())
+        assignments = (
+            await db.execute(
+                select(Assignment)
+                .options(selectinload(Assignment.images), selectinload(Assignment.comments))
+                .where(
+                    Assignment.group_id == profile.group_id,
+                    Assignment.status == AssignmentStatus.PUBLISHED,
+                    Assignment.deadline >= now,
+                )
+                .order_by(Assignment.deadline.asc())
             )
-            .order_by(Assignment.deadline.asc())
-        )
-    ).scalars().all()
+        ).scalars().all()
 
-    return await _build_student_assignments(db, profile, assignments, is_past_view=False)
+        return await _build_student_assignments(db, profile, assignments, is_past_view=False)
+    except Exception as e:
+        logger.exception("Error in list_my_assignments for student %s: %s", profile.id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load assignments: {str(e)}",
+        )
 
 
 @router.get("/past-deadlines", response_model=list[AssignmentForStudent])
@@ -562,24 +592,34 @@ async def list_past_deadline_assignments(
     if profile.group_id is None:
         return []
 
-    from app.services.gamification_service import check_and_apply_overdue_penalties
-    await check_and_apply_overdue_penalties(db, profile.id)
+    try:
+        from app.services.gamification_service import check_and_apply_overdue_penalties
+        await check_and_apply_overdue_penalties(db, profile.id)
+    except Exception as e:
+        logger.warning(f"Error applying overdue penalties in list_past_deadline_assignments: {e}")
 
-    now = utcnow()
-    assignments = (
-        await db.execute(
-            select(Assignment)
-            .options(selectinload(Assignment.images), selectinload(Assignment.comments))
-            .where(
-                Assignment.group_id == profile.group_id,
-                Assignment.status == AssignmentStatus.PUBLISHED,
-                Assignment.deadline < now,
+    try:
+        now = ensure_utc(utcnow())
+        assignments = (
+            await db.execute(
+                select(Assignment)
+                .options(selectinload(Assignment.images), selectinload(Assignment.comments))
+                .where(
+                    Assignment.group_id == profile.group_id,
+                    Assignment.status == AssignmentStatus.PUBLISHED,
+                    Assignment.deadline < now,
+                )
+                .order_by(Assignment.deadline.desc())
             )
-            .order_by(Assignment.deadline.desc())
-        )
-    ).scalars().all()
+        ).scalars().all()
 
-    return await _build_student_assignments(db, profile, assignments, is_past_view=True)
+        return await _build_student_assignments(db, profile, assignments, is_past_view=True)
+    except Exception as e:
+        logger.exception("Error in list_past_deadline_assignments for student %s: %s", profile.id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load past deadline assignments: {str(e)}",
+        )
 
 
 @router.get("/{assignment_id}", response_model=AssignmentOut)

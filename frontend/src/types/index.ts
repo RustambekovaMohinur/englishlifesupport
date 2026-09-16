@@ -286,6 +286,7 @@ export interface AssignmentForStudent {
   images?: AssignmentImageOut[];
   is_past_deadline: boolean;
   is_overdue?: boolean;
+  is_late?: boolean;
   submission_status: "submitted" | "late" | "graded" | null;
   score: number | null;
   stars?: number | null;
