@@ -162,4 +162,7 @@ class StudentHistoryOut(BaseModel):
     group_name: str | None = None
     total_stars: int
     total_lightning: int = 0
+    cycle_completed_tasks: int = 0
+    cycle_total_tasks: int = 0
+    cycle_progress_percentage: int = 0
     history: list[StudentHistoryItem] = []

@@ -121,14 +121,14 @@ export default function SubmissionsPage() {
                 {submissions.map((s) => (
                    <tr key={s.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition">
                      <td className="py-3.5 px-4 font-medium text-zinc-900 dark:text-white">
-                       <button
-                         type="button"
-                         onClick={() => setSelectedStudentId(s.student_id)}
-                         className="text-left font-semibold hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline decoration-dotted transition cursor-pointer"
-                         title="O'quvchi ma'lumotlarini ko'rish"
-                       >
-                         {s.student_name}
-                       </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStudentId(s.student_id)}
+                          className="text-left font-semibold hover:text-blue-600 dark:hover:text-blue-400 hover:underline decoration-dotted transition cursor-pointer"
+                          title="Inspect student details"
+                        >
+                          {s.student_name}
+                        </button>
                      </td>
                      <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">{s.assignment_title}</td>
 

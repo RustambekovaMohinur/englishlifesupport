@@ -888,10 +888,10 @@ export default function StudentsPage() {
                               className="w-9 h-9 rounded-full object-cover aspect-square shrink-0"
                             />
                             <div className="min-w-0">
-                              <div className="font-semibold text-zinc-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                              <div className="font-semibold text-zinc-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate max-w-[140px] sm:max-w-none">
                                 {s.full_name}
                               </div>
-                              <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 truncate">
+                              <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-[130px] sm:max-w-none">
                                 @{s.username || s.email}
                               </div>
                             </div>

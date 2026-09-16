@@ -81,7 +81,7 @@ export default function StudentLayout() {
   }, [location.pathname]);
 
   return (
-    <div className="flex h-screen max-h-screen overflow-hidden bg-[#FBFBFA] dark:bg-[#0B0F19] font-sans antialiased text-zinc-900 dark:text-zinc-100 transition-colors">
+    <div className="flex h-screen max-h-screen w-full max-w-full overflow-hidden overflow-x-hidden bg-[#FBFBFA] dark:bg-[#0B0F19] font-sans antialiased text-zinc-900 dark:text-zinc-100 transition-colors">
       {/* Desktop Sidebar (lg:flex, hidden on tablet and mobile) */}
       <aside
         className={`hidden flex-col border-r border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] py-5 lg:flex shrink-0 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] relative z-40 ${

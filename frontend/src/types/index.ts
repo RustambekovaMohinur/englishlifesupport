@@ -153,6 +153,9 @@ export interface StudentHistoryOut {
   group_name: string | null;
   total_stars: number;
   total_lightning: number;
+  cycle_completed_tasks?: number;
+  cycle_total_tasks?: number;
+  cycle_progress_percentage?: number;
   history: StudentHistoryItem[];
 }
 

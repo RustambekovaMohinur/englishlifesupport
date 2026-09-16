@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_student_profile, require_teacher
 from app.core.config import settings
 from app.db.session import get_db
+from app.utils.datetimes import as_utc
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.group import Group
 from app.models.student import StudentProfile
@@ -655,7 +656,14 @@ async def get_student_history(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this student")
 
     history_items: list[StudentHistoryItem] = []
+    cycle_completed_tasks = 0
+    cycle_total_tasks = 0
+    cycle_progress_percentage = 0
+
     if profile.group_id:
+        grp = profile.group
+        current_cycle = getattr(grp, "current_cycle", 1) or 1
+
         # Load all assignments for this group, newest first
         assignments_res = await db.execute(
             select(Assignment)
@@ -663,6 +671,9 @@ async def get_student_history(
             .order_by(Assignment.created_at.desc())
         )
         assignments = assignments_res.scalars().all()
+
+        cycle_assignments = [a for a in assignments if (getattr(a, "cycle_number", 1) or 1) == current_cycle]
+        cycle_total_tasks = len(cycle_assignments)
 
         assignment_ids = [a.id for a in assignments]
         submissions_map: dict[uuid.UUID, Submission] = {}
@@ -686,10 +697,21 @@ async def get_student_history(
             stars_earned = 0
             text_ans = None
             file_name = None
+            a_cycle = getattr(a, "cycle_number", 1) or 1
 
-            if sub is not None:
+            # A submission is active if non-archived AND submitted_at >= assignment.updated_at
+            is_active_sub = (
+                sub is not None
+                and not getattr(sub, "is_archived", False)
+                and (
+                    not getattr(a, "updated_at", None)
+                    or as_utc(sub.submitted_at) >= as_utc(a.updated_at)
+                )
+            )
+
+            if is_active_sub:
                 sub_id = sub.id
-                sub_status = sub.status.value
+                sub_status = sub.status.value if hasattr(sub.status, "value") else str(sub.status)
                 sub_at = sub.submitted_at
                 text_ans = sub.text_answer
                 file_name = sub.file_original_name
@@ -700,6 +722,17 @@ async def get_student_history(
                     comp_pct = min(100, max(0, int((sub.grade.score / 10.0) * 100)))
                 else:
                     comp_pct = 100
+
+                if comp_pct >= 100 and a_cycle == current_cycle:
+                    cycle_completed_tasks += 1
+            elif sub is not None:
+                # Archived / obsolete submission
+                sub_id = sub.id
+                sub_status = "obsolete"
+                sub_at = sub.submitted_at
+                text_ans = sub.text_answer
+                file_name = sub.file_original_name
+                comp_pct = 0
 
             history_items.append(
                 StudentHistoryItem(
@@ -720,6 +753,12 @@ async def get_student_history(
                 )
             )
 
+        cycle_progress_percentage = (
+            int((cycle_completed_tasks / cycle_total_tasks) * 100)
+            if cycle_total_tasks > 0
+            else 0
+        )
+
     grp = profile.group
     return StudentHistoryOut(
         student_id=profile.id,
@@ -730,6 +769,9 @@ async def get_student_history(
         group_name=grp.name if grp else None,
         total_stars=profile.total_stars,
         total_lightning=getattr(profile, "total_lightning", 0),
+        cycle_completed_tasks=cycle_completed_tasks,
+        cycle_total_tasks=cycle_total_tasks,
+        cycle_progress_percentage=cycle_progress_percentage,
         history=history_items,
     )
 

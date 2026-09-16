@@ -548,23 +548,23 @@ export default function StudentAssignmentSubmitPage() {
       } else if (typeof serverMessage === "string" && serverMessage.trim()) {
         errorMsg = serverMessage;
       } else if (status === 413) {
-        errorMsg = "Yuklangan fayllar hajmi ruxsat etilgan limitdan oshdi. Iltimos, ixchamroq fayl yuklang.";
+        errorMsg = "Uploaded file size exceeds the allowed limit. Please compress or select smaller files.";
       } else if (status === 403) {
-        errorMsg = "Ushbu topshiriqqa javob yuborish huquqi yo'q yoki topshiriq qulflangan.";
+        errorMsg = "You do not have permission to submit this assignment or the task is locked.";
       } else if (status === 409) {
-        errorMsg = "Ushbu topshiriq allaqachon topshirilgan yoki ziddiyat yuz berdi.";
+        errorMsg = "This assignment has already been submitted or a conflict occurred.";
       } else if (status === 500 || status === 502) {
-        errorMsg = "Serverda xatolik yuz berdi (500/502). Iltimos, qayta urinib ko'ring.";
+        errorMsg = "A server error occurred (500/502). Please try submitting again.";
       } else if (status === 504) {
-        errorMsg = "Server javob berish vaqti tugadi (504 Gateway Timeout). Iltimos, qayta urinib ko'ring.";
+        errorMsg = "The server request timed out (504 Gateway Timeout). Please try again.";
       } else if (err.code === "ECONNABORTED" || err.message?.toLowerCase().includes("timeout")) {
-        errorMsg = "Tarmoq sekinligi tufayli vaqt tugadi. Internet yaxshiroq joyda qayta urining.";
+        errorMsg = "Network timeout. Please check your connection and try again.";
       } else if (typeof window !== "undefined" && !window.navigator.onLine) {
-        errorMsg = "Internet aloqasini tekshiring. Qurilma oflayn holatda.";
+        errorMsg = "No internet connection. Your device appears to be offline.";
       } else if (err?.message && !err.message.includes("Network Error")) {
-        errorMsg = `Xatolik yuz berdi: ${err.message}`;
+        errorMsg = `An error occurred: ${err.message}`;
       } else {
-        errorMsg = "Topshiriqni yuborishda xatolik yuz berdi. Iltimos qayta urinib ko'ring.";
+        errorMsg = "Failed to submit assignment. Please try again.";
       }
 
       toast.error(errorMsg, { id: "submit-homework-error", duration: 5000 });
@@ -762,10 +762,10 @@ export default function StudentAssignmentSubmitPage() {
             <span className="text-xl shrink-0">⚠️</span>
             <div className="space-y-1">
               <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">
-                Muddat o‘tgan (Late Submission)
+                Late Submission Notice
               </h4>
               <p className="text-xs sm:text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
-                Muddat o‘tgan, lekin vazifani topshirishingiz mumkin. O‘qituvchi buni kechikkan deb ko‘radi.
+                The deadline for this assignment has passed. You can still submit your work, and your teacher will review it as a late submission.
               </p>
             </div>
           </div>
@@ -955,23 +955,23 @@ export default function StudentAssignmentSubmitPage() {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                <span>Topshiriq yuzasidan savolingiz bormi?</span>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-mono">
-                  {assignment.comment_count ?? 0} ta fikr
+                <span>Have a question about this assignment?</span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-mono">
+                  {assignment.comment_count ?? 0} comments
                 </span>
               </p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Tushunarsiz joylar bo'yicha o'qituvchiga savol yo'llang yoki guruhdoshlar fikrini ko'ring
+                Ask your instructor questions or discuss points with your classmates
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={() => setDiscussionOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-xs transition shrink-0 self-end sm:self-auto"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xs transition shrink-0 self-end sm:self-auto"
           >
             <MessageSquare className="w-3.5 h-3.5" />
-            <span>Savollar & Muhokama</span>
+            <span>Questions & Discussion</span>
           </button>
         </div>
 

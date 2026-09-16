@@ -106,9 +106,16 @@ export default function StudentAssignmentsPage() {
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
 
   const displayedAssignments = useMemo(() => {
+    const nowTime = Date.now();
+    // Strictly isolate active assignments: deadline must be in the future
+    const activeOnly = assignments.filter((a) => {
+      const dl = new Date(a.deadline).getTime();
+      return !isNaN(dl) && dl >= nowTime;
+    });
+
     return isVocabRoute
-      ? assignments.filter((a) => a.vocab_words && a.vocab_words.length > 0)
-      : assignments;
+      ? activeOnly.filter((a) => a.vocab_words && a.vocab_words.length > 0)
+      : activeOnly;
   }, [assignments, isVocabRoute]);
 
   const activeAssignments = useMemo(() => {
@@ -219,7 +226,7 @@ export default function StudentAssignmentsPage() {
                     ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 cursor-not-allowed border border-zinc-300 dark:border-zinc-700"
                     : isPastDue && !a.submission_status
                     ? "bg-amber-600 hover:bg-amber-500 text-white shadow-xs"
-                    : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs"
+                    : "bg-blue-600 hover:bg-blue-500 text-white shadow-xs"
                 }`}
                 disabled={isTaskLocked}
                 onClick={() => navigate(`/student/assignments/${a.id}/submit`)}
@@ -227,7 +234,7 @@ export default function StudentAssignmentsPage() {
                 {isTaskLocked ? (
                   <>
                     <Lock className="w-3 h-3" />
-                    <span>Qulflangan</span>
+                    <span>Locked</span>
                   </>
                 ) : a.submission_status ? (
                   a.submission_status === "graded" ? "View" : "Edit"
@@ -244,7 +251,7 @@ export default function StudentAssignmentsPage() {
           {isTaskLocked && (
             <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30 p-2 rounded-xl flex items-start gap-1.5 border border-amber-500/20">
               <span className="shrink-0">⚠️</span>
-              <span>{a.lock_reason || "Ushbu vazifani ochish uchun avval oldingi vazifani topshiring."}</span>
+              <span>{a.lock_reason ? `Prerequisite required: please complete ${a.lock_reason.replace("Oldingi vazifani topshiring: ", "")} first.` : "Please submit the previous prerequisite assignment to unlock this task."}</span>
             </div>
           )}
 
@@ -389,7 +396,7 @@ export default function StudentAssignmentsPage() {
                 {isTaskLocked ? (
                   <>
                     <Lock className="w-3.5 h-3.5" />
-                    <span>Qulflangan</span>
+                    <span>Locked</span>
                   </>
                 ) : (
                   <>
@@ -414,7 +421,7 @@ export default function StudentAssignmentsPage() {
             <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800 text-xs text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30 p-2.5 rounded-xl flex items-center gap-2 border border-amber-500/20">
               <span className="text-sm shrink-0">⚠️</span>
               <span className="font-medium">
-                Ushbu vazifani ochish uchun avval {a.lock_reason ? `'${a.lock_reason.replace("Oldingi vazifani topshiring: ", "")}'` : "oldingi"} vazifasini topshiring.
+                {a.lock_reason ? `Prerequisite required: please complete ${a.lock_reason.replace("Oldingi vazifani topshiring: ", "")} first to unlock this assignment.` : "Please submit the previous prerequisite assignment to unlock this task."}
               </span>
             </div>
           )}
@@ -495,7 +502,7 @@ export default function StudentAssignmentsPage() {
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 max-w-md mx-auto leading-relaxed">
               {isVocabRoute
                 ? "Vocabulary lists will appear here once your teacher attaches words to active assignments."
-                : "No active assignments due. Check 'Past Deadlines' for any missed tasks or wait for your instructor's next update."}
+                : "All caught up! You have no active assignments due. Visit 'Past Deadlines' to submit overdue work or wait for new assignments."}
             </p>
             {!isVocabRoute && (
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
@@ -542,16 +549,16 @@ export default function StudentAssignmentsPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  ✨ Faol va Yangi Vazifalar (Active Tasks)
+                  ACTIVE ASSIGNMENTS
                 </span>
-                <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold">
+                <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold">
                   {activeAssignments.length}
                 </span>
               </div>
               <span className="text-[11px] text-zinc-400 font-medium hidden sm:inline">
-                Ketma-ket tartibda topshiring
+                Sequential progression required
               </span>
             </div>
             <div className="space-y-3">

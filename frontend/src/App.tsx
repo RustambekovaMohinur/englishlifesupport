@@ -35,41 +35,43 @@ function RootRedirect() {
 export default function App() {
   return (
     <AuthProvider>
-      <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
-      <Routes>
-        <Route path="/" element={<RootRedirect />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+      <div className="w-full max-w-full overflow-x-hidden min-h-screen">
+        <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
+        <Routes>
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
 
-        <Route element={<ProtectedRoute allowedRole="teacher" />}>
-          <Route path="/teacher" element={<TeacherLayout />}>
-            <Route index element={<TeacherDashboardPage />} />
-            <Route path="students" element={<StudentsPage />} />
-            <Route path="groups" element={<GroupsPage />} />
-            <Route path="groups/:groupId" element={<GroupDetailPage />} />
-            <Route path="assignments" element={<AssignmentsPage />} />
-            <Route path="submissions" element={<SubmissionsPage />} />
-            <Route path="profile" element={<TeacherProfilePage />} />
+          <Route element={<ProtectedRoute allowedRole="teacher" />}>
+            <Route path="/teacher" element={<TeacherLayout />}>
+              <Route index element={<TeacherDashboardPage />} />
+              <Route path="students" element={<StudentsPage />} />
+              <Route path="groups" element={<GroupsPage />} />
+              <Route path="groups/:groupId" element={<GroupDetailPage />} />
+              <Route path="assignments" element={<AssignmentsPage />} />
+              <Route path="submissions" element={<SubmissionsPage />} />
+              <Route path="profile" element={<TeacherProfilePage />} />
+            </Route>
           </Route>
-        </Route>
 
-        <Route element={<ProtectedRoute allowedRole="student" />}>
-          <Route path="/student" element={<StudentLayout />}>
-            <Route index element={<StudentDashboardPage />} />
-            <Route path="assignments" element={<StudentAssignmentsPage />} />
-            <Route path="past-deadlines" element={<StudentPastDeadlinesPage />} />
-            <Route path="assignments/:assignmentId/submit" element={<StudentAssignmentSubmitPage />} />
-            <Route path="vocabulary" element={<StudentAssignmentsPage />} />
-            <Route path="submissions" element={<StudentSubmissionsPage />} />
-            <Route path="results" element={<StudentResultsPage />} />
-            <Route path="leaderboard" element={<StudentDashboardPage />} />
-            <Route path="progress" element={<StudentProgressPage />} />
-            <Route path="profile" element={<StudentProfilePage />} />
+          <Route element={<ProtectedRoute allowedRole="student" />}>
+            <Route path="/student" element={<StudentLayout />}>
+              <Route index element={<StudentDashboardPage />} />
+              <Route path="assignments" element={<StudentAssignmentsPage />} />
+              <Route path="past-deadlines" element={<StudentPastDeadlinesPage />} />
+              <Route path="assignments/:assignmentId/submit" element={<StudentAssignmentSubmitPage />} />
+              <Route path="vocabulary" element={<StudentAssignmentsPage />} />
+              <Route path="submissions" element={<StudentSubmissionsPage />} />
+              <Route path="results" element={<StudentResultsPage />} />
+              <Route path="leaderboard" element={<StudentDashboardPage />} />
+              <Route path="progress" element={<StudentProgressPage />} />
+              <Route path="profile" element={<StudentProfilePage />} />
+            </Route>
           </Route>
-        </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
     </AuthProvider>
   );
 }

@@ -245,13 +245,13 @@ export default function StudentDashboardPage() {
                 {"★".repeat(Math.round(feedbackSummary?.average_rating || 5))}
               </div>
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                ({feedbackSummary?.total_reviews ?? 0} ta o'quvchi baholadi)
+                ({feedbackSummary?.total_reviews ?? 0} reviews)
               </span>
             </div>
             <p className="text-xs text-zinc-600 dark:text-zinc-400 truncate">
               {feedbackSummary?.user_has_reviewed
-                ? "Siz platformani baholagansiz. Fikringizni istalgan vaqtda yangilashingiz mumkin!"
-                : "Platformani baholang, takliflaringizni yozing va +5 XP bonusiga ega bo'ling!"}
+                ? "You have reviewed the platform. You can update your feedback anytime!"
+                : "Rate the platform, share suggestions, and claim a +5 XP bonus!"}
             </p>
           </div>
         </div>

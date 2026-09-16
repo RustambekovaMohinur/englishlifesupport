@@ -614,8 +614,8 @@ export default function AssignmentsPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-base shrink-0">⚠️</span>
                     <div>
-                      <span className="font-semibold block">Ogohlantirish: Ushbu muddat o'tib ketgan sanaga to'g'ri keladi ({format(new Date(deadline), "dd/MM/yyyy HH:mm")}).</span>
-                      <span className="text-[11px] opacity-80">O'quvchilar bu vazifani muddatidan o'tgan deb ko'rishadi.</span>
+                      <span className="font-semibold block">Warning: This deadline is in the past ({format(new Date(deadline), "MMM d, yyyy HH:mm")}).</span>
+                      <span className="text-[11px] opacity-80">Students will see this assignment in their Past Deadlines hub.</span>
                     </div>
                   </div>
                   <button
@@ -628,7 +628,7 @@ export default function AssignmentsPage() {
                     }}
                     className="shrink-0 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-[11px] transition shadow-xs active:scale-95"
                   >
-                    Ertangi kunga surish ⚡
+                    Set to Tomorrow ⚡
                   </button>
                 </div>
               )}

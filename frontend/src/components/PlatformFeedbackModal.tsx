@@ -551,14 +551,14 @@ export function PublicCommunityReviewsWall({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-zinc-900 dark:text-white tracking-tight">
-                O'quvchilar Fikrlari & Sharhlar
+                Student Feedback & Reviews
               </h2>
               <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                 ⭐ {avgRating} / 5.0
               </span>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Platforma sifatini oshirish bo'yicha jamoamiz a'zolarining ochiq fikrlari
+              Community reviews and platform improvement suggestions
             </p>
           </div>
         </div>
@@ -569,7 +569,7 @@ export function PublicCommunityReviewsWall({
             onClick={onOpenFeedbackModal}
             className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 active:scale-95 text-white shadow-xs transition shrink-0 self-start sm:self-auto"
           >
-            <span>{userHasReviewed ? "Fikrimni yangilash" : "⭐ Fikr bildirish (+5 XP)"}</span>
+            <span>{userHasReviewed ? "Update Feedback" : "⭐ Leave Feedback (+5 XP)"}</span>
           </button>
         )}
       </div>
@@ -581,11 +581,11 @@ export function PublicCommunityReviewsWall({
           onClick={() => setRatingFilter(null)}
           className={`px-3 py-1 rounded-lg text-xs font-semibold transition shrink-0 ${
             ratingFilter === null
-              ? "bg-brand-600 text-white shadow-xs"
+              ? "bg-blue-600 text-white shadow-xs"
               : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
           }`}
         >
-          Barchasi ({feedbacks.length})
+          All ({feedbacks.length})
         </button>
         {[5, 4, 3, 2, 1].map((star) => {
           const count = feedbacks.filter((f) => f.rating === star).length;
@@ -609,11 +609,11 @@ export function PublicCommunityReviewsWall({
 
       {/* Reviews Cards Grid */}
       {isLoading ? (
-        <div className="py-8 text-center text-xs text-zinc-400">Sharhlar yuklanmoqda...</div>
+        <div className="py-8 text-center text-xs text-zinc-400">Loading reviews...</div>
       ) : filteredFeedbacks.length === 0 ? (
         <div className="text-center py-8 px-4 bg-zinc-50/50 dark:bg-zinc-900/30 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800">
           <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
-            {ratingFilter ? `${ratingFilter} yulduzli sharhlar topilmadi` : "Hozircha sharhlar mavjud emas"}
+            {ratingFilter ? `No ${ratingFilter}-star reviews found` : "No reviews available yet"}
           </p>
         </div>
       ) : (
