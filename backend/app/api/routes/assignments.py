@@ -526,6 +526,9 @@ async def _build_student_assignments(
                 lock_reason=lock_reason,
                 comment_count=comment_cnt,
                 detailed_status=detailed_status,
+                group_id=assignment.group_id,
+                group_name=assignment.group.name if getattr(assignment, "group", None) else None,
+                created_at=assignment.created_at,
             )
         )
     return result
@@ -622,18 +625,26 @@ async def list_past_deadline_assignments(
         )
 
 
-@router.get("/{assignment_id}", response_model=AssignmentOut)
+@router.get("/{assignment_id}", response_model=AssignmentForStudent | AssignmentOut)
+@router.get("/student/{assignment_id}", response_model=AssignmentForStudent)
+@router.get("/{assignment_id}/student", response_model=AssignmentForStudent)
 async def get_assignment(
     assignment_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Returns assignment details.
+    For students: returns AssignmentForStudent with complete submission, grade, and lock status.
+    Critically, allows past-deadline assignments without 404/403 errors so students can catch up.
+    For teachers/admins: returns AssignmentOut.
+    """
     assignment = await _get_assignment_with_relations(db, assignment_id)
 
     if assignment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
 
-    # Security check for student role
+    # Security check & student-specific representation
     if current_user.role == UserRole.STUDENT:
         student_profile = (
             await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
@@ -643,6 +654,15 @@ async def get_assignment(
         if assignment.status != AssignmentStatus.PUBLISHED:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
 
+        now = ensure_utc(utcnow())
+        deadline_utc = ensure_utc(assignment.deadline)
+        is_past = deadline_utc < now
+        student_items = await _build_student_assignments(db, student_profile, [assignment], is_past_view=is_past)
+        if not student_items:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+        return student_items[0]
+
+    # Teacher / Admin response
     sub_count = (
         await db.execute(select(func.count()).select_from(Submission).where(Submission.assignment_id == assignment.id))
     ).scalar_one()
@@ -662,6 +682,15 @@ async def get_assignment(
         (await db.execute(select(Group.name).where(Group.id == assignment.group_id))).scalar_one_or_none() or ""
     )
     return _assignment_to_out(assignment, group_name, sub_count, vocab_words)
+
+
+async def get_assignment_for_student(
+    assignment_id: uuid.UUID,
+    current_user: User,
+    db: AsyncSession,
+) -> AssignmentForStudent:
+    """Helper satisfying the specification to retrieve an assignment specifically for a student."""
+    return await get_assignment(assignment_id, current_user, db)
 
 
 @router.get("/{assignment_id}/file")

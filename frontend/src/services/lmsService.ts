@@ -113,6 +113,8 @@ export const updateAssignmentInPlace = (id: string, formData: FormData) =>
 export const updateAssignment = (id: string, body: Partial<{ title: string; description: string; deadline: string; group_id: string; status: string }>) =>
   api.patch<AssignmentOut>(`/assignments/${id}`, body).then((r) => r.data);
 export const deleteAssignment = (id: string) => api.delete(`/assignments/${id}`);
+export const getAssignment = (id: string) =>
+  api.get<AssignmentForStudent>(`/assignments/${id}`).then((r) => r.data);
 export const listMyAssignments = () => api.get<AssignmentForStudent[]>("/assignments/mine").then((r) => r.data);
 export const listPastDeadlineAssignments = () =>
   api.get<AssignmentForStudent[]>("/assignments/past-deadlines").then((r) => r.data);

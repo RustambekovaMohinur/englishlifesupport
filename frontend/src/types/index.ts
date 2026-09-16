@@ -299,6 +299,9 @@ export interface AssignmentForStudent {
   lock_reason?: string | null;
   comment_count?: number;
   detailed_status?: "SUBMITTED_LATE" | "OVERDUE / PENDING_LATE" | "COMPLETED_ON_TIME" | string | null;
+  group_id?: string;
+  group_name?: string;
+  created_at?: string;
 }
 
 export interface AssignmentComment {

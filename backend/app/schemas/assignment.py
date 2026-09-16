@@ -125,6 +125,9 @@ class AssignmentForStudent(BaseModel):
     lock_reason: str | None = None
     comment_count: int = 0
     detailed_status: str | None = "OVERDUE / PENDING_LATE"  # e.g. 'SUBMITTED_LATE', 'OVERDUE / PENDING_LATE', 'COMPLETED_ON_TIME'
+    group_id: uuid.UUID | None = None
+    group_name: str | None = None
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

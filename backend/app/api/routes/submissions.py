@@ -46,7 +46,7 @@ from app.services.gamification_service import (
     unlock_achievement,
     update_student_streak,
 )
-from app.utils.datetimes import as_utc, utcnow
+from app.utils.datetimes import as_utc, ensure_utc, utcnow
 from app.utils.files import (
     process_submission_file_concurrent,
     process_submission_image_concurrent,
@@ -154,7 +154,7 @@ def _submission_to_out(sub: Submission) -> SubmissionOut:
         status=sub.status.value,
         is_late=bool(
             sub.status == SubmissionStatus.LATE
-            or (sub.assignment and as_utc(sub.submitted_at) > as_utc(sub.assignment.deadline))
+            or (sub.assignment and ensure_utc(sub.submitted_at) > ensure_utc(sub.assignment.deadline))
         ),
         submitted_at=sub.submitted_at,
         grade=grade_out,
@@ -205,9 +205,13 @@ async def submit_homework(
         # A student may only submit to assignments for their own group.
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This assignment is not for your group")
 
-    # Enforce sequential task lock strictly on backend
+    now = ensure_utc(utcnow())
+    is_late = ensure_utc(assignment.deadline) < now
+
+    # Enforce sequential task lock strictly on backend for active assignments
+    # Overdue/past deadline coursework is permitted to allow students to catch up
     is_locked, lock_reason = await is_assignment_locked_for_student(db, assignment_uuid, profile.id)
-    if is_locked:
+    if is_locked and not is_late:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Task is locked: {lock_reason}",
@@ -315,7 +319,7 @@ async def submit_homework(
         file_path, file_original_name, file_content_type, file_size, backend_used = primary_res
         await record_file_blob(db, file_path, file_size, file_content_type, file_original_name, storage_backend=backend_used)
 
-    is_late = as_utc(assignment.deadline) < now
+    is_late = ensure_utc(assignment.deadline) < now
     submission_status = SubmissionStatus.LATE if is_late else SubmissionStatus.SUBMITTED
 
     # If text_answer/content is sent, update it; otherwise retain existing

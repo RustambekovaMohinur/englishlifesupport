@@ -42,7 +42,9 @@ import {
 import { AudioRecorderWidget } from "@/components/AudioRecorder";
 import { AssignmentDiscussionDrawer } from "@/components/AssignmentDiscussionDrawer";
 import {
+  getAssignment,
   listMyAssignments,
+  listPastDeadlineAssignments,
   submitHomework,
   useFreePass,
   recordVocabPractice,
@@ -257,7 +259,7 @@ export default function StudentAssignmentSubmitPage() {
           }
           if (restoredFiles.length > 0) {
             setSubmissionImages(restoredFiles);
-            toast.success("Oldingi qoralama tiklandi 💾", { id: "draft-restored" });
+            toast.success("Previous draft restored 💾", { id: "draft-restored" });
           }
         }
       }
@@ -298,29 +300,47 @@ export default function StudentAssignmentSubmitPage() {
     return () => clearTimeout(timer);
   }, [assignmentId, activeTab, textAnswer, externalLink, submissionImages, isLoading, existingSubmission]);
 
-  // Fetch Assignment Details
-  function loadData() {
+  // Fetch Assignment Details (direct getAssignment with fallback to active & past pools)
+  async function loadData() {
     if (!assignmentId) return;
     setIsLoading(true);
-    listMyAssignments()
-      .then((items) => {
-        const found = items.find((a) => a.id === assignmentId);
-        if (found) {
-          setAssignment(found);
-          const skill = getSkillBadge(found.title);
-          setActiveTab(skill.defaultTab);
+    try {
+      let found: AssignmentForStudent | null = null;
+      // 1. Direct fetch via single assignment endpoint
+      try {
+        found = await getAssignment(assignmentId);
+      } catch (err) {
+        console.warn("Direct getAssignment call failed, checking assignment pools:", err);
+      }
 
-          if (found.submission_id) {
-            getSubmission(found.submission_id)
-              .then(setExistingSubmission)
-              .catch(() => {});
-          }
-        } else {
-          toast.error("Assignment not found or not enrolled");
+      // 2. Resilient fallback: scan active and past deadline pools
+      if (!found) {
+        const [activeList, pastList] = await Promise.all([
+          listMyAssignments().catch(() => [] as AssignmentForStudent[]),
+          listPastDeadlineAssignments().catch(() => [] as AssignmentForStudent[]),
+        ]);
+        const combined = [...activeList, ...pastList];
+        found = combined.find((a) => a.id === assignmentId) || null;
+      }
+
+      if (found) {
+        setAssignment(found);
+        const skill = getSkillBadge(found.title);
+        setActiveTab(skill.defaultTab);
+
+        if (found.submission_id) {
+          getSubmission(found.submission_id)
+            .then(setExistingSubmission)
+            .catch(() => {});
         }
-      })
-      .catch(() => toast.error("Failed to load assignment details"))
-      .finally(() => setIsLoading(false));
+      } else {
+        toast.error("Assignment not found or not enrolled");
+      }
+    } catch {
+      toast.error("Failed to load assignment details");
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -339,7 +359,7 @@ export default function StudentAssignmentSubmitPage() {
 
     for (const f of incomingFiles) {
       if (f.size > 25 * 1024 * 1024) {
-        toast.error(`"${f.name}" fayl hajmi juda katta (maksimal 25 MB).`);
+        toast.error(`"${f.name}" is too large (maximum 25 MB).`);
         continue;
       }
       const isImg = f.type.startsWith("image/") || allowedImgExts.test(f.name);
@@ -347,7 +367,7 @@ export default function StudentAssignmentSubmitPage() {
       const isDoc = allowedDocExts.test(f.name);
 
       if (!isImg && !isDoc && !isAudio) {
-        toast.error(`"${f.name}" formati qo'llab-quvvatlanmaydi. Iltimos, PDF, DOCX, PNG, JPG yoki MP3 yuklang.`);
+        toast.error(`"${f.name}" format is not supported. Please upload PDF, DOCX, PNG, JPG, or audio files.`);
         continue;
       }
 
@@ -589,26 +609,40 @@ export default function StudentAssignmentSubmitPage() {
           title="Task not found"
           description="This assignment could not be loaded or is not assigned to your active cohort."
         />
-        <button
-          onClick={() => navigate("/student/assignments")}
-          className="btn-primary inline-flex items-center gap-2"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Assignments</span>
-        </button>
+        <div className="flex items-center justify-center gap-3">
+          <button
+            onClick={() => navigate("/student/assignments")}
+            className="btn-primary inline-flex items-center gap-2 text-xs"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Active Tasks</span>
+          </button>
+          <button
+            onClick={() => navigate("/student/past-deadlines")}
+            className="btn-secondary inline-flex items-center gap-2 text-xs"
+          >
+            <span>Past Deadlines Hub</span>
+          </button>
+        </div>
       </div>
     );
   }
 
   const skillBadge = getSkillBadge(assignment.title);
   const countdown = getCountdownInfo(assignment.deadline);
+  const isElapsedDeadline = Boolean(
+    assignment.is_past_deadline ||
+    (assignment.deadline && new Date(assignment.deadline).getTime() < Date.now())
+  );
+  // Do NOT lock past-deadline assignments; keep inputs and submit CTA unlocked for late catch-up submission!
   const isTaskLocked = Boolean(
+    !isElapsedDeadline &&
     assignment.is_locked &&
     assignment.prerequisite_id !== assignment.id &&
     !assignment.title.toLowerCase().includes("ket listening test2")
   );
   const isGraded = assignment.submission_status === "graded";
-  const isPastDeadline = assignment.is_past_deadline && !assignment.submission_status;
+  const isPastDeadline = isElapsedDeadline;
   const isAudioFile = assignment.file_original_name && /\.(mp3|wav|ogg|webm|m4a)$/i.test(assignment.file_original_name);
 
   const galleryImages = (assignment.images || []).map((img) => ({
@@ -640,12 +674,20 @@ export default function StudentAssignmentSubmitPage() {
           {/* Back Button & Title */}
           <div className="flex items-center gap-2.5 min-w-0">
             <button
-              onClick={() => navigate("/student/assignments")}
+              onClick={() => {
+                if (isElapsedDeadline) {
+                  navigate("/student/past-deadlines");
+                } else {
+                  navigate("/student/assignments");
+                }
+              }}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition active:scale-95 shrink-0"
-              title="Return to homework list"
+              title="Return to coursework list"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Back to Tasks</span>
+              <span className="hidden sm:inline">
+                {isElapsedDeadline ? "Back to Past Deadlines" : "Back to Tasks"}
+              </span>
             </button>
 
             <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700 shrink-0" />
@@ -756,16 +798,16 @@ export default function StudentAssignmentSubmitPage() {
           </div>
         )}
 
-        {/* Late Submission Notice Banner */}
+        {/* Past Deadline Submission Notice Banner */}
         {isPastDeadline && !isGraded && (
           <div className="rounded-2xl border border-amber-300 dark:border-amber-700/80 bg-amber-500/10 dark:bg-amber-950/40 p-4 sm:p-5 flex items-start gap-3 shadow-xs">
             <span className="text-xl shrink-0">⚠️</span>
             <div className="space-y-1">
               <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">
-                Late Submission Notice
+                Past Deadline Submission
               </h4>
               <p className="text-xs sm:text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
-                The deadline for this assignment has passed. You can still submit your work, and your teacher will review it as a late submission.
+                You are submitting after the due date. This submission will be marked as Late for your instructor.
               </p>
             </div>
           </div>
@@ -1512,16 +1554,16 @@ export default function StudentAssignmentSubmitPage() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Yuborilmoqda...</span>
+                    <span>Submitting...</span>
                   </>
                 ) : isCompressingImages ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Rasmlar siqilmoqda...</span>
+                    <span>Compressing images...</span>
                   </>
                 ) : isPastDeadline ? (
                   <>
-                    <span>Submit Late</span>
+                    <span>Submit Late Homework</span>
                     <span className="text-base">⚠️</span>
                   </>
                 ) : (
@@ -1534,10 +1576,16 @@ export default function StudentAssignmentSubmitPage() {
             ) : (
               <button
                 type="button"
-                onClick={() => navigate("/student/assignments")}
+                onClick={() => {
+                  if (isElapsedDeadline) {
+                    navigate("/student/past-deadlines");
+                  } else {
+                    navigate("/student/assignments");
+                  }
+                }}
                 className="w-full sm:w-64 py-3 px-6 rounded-xl btn-secondary text-sm font-semibold flex items-center justify-center min-h-[44px]"
               >
-                Return to Assignments
+                {isElapsedDeadline ? "Return to Past Deadlines" : "Return to Assignments"}
               </button>
             )}
           </div>
