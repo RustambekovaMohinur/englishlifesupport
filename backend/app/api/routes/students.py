@@ -150,9 +150,14 @@ async def list_students(
     if st_ids:
         st_sub_query = (
             select(Submission.student_id, func.count(func.distinct(Submission.assignment_id)))
+            .join(Assignment, Submission.assignment_id == Assignment.id)
             .where(
                 Submission.student_id.in_(st_ids),
                 Submission.is_archived == False,
+                or_(
+                    Assignment.updated_at.is_(None),
+                    Submission.submitted_at >= Assignment.updated_at,
+                ),
             )
             .group_by(Submission.student_id)
         )

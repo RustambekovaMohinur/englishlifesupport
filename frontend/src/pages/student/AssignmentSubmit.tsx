@@ -1226,11 +1226,9 @@ export default function StudentAssignmentSubmitPage() {
 
                   {/* Resilient Audio Recorder Component with Stream Cleanup & Toast Deduplication */}
                   <AudioRecorderWidget
-                    onAudioRecorded={(blob) => {
-                      if (blob) {
-                        const ext = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
-                        const audioFile = new File([blob], `voice_recording_${Date.now()}.${ext}`, { type: blob.type || "audio/webm" });
-                        setVoiceFile(audioFile);
+                    onAudioRecorded={(file) => {
+                      if (file) {
+                        setVoiceFile(file);
                         toast.success("Ovozli javob tayyor!", { id: "voice-recorded-success" });
                       } else {
                         setVoiceFile(null);

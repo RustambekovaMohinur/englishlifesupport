@@ -24,7 +24,7 @@ from app.schemas.dashboard import (
 
 from app.models.gamification import FreePass, StudentStreak, StudentXP, TaskLockOverride
 from app.services.gamification_service import calculate_level, get_or_create_monthly_free_pass
-from app.utils.datetimes import utcnow
+from app.utils.datetimes import as_utc, utcnow
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -223,12 +223,17 @@ async def student_dashboard(
             total_assignments = len(cycle_assignments)
             cycle_assign_ids = {a.id for a in cycle_assignments}
 
-            # Active, non-archived submissions for the current cycle
+            # Active, non-archived submissions for the current cycle submitted >= updated_at
+            cycle_assign_map = {a.id: a for a in cycle_assignments}
             active_cycle_subs = [
                 s for s in submissions
                 if s.assignment_id in cycle_assign_ids
                 and (getattr(s, "cycle_number", 1) or 1) == current_cycle
                 and not getattr(s, "is_archived", False)
+                and (
+                    not getattr(cycle_assign_map.get(s.assignment_id), "updated_at", None)
+                    or as_utc(s.submitted_at) >= as_utc(cycle_assign_map[s.assignment_id].updated_at)
+                )
             ]
             completed_assignments = len(active_cycle_subs)
             submitted_cycle_ids = {s.assignment_id for s in active_cycle_subs}

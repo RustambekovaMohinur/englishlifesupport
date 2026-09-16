@@ -3,8 +3,8 @@ import toast from 'react-hot-toast';
 import { Mic, Square, Play, Pause, RotateCcw, AlertCircle } from 'lucide-react';
 
 interface AudioRecorderProps {
-  onAudioRecorded: (blob: Blob | null) => void;
-  existingAudio?: Blob | null;
+  onAudioRecorded: (file: File | null) => void;
+  existingAudio?: File | Blob | null;
 }
 
 export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecorded, existingAudio }) => {
@@ -19,6 +19,22 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  const getSupportedMimeType = (): string => {
+    if (typeof MediaRecorder === 'undefined') return '';
+    const types = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+      'audio/aac',
+      'audio/ogg;codecs=opus',
+      'audio/ogg',
+    ];
+    for (const t of types) {
+      if (MediaRecorder.isTypeSupported(t)) return t;
+    }
+    return '';
+  };
 
   // Initialize existingAudio URL if supplied
   useEffect(() => {
@@ -45,6 +61,19 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
     setMicUnavailable(false);
     audioChunksRef.current = [];
 
+    // Explicit AudioContext activation on user gesture for Mobile Safari (iOS WebKit)
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const audioCtx = new AudioContextClass();
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume();
+        }
+      }
+    } catch (e) {
+      console.warn("AudioContext activation warning:", e);
+    }
+
     // Guard against unsupported environments
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       toast.error("Brauzeringizda ovoz yozish imkoniyati cheklangan. Audio fayl yuklashingiz mumkin.", {
@@ -64,25 +93,24 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
       });
       streamRef.current = stream;
 
-      // Select supported audio mimeType with Opus compression
-      const mimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
-      let selectedMimeType = '';
-      for (const mime of mimeTypes) {
-        if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(mime)) {
-          selectedMimeType = mime;
-          break;
+      const mimeType = getSupportedMimeType();
+
+      let mediaRecorder: MediaRecorder;
+      try {
+        const recorderOptions: MediaRecorderOptions = {};
+        if (mimeType) {
+          recorderOptions.mimeType = mimeType;
+        }
+        recorderOptions.audioBitsPerSecond = 32000;
+        mediaRecorder = new MediaRecorder(stream, recorderOptions);
+      } catch {
+        // Safe fallback without bitrate restriction if mobile browser throws
+        try {
+          mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+        } catch {
+          mediaRecorder = new MediaRecorder(stream);
         }
       }
-
-      // 32 kbps produces pristine voice quality at only ~240 KB per minute instead of 4 MB!
-      const recorderOptions: MediaRecorderOptions = {
-        audioBitsPerSecond: 32000,
-      };
-      if (selectedMimeType) {
-        recorderOptions.mimeType = selectedMimeType;
-      }
-
-      const mediaRecorder = new MediaRecorder(stream, recorderOptions);
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event: BlobEvent) => {
@@ -92,11 +120,17 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: selectedMimeType || 'audio/webm' });
-        console.log(`[AudioRecorder] Recorded voice note size: ${(audioBlob.size / 1024).toFixed(1)} KB`);
-        const url = URL.createObjectURL(audioBlob);
+        const chosenMime = mimeType || getSupportedMimeType() || 'audio/mp4';
+        const ext = chosenMime.includes('webm') ? 'webm' : chosenMime.includes('ogg') ? 'ogg' : 'm4a';
+        const audioBlob = new Blob(audioChunksRef.current, { type: chosenMime });
+        const voiceFile = new File([audioBlob], `voice_recording_${Date.now()}.${ext}`, {
+          type: chosenMime,
+          lastModified: Date.now(),
+        });
+        console.log(`[AudioRecorder] Recorded voice note: ${voiceFile.name} (${(voiceFile.size / 1024).toFixed(1)} KB, ${voiceFile.type})`);
+        const url = URL.createObjectURL(voiceFile);
         setAudioUrl(url);
-        onAudioRecorded(audioBlob);
+        onAudioRecorded(voiceFile);
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
           streamRef.current = null;

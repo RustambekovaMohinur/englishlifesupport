@@ -206,7 +206,17 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
             a_cycle = getattr(a, "cycle_number", 1) or 1
             is_past_dl = as_utc(a.deadline) < now_dt
 
-            if sub is not None:
+            # An assignment is only completed if submission is active (non-archived) AND submitted_at >= assignment.updated_at
+            is_active_sub = (
+                sub is not None
+                and not getattr(sub, "is_archived", False)
+                and (
+                    not getattr(a, "updated_at", None)
+                    or as_utc(sub.submitted_at) >= as_utc(a.updated_at)
+                )
+            )
+
+            if is_active_sub:
                 has_sub = True
                 sub_at = sub.submitted_at
                 if sub.grade is not None:
@@ -230,10 +240,20 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
             if a.prerequisite_id and not has_sub:
                 if (a.id, st_profile.id) not in overrides_set:
                     prereq_sub = submissions_map.get((a.prerequisite_id, st_profile.id))
-                    if not prereq_sub:
+                    prereq_a = next((x for x in assignments if x.id == a.prerequisite_id), None)
+                    prereq_active = (
+                        prereq_sub is not None
+                        and not getattr(prereq_sub, "is_archived", False)
+                        and (
+                            not prereq_a
+                            or not getattr(prereq_a, "updated_at", None)
+                            or as_utc(prereq_sub.submitted_at) >= as_utc(prereq_a.updated_at)
+                        )
+                    )
+                    if not prereq_active:
                         is_locked = True
 
-            computed_status = "locked" if is_locked else ("overdue" if (is_past_dl and not has_sub) else (sub.status.value if sub else "not_submitted"))
+            computed_status = "locked" if is_locked else ("overdue" if (is_past_dl and not has_sub) else (sub.status.value if (has_sub and sub) else "not_submitted"))
 
             student_assignments.append(
                 AssignmentItemOverview(

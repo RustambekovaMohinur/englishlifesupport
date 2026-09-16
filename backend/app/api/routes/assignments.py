@@ -38,6 +38,7 @@ from app.utils.files import (
 )
 
 router = APIRouter(prefix="/api/assignments", tags=["assignments"])
+teacher_assignments_router = APIRouter(prefix="/api/teacher/assignments", tags=["assignments"])
 
 
 async def _get_assignment_with_relations(db: AsyncSession, assignment_id: uuid.UUID) -> Assignment | None:
@@ -372,11 +373,15 @@ async def list_my_assignments(
             )
         )
     ).scalars().all()
-    # Active submissions strictly scoped to current assignment cycle (non-archived)
+    # Active submissions strictly scoped to current assignment cycle (non-archived and submitted >= updated_at)
     sub_map = {
         s.assignment_id: s for s in subs
         if (getattr(s, "cycle_number", 1) or 1) == (getattr(assign_map[s.assignment_id], "cycle_number", 1) or 1)
         and not getattr(s, "is_archived", False)
+        and (
+            not getattr(assign_map[s.assignment_id], "updated_at", None)
+            or as_utc(s.submitted_at) >= as_utc(assign_map[s.assignment_id].updated_at)
+        )
     }
 
     # Batch 2: Vocabulary assignments with words
@@ -587,6 +592,8 @@ async def download_assignment_file(
 
 @router.put("/{assignment_id}", response_model=AssignmentOut, dependencies=[Depends(require_teacher)])
 @router.put("/{assignment_id}/", response_model=AssignmentOut, dependencies=[Depends(require_teacher)], include_in_schema=False)
+@teacher_assignments_router.put("/{assignment_id}", response_model=AssignmentOut, dependencies=[Depends(require_teacher)])
+@teacher_assignments_router.put("/{assignment_id}/", response_model=AssignmentOut, dependencies=[Depends(require_teacher)], include_in_schema=False)
 async def edit_assignment_in_place(
     assignment_id: uuid.UUID,
     title: str = Form(...),
@@ -686,6 +693,15 @@ async def edit_assignment_in_place(
             .values(is_archived=True)
         )
 
+    # Mark prior submissions for this updated assignment as archived,
+    # requiring students to submit fresh work while preserving 100% of historical stars and feedback logs.
+    await db.execute(
+        update(Submission)
+        .where(Submission.assignment_id == assignment.id)
+        .values(is_archived=True)
+    )
+
+    assignment.updated_at = now
     assignment.title = clean_title
     assignment.description = clean_description
     assignment.deadline = parsed_deadline
@@ -796,6 +812,8 @@ async def edit_assignment_in_place(
 
 @router.patch("/{assignment_id}", response_model=AssignmentOut, dependencies=[Depends(require_teacher)])
 @router.patch("/{assignment_id}/", response_model=AssignmentOut, dependencies=[Depends(require_teacher)], include_in_schema=False)
+@teacher_assignments_router.patch("/{assignment_id}", response_model=AssignmentOut, dependencies=[Depends(require_teacher)])
+@teacher_assignments_router.patch("/{assignment_id}/", response_model=AssignmentOut, dependencies=[Depends(require_teacher)], include_in_schema=False)
 async def update_assignment(
     assignment_id: uuid.UUID,
     body: AssignmentUpdate,
@@ -818,6 +836,14 @@ async def update_assignment(
 
     for field, value in update_data.items():
         setattr(assignment, field, value)
+
+    now = utcnow()
+    assignment.updated_at = now
+    await db.execute(
+        update(Submission)
+        .where(Submission.assignment_id == assignment.id)
+        .values(is_archived=True)
+    )
 
     await db.commit()
 
