@@ -156,6 +156,8 @@ export interface StudentHistoryOut {
   cycle_completed_tasks?: number;
   cycle_total_tasks?: number;
   cycle_progress_percentage?: number;
+  active_assignments?: StudentHistoryItem[];
+  past_cycles?: any[];
   history: StudentHistoryItem[];
 }
 

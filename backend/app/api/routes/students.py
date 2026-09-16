@@ -656,6 +656,8 @@ async def get_student_history(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this student")
 
     history_items: list[StudentHistoryItem] = []
+    active_assignments: list[StudentHistoryItem] = []
+    past_cycles: list[Any] = []
     cycle_completed_tasks = 0
     cycle_total_tasks = 0
     cycle_progress_percentage = 0
@@ -734,24 +736,27 @@ async def get_student_history(
                 file_name = sub.file_original_name
                 comp_pct = 0
 
-            history_items.append(
-                StudentHistoryItem(
-                    assignment_id=a.id,
-                    title=a.title,
-                    assignment_type="homework",
-                    assigned_date=a.created_at,
-                    deadline=a.deadline,
-                    completion_percentage=comp_pct,
-                    submission_id=sub_id,
-                    submission_status=sub_status,
-                    submitted_at=sub_at,
-                    score=score,
-                    feedback=feedback,
-                    stars_earned=stars_earned,
-                    text_answer=text_ans,
-                    file_original_name=file_name,
-                )
+            item = StudentHistoryItem(
+                assignment_id=a.id,
+                title=a.title,
+                assignment_type="homework",
+                assigned_date=a.created_at,
+                deadline=a.deadline,
+                completion_percentage=comp_pct,
+                submission_id=sub_id,
+                submission_status=sub_status,
+                submitted_at=sub_at,
+                score=score,
+                feedback=feedback,
+                stars_earned=stars_earned,
+                text_answer=text_ans,
+                file_original_name=file_name,
             )
+            history_items.append(item)
+            if a_cycle == current_cycle:
+                active_assignments.append(item)
+            else:
+                past_cycles.append(item)
 
         cycle_progress_percentage = (
             int((cycle_completed_tasks / cycle_total_tasks) * 100)
@@ -762,16 +767,18 @@ async def get_student_history(
     grp = profile.group
     return StudentHistoryOut(
         student_id=profile.id,
-        full_name=profile.full_name,
-        username=profile.user.username,
-        telegram_username=profile.phone,
-        level=grp.english_level.value if grp and hasattr(grp.english_level, "value") else None,
+        full_name=profile.full_name or "",
+        username=profile.user.username if profile.user else "",
+        telegram_username=profile.phone or "",
+        level=grp.english_level.value if grp and hasattr(grp.english_level, "value") else (str(grp.english_level) if grp and grp.english_level else None),
         group_name=grp.name if grp else None,
-        total_stars=profile.total_stars,
-        total_lightning=getattr(profile, "total_lightning", 0),
+        total_stars=profile.total_stars or 0,
+        total_lightning=getattr(profile, "total_lightning", 0) or 0,
         cycle_completed_tasks=cycle_completed_tasks,
         cycle_total_tasks=cycle_total_tasks,
         cycle_progress_percentage=cycle_progress_percentage,
+        active_assignments=active_assignments,
+        past_cycles=past_cycles,
         history=history_items,
     )
 

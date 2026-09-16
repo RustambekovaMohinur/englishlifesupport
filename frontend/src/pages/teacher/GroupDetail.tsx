@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import StudentDetailModal from "@/components/StudentDetailModal";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { StudentProgressMatrix } from "@/components/StudentProgressMatrix";
 import {
@@ -68,6 +69,7 @@ export default function GroupDetailPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [isInspectOpen, setIsInspectOpen] = useState(false);
   const [placementStudent, setPlacementStudent] = useState<GroupStudentDetail | null>(null);
   const [resettingStudent, setResettingStudent] = useState<GroupStudentDetail | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -80,6 +82,16 @@ export default function GroupDetailPage() {
   } | null>(null);
 
   const { confirm, ConfirmDialog } = useConfirm();
+
+  function handleInspectStudent(id: string) {
+    setSelectedStudentId(id);
+    setIsInspectOpen(true);
+  }
+
+  function handleCloseInspect() {
+    setIsInspectOpen(false);
+    setSelectedStudentId(null);
+  }
 
   function loadDetails() {
     if (!groupId) return;
@@ -485,7 +497,7 @@ export default function GroupDetailPage() {
                 return (
                   <tr
                     key={student.student_id}
-                    onClick={() => setSelectedStudentId(student.student_id)}
+                    onClick={() => handleInspectStudent(student.student_id)}
                     className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer group"
                     title="Click to inspect student progress & submissions"
                   >
@@ -559,7 +571,7 @@ export default function GroupDetailPage() {
                       <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
-                          onClick={() => setSelectedStudentId(student.student_id)}
+                          onClick={() => handleInspectStudent(student.student_id)}
                           className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 transition"
                           title="Inspect Student Progress & History"
                         >
@@ -620,7 +632,7 @@ export default function GroupDetailPage() {
             return (
               <div
                 key={student.student_id}
-                onClick={() => setSelectedStudentId(student.student_id)}
+                onClick={() => handleInspectStudent(student.student_id)}
                 className="card cursor-pointer transition-all hover:shadow-md hover:border-brand-300 relative overflow-hidden group"
               >
                 {/* Status indicator badge in top-right */}
@@ -734,17 +746,46 @@ export default function GroupDetailPage() {
         <StudentProgressMatrix
           groupDetail={groupDetail}
           isTeacher={true}
-          onStudentClick={(id) => setSelectedStudentId(id)}
+          onStudentClick={(id) => handleInspectStudent(id)}
           onCellClick={(student, assignment, item) => setActiveGradingCell({ student, assignment, item })}
         />
       )}
 
-      {/* Polish Responsive StudentDetailModal */}
-      <StudentDetailModal
-        studentId={selectedStudentId}
-        onClose={() => setSelectedStudentId(null)}
-        onStudentUpdated={loadDetails}
-      />
+      {/* Polish Responsive StudentDetailModal wrapped in ErrorBoundary */}
+      {selectedStudentId && isInspectOpen && (
+        <ErrorBoundary
+          onReset={handleCloseInspect}
+          fallback={
+            <Modal open={true} onClose={handleCloseInspect} title="Student Details">
+              <div className="p-6 text-center space-y-4">
+                <div className="text-rose-500 text-3xl">⚠️</div>
+                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+                  Failed to render student inspect view.
+                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  An error occurred while displaying student records.
+                </p>
+                <div className="flex justify-center pt-2">
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs px-4 py-2"
+                    onClick={handleCloseInspect}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </Modal>
+          }
+        >
+          <StudentDetailModal
+            isOpen={isInspectOpen}
+            studentId={selectedStudentId}
+            onClose={handleCloseInspect}
+            onStudentUpdated={loadDetails}
+          />
+        </ErrorBoundary>
+      )}
 
       {/* Edit Student Placement Modal */}
       <EditStudentPlacementModal

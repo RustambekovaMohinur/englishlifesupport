@@ -1,29 +1,41 @@
 import { useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
-import { ChevronDown, ChevronRight, History } from "lucide-react";
-import { FileDownloadButton, LoadingRows, Modal, TelegramLink } from "@/components/ui";
+import { ChevronDown, History } from "lucide-react";
+import { FileDownloadButton, LoadingRows, Modal, Spinner, TelegramLink } from "@/components/ui";
 import { getStudent, getStudentHistory, listGroups, listSubmissions, resetStudentPassword, updateStudentPlacement } from "@/services/lmsService";
 import { Group, StudentHistoryOut, StudentOut, SubmissionOut } from "@/types";
 import { UserAvatar } from "@/components/common/UserAvatar";
 
 interface StudentDetailModalProps {
   studentId: string | null;
+  isOpen?: boolean;
+  open?: boolean;
   onClose: () => void;
   onStudentUpdated?: () => void;
 }
 
-export default function StudentDetailModal({ studentId, onClose, onStudentUpdated }: StudentDetailModalProps) {
+export default function StudentDetailModal({
+  studentId,
+  isOpen,
+  open,
+  onClose,
+  onStudentUpdated,
+}: StudentDetailModalProps) {
   const [profile, setProfile] = useState<StudentOut | null>(null);
   const [history, setHistory] = useState<StudentHistoryOut | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionOut[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isUpdatingGroup, setIsUpdatingGroup] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isResetting, setIsResetting] = useState(false);
   const [isPastCyclesOpen, setIsPastCyclesOpen] = useState(false);
+
+  const isModalOpen = (isOpen ?? open) !== undefined ? Boolean(isOpen ?? open) : Boolean(studentId);
 
   async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault();
@@ -75,11 +87,16 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
       setProfile(null);
       setHistory(null);
       setSubmissions([]);
+      setIsLoading(false);
+      setHasError(false);
+      setErrorMessage(null);
       return;
     }
 
     let isCurrent = true;
     setIsLoading(true);
+    setHasError(false);
+    setErrorMessage(null);
 
     Promise.allSettled([
       getStudent(studentId),
@@ -89,19 +106,36 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
       .then(([profRes, histRes, subsRes]) => {
         if (!isCurrent) return;
 
-        if (profRes.status === "fulfilled") {
+        let profLoaded = false;
+        let histLoaded = false;
+
+        if (profRes.status === "fulfilled" && profRes.value) {
           setProfile(profRes.value);
-        } else {
-          toast.error("Failed to load student profile");
+          profLoaded = true;
         }
 
-        if (histRes.status === "fulfilled") {
+        if (histRes.status === "fulfilled" && histRes.value) {
           setHistory(histRes.value);
+          histLoaded = true;
         }
 
-        if (subsRes.status === "fulfilled") {
-          setSubmissions(subsRes.value.items);
+        if (subsRes.status === "fulfilled" && subsRes.value) {
+          setSubmissions(Array.isArray(subsRes.value.items) ? subsRes.value.items : []);
         }
+
+        if (!profLoaded && !histLoaded) {
+          setHasError(true);
+          const detail =
+            (profRes.status === "rejected" && (profRes.reason?.response?.data?.detail || profRes.reason?.message)) ||
+            (histRes.status === "rejected" && (histRes.reason?.response?.data?.detail || histRes.reason?.message)) ||
+            "Failed to load student records.";
+          setErrorMessage(detail);
+        }
+      })
+      .catch((err) => {
+        if (!isCurrent) return;
+        setHasError(true);
+        setErrorMessage(err?.message || "Failed to load student data");
       })
       .finally(() => {
         if (isCurrent) setIsLoading(false);
@@ -112,48 +146,89 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
     };
   }, [studentId]);
 
-  if (!studentId) return null;
+  if (!isModalOpen || !studentId) return null;
+
+  // Safe fallbacks for all metrics
+  const studentHistory = history;
+  const completedTasks = studentHistory?.cycle_completed_tasks ?? 0;
+  const totalTasks = studentHistory?.cycle_total_tasks ?? 0;
+  const progressPercentage = studentHistory?.cycle_progress_percentage ?? 0;
+  const activeAssignments = studentHistory?.active_assignments ?? [];
+  const pastCycles = studentHistory?.past_cycles ?? [];
+
+  const historyItems = Array.isArray(studentHistory?.history) ? studentHistory.history : [];
+  const lifetimeCompleted = historyItems.filter((h) => (Number(h?.completion_percentage) || 0) >= 100).length;
+  const lifetimeTotal = historyItems.length;
+
+  const cycleCompleted = studentHistory?.cycle_completed_tasks ?? (lifetimeCompleted > 0 ? lifetimeCompleted : completedTasks);
+  const cycleTotal = studentHistory?.cycle_total_tasks ?? (lifetimeTotal > 0 ? lifetimeTotal : totalTasks);
+  const cyclePct =
+    studentHistory?.cycle_progress_percentage ??
+    (cycleTotal > 0 ? Math.round((cycleCompleted / cycleTotal) * 100) : progressPercentage);
 
   const fullName = profile?.full_name || history?.full_name || "Student Profile";
   const username = profile?.username || history?.username || "";
   const telegram = profile?.phone || history?.telegram_username || "";
   const groupName = profile?.group?.name || history?.group_name || "No Cohort Assigned";
   const level = profile?.group?.english_level || history?.level || "";
-  const totalStars = profile?.total_stars ?? history?.total_stars ?? 0;
-  const totalLightning = history?.total_lightning ?? 0;
-  const totalTasks = history?.history?.length ?? 0;
-  const completedTasks = history?.history?.filter((h) => h.completion_percentage >= 100).length ?? 0;
-  const cycleCompleted = history?.cycle_completed_tasks ?? (history?.history?.filter((h) => h.completion_percentage >= 100).length ?? 0);
-  const cycleTotal = history?.cycle_total_tasks ?? (history?.history?.length ?? 0);
-  const cyclePct = history?.cycle_progress_percentage ?? (cycleTotal > 0 ? Math.round((cycleCompleted / cycleTotal) * 100) : 0);
+  const totalStars = Number(profile?.total_stars ?? history?.total_stars ?? 0);
+  const totalLightning = Number(history?.total_lightning ?? (profile as any)?.total_lightning ?? 0);
 
   // Split history into active cycle tasks and past cycle tasks
   const { activeCycleItems, pastCycleItems } = useMemo(() => {
-    if (!history?.history) return { activeCycleItems: [], pastCycleItems: [] };
-    // If backend provided cycle_total_tasks > 0, the first cycle_total_tasks items correspond to the active cycle (ordered newest first)
-    // Alternatively, items with completion/active cycle matching
-    const active = history.history.slice(0, cycleTotal);
-    const past = history.history.slice(cycleTotal);
+    if (Array.isArray(activeAssignments) && activeAssignments.length > 0) {
+      return {
+        activeCycleItems: activeAssignments,
+        pastCycleItems: Array.isArray(pastCycles) ? pastCycles : [],
+      };
+    }
+    if (!historyItems || historyItems.length === 0) {
+      return { activeCycleItems: [], pastCycleItems: [] };
+    }
+    const active = historyItems.slice(0, cycleTotal > 0 ? cycleTotal : historyItems.length);
+    const past = cycleTotal > 0 && cycleTotal < historyItems.length ? historyItems.slice(cycleTotal) : [];
     return { activeCycleItems: active, pastCycleItems: past };
-  }, [history, cycleTotal]);
+  }, [activeAssignments, pastCycles, historyItems, cycleTotal]);
 
   function renderHistoryCard(h: any) {
-    const subDetail = submissions.find((s) => s.assignment_id === h.assignment_id);
-    const isDone = h.completion_percentage >= 100;
-    const isZero = h.completion_percentage === 0;
+    if (!h) return null;
+    const subDetail = Array.isArray(submissions) ? submissions.find((s) => s && s.assignment_id === h.assignment_id) : undefined;
+    const compPct = Number(h.completion_percentage) || 0;
+    const isDone = compPct >= 100;
+    const isZero = compPct === 0;
+
+    let deadlineStr = "No deadline";
+    try {
+      if (h.deadline) {
+        const d = new Date(h.deadline);
+        deadlineStr = isNaN(d.getTime()) ? String(h.deadline) : d.toLocaleString();
+      }
+    } catch {
+      deadlineStr = String(h.deadline || "No deadline");
+    }
+
+    let submittedAtStr: string | null = null;
+    try {
+      if (h.submitted_at) {
+        const d = new Date(h.submitted_at);
+        submittedAtStr = isNaN(d.getTime()) ? String(h.submitted_at) : d.toLocaleString();
+      }
+    } catch {
+      submittedAtStr = String(h.submitted_at);
+    }
 
     return (
       <div
-        key={h.assignment_id}
+        key={h.assignment_id || h.id || Math.random()}
         className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-slate-900 p-3.5 space-y-2.5 shadow-xs"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h5 className="font-semibold text-zinc-900 dark:text-white text-sm">{h.title}</h5>
+            <h5 className="font-semibold text-zinc-900 dark:text-white text-sm">{h.title || "Untitled Assignment"}</h5>
             <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              <span>Deadline: {new Date(h.deadline).toLocaleString()}</span>
-              {h.submitted_at && (
-                <span>Submitted: {new Date(h.submitted_at).toLocaleString()}</span>
+              <span>Deadline: {deadlineStr}</span>
+              {submittedAtStr && (
+                <span>Submitted: {submittedAtStr}</span>
               )}
             </div>
           </div>
@@ -167,17 +242,17 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
                 : "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300"
             }`}
           >
-            {isDone ? "✓ Complete (100%)" : isZero ? "✕ Not completed (0%)" : `⏳ ${h.completion_percentage}%`}
+            {isDone ? "✓ Complete (100%)" : isZero ? "✕ Not completed (0%)" : `⏳ ${compPct}%`}
           </span>
         </div>
 
         {/* Score & Stars */}
-        {h.score !== null && (
+        {h.score !== null && h.score !== undefined && (
           <div className="flex items-center gap-4 text-xs font-semibold bg-zinc-50 dark:bg-zinc-850 px-3 py-1.5 rounded-lg border border-zinc-200/60 dark:border-zinc-800">
             <span className="text-zinc-800 dark:text-zinc-200">
               Grade: <span className="text-blue-600 dark:text-blue-400 text-sm font-bold">{h.score}/10</span>
             </span>
-            <span className="text-amber-600 dark:text-amber-400">⭐ +{h.stars_earned} stars awarded</span>
+            <span className="text-amber-600 dark:text-amber-400">⭐ +{h.stars_earned ?? 0} stars awarded</span>
             {h.submission_status && (
               <span className="text-zinc-500 dark:text-zinc-400 uppercase text-[10px] tracking-wider ml-auto">
                 Status: {h.submission_status}
@@ -201,7 +276,7 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
           <div className="flex items-center gap-2 pt-1">
             <FileDownloadButton
               url={subDetail.file_url}
-              filename={subDetail.file_original_name || `${h.title}_homework`}
+              filename={subDetail.file_original_name || `${h.title || "homework"}_file`}
               className="btn-secondary text-xs py-1 px-2.5 flex items-center gap-1.5"
             >
               <span>📎 Download Homework Attachment</span>
@@ -221,50 +296,65 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
         )}
 
         {/* Teacher Error Corrections */}
-        {subDetail?.corrections && subDetail.corrections.length > 0 && (
+        {Array.isArray(subDetail?.corrections) && subDetail.corrections.length > 0 && (
           <div className="text-xs space-y-1.5 bg-rose-50/30 dark:bg-rose-950/20 p-2.5 rounded-lg border border-rose-100 dark:border-rose-900/40">
             <span className="font-bold text-rose-900 dark:text-rose-300 block">Teacher Error Corrections:</span>
             <div className="space-y-1.5">
-              {subDetail.corrections.map((corr) => (
-                <div
-                  key={corr.id}
-                  className="bg-white dark:bg-zinc-900 p-2 rounded border border-rose-200/60 dark:border-rose-900/60 text-xs flex flex-col gap-1"
-                >
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <del className="text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-1 py-0.5 rounded font-mono">
-                      {corr.selected_text}
-                    </del>
-                    <span className="text-zinc-400 dark:text-zinc-500">→</span>
-                    <ins className="text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded font-semibold no-underline font-mono">
-                      {corr.correction}
-                    </ins>
-                    {corr.error_type && (
-                      <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-                        {corr.error_type}
-                      </span>
+              {subDetail.corrections.map((corr: any, idx: number) => {
+                if (!corr) return null;
+                return (
+                  <div
+                    key={corr.id || idx}
+                    className="bg-white dark:bg-zinc-900 p-2 rounded border border-rose-200/60 dark:border-rose-900/60 text-xs flex flex-col gap-1"
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <del className="text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-1 py-0.5 rounded font-mono">
+                        {corr.selected_text || ""}
+                      </del>
+                      <span className="text-zinc-400 dark:text-zinc-500">→</span>
+                      <ins className="text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded font-semibold no-underline font-mono">
+                        {corr.correction || ""}
+                      </ins>
+                      {corr.error_type && (
+                        <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                          {corr.error_type}
+                        </span>
+                      )}
+                    </div>
+                    {corr.comment && (
+                      <span className="text-zinc-600 dark:text-zinc-400 text-[11px] italic">Note: {corr.comment}</span>
                     )}
                   </div>
-                  {corr.comment && (
-                    <span className="text-zinc-600 dark:text-zinc-400 text-[11px] italic">Note: {corr.comment}</span>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
 
         {/* Teacher Comments */}
-        {subDetail?.comments && subDetail.comments.length > 0 && (
+        {Array.isArray(subDetail?.comments) && subDetail.comments.length > 0 && (
           <div className="text-xs space-y-1.5 bg-zinc-50/80 dark:bg-zinc-850/80 p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800">
             <span className="font-bold text-zinc-800 dark:text-zinc-200 block">Comments:</span>
-            {subDetail.comments.map((c) => (
-              <div key={c.id} className="text-zinc-700 dark:text-zinc-300 text-xs bg-white dark:bg-zinc-900 p-2 rounded border border-zinc-200 dark:border-zinc-800">
-                <p>{c.comment}</p>
-                <span className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 block">
-                  {new Date(c.created_at).toLocaleString()}
-                </span>
-              </div>
-            ))}
+            {subDetail.comments.map((c: any, idx: number) => {
+              if (!c) return null;
+              let commentDate = "";
+              try {
+                if (c.created_at) {
+                  const cd = new Date(c.created_at);
+                  commentDate = isNaN(cd.getTime()) ? "" : cd.toLocaleString();
+                }
+              } catch {}
+              return (
+                <div key={c.id || idx} className="text-zinc-700 dark:text-zinc-300 text-xs bg-white dark:bg-zinc-900 p-2 rounded border border-zinc-200 dark:border-zinc-800">
+                  <p>{c.comment}</p>
+                  {commentDate && (
+                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 block">
+                      {commentDate}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -272,9 +362,27 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
   }
 
   return (
-    <Modal open={!!studentId} onClose={onClose} title={`Student: ${fullName}`}>
+    <Modal open={isModalOpen} onClose={onClose} title={`Student: ${fullName}`}>
       {isLoading && !profile && !history ? (
-        <LoadingRows rows={5} />
+        <div className="space-y-4 py-8">
+          <div className="flex flex-col items-center justify-center gap-3 text-zinc-500 dark:text-zinc-400">
+            <Spinner className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+            <p className="text-sm font-medium">Loading student history & submissions...</p>
+          </div>
+          <LoadingRows rows={5} />
+        </div>
+      ) : hasError && !profile && !history ? (
+        <div className="p-6 text-center space-y-4">
+          <div className="text-rose-500 text-3xl">⚠️</div>
+          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+            {errorMessage || "Failed to load student records."}
+          </p>
+          <div className="flex justify-center gap-3 pt-2">
+            <button type="button" className="btn-secondary text-xs px-4 py-2" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
       ) : (
         <div className="space-y-5 max-h-[75vh] overflow-y-auto pr-1 text-sm">
           {/* Header Profile Info Card */}
@@ -386,7 +494,7 @@ export default function StudentDetailModal({ studentId, onClose, onStudentUpdate
             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-center">
               <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">Lifetime Completed</span>
               <span className="text-xl font-black text-emerald-600 dark:text-emerald-300 mt-0.5 block">
-                {completedTasks} / {totalTasks}
+                {lifetimeCompleted} / {lifetimeTotal}
               </span>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -160,9 +161,11 @@ class StudentHistoryOut(BaseModel):
     telegram_username: str | None = None
     level: str | None = None
     group_name: str | None = None
-    total_stars: int
+    total_stars: int = 0
     total_lightning: int = 0
     cycle_completed_tasks: int = 0
     cycle_total_tasks: int = 0
     cycle_progress_percentage: int = 0
-    history: list[StudentHistoryItem] = []
+    active_assignments: list[StudentHistoryItem] = Field(default_factory=list)
+    past_cycles: list[Any] = Field(default_factory=list)
+    history: list[StudentHistoryItem] = Field(default_factory=list)
