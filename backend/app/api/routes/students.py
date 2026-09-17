@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_student_profile, require_teacher
 from app.core.config import settings
 from app.db.session import get_db
-from app.utils.datetimes import as_utc
+from app.utils.datetimes import as_utc, utcnow
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.group import Group
 from app.models.student import StudentProfile
@@ -133,37 +133,44 @@ async def list_students(
     query = query.order_by(StudentProfile.full_name).offset((page - 1) * page_size).limit(page_size)
     rows = (await db.execute(query)).all()
 
-    # Calculate assignment counts and completed submissions for the fetched students
+    # Calculate active assignment counts and completed submissions for the fetched students
     st_ids = [profile.id for profile, *_ in rows]
     grp_ids = list({grp_id for *_, grp_id, _, _ in rows if grp_id})
 
     total_assignments_map: dict[uuid.UUID, int] = {}
+    active_assign_ids_by_group: dict[uuid.UUID, set[uuid.UUID]] = {}
     if grp_ids:
+        now_dt = utcnow()
         group_asgn_query = (
-            select(Assignment.group_id, func.count(Assignment.id))
+            select(Assignment.id, Assignment.group_id, Assignment.cycle_number, Assignment.deadline, Group.current_cycle)
+            .join(Group, Assignment.group_id == Group.id)
             .where(Assignment.group_id.in_(grp_ids), Assignment.status == AssignmentStatus.PUBLISHED)
-            .group_by(Assignment.group_id)
         )
         group_asgn_res = await db.execute(group_asgn_query)
-        total_assignments_map = {gid: count for gid, count in group_asgn_res.all()}
+        for a_id, gid, a_cycle, a_deadline, g_cycle in group_asgn_res.all():
+            g_curr = g_cycle or 1
+            is_active_task = (a_cycle or 1) == g_curr or as_utc(a_deadline) >= now_dt
+            if is_active_task:
+                active_assign_ids_by_group.setdefault(gid, set()).add(a_id)
+
+        for gid in grp_ids:
+            total_assignments_map[gid] = len(active_assign_ids_by_group.get(gid, set()))
 
     completed_submissions_map: dict[uuid.UUID, int] = {}
     if st_ids:
-        st_sub_query = (
-            select(Submission.student_id, func.count(func.distinct(Submission.assignment_id)))
-            .join(Assignment, Submission.assignment_id == Assignment.id)
-            .where(
-                Submission.student_id.in_(st_ids),
-                Submission.is_archived == False,
-                or_(
-                    Assignment.updated_at.is_(None),
-                    Submission.submitted_at >= Assignment.updated_at,
-                ),
+        all_active_a_ids = [aid for s in active_assign_ids_by_group.values() for aid in s]
+        if all_active_a_ids:
+            st_sub_query = (
+                select(Submission.student_id, func.count(func.distinct(Submission.assignment_id)))
+                .where(
+                    Submission.student_id.in_(st_ids),
+                    Submission.assignment_id.in_(all_active_a_ids),
+                    Submission.is_archived == False,
+                )
+                .group_by(Submission.student_id)
             )
-            .group_by(Submission.student_id)
-        )
-        st_sub_res = await db.execute(st_sub_query)
-        completed_submissions_map = {sid: count for sid, count in st_sub_res.all()}
+            st_sub_res = await db.execute(st_sub_query)
+            completed_submissions_map = {sid: count for sid, count in st_sub_res.all()}
 
     items = []
     for profile, email, username, is_active, appr_status, user_created_at, grp_id, grp_name, grp_level in rows:
@@ -665,17 +672,22 @@ async def get_student_history(
     if profile.group_id:
         grp = profile.group
         current_cycle = getattr(grp, "current_cycle", 1) or 1
+        now_dt = utcnow()
 
-        # Load all assignments for this group, newest first
+        # Load all published assignments for this group, newest first
         assignments_res = await db.execute(
             select(Assignment)
-            .where(Assignment.group_id == profile.group_id)
+            .where(Assignment.group_id == profile.group_id, Assignment.status == AssignmentStatus.PUBLISHED)
             .order_by(Assignment.created_at.desc())
         )
         assignments = assignments_res.scalars().all()
 
-        cycle_assignments = [a for a in assignments if (getattr(a, "cycle_number", 1) or 1) == current_cycle]
-        cycle_total_tasks = len(cycle_assignments)
+        active_assignments_list = [
+            a for a in assignments
+            if (getattr(a, "cycle_number", 1) or 1) == current_cycle or as_utc(a.deadline) >= now_dt
+        ]
+        active_assignment_ids = {a.id for a in active_assignments_list}
+        cycle_total_tasks = len(active_assignments_list)
 
         assignment_ids = [a.id for a in assignments]
         submissions_map: dict[uuid.UUID, Submission] = {}
@@ -683,10 +695,15 @@ async def get_student_history(
             subs_res = await db.execute(
                 select(Submission)
                 .options(selectinload(Submission.grade))
-                .where(Submission.assignment_id.in_(assignment_ids), Submission.student_id == profile.id)
+                .where(
+                    Submission.assignment_id.in_(assignment_ids),
+                    Submission.student_id == profile.id,
+                )
+                .order_by(Submission.is_archived.asc(), Submission.submitted_at.desc(), Submission.id.desc())
             )
             for s in subs_res.scalars().all():
-                submissions_map[s.assignment_id] = s
+                if s.assignment_id not in submissions_map:
+                    submissions_map[s.assignment_id] = s
 
         for a in assignments:
             sub = submissions_map.get(a.id)
@@ -699,42 +716,30 @@ async def get_student_history(
             stars_earned = 0
             text_ans = None
             file_name = None
-            a_cycle = getattr(a, "cycle_number", 1) or 1
+            is_active_task = a.id in active_assignment_ids
 
-            # A submission is active if non-archived AND submitted_at >= assignment.updated_at
-            is_active_sub = (
-                sub is not None
-                and not getattr(sub, "is_archived", False)
-                and (
-                    not getattr(a, "updated_at", None)
-                    or as_utc(sub.submitted_at) >= as_utc(a.updated_at)
-                )
-            )
-
-            if is_active_sub:
+            if sub is not None:
                 sub_id = sub.id
                 sub_status = sub.status.value if hasattr(sub.status, "value") else str(sub.status)
                 sub_at = sub.submitted_at
                 text_ans = sub.text_answer
                 file_name = sub.file_original_name
-                if sub.grade is not None:
-                    score = sub.grade.score
-                    feedback = sub.grade.feedback
-                    stars_earned = sub.grade.stars
-                    comp_pct = min(100, max(0, int((sub.grade.score / 10.0) * 100)))
-                else:
-                    comp_pct = 100
+                is_unarchived = not getattr(sub, "is_archived", False)
 
-                if comp_pct >= 100 and a_cycle == current_cycle:
-                    cycle_completed_tasks += 1
-            elif sub is not None:
-                # Archived / obsolete submission
-                sub_id = sub.id
-                sub_status = "obsolete"
-                sub_at = sub.submitted_at
-                text_ans = sub.text_answer
-                file_name = sub.file_original_name
-                comp_pct = 0
+                if is_unarchived:
+                    if sub.grade is not None:
+                        score = sub.grade.score
+                        feedback = sub.grade.feedback
+                        stars_earned = sub.grade.stars
+                        comp_pct = min(100, max(0, int((sub.grade.score / 10.0) * 100)))
+                    else:
+                        comp_pct = 100
+
+                    if is_active_task:
+                        cycle_completed_tasks += 1
+                else:
+                    comp_pct = 0
+                    sub_status = "archived"
 
             item = StudentHistoryItem(
                 assignment_id=a.id,
@@ -753,13 +758,13 @@ async def get_student_history(
                 file_original_name=file_name,
             )
             history_items.append(item)
-            if a_cycle == current_cycle:
+            if is_active_task:
                 active_assignments.append(item)
             else:
                 past_cycles.append(item)
 
         cycle_progress_percentage = (
-            int((cycle_completed_tasks / cycle_total_tasks) * 100)
+            int(round((cycle_completed_tasks / cycle_total_tasks) * 100))
             if cycle_total_tasks > 0
             else 0
         )

@@ -205,7 +205,20 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
     )
     student_rows = students_res.all()
 
-    # Fetch all submissions for these assignments and students
+    current_cycle = getattr(group, "current_cycle", 1) or 1
+    now_dt = utcnow()
+
+    # Define Active Group Assignments:
+    # All assignments where group_id == target_group_id, is_active == True (status == PUBLISHED),
+    # is_archived == False, and (cycle == group.current_cycle OR deadline >= now_utc()).
+    active_assignments = [
+        a for a in assignments
+        if (getattr(a, "cycle_number", 1) or 1) == current_cycle or as_utc(a.deadline) >= now_dt
+    ]
+    active_assignment_ids = {a.id for a in active_assignments}
+    total_active_tasks = len(active_assignments)
+
+    # Fetch all submissions for these assignments and students in a single bulk query
     assignment_ids = [a.id for a in assignments]
     student_ids = [s.id for s, _ in student_rows]
 
@@ -215,10 +228,16 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
         subs_res = await db.execute(
             select(Submission)
             .options(selectinload(Submission.grade))
-            .where(Submission.assignment_id.in_(assignment_ids), Submission.student_id.in_(student_ids))
+            .where(
+                Submission.assignment_id.in_(assignment_ids),
+                Submission.student_id.in_(student_ids),
+                Submission.is_archived == False,
+            )
+            .order_by(Submission.submitted_at.desc(), Submission.id.desc())
         )
         for sub in subs_res.scalars().all():
-            submissions_map[(sub.assignment_id, sub.student_id)] = sub
+            if (sub.assignment_id, sub.student_id) not in submissions_map:
+                submissions_map[(sub.assignment_id, sub.student_id)] = sub
 
         from app.models.gamification import TaskLockOverride
         ov_res = await db.execute(
@@ -231,15 +250,10 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
         )
         overrides_set = {(r[0], r[1]) for r in ov_res.all()}
 
-    current_cycle = getattr(group, "current_cycle", 1) or 1
-    cycle_assignments = [a for a in assignments if (getattr(a, "cycle_number", 1) or 1) == current_cycle]
-    now_dt = utcnow()
-
     student_details: list[GroupStudentDetail] = []
     for st_profile, st_user in student_rows:
         student_assignments: list[AssignmentItemOverview] = []
-        completed_count = 0
-        cycle_completed_count = 0
+        active_completed_count = 0
         overdue_count = 0
 
         for a in assignments:
@@ -251,18 +265,15 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
             sub_at = None
             a_cycle = getattr(a, "cycle_number", 1) or 1
             is_past_dl = as_utc(a.deadline) < now_dt
+            is_active_cohort_task = a.id in active_assignment_ids
 
-            # An assignment is only completed if submission is active (non-archived) AND submitted_at >= assignment.updated_at
-            is_active_sub = (
+            # A submission is valid if non-archived
+            is_valid_sub = (
                 sub is not None
                 and not getattr(sub, "is_archived", False)
-                and (
-                    not getattr(a, "updated_at", None)
-                    or as_utc(sub.submitted_at) >= as_utc(a.updated_at)
-                )
             )
 
-            if is_active_sub:
+            if is_valid_sub:
                 has_sub = True
                 sub_at = sub.submitted_at
                 if sub.grade is not None:
@@ -272,13 +283,11 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
                 else:
                     comp_pct = 100
 
-                if comp_pct >= 100:
-                    completed_count += 1
-                    if a_cycle == current_cycle:
-                        cycle_completed_count += 1
+                if is_active_cohort_task:
+                    active_completed_count += 1
             else:
                 comp_pct = 0
-                if is_past_dl:
+                if is_past_dl and is_active_cohort_task:
                     overdue_count += 1
 
             # Determine lock status
@@ -286,20 +295,18 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
             if a.prerequisite_id and not has_sub:
                 if (a.id, st_profile.id) not in overrides_set:
                     prereq_sub = submissions_map.get((a.prerequisite_id, st_profile.id))
-                    prereq_a = next((x for x in assignments if x.id == a.prerequisite_id), None)
                     prereq_active = (
                         prereq_sub is not None
                         and not getattr(prereq_sub, "is_archived", False)
-                        and (
-                            not prereq_a
-                            or not getattr(prereq_a, "updated_at", None)
-                            or as_utc(prereq_sub.submitted_at) >= as_utc(prereq_a.updated_at)
-                        )
                     )
                     if not prereq_active:
                         is_locked = True
 
-            computed_status = "locked" if is_locked else ("overdue" if (is_past_dl and not has_sub) else (sub.status.value if (has_sub and sub) else "not_submitted"))
+            computed_status = (
+                "locked"
+                if is_locked
+                else ("overdue" if (is_past_dl and not has_sub) else (sub.status.value if (has_sub and sub) else "not_submitted"))
+            )
 
             student_assignments.append(
                 AssignmentItemOverview(
@@ -319,11 +326,10 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
                 )
             )
 
-        overall_pct = (
-            int((completed_count / len(assignments)) * 100) if assignments else 100
-        )
-        cycle_pct = (
-            int((cycle_completed_count / len(cycle_assignments)) * 100) if cycle_assignments else 0
+        progress_pct = (
+            int(round((active_completed_count / total_active_tasks) * 100))
+            if total_active_tasks > 0
+            else 0
         )
 
         student_details.append(
@@ -338,12 +344,12 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
                 bio=st_profile.bio,
                 total_stars=st_profile.total_stars,
                 total_lightning=getattr(st_profile, "total_lightning", 0),
-                completed_assignments_count=completed_count,
-                total_assignments_count=len(assignments),
-                overall_completion_percentage=overall_pct,
-                completed_cycle_count=cycle_completed_count,
-                total_cycle_count=len(cycle_assignments),
-                cycle_completion_percentage=cycle_pct,
+                completed_assignments_count=active_completed_count,
+                total_assignments_count=total_active_tasks,
+                overall_completion_percentage=progress_pct,
+                completed_cycle_count=active_completed_count,
+                total_cycle_count=total_active_tasks,
+                cycle_completion_percentage=progress_pct,
                 overdue_assignments_count=overdue_count,
                 assignments=student_assignments,
             )
@@ -373,13 +379,11 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
     final_students.sort(key=lambda x: (x.full_name or "").lower())
 
     # Harmonized Group Cycle Progress:
-    # (Sum of valid cycle submissions across enrolled active students) / (total_active_students * total_published_tasks_in_cycle) * 100
     total_active_students = len(final_students)
-    total_cycle_tasks = len(cycle_assignments)
-    cycle_denominator = total_active_students * total_cycle_tasks
+    cycle_denominator = total_active_students * total_active_tasks
     total_valid_cycle_submissions = sum(s.completed_cycle_count for s in final_students)
     group_cycle_pct = (
-        int((total_valid_cycle_submissions / cycle_denominator) * 100)
+        int(round((total_valid_cycle_submissions / cycle_denominator) * 100))
         if cycle_denominator > 0
         else 0
     )

@@ -174,6 +174,21 @@ export default function GroupDetailPage() {
     return activeList.length > 0 ? activeList : Array.from(map.values());
   }, [groupDetail?.students]);
 
+  // Calculate unified active cohort assignments to ensure consistent task denominators across all students
+  const currentCycle = groupDetail?.current_cycle || 1;
+  const nowUtc = Date.now();
+  const activeCohortAssignments = useMemo(() => {
+    if (!groupDetail?.assignments || !Array.isArray(groupDetail.assignments)) return [];
+    return groupDetail.assignments.filter((a) => {
+      const aCycle = a.cycle_number ?? 1;
+      const isFuture = a.deadline ? new Date(a.deadline).getTime() >= nowUtc : false;
+      return aCycle === currentCycle || isFuture;
+    });
+  }, [groupDetail?.assignments, currentCycle, nowUtc]);
+
+  const activeTaskIds = useMemo(() => new Set(activeCohortAssignments.map((a) => a.id)), [activeCohortAssignments]);
+  const unifiedTotalActiveTasks = activeCohortAssignments.length > 0 ? activeCohortAssignments.length : (groupDetail?.assignments?.length ?? 0);
+
   // Calculate Group Average Progress using dedupedStudents with full null safety
   const totalStudents = dedupedStudents.length;
   const totalAssignments = groupDetail?.assignments?.length ?? 0;
@@ -482,13 +497,20 @@ export default function GroupDetailPage() {
               {dedupedStudents.map((student) => {
                 if (!student) return null;
                 const studentAssignments = Array.isArray(student.assignments) ? student.assignments : [];
+                const activeCompleted = studentAssignments.filter(
+                  (a) =>
+                    a &&
+                    (activeTaskIds.size === 0 || activeTaskIds.has(a.assignment_id || (a as any).id)) &&
+                    (a.completion_percentage >= 100 || (a as any).has_submission)
+                ).length;
                 const completedCount =
+                  student.completed_cycle_count ??
                   student.completed_assignments_count ??
-                  studentAssignments.filter((a) => a && a.completion_percentage >= 100).length;
-                const groupAsgCount = groupDetail?.assignments?.length ?? 0;
+                  activeCompleted;
                 const totalCount =
-                  student.total_assignments_count ??
-                  (groupAsgCount > 0 ? groupAsgCount : studentAssignments.length);
+                  unifiedTotalActiveTasks > 0
+                    ? unifiedTotalActiveTasks
+                    : (student.total_assignments_count ?? (groupDetail?.assignments?.length ?? 0));
                 const pct =
                   totalCount > 0
                     ? Math.round((completedCount / totalCount) * 100)
@@ -618,16 +640,26 @@ export default function GroupDetailPage() {
           {dedupedStudents.map((student) => {
             if (!student) return null;
             const studentAssignments = Array.isArray(student.assignments) ? student.assignments : [];
+            const activeCompleted = studentAssignments.filter(
+              (a) =>
+                a &&
+                (activeTaskIds.size === 0 || activeTaskIds.has(a.assignment_id || (a as any).id)) &&
+                (a.completion_percentage >= 100 || (a as any).has_submission)
+            ).length;
             const completedCount =
+              student.completed_cycle_count ??
               student.completed_assignments_count ??
-              studentAssignments.filter((a) => a && a.completion_percentage >= 100).length;
-            const groupAsgCount = groupDetail?.assignments?.length ?? 0;
+              activeCompleted;
             const totalCount =
-              student.total_assignments_count ??
-              (groupAsgCount > 0 ? groupAsgCount : studentAssignments.length);
+              unifiedTotalActiveTasks > 0
+                ? unifiedTotalActiveTasks
+                : (student.total_assignments_count ?? (groupDetail?.assignments?.length ?? 0));
 
             const isAllCompleted = totalCount > 0 && completedCount >= totalCount;
-            const pct = Number(student.overall_completion_percentage) || 0;
+            const pct =
+              totalCount > 0
+                ? Math.round((completedCount / totalCount) * 100)
+                : (Number(student.overall_completion_percentage) || 0);
 
             return (
               <div
@@ -675,21 +707,21 @@ export default function GroupDetailPage() {
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center justify-between text-xs font-semibold">
                     <span className="text-zinc-600 dark:text-zinc-400">
-                      Cycle {groupDetail.current_cycle || 1}: <strong className="text-indigo-700 dark:text-indigo-400">{student.completed_cycle_count ?? 0}/{student.total_cycle_count ?? 0}</strong>
+                      Cycle {groupDetail.current_cycle || 1}: <strong className="text-indigo-700 dark:text-indigo-400">{completedCount}/{totalCount}</strong>
                     </span>
                     <span className="text-indigo-700 dark:text-indigo-400 font-bold">
-                      {student.cycle_completion_percentage ?? pct}%
+                      {pct}%
                     </span>
                   </div>
                   <div className="h-2 w-full bg-indigo-50 dark:bg-indigo-950/40 rounded-full overflow-hidden border border-indigo-200/50 dark:border-indigo-800/40">
                     <div
                       className="h-full rounded-full bg-indigo-600 dark:bg-indigo-500 transition-all duration-300"
-                      style={{ width: `${Math.min(100, Math.max(0, student.cycle_completion_percentage ?? pct))}%` }}
+                      style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
                     />
                   </div>
 
                   <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 pt-0.5">
-                    <span>All-Time: {completedCount}/{totalCount} ({pct}%)</span>
+                    <span>Active Tasks: {completedCount}/{totalCount} ({pct}%)</span>
                     {(student.overdue_assignments_count ?? 0) > 0 ? (
                       <span className="text-rose-600 dark:text-rose-400 font-semibold bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.2 rounded">
                         🔴 {student.overdue_assignments_count} Overdue

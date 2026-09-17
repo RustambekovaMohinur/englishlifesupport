@@ -160,11 +160,11 @@ export default function StudentDetailModal({
   const lifetimeCompleted = historyItems.filter((h) => (Number(h?.completion_percentage) || 0) >= 100).length;
   const lifetimeTotal = historyItems.length;
 
-  const cycleCompleted = studentHistory?.cycle_completed_tasks ?? (lifetimeCompleted > 0 ? lifetimeCompleted : completedTasks);
-  const cycleTotal = studentHistory?.cycle_total_tasks ?? (lifetimeTotal > 0 ? lifetimeTotal : totalTasks);
+  const cycleCompleted = studentHistory?.cycle_completed_tasks ?? 0;
+  const cycleTotal = studentHistory?.cycle_total_tasks ?? (activeAssignments.length > 0 ? activeAssignments.length : 0);
   const cyclePct =
     studentHistory?.cycle_progress_percentage ??
-    (cycleTotal > 0 ? Math.round((cycleCompleted / cycleTotal) * 100) : progressPercentage);
+    (cycleTotal > 0 ? Math.round((cycleCompleted / cycleTotal) * 100) : 0);
 
   const fullName = profile?.full_name || history?.full_name || "Student Profile";
   const username = profile?.username || history?.username || "";
@@ -193,9 +193,17 @@ export default function StudentDetailModal({
   function renderHistoryCard(h: any) {
     if (!h) return null;
     const subDetail = Array.isArray(submissions) ? submissions.find((s) => s && s.assignment_id === h.assignment_id) : undefined;
-    const compPct = Number(h.completion_percentage) || 0;
-    const isDone = compPct >= 100;
-    const isZero = compPct === 0;
+    const hasSubmission = Boolean(h.submission_id || h.submitted_at || subDetail);
+    const isGraded = h.score !== null && h.score !== undefined;
+
+    let isPastDeadline = false;
+    if (h.deadline) {
+      try {
+        isPastDeadline = new Date(h.deadline).getTime() < Date.now();
+      } catch {
+        isPastDeadline = false;
+      }
+    }
 
     let deadlineStr = "No deadline";
     try {
@@ -233,17 +241,24 @@ export default function StudentDetailModal({
             </div>
           </div>
 
-          <span
-            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 ${
-              isDone
-                ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300"
-                : isZero
-                ? "bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300"
-                : "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300"
-            }`}
-          >
-            {isDone ? "✓ Complete (100%)" : isZero ? "✕ Not completed (0%)" : `⏳ ${compPct}%`}
-          </span>
+          {/* Task Item Badges according to Master Spec */}
+          {hasSubmission && isGraded ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+              ✓ Graded ({h.score <= 10 ? h.score * 10 : h.score}%)
+            </span>
+          ) : hasSubmission && !isGraded ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
+              ✓ Submitted (Pending Review)
+            </span>
+          ) : isPastDeadline ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60">
+              ✕ Overdue
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+              ○ Not Submitted
+            </span>
+          )}
         </div>
 
         {/* Score & Stars */}
