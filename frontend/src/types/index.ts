@@ -67,6 +67,12 @@ export interface StudentListItem {
   completed_assignments_count?: number;
   total_assignments_count?: number;
   overall_completion_percentage?: number;
+  total_active_tasks?: number;
+  completed_tasks?: number;
+  cycle_progress_percentage?: number;
+  cycle_completed_tasks?: number;
+  cycle_total_tasks?: number;
+  group?: { id: string; name: string; english_level?: string } | null;
 }
 
 export interface AssignmentItemOverview {

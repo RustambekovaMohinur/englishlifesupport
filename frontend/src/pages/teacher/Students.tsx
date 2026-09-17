@@ -164,24 +164,27 @@ export default function StudentsPage() {
 
   // Deduplicate student directory rows per cohort, prioritizing active accounts with stars/submissions
   const dedupedStudents = useMemo(() => {
+    if (!Array.isArray(students)) return [];
     const map = new Map<string, StudentListItem>();
     for (const s of students) {
-      const normUser = (s.username || "").trim().toLowerCase();
-      const normEmail = (s.email || "").trim().toLowerCase();
-      const key = normUser && normUser !== "none" ? normUser : (normEmail || s.user_id || s.id);
+      if (!s) continue;
+      const normUser = (s?.username || "").trim().toLowerCase();
+      const normEmail = (s?.email || "").trim().toLowerCase();
+      const key = normUser && normUser !== "none" ? normUser : (normEmail || s?.user_id || s?.id);
+      if (!key) continue;
 
       if (!map.has(key)) {
         map.set(key, s);
       } else {
         const existing = map.get(key)!;
-        const existingScore = (existing.total_stars || 0) * 10 + 
-                              (existing.completed_assignments_count || 0) * 5 + 
-                              (existing.group_name ? 2 : 0) +
-                              (existing.is_active ? 1 : 0);
-        const currentScore = (s.total_stars || 0) * 10 + 
-                             (s.completed_assignments_count || 0) * 5 + 
-                             (s.group_name ? 2 : 0) +
-                             (s.is_active ? 1 : 0);
+        const existingScore = (Number(existing?.total_stars) || 0) * 10 + 
+                              (Number(existing?.completed_assignments_count ?? existing?.completed_tasks) || 0) * 5 + 
+                              (existing?.group_name || existing?.group?.name ? 2 : 0) +
+                              (existing?.is_active ? 1 : 0);
+        const currentScore = (Number(s?.total_stars) || 0) * 10 + 
+                             (Number(s?.completed_assignments_count ?? s?.completed_tasks) || 0) * 5 + 
+                             (s?.group_name || s?.group?.name ? 2 : 0) +
+                             (s?.is_active ? 1 : 0);
         if (currentScore > existingScore) {
           map.set(key, s);
         }
@@ -685,36 +688,41 @@ export default function StudentsPage() {
                                 title="Click to view full student profile"
                               >
                                 <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
-                                  {st.full_name.charAt(0).toUpperCase()}
+                                  {(st?.full_name || "S").charAt(0).toUpperCase()}
                                 </div>
                                 <div className="min-w-0">
                                   <p className="font-bold text-zinc-900 dark:text-white truncate text-xs group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                                    {st.full_name}
+                                    {st?.full_name || "Unknown"}
                                   </p>
                                   <p className="text-[10px] text-zinc-400 font-mono truncate">
-                                    @{st.username}
+                                    @{st?.username || "unknown"}
                                   </p>
                                 </div>
                               </div>
 
                               {/* Student Overall % Circle / Pill */}
-                              <span
-                                className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-full border tabular-nums shrink-0 ${
-                                  st.overall_completion_percentage >= 80
-                                    ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
-                                    : st.overall_completion_percentage >= 50
-                                    ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800"
-                                    : "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800"
-                                }`}
-                              >
-                                {st.overall_completion_percentage}%
-                              </span>
+                              {(() => {
+                                const stPct = Number(st?.overall_completion_percentage) || 0;
+                                return (
+                                  <span
+                                    className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-full border tabular-nums shrink-0 ${
+                                      stPct >= 80
+                                        ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
+                                        : stPct >= 50
+                                        ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800"
+                                        : "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800"
+                                    }`}
+                                  >
+                                    {stPct}%
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </td>
 
                           {/* Matrix Intersection Cells */}
-                          {cohortDetail.assignments.map((col) => {
-                            const overview = st.assignments.find((a) => a.assignment_id === col.id);
+                          {(cohortDetail?.assignments || []).map((col) => {
+                            const overview = Array.isArray(st?.assignments) ? st.assignments.find((a) => a?.assignment_id === col.id) : undefined;
                             const isCellHovered =
                               hoveredCell?.studentId === st.student_id &&
                               hoveredCell?.assignmentId === col.id;
@@ -871,117 +879,144 @@ export default function StudentsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
-                    {dedupedStudents.map((s) => (
-                      <tr
-                        key={s.id}
-                        onClick={() => setSelectedStudentId(s.id)}
-                        className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer group"
-                        title="Click to view student submissions and inspection"
-                      >
-                        {/* 1. Student Avatar + Name + Username */}
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-3">
-                            <UserAvatar
-                              src={s.avatar_url}
-                              name={s.full_name}
-                              size="sm"
-                              className="w-9 h-9 rounded-full object-cover aspect-square shrink-0"
-                            />
-                            <div className="min-w-0">
-                              <div className="font-semibold text-zinc-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate max-w-[140px] sm:max-w-none">
-                                {s.full_name}
-                              </div>
-                              <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-[130px] sm:max-w-none">
-                                @{s.username || s.email}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
+                    {dedupedStudents.map((s) => {
+                      if (!s) return null;
+                      try {
+                        const studentId = s?.id || (s as any)?._id || "";
+                        const fullName = s?.full_name ?? "Unknown";
+                        const username = s?.username || s?.email || "unknown";
+                        const groupName = s?.group?.name ?? s?.group_name ?? "No Cohort";
+                        const isUnassigned = !s?.group_id || groupName === "No Cohort" || groupName === "Unassigned";
+                        const level = s?.group?.english_level ?? s?.level;
+                        const stars = s?.total_stars ?? 0;
+                        const lightning = s?.total_lightning ?? 0;
+                        const completedTasks = s?.completed_tasks ?? s?.completed_assignments_count ?? 0;
+                        const totalTasks = s?.total_active_tasks ?? s?.total_assignments_count ?? 0;
+                        const rawPct = s?.cycle_progress_percentage ?? s?.overall_completion_percentage ?? (totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0);
+                        const pct = Number(rawPct) || 0;
+                        const pctDisplay = pct.toFixed(0);
 
-                        {/* 2. Cohort & Level */}
-                        <td className="py-3 px-3">
-                          {s.group_name ? (
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
-                              <span className="font-semibold">{s.group_name}</span>
-                              {s.level && (
-                                <span className="text-[10px] opacity-80 uppercase tracking-wider font-mono">
-                                  ({s.level.replace("_", " ")})
+                        return (
+                          <tr
+                            key={studentId || Math.random()}
+                            onClick={() => studentId && setSelectedStudentId(studentId)}
+                            className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer group"
+                            title="Click to view student submissions and inspection"
+                          >
+                            {/* 1. Student Avatar + Name + Username */}
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-3">
+                                <UserAvatar
+                                  src={s?.avatar_url}
+                                  name={fullName}
+                                  size="sm"
+                                  className="w-9 h-9 rounded-full object-cover aspect-square shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-zinc-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate max-w-[140px] sm:max-w-none">
+                                    {fullName}
+                                  </div>
+                                  <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-[130px] sm:max-w-none">
+                                    @{username}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 2. Cohort & Level */}
+                            <td className="py-3 px-3">
+                              {!isUnassigned && groupName !== "Unassigned" ? (
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
+                                  <span className="font-semibold">{groupName}</span>
+                                  {level && (
+                                    <span className="text-[10px] opacity-80 uppercase tracking-wider font-mono">
+                                      ({String(level).replace("_", " ")})
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800 italic">
+                                  No Cohort
                                 </span>
                               )}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-zinc-400 italic">No Cohort</span>
-                          )}
-                        </td>
+                            </td>
 
-                        {/* 3. Stars (⭐️) */}
-                        <td className="py-3 px-3 text-center">
-                          <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-bold font-mono text-xs tabular-nums">
-                            <span>⭐️</span>
-                            <span>{s.total_stars ?? 0}</span>
-                          </div>
-                        </td>
+                            {/* 3. Stars (⭐️) */}
+                            <td className="py-3 px-3 text-center">
+                              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-bold font-mono text-xs tabular-nums">
+                                <span>⭐️</span>
+                                <span>{stars}</span>
+                                {lightning > 0 && (
+                                  <span className="ml-1 text-yellow-600 dark:text-yellow-400">⚡️ {lightning}</span>
+                                )}
+                              </div>
+                            </td>
 
-                        {/* 4. Homework Progress */}
-                        <td className="py-3 px-3">
-                          <div className="w-36 space-y-1">
-                            <div className="flex items-center justify-between text-[11px] font-mono">
-                              <span className="text-zinc-700 dark:text-zinc-300 font-medium">
-                                {s.completed_assignments_count ?? 0}/{s.total_assignments_count ?? 0} Tasks
-                              </span>
-                              <span className="text-zinc-500 dark:text-zinc-400 font-semibold">
-                                {s.overall_completion_percentage ?? 0}%
-                              </span>
-                            </div>
-                            <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all duration-300 ${
-                                  (s.overall_completion_percentage ?? 0) >= 80
-                                    ? "bg-emerald-500"
-                                    : (s.overall_completion_percentage ?? 0) >= 40
-                                    ? "bg-indigo-500"
-                                    : "bg-amber-500"
-                                }`}
-                                style={{ width: `${Math.min(100, s.overall_completion_percentage ?? 0)}%` }}
-                              />
-                            </div>
-                          </div>
-                        </td>
+                            {/* 4. Homework Progress */}
+                            <td className="py-3 px-3">
+                              <div className="w-36 space-y-1">
+                                <div className="flex items-center justify-between text-[11px] font-mono">
+                                  <span className="text-zinc-700 dark:text-zinc-300 font-medium">
+                                    {completedTasks}/{totalTasks} Tasks
+                                  </span>
+                                  <span className="text-zinc-500 dark:text-zinc-400 font-semibold">
+                                    {pctDisplay}%
+                                  </span>
+                                </div>
+                                <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-300 ${
+                                      pct >= 80
+                                        ? "bg-emerald-500"
+                                        : pct >= 40
+                                        ? "bg-indigo-500"
+                                        : "bg-amber-500"
+                                    }`}
+                                    style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
 
-                        {/* 5. Actions */}
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => setPlacementStudent(s)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800/60 transition"
-                              title="Change Cohort Placement"
-                            >
-                              <ArrowRightLeft className="w-3.5 h-3.5" />
-                              <span>Placement</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setResettingStudent(s)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 transition"
-                              title="Reset Password"
-                            >
-                              <Key className="w-3.5 h-3.5" />
-                              <span>Password</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(s)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800/60 transition"
-                              title="Remove Student"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Delete</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                            {/* 5. Actions */}
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  onClick={() => setPlacementStudent(s)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800/60 transition"
+                                  title="Change Cohort Placement"
+                                >
+                                  <ArrowRightLeft className="w-3.5 h-3.5" />
+                                  <span>Placement</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setResettingStudent(s)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 transition"
+                                  title="Reset Password"
+                                >
+                                  <Key className="w-3.5 h-3.5" />
+                                  <span>Password</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(s)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800/60 transition"
+                                  title="Remove Student"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      } catch (err) {
+                        console.error("Error rendering student row:", err, s);
+                        return null;
+                      }
+                    })}
                   </tbody>
                 </table>
 

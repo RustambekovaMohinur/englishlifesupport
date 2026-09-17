@@ -23,6 +23,7 @@ from app.schemas.student import (
     RejectedStudentData,
     RejectStudentResponse,
     StudentApprovalAction,
+    StudentGroupBrief,
     StudentHistoryItem,
     StudentHistoryOut,
     StudentListItem,
@@ -90,8 +91,12 @@ async def list_students(
         User, StudentProfile.user_id == User.id
     ).outerjoin(Group, StudentProfile.group_id == Group.id)
 
-    # Scoped strictly to groups owned by this teacher
-    query = query.where(StudentProfile.group_id.in_(teacher_group_ids))
+    if group_id:
+        if group_id not in teacher_group_ids:
+            return PaginatedStudents(items=[], total=0, page=page, page_size=page_size)
+        query = query.where(StudentProfile.group_id == group_id)
+    elif teacher_group_ids:
+        query = query.where(or_(StudentProfile.group_id.in_(teacher_group_ids), StudentProfile.group_id.is_(None)))
 
     if search:
         like = f"%{search.strip()}%"
@@ -100,11 +105,6 @@ async def list_students(
             User.email.ilike(like),
             User.username.ilike(like),
         ))
-
-    if group_id:
-        if group_id not in teacher_group_ids:
-            return PaginatedStudents(items=[], total=0, page=page, page_size=page_size)
-        query = query.where(StudentProfile.group_id == group_id)
 
     if approval_status is not None and approval_status.strip():
         appr_val = approval_status.strip().lower()
@@ -174,33 +174,52 @@ async def list_students(
 
     items = []
     for profile, email, username, is_active, appr_status, user_created_at, grp_id, grp_name, grp_level in rows:
-        total_asgns = total_assignments_map.get(grp_id, 0)
-        completed_asgns = completed_submissions_map.get(profile.id, 0)
-        if completed_asgns > total_asgns and total_asgns > 0:
-            completed_asgns = total_asgns
-        pct = int((completed_asgns / total_asgns) * 100) if total_asgns > 0 else 0
+        if grp_id is None:
+            total_asgns = 0
+            completed_asgns = 0
+            pct = 0
+            display_group_name = "Unassigned"
+            group_brief = None
+        else:
+            total_asgns = total_assignments_map.get(grp_id, 0)
+            completed_asgns = completed_submissions_map.get(profile.id, 0)
+            if completed_asgns > total_asgns and total_asgns > 0:
+                completed_asgns = total_asgns
+            pct = int((completed_asgns / total_asgns) * 100) if total_asgns > 0 else 0
+            display_group_name = grp_name or "Unassigned"
+            group_brief = StudentGroupBrief(
+                id=grp_id,
+                name=grp_name or "Unassigned",
+                english_level=grp_level.value if hasattr(grp_level, "value") else str(grp_level) if grp_level else "beginner",
+            )
 
         items.append(
             StudentListItem(
                 id=profile.id,
                 user_id=profile.user_id,
-                full_name=profile.full_name,
-                email=email,
+                full_name=profile.full_name or "Unknown",
+                email=email or "",
                 username=username or "",
                 phone=profile.phone,
                 telegram_username=profile.phone,
                 avatar_url=profile.avatar_url,
                 is_active=is_active if is_active is not None else True,
                 approval_status=appr_status.value if hasattr(appr_status, "value") else str(appr_status) if appr_status else "approved",
-                total_stars=profile.total_stars,
+                total_stars=profile.total_stars or 0,
                 total_lightning=getattr(profile, "total_lightning", 0) or 0,
                 group_id=grp_id,
-                group_name=grp_name,
+                group_name=display_group_name,
                 level=grp_level.value if hasattr(grp_level, "value") else str(grp_level) if grp_level else None,
                 created_at=user_created_at,
                 completed_assignments_count=completed_asgns,
                 total_assignments_count=total_asgns,
                 overall_completion_percentage=pct,
+                total_active_tasks=total_asgns,
+                completed_tasks=completed_asgns,
+                cycle_progress_percentage=pct,
+                cycle_completed_tasks=completed_asgns,
+                cycle_total_tasks=total_asgns,
+                group=group_brief,
             )
         )
     return PaginatedStudents(items=items, total=total, page=page, page_size=page_size)

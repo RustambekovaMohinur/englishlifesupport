@@ -41,18 +41,24 @@ class StudentListItem(BaseModel):
     username: str = ""
     phone: str | None = None
     telegram_username: str | None = None
-    is_active: bool
+    is_active: bool = True
     approval_status: str = "approved"
-    total_stars: int
+    total_stars: int = 0
     total_lightning: int = 0
     avatar_url: str | None = None
     group_id: uuid.UUID | None = None
-    group_name: str | None = None
+    group_name: str | None = "Unassigned"
     level: str | None = None
     created_at: datetime | None = None
     completed_assignments_count: int = 0
     total_assignments_count: int = 0
     overall_completion_percentage: int = 0
+    total_active_tasks: int = 0
+    completed_tasks: int = 0
+    cycle_progress_percentage: int = 0
+    cycle_completed_tasks: int = 0
+    cycle_total_tasks: int = 0
+    group: StudentGroupBrief | None = None
 
     model_config = {"from_attributes": True}
 
