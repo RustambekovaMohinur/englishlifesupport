@@ -74,6 +74,7 @@ export default function AssignmentsPage() {
   const [assignments, setAssignments] = useState<AssignmentOut[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [groupFilter, setGroupFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"active" | "all" | "archived">("active");
   const [isLoading, setIsLoading] = useState(true);
   const [showBuilder, setShowBuilder] = useState(false);
   const [discussionAssignment, setDiscussionAssignment] = useState<AssignmentOut | null>(null);
@@ -215,8 +216,9 @@ export default function AssignmentsPage() {
     confirm(`Delete "${a.title}"? All related submissions and grades will be removed.`, async () => {
       try {
         await deleteAssignment(a.id);
-        toast.success("Assignment deleted");
-        refresh();
+        // Immediately filter out the deleted assignment from local React state so it vanishes instantly
+        setAssignments((prev) => prev.filter((item) => item.id !== a.id));
+        toast.success("Assignment permanently deleted");
       } catch (err: any) {
         toast.error(err?.response?.data?.detail ?? "Failed to delete assignment");
       }
@@ -317,9 +319,13 @@ export default function AssignmentsPage() {
   }, [deadline]);
 
   const filteredAssignments = useMemo(() => {
-    if (!groupFilter) return assignments;
-    return assignments.filter((a) => a.group_id === groupFilter);
-  }, [assignments, groupFilter]);
+    return assignments.filter((a) => {
+      if (groupFilter && a.group_id !== groupFilter) return false;
+      if (statusFilter === "active") return a.status !== "archived";
+      if (statusFilter === "archived") return a.status === "archived";
+      return true; // "all"
+    });
+  }, [assignments, groupFilter, statusFilter]);
 
   const sortedAssignments = useMemo(() => {
     const now = Date.now();
@@ -1173,20 +1179,59 @@ export default function AssignmentsPage() {
         </form>
       )}
 
-      {/* Assignment List */}
-      <div className="flex items-center gap-3">
-        <select
-          className="input max-w-[220px]"
-          value={groupFilter}
-          onChange={(e) => setGroupFilter(e.target.value)}
-        >
-          <option value="">All active groups</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
+      {/* Assignment List Filters */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 dark:border-zinc-800 pb-3">
+        <div className="flex items-center gap-3">
+          <select
+            className="input max-w-[220px]"
+            value={groupFilter}
+            onChange={(e) => setGroupFilter(e.target.value)}
+          >
+            <option value="">All active groups</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Tabbed Status Filter */}
+        <div className="flex items-center bg-zinc-100 dark:bg-zinc-800/80 p-1 rounded-xl gap-1 border border-zinc-200/60 dark:border-zinc-700/50 text-xs">
+          <button
+            type="button"
+            onClick={() => setStatusFilter("active")}
+            className={`px-3 py-1.5 rounded-lg font-medium transition ${
+              statusFilter === "active"
+                ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm font-semibold"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+            }`}
+          >
+            ⚡ Active / Drafts
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("all")}
+            className={`px-3 py-1.5 rounded-lg font-medium transition ${
+              statusFilter === "all"
+                ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm font-semibold"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+            }`}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("archived")}
+            className={`px-3 py-1.5 rounded-lg font-medium transition ${
+              statusFilter === "archived"
+                ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm font-semibold"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+            }`}
+          >
+            📦 Archived
+          </button>
+        </div>
       </div>
 
       {isLoading ? (

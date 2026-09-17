@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func, inspect as sa_inspect, select, update
+from sqlalchemy import delete, func, inspect as sa_inspect, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.base import NO_VALUE
@@ -1050,25 +1050,21 @@ async def update_assignment(
     return _assignment_to_out(reloaded, group_name, sub_count, vocab_words)
 
 
-@router.delete("/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_teacher)])
+@router.delete("/{assignment_id}", dependencies=[Depends(require_teacher)])
 async def delete_assignment(assignment_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     assignment = (await db.execute(select(Assignment).where(Assignment.id == assignment_id))).scalar_one_or_none()
     if assignment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
 
-    sub_count = (
-        await db.execute(select(func.count()).select_from(Submission).where(Submission.assignment_id == assignment.id))
-    ).scalar_one()
+    # Hard-delete associated submissions first to ensure clean cascade purge
+    await db.execute(
+        delete(Submission).where(Submission.assignment_id == assignment.id)
+    )
 
-    if sub_count > 0:
-        # Protect historical submissions, grades, corrections, stars: soft delete as ARCHIVED
-        assignment.status = AssignmentStatus.ARCHIVED
-        await db.commit()
-        return None
-
+    # Permanently delete the assignment itself
     await db.delete(assignment)
     await db.commit()
-    return None
+    return {"success": True, "message": "Assignment permanently deleted"}
 
 
 @router.post("/{assignment_id}/images", response_model=AssignmentImageOut, dependencies=[Depends(require_teacher)])
