@@ -28,6 +28,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { UserAvatar } from "@/components/common/UserAvatar";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import StudentDetailModal from "@/components/StudentDetailModal";
 import { SubmissionReviewDrawer } from "@/components/SubmissionReviewDrawer";
 import { EmptyState, LoadingRows, Modal, useConfirm, TelegramLink } from "@/components/ui";
@@ -145,8 +146,20 @@ export default function StudentsPage() {
   const [editing, setEditing] = useState<StudentListItem | null>(null);
   const [placementStudent, setPlacementStudent] = useState<StudentListItem | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [isInspectOpen, setIsInspectOpen] = useState(false);
   const [resettingStudent, setResettingStudent] = useState<StudentListItem | null>(null);
   const { confirm, ConfirmDialog } = useConfirm();
+
+  function handleInspectStudent(targetId: string) {
+    if (!targetId) return;
+    setSelectedStudentId(targetId);
+    setIsInspectOpen(true);
+  }
+
+  function handleCloseInspect() {
+    setIsInspectOpen(false);
+    setSelectedStudentId(null);
+  }
 
   // Load directory, groups, and initial pending data on mount
   useEffect(() => {
@@ -683,7 +696,7 @@ export default function StudentsPage() {
                           >
                             <div className="flex items-center justify-between gap-2.5">
                               <div
-                                onClick={() => setSelectedStudentId(st.student_id)}
+                                onClick={() => handleInspectStudent(st.student_id || (st as any).id)}
                                 className="flex items-center gap-2.5 min-w-0 cursor-pointer group"
                                 title="Click to view full student profile"
                               >
@@ -882,7 +895,8 @@ export default function StudentsPage() {
                     {dedupedStudents.map((s) => {
                       if (!s) return null;
                       try {
-                        const studentId = s?.id || (s as any)?._id || "";
+                        const targetId = (s as any)?.student_id || s?.id || (s as any)?._id || "";
+                        const studentId = targetId;
                         const fullName = s?.full_name ?? "Unknown";
                         const username = s?.username || s?.email || "unknown";
                         const groupName = s?.group?.name ?? s?.group_name ?? "No Cohort";
@@ -899,7 +913,7 @@ export default function StudentsPage() {
                         return (
                           <tr
                             key={studentId || Math.random()}
-                            onClick={() => studentId && setSelectedStudentId(studentId)}
+                            onClick={() => studentId && handleInspectStudent(studentId)}
                             className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer group"
                             title="Click to view student submissions and inspection"
                           >
@@ -1171,14 +1185,39 @@ export default function StudentsPage() {
       />
 
       {/* Student Profile Detail Modal */}
-      <StudentDetailModal
-        studentId={selectedStudentId}
-        onClose={() => setSelectedStudentId(null)}
-        onStudentUpdated={() => {
-          refreshDirectory();
-          if (selectedCohortId) loadCohortMatrix(selectedCohortId);
-        }}
-      />
+      {selectedStudentId && (
+        <ErrorBoundary
+          fallback={
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+              <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md w-full text-center">
+                <p className="text-red-400 font-semibold mb-4">Could not load student profile</p>
+                <button
+                  onClick={() => {
+                    setIsInspectOpen(false);
+                    setSelectedStudentId(null);
+                  }}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          }
+        >
+          <StudentDetailModal
+            isOpen={isInspectOpen}
+            studentId={selectedStudentId}
+            onClose={() => {
+              setIsInspectOpen(false);
+              setSelectedStudentId(null);
+            }}
+            onStudentUpdated={() => {
+              refreshDirectory();
+              if (selectedCohortId) loadCohortMatrix(selectedCohortId);
+            }}
+          />
+        </ErrorBoundary>
+      )}
 
 
       {/* Edit Placement Modal */}

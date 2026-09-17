@@ -150,29 +150,30 @@ export default function StudentDetailModal({
 
   // Safe fallbacks for all metrics
   const studentHistory = history;
-  const completedTasks = studentHistory?.cycle_completed_tasks ?? 0;
-  const totalTasks = studentHistory?.cycle_total_tasks ?? 0;
-  const progressPercentage = studentHistory?.cycle_progress_percentage ?? 0;
-  const activeAssignments = studentHistory?.active_assignments ?? [];
-  const pastCycles = studentHistory?.past_cycles ?? [];
+  const isUnassigned = !profile?.group?.id && (!history?.group_name || history?.group_name === "Unassigned");
+  const rawGroupName = profile?.group?.name || history?.group_name;
+  const groupName = isUnassigned ? "No Cohort / Unassigned" : (rawGroupName || "No Cohort / Unassigned");
+  const level = profile?.group?.english_level || history?.level || "";
+  const totalStars = Number(profile?.total_stars ?? history?.total_stars ?? 0);
+  const totalLightning = Number(history?.total_lightning ?? (profile as any)?.total_lightning ?? 0);
 
-  const historyItems = Array.isArray(studentHistory?.history) ? studentHistory.history : [];
+  const activeAssignments = isUnassigned ? [] : (Array.isArray(studentHistory?.active_assignments) ? studentHistory.active_assignments : []);
+  const pastCycles = isUnassigned ? [] : (Array.isArray(studentHistory?.past_cycles) ? studentHistory.past_cycles : []);
+
+  const historyItems = isUnassigned ? [] : (Array.isArray(studentHistory?.history) ? studentHistory.history : []);
   const lifetimeCompleted = historyItems.filter((h) => (Number(h?.completion_percentage) || 0) >= 100).length;
   const lifetimeTotal = historyItems.length;
 
-  const cycleCompleted = studentHistory?.cycle_completed_tasks ?? 0;
-  const cycleTotal = studentHistory?.cycle_total_tasks ?? (activeAssignments.length > 0 ? activeAssignments.length : 0);
-  const cyclePct =
-    studentHistory?.cycle_progress_percentage ??
-    (cycleTotal > 0 ? Math.round((cycleCompleted / cycleTotal) * 100) : 0);
+  const cycleCompleted = isUnassigned ? 0 : (studentHistory?.cycle_completed_tasks ?? 0);
+  const cycleTotal = isUnassigned ? 0 : (studentHistory?.cycle_total_tasks ?? (activeAssignments.length > 0 ? activeAssignments.length : 0));
+  const cyclePct = isUnassigned
+    ? 0
+    : (studentHistory?.cycle_progress_percentage ??
+       (cycleTotal > 0 ? Math.round((cycleCompleted / cycleTotal) * 100) : 0));
 
   const fullName = profile?.full_name || history?.full_name || "Student Profile";
   const username = profile?.username || history?.username || "";
   const telegram = profile?.phone || history?.telegram_username || "";
-  const groupName = profile?.group?.name || history?.group_name || "No Cohort Assigned";
-  const level = profile?.group?.english_level || history?.level || "";
-  const totalStars = Number(profile?.total_stars ?? history?.total_stars ?? 0);
-  const totalLightning = Number(history?.total_lightning ?? (profile as any)?.total_lightning ?? 0);
 
   // Split history into active cycle tasks and past cycle tasks
   const { activeCycleItems, pastCycleItems } = useMemo(() => {
@@ -436,7 +437,7 @@ export default function StudentDetailModal({
                         onChange={(e) => handleQuickGroupChange(e.target.value)}
                         className="text-xs font-semibold py-1 px-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-slate-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                       >
-                        <option value="">No Cohort</option>
+                        <option value="">No Cohort (Unassigned)</option>
                         {groups.map((g) => (
                           <option key={g.id} value={g.id}>
                             {g.name}

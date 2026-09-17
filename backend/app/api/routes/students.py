@@ -629,7 +629,7 @@ async def get_student(
     result = await db.execute(
         select(StudentProfile)
         .options(selectinload(StudentProfile.group), selectinload(StudentProfile.user))
-        .where(StudentProfile.id == student_id)
+        .where(or_(StudentProfile.id == student_id, StudentProfile.user_id == student_id))
     )
     profile = result.scalar_one_or_none()
     if profile is None:
@@ -643,16 +643,16 @@ async def get_student(
     return StudentOut(
         id=profile.id,
         user_id=profile.user_id,
-        email=profile.user.email,
-        username=profile.user.username,
-        full_name=profile.full_name,
+        email=profile.user.email if profile.user else "",
+        username=profile.user.username if profile.user else "",
+        full_name=profile.full_name or "Student Profile",
         phone=profile.phone,
         telegram_username=profile.phone,
         bio=profile.bio,
         avatar_url=profile.avatar_url,
-        is_active=profile.user.is_active,
-        approval_status=profile.user.approval_status.value if hasattr(profile.user.approval_status, "value") else str(profile.user.approval_status),
-        total_stars=profile.total_stars,
+        is_active=profile.user.is_active if profile.user else True,
+        approval_status=profile.user.approval_status.value if profile.user and hasattr(profile.user.approval_status, "value") else str(profile.user.approval_status) if profile.user and profile.user.approval_status else "approved",
+        total_stars=profile.total_stars or 0,
         total_lightning=getattr(profile, "total_lightning", 0) or 0,
         group=profile.group,
         created_at=profile.created_at,
@@ -671,7 +671,7 @@ async def get_student_history(
     result = await db.execute(
         select(StudentProfile)
         .options(selectinload(StudentProfile.group), selectinload(StudentProfile.user))
-        .where(StudentProfile.id == student_id)
+        .where(or_(StudentProfile.id == student_id, StudentProfile.user_id == student_id))
     )
     profile = result.scalar_one_or_none()
     if profile is None:
