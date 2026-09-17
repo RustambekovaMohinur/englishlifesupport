@@ -23,6 +23,8 @@ from app.schemas.group import (
     GroupOut,
     GroupStudentDetail,
     GroupUpdate,
+    PublishCycleRequest,
+    PublishCycleResponse,
 )
 from app.utils.datetimes import as_utc, utcnow
 
@@ -208,10 +210,14 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
     current_cycle = getattr(group, "current_cycle", 1) or 1
     now_dt = utcnow()
 
-    # Define Active Group Assignments:
-    # All published assignments belonging to this cohort (Assignment.status == PUBLISHED).
-    # Ensures uniform cohort scoping and consistent task denominators across all students.
-    active_assignments = [
+    # Dynamic Proportional Calculation Engine:
+    # N = count of active, unarchived assignments where assignment.group_id == group_id and assignment.cycle == group.current_cycle and assignment.status == AssignmentStatus.PUBLISHED.
+    # Defensive fallback: if no assignments match current_cycle, include all published assignments for the cohort
+    cycle_assignments = [
+        a for a in assignments
+        if a.status == AssignmentStatus.PUBLISHED and (getattr(a, "cycle_number", 1) or 1) == current_cycle
+    ]
+    active_assignments = cycle_assignments if len(cycle_assignments) > 0 else [
         a for a in assignments
         if a.status == AssignmentStatus.PUBLISHED
     ]
@@ -397,7 +403,7 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
             cycle_number=getattr(a, "cycle_number", 1) or 1,
             prerequisite_id=a.prerequisite_id,
         )
-        for a in assignments
+        for a in active_assignments
     ]
 
     return GroupDetailOut(
@@ -463,6 +469,98 @@ async def get_group_detail(
     return await _build_group_detail_out(db, group)
 
 
+@router.post("/{group_id}/publish-cycle", response_model=PublishCycleResponse)
+async def publish_group_cycle(
+    group_id: uuid.UUID,
+    body: PublishCycleRequest = PublishCycleRequest(),
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Publishes homework batch for a group and resets active cycle progress:
+    1. Archives past cycle assignments (passed deadlines or older cycle numbers).
+    2. Increments group.current_cycle += 1.
+    3. Activates and assigns target/draft assignments to new cycle with status = PUBLISHED.
+    4. Resets active cohort progress for all students to 0 / N Tasks (0%).
+    """
+    group = (await db.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+    if group is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+
+    is_owner = (
+        group.created_by == current_user.id
+        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+    )
+    if not is_owner:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
+
+    now_dt = utcnow()
+    old_cycle = getattr(group, "current_cycle", 1) or 1
+    new_cycle = old_cycle + 1
+
+    # Fetch all assignments for this group
+    asgns_res = await db.execute(
+        select(Assignment).where(Assignment.group_id == group_id)
+    )
+    all_group_assignments = asgns_res.scalars().all()
+
+    # Determine target assignments to include in new active cycle
+    target_assignments: list[Assignment] = []
+    if body.assignment_ids:
+        target_ids_set = set(body.assignment_ids)
+        target_assignments = [a for a in all_group_assignments if a.id in target_ids_set]
+    else:
+        # If specific IDs not passed:
+        # First priority: All DRAFT assignments for this cohort
+        drafts = [a for a in all_group_assignments if a.status == AssignmentStatus.DRAFT]
+        if drafts:
+            target_assignments = drafts
+        else:
+            # Fallback: unarchived assignments with future deadline (deadline >= now_dt)
+            future_tasks = [
+                a for a in all_group_assignments
+                if a.status == AssignmentStatus.PUBLISHED and as_utc(a.deadline) >= now_dt
+            ]
+            target_assignments = future_tasks
+
+    target_ids = {a.id for a in target_assignments}
+
+    # 1. Archive past assignments:
+    # All existing assignments for this group with passed deadlines (deadline < now_dt)
+    # or older cycle numbers (cycle_number <= old_cycle) that are NOT in target_assignments
+    archived_count = 0
+    for a in all_group_assignments:
+        if a.id not in target_ids:
+            if a.status != AssignmentStatus.ARCHIVED:
+                if as_utc(a.deadline) < now_dt or (getattr(a, "cycle_number", 1) or 1) <= old_cycle:
+                    a.status = AssignmentStatus.ARCHIVED
+                    archived_count += 1
+
+    # 2. Increment cohort cycle
+    group.current_cycle = new_cycle
+
+    # 3. Assign all target assignments for this session to new_cycle with status = PUBLISHED
+    active_count = 0
+    for a in target_assignments:
+        a.cycle_number = new_cycle
+        a.status = AssignmentStatus.PUBLISHED
+        if body.new_deadline:
+            a.deadline = body.new_deadline
+        active_count += 1
+
+    await db.commit()
+    await db.refresh(group)
+
+    return PublishCycleResponse(
+        success=True,
+        group_id=group.id,
+        new_cycle=new_cycle,
+        active_tasks_count=active_count,
+        archived_tasks_count=archived_count,
+        message=f"Successfully published Cycle {new_cycle} with {active_count} active tasks. {archived_count} past tasks archived.",
+    )
+
+
 @router.post("/{group_id}/start-cycle", response_model=GroupOut)
 async def start_new_homework_cycle(
     group_id: uuid.UUID,
@@ -485,7 +583,20 @@ async def start_new_homework_cycle(
     if not is_owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
 
-    group.current_cycle = (getattr(group, "current_cycle", 1) or 1) + 1
+    # Delegate to clean cycle publishing to maintain consistent archiving
+    now_dt = utcnow()
+    old_cycle = getattr(group, "current_cycle", 1) or 1
+    new_cycle = old_cycle + 1
+
+    asgns_res = await db.execute(
+        select(Assignment).where(Assignment.group_id == group_id)
+    )
+    for a in asgns_res.scalars().all():
+        if a.status != AssignmentStatus.ARCHIVED:
+            if as_utc(a.deadline) < now_dt or (getattr(a, "cycle_number", 1) or 1) <= old_cycle:
+                a.status = AssignmentStatus.ARCHIVED
+
+    group.current_cycle = new_cycle
     await db.commit()
     await db.refresh(group)
     return await _to_group_out(db, group)

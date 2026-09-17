@@ -111,3 +111,18 @@ class GroupDetailOut(BaseModel):
     students: list[GroupStudentDetail] = []
 
     model_config = {"from_attributes": True}
+
+
+class PublishCycleRequest(BaseModel):
+    assignment_ids: list[uuid.UUID] | None = None
+    new_deadline: datetime | None = None
+    cycle_title: str | None = None
+
+
+class PublishCycleResponse(BaseModel):
+    success: bool = True
+    group_id: uuid.UUID
+    new_cycle: int
+    active_tasks_count: int
+    archived_tasks_count: int
+    message: str

@@ -35,10 +35,12 @@ import {
   getGroupDetail,
   updateGroup,
   startGroupCycle,
+  publishGroupCycle,
   gradeSubmission,
   listSubmissions,
   getSubmission,
   listGroups,
+  listAssignments,
   updateStudentPlacement,
   resetStudentPassword,
   deleteStudent,
@@ -49,6 +51,7 @@ import {
   GroupStudentDetail,
   GroupAssignmentHeader,
   AssignmentItemOverview,
+  AssignmentOut,
   SubmissionOut,
 } from "@/types";
 
@@ -73,6 +76,7 @@ export default function GroupDetailPage() {
   const [placementStudent, setPlacementStudent] = useState<GroupStudentDetail | null>(null);
   const [resettingStudent, setResettingStudent] = useState<GroupStudentDetail | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [isPublishBatchOpen, setIsPublishBatchOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"table" | "cards" | "matrix">("table");
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
   const [activeGradingCell, setActiveGradingCell] = useState<{
@@ -332,29 +336,18 @@ export default function GroupDetailPage() {
               <span>⏰</span>
               <span>Default homework due time: <strong className="text-zinc-700 dark:text-zinc-300">{groupDetail.default_homework_time || "20:00"}</strong></span>
             </p>
-            <div className="mt-2.5 flex items-center gap-2">
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                 🔄 Cycle {groupDetail.current_cycle || 1} Active
               </span>
               <button
                 type="button"
-                onClick={() => {
-                  confirm(
-                    `Start Homework Cycle ${(groupDetail.current_cycle || 1) + 1}? All historical homework, grades, submissions, and stars will be 100% preserved. Future assignments will belong to the new cycle.`,
-                    async () => {
-                      try {
-                        const res = await startGroupCycle(groupDetail.id);
-                        toast.success(`Cycle ${res.current_cycle} started successfully!`);
-                        loadDetails();
-                      } catch (err: any) {
-                        toast.error(err?.response?.data?.detail ?? "Failed to start cycle");
-                      }
-                    }
-                  );
-                }}
-                className="btn-sm bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-2.5 py-1 rounded-md shadow-xs transition"
+                onClick={() => setIsPublishBatchOpen(true)}
+                className="btn-sm bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1.5"
+                title="Publish homework batch for this cohort, archive past tasks, and start clean cycle"
               >
-                + Start Next Cycle
+                <span>🚀</span>
+                <span>Publish Homework Batch (Start Cycle)</span>
               </button>
             </div>
           </div>
@@ -832,6 +825,16 @@ export default function GroupDetailPage() {
         student={resettingStudent}
         onClose={() => setResettingStudent(null)}
       />
+
+      {/* Publish Homework Batch Modal */}
+      {isPublishBatchOpen && (
+        <PublishBatchModal
+          open={isPublishBatchOpen}
+          onClose={() => setIsPublishBatchOpen(false)}
+          group={groupDetail}
+          onSuccess={loadDetails}
+        />
+      )}
 
       {/* Grading Slide-Over Drawer */}
       <GradingSlideOver
@@ -1458,6 +1461,204 @@ function ResetPasswordModal({
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+interface PublishBatchModalProps {
+  open: boolean;
+  onClose: () => void;
+  group: GroupDetailOut;
+  onSuccess: () => void;
+}
+
+function PublishBatchModal({ open, onClose, group, onSuccess }: PublishBatchModalProps) {
+  const [allAssignments, setAllAssignments] = useState<AssignmentOut[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [newDeadline, setNewDeadline] = useState("");
+  const [isLoadingAsgns, setIsLoadingAsgns] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open || !group.id) return;
+    setIsLoadingAsgns(true);
+    listAssignments(group.id)
+      .then((data) => {
+        setAllAssignments(data);
+        // Pre-select draft assignments, or all unarchived assignments
+        const drafts = data.filter((a) => a.status === "draft");
+        if (drafts.length > 0) {
+          setSelectedIds(drafts.map((a) => a.id));
+        } else {
+          setSelectedIds(data.filter((a) => a.status !== "archived").map((a) => a.id));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoadingAsgns(false));
+  }, [open, group.id]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.length === allAssignments.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(allAssignments.map((a) => a.id));
+    }
+  };
+
+  const handleConfirmPublish = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await publishGroupCycle(group.id, {
+        assignment_ids: selectedIds.length > 0 ? selectedIds : undefined,
+        new_deadline: newDeadline ? new Date(newDeadline).toISOString() : undefined,
+      });
+      toast.success(res.message || `Cycle ${res.new_cycle} published successfully!`);
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Failed to publish homework batch");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="🚀 Publish Homework Batch (Start Cycle)">
+      <div className="p-6 space-y-5">
+        {/* Cycle progression banner */}
+        <div className="flex items-center justify-between p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60">
+          <div>
+            <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium block">Current Cycle</span>
+            <span className="text-base font-black text-indigo-950 dark:text-white">Cycle {group.current_cycle || 1}</span>
+          </div>
+          <span className="text-lg font-bold text-indigo-400">→</span>
+          <div className="text-right">
+            <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium block">New Active Cycle</span>
+            <span className="text-base font-black text-indigo-600 dark:text-indigo-400">Cycle {(group.current_cycle || 1) + 1}</span>
+          </div>
+        </div>
+
+        {/* Confirmation prompt */}
+        <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+          <p className="font-semibold">⚠️ Important Cycle Reset Notice:</p>
+          <p>
+            Are you sure you want to publish these assignments as the new active homework cycle? Past deadline assignments will be archived, and cohort progress will reset to <strong>0%</strong> for the new tasks until students submit.
+          </p>
+        </div>
+
+        {/* Optional Unified Deadline */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+            Unified Due Date & Time (Optional)
+          </label>
+          <input
+            type="datetime-local"
+            value={newDeadline}
+            onChange={(e) => setNewDeadline(e.target.value)}
+            className="w-full text-xs rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-2 text-zinc-900 dark:text-white"
+          />
+          <p className="text-[11px] text-zinc-500">Applies this deadline to all selected assignments in this cycle batch.</p>
+        </div>
+
+        {/* Assignments to include in batch */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-zinc-900 dark:text-white">
+              Select Assignments for this Cycle ({selectedIds.length} selected)
+            </span>
+            {allAssignments.length > 0 && (
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+              >
+                {selectedIds.length === allAssignments.length ? "Deselect All" : "Select All"}
+              </button>
+            )}
+          </div>
+
+          {isLoadingAsgns ? (
+            <div className="p-4 text-center text-xs text-zinc-500">Loading assignments...</div>
+          ) : allAssignments.length === 0 ? (
+            <div className="p-4 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-500">
+              No assignments found. Please create assignments first in the Assignments tab.
+            </div>
+          ) : (
+            <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+              {allAssignments.map((a) => {
+                const isChecked = selectedIds.includes(a.id);
+                return (
+                  <label
+                    key={a.id}
+                    className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition ${
+                      isChecked
+                        ? "bg-indigo-50/60 dark:bg-indigo-950/30 border-indigo-300 dark:border-indigo-800"
+                        : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-850"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleSelect(a.id)}
+                        className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="font-semibold text-zinc-900 dark:text-white truncate">{a.title}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                        a.status === "draft"
+                          ? "bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400"
+                          : a.status === "published"
+                          ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400"
+                          : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"
+                      }`}>
+                        {a.status}
+                      </span>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="btn-secondary text-xs px-4 py-2"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirmPublish}
+            disabled={isSubmitting}
+            className="btn-primary text-xs px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 flex items-center gap-1.5 shadow-sm"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Publishing Cycle...</span>
+              </>
+            ) : (
+              <>
+                <span>🚀</span>
+                <span>Publish Cycle & Reset Progress</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     </Modal>
   );
 }

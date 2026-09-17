@@ -93,6 +93,7 @@ export default function AssignmentsPage() {
   const [mainInstructionsText, setMainInstructionsText] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
   const [isCompressingImages, setIsCompressingImages] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<"published" | "draft">("published");
 
   useEffect(() => {
     listGroups(false).then((data) => {
@@ -419,7 +420,7 @@ export default function AssignmentsPage() {
       formData.append("title", title.trim());
       formData.append("description", descriptionPayload);
       formData.append("deadline", parsedDate.toISOString());
-      formData.append("status", "published");
+      formData.append("status", submitStatus);
       if (prerequisiteId) formData.append("prerequisite_id", prerequisiteId);
 
       // Ghost file protection: strictly filter non-empty File instances
@@ -1144,7 +1145,7 @@ export default function AssignmentsPage() {
             )}
           </div>
 
-          <div className="flex justify-end gap-3 border-t border-zinc-100 dark:border-zinc-800 pt-4">
+          <div className="flex justify-end items-center gap-3 border-t border-zinc-100 dark:border-zinc-800 pt-4">
             <button
               type="button"
               className="btn-secondary"
@@ -1155,9 +1156,18 @@ export default function AssignmentsPage() {
             <button
               type="submit"
               disabled={isSaving}
-              className="btn-primary"
+              onClick={() => setSubmitStatus("draft")}
+              className="btn-secondary border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-xs font-semibold"
             >
-              {isSaving ? "Saving Assignment..." : "Save Assignment"}
+              {isSaving ? "Saving..." : "Save as Draft (Batch)"}
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              onClick={() => setSubmitStatus("published")}
+              className="btn-primary text-xs font-semibold"
+            >
+              {isSaving ? "Publishing..." : "Publish Now"}
             </button>
           </div>
         </form>

@@ -141,15 +141,23 @@ async def list_students(
     active_assign_ids_by_group: dict[uuid.UUID, set[uuid.UUID]] = {}
     if grp_ids:
         group_asgn_query = (
-            select(Assignment.id, Assignment.group_id)
+            select(Assignment.id, Assignment.group_id, Assignment.cycle_number, Group.current_cycle)
+            .join(Group, Assignment.group_id == Group.id)
             .where(Assignment.group_id.in_(grp_ids), Assignment.status == AssignmentStatus.PUBLISHED)
         )
         group_asgn_res = await db.execute(group_asgn_query)
-        for a_id, gid in group_asgn_res.all():
-            active_assign_ids_by_group.setdefault(gid, set()).add(a_id)
+        all_published_by_group: dict[uuid.UUID, set[uuid.UUID]] = {}
+        for a_id, gid, a_cycle, g_cycle in group_asgn_res.all():
+            all_published_by_group.setdefault(gid, set()).add(a_id)
+            if (a_cycle or 1) == (g_cycle or 1):
+                active_assign_ids_by_group.setdefault(gid, set()).add(a_id)
 
         for gid in grp_ids:
-            total_assignments_map[gid] = len(active_assign_ids_by_group.get(gid, set()))
+            active_ids = active_assign_ids_by_group.get(gid, set())
+            if not active_ids:
+                active_ids = all_published_by_group.get(gid, set())
+                active_assign_ids_by_group[gid] = active_ids
+            total_assignments_map[gid] = len(active_ids)
 
     completed_submissions_map: dict[uuid.UUID, int] = {}
     if st_ids:
@@ -699,9 +707,13 @@ async def get_student_history(
         )
         assignments = assignments_res.scalars().all()
 
-        active_assignments_list = [
+        current_cycle = getattr(grp, "current_cycle", 1) or 1
+        cycle_matching = [
             a for a in assignments
-            if a.status == AssignmentStatus.PUBLISHED
+            if a.status == AssignmentStatus.PUBLISHED and (getattr(a, "cycle_number", 1) or 1) == current_cycle
+        ]
+        active_assignments_list = cycle_matching if len(cycle_matching) > 0 else [
+            a for a in assignments if a.status == AssignmentStatus.PUBLISHED
         ]
         active_assignment_ids = {a.id for a in active_assignments_list}
         cycle_total_tasks = len(active_assignments_list)

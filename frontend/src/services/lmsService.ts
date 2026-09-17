@@ -77,6 +77,24 @@ export const createGroup = (body: { name: string; english_level: string; schedul
 export const updateGroup = (id: string, body: Partial<{ name: string; english_level: string; schedule: string; default_homework_time?: string; is_active: boolean }>) =>
   api.patch<Group>(`/groups/${id}`, body).then((r) => r.data);
 export const deleteGroup = (id: string) => api.delete(`/groups/${id}`);
+export interface PublishCyclePayload {
+  assignment_ids?: string[];
+  new_deadline?: string;
+  cycle_title?: string;
+}
+
+export interface PublishCycleResult {
+  success: boolean;
+  group_id: string;
+  new_cycle: number;
+  active_tasks_count: number;
+  archived_tasks_count: number;
+  message: string;
+}
+
+export const publishGroupCycle = (group_id: string, body?: PublishCyclePayload) =>
+  api.post<PublishCycleResult>(`/groups/${group_id}/publish-cycle`, body || {}).then((r) => r.data);
+
 export const startGroupCycle = (group_id: string) =>
   api.post<{ message: string; group_id: string; previous_cycle: number; current_cycle: number }>(`/groups/${group_id}/start-cycle`).then((r) => r.data);
 
