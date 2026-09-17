@@ -161,7 +161,7 @@ export default function StudentDetailModal({
   const pastCycles = isUnassigned ? [] : (Array.isArray(studentHistory?.past_cycles) ? studentHistory.past_cycles : []);
 
   const historyItems = isUnassigned ? [] : (Array.isArray(studentHistory?.history) ? studentHistory.history : []);
-  const lifetimeCompleted = historyItems.filter((h) => (Number(h?.completion_percentage) || 0) >= 100).length;
+  const lifetimeCompleted = historyItems.filter((h) => (Number(h?.completion_percentage) || 0) >= 100 || Boolean(h?.submission_id)).length;
   const lifetimeTotal = historyItems.length;
 
   const cycleCompleted = isUnassigned ? 0 : (studentHistory?.cycle_completed_tasks ?? 0);

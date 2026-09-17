@@ -209,11 +209,11 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
     now_dt = utcnow()
 
     # Define Active Group Assignments:
-    # All assignments where group_id == target_group_id, is_active == True (status == PUBLISHED),
-    # is_archived == False, and (cycle == group.current_cycle OR deadline >= now_utc()).
+    # All published assignments belonging to this cohort (Assignment.status == PUBLISHED).
+    # Ensures uniform cohort scoping and consistent task denominators across all students.
     active_assignments = [
         a for a in assignments
-        if (getattr(a, "cycle_number", 1) or 1) == current_cycle or as_utc(a.deadline) >= now_dt
+        if a.status == AssignmentStatus.PUBLISHED
     ]
     active_assignment_ids = {a.id for a in active_assignments}
     total_active_tasks = len(active_assignments)

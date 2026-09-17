@@ -65,6 +65,14 @@ class Assignment(UUIDPKMixin, TimestampMixin, Base):
         lazy="selectin",
     )
 
+    @property
+    def is_active(self) -> bool:
+        return self.status == AssignmentStatus.PUBLISHED
+
+    @property
+    def is_archived(self) -> bool:
+        return self.status == AssignmentStatus.ARCHIVED
+
 
 class AssignmentImage(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "assignment_images"

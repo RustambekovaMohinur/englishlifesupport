@@ -22,7 +22,7 @@ export const StudentProgressMatrix: React.FC<StudentProgressMatrixProps> = ({
   isTeacher = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
+  const [selectedCycle, setSelectedCycle] = useState<number | "all">("all");
 
   // Determine available cycles
   const currentCycle = groupDetail?.current_cycle ?? 1;
@@ -38,12 +38,11 @@ export const StudentProgressMatrix: React.FC<StudentProgressMatrixProps> = ({
     return Array.from(set).sort((a, b) => a - b);
   }, [assignmentsList, currentCycle]);
 
-  const activeCycle = selectedCycle ?? currentCycle;
-
   // Filter assignments by active cycle
   const cycleAssignments = useMemo(() => {
-    return assignmentsList.filter((a) => a && (a.cycle_number ?? 1) === activeCycle);
-  }, [assignmentsList, activeCycle]);
+    if (selectedCycle === "all") return assignmentsList;
+    return assignmentsList.filter((a) => a && (a.cycle_number ?? 1) === selectedCycle);
+  }, [assignmentsList, selectedCycle]);
 
   // Filter students by search query
   const filteredStudents = useMemo(() => {
@@ -95,7 +94,9 @@ export const StudentProgressMatrix: React.FC<StudentProgressMatrixProps> = ({
             {cycleSet.length > 1 && (
               <>
                 <span>·</span>
-                <span className="font-semibold text-brand-600 dark:text-brand-400">Cycle {activeCycle}</span>
+                <span className="font-semibold text-brand-600 dark:text-brand-400">
+                  {selectedCycle === "all" ? "All Cycles" : `Cycle ${selectedCycle}`}
+                </span>
               </>
             )}
           </p>
@@ -105,13 +106,24 @@ export const StudentProgressMatrix: React.FC<StudentProgressMatrixProps> = ({
           {/* Cycle filter pills */}
           {cycleSet.length > 1 && (
             <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setSelectedCycle("all")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                  selectedCycle === "all"
+                    ? "bg-white dark:bg-[#1F2937] text-zinc-900 dark:text-white shadow-xs"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
+                }`}
+              >
+                All Tasks ({assignmentsList.length})
+              </button>
               {cycleSet.map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setSelectedCycle(c)}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                    activeCycle === c
+                    selectedCycle === c
                       ? "bg-white dark:bg-[#1F2937] text-zinc-900 dark:text-white shadow-xs"
                       : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
                   }`}
@@ -149,7 +161,7 @@ export const StudentProgressMatrix: React.FC<StudentProgressMatrixProps> = ({
               {/* Assignments Horizontal Columns (Matches Image 3) */}
               {cycleAssignments.length === 0 ? (
                 <th className="px-4 py-3 text-zinc-400 italic font-normal text-xs text-center">
-                  No assignments found in Cycle {activeCycle}
+                  No assignments found {selectedCycle === "all" ? "" : `in Cycle ${selectedCycle}`}
                 </th>
               ) : (
                 cycleAssignments.map((a) => (

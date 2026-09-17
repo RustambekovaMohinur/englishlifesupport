@@ -140,18 +140,13 @@ async def list_students(
     total_assignments_map: dict[uuid.UUID, int] = {}
     active_assign_ids_by_group: dict[uuid.UUID, set[uuid.UUID]] = {}
     if grp_ids:
-        now_dt = utcnow()
         group_asgn_query = (
-            select(Assignment.id, Assignment.group_id, Assignment.cycle_number, Assignment.deadline, Group.current_cycle)
-            .join(Group, Assignment.group_id == Group.id)
+            select(Assignment.id, Assignment.group_id)
             .where(Assignment.group_id.in_(grp_ids), Assignment.status == AssignmentStatus.PUBLISHED)
         )
         group_asgn_res = await db.execute(group_asgn_query)
-        for a_id, gid, a_cycle, a_deadline, g_cycle in group_asgn_res.all():
-            g_curr = g_cycle or 1
-            is_active_task = (a_cycle or 1) == g_curr or as_utc(a_deadline) >= now_dt
-            if is_active_task:
-                active_assign_ids_by_group.setdefault(gid, set()).add(a_id)
+        for a_id, gid in group_asgn_res.all():
+            active_assign_ids_by_group.setdefault(gid, set()).add(a_id)
 
         for gid in grp_ids:
             total_assignments_map[gid] = len(active_assign_ids_by_group.get(gid, set()))
@@ -185,7 +180,7 @@ async def list_students(
             completed_asgns = completed_submissions_map.get(profile.id, 0)
             if completed_asgns > total_asgns and total_asgns > 0:
                 completed_asgns = total_asgns
-            pct = int((completed_asgns / total_asgns) * 100) if total_asgns > 0 else 0
+            pct = int(round((completed_asgns / total_asgns) * 100)) if total_asgns > 0 else 0
             display_group_name = grp_name or "Unassigned"
             group_brief = StudentGroupBrief(
                 id=grp_id,
@@ -693,17 +688,20 @@ async def get_student_history(
         current_cycle = getattr(grp, "current_cycle", 1) or 1
         now_dt = utcnow()
 
-        # Load all published assignments for this group, newest first
+        # Load all assignments for this group (published and archived), newest first
         assignments_res = await db.execute(
             select(Assignment)
-            .where(Assignment.group_id == profile.group_id, Assignment.status == AssignmentStatus.PUBLISHED)
+            .where(
+                Assignment.group_id == profile.group_id,
+                Assignment.status.in_([AssignmentStatus.PUBLISHED, AssignmentStatus.ARCHIVED]),
+            )
             .order_by(Assignment.created_at.desc())
         )
         assignments = assignments_res.scalars().all()
 
         active_assignments_list = [
             a for a in assignments
-            if (getattr(a, "cycle_number", 1) or 1) == current_cycle or as_utc(a.deadline) >= now_dt
+            if a.status == AssignmentStatus.PUBLISHED
         ]
         active_assignment_ids = {a.id for a in active_assignments_list}
         cycle_total_tasks = len(active_assignments_list)

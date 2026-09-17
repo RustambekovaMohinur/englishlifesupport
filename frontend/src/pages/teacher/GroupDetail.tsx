@@ -175,16 +175,12 @@ export default function GroupDetailPage() {
   }, [groupDetail?.students]);
 
   // Calculate unified active cohort assignments to ensure consistent task denominators across all students
-  const currentCycle = groupDetail?.current_cycle || 1;
-  const nowUtc = Date.now();
   const activeCohortAssignments = useMemo(() => {
     if (!groupDetail?.assignments || !Array.isArray(groupDetail.assignments)) return [];
-    return groupDetail.assignments.filter((a) => {
-      const aCycle = a.cycle_number ?? 1;
-      const isFuture = a.deadline ? new Date(a.deadline).getTime() >= nowUtc : false;
-      return aCycle === currentCycle || isFuture;
-    });
-  }, [groupDetail?.assignments, currentCycle, nowUtc]);
+    return groupDetail.assignments.filter(
+      (a) => a && (a.status === "published" || !((a as any).is_archived))
+    );
+  }, [groupDetail?.assignments]);
 
   const activeTaskIds = useMemo(() => new Set(activeCohortAssignments.map((a) => a.id)), [activeCohortAssignments]);
   const unifiedTotalActiveTasks = activeCohortAssignments.length > 0 ? activeCohortAssignments.length : (groupDetail?.assignments?.length ?? 0);
