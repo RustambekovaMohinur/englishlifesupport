@@ -235,7 +235,7 @@ export function PlatformFeedbackFloatingTrigger() {
       <button
         type="button"
         onClick={() => setModalOpen(true)}
-        className="fixed bottom-16 lg:bottom-6 right-4 lg:right-6 z-40 inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold shadow-lg shadow-amber-500/25 transition-all hover:scale-105 active:scale-95 group"
+        className="fixed bottom-20 sm:bottom-6 right-4 lg:right-6 z-40 inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold shadow-lg shadow-amber-500/25 transition-all hover:scale-105 active:scale-95 group"
         title="Platform Feedback & Reviews"
       >
         <Star className="w-3.5 h-3.5 fill-white transition-transform group-hover:rotate-12" />

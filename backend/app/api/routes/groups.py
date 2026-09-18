@@ -90,11 +90,7 @@ async def get_active_student_counts(db: AsyncSession, group_ids: list[uuid.UUID]
                 if score > existing_score:
                     dedup_map[key] = (r, score)
 
-        active = [
-            r for r, _ in dedup_map.values()
-            if (r[4] or 0) > 0 or (r[5] or 0) > 0
-        ]
-        counts_map[gid] = len(active) if active else len(dedup_map)
+        counts_map[gid] = len(dedup_map)
 
     return counts_map
 
@@ -377,11 +373,7 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
             if score > existing_score:
                 dedup_map[key] = (s, score)
 
-    active_students = [
-        s for s, _ in dedup_map.values()
-        if (s.total_stars or 0) > 0 or s.completed_assignments_count > 0 or any(a.has_submission for a in s.assignments)
-    ]
-    final_students = active_students if len(active_students) > 0 else [s for s, _ in dedup_map.values()]
+    final_students = [s for s, _ in dedup_map.values()]
     final_students.sort(key=lambda x: (x.full_name or "").lower())
 
     # Harmonized Group Cycle Progress:

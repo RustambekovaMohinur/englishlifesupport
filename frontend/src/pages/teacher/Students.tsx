@@ -421,7 +421,7 @@ export default function StudentsPage() {
         </div>
 
         {/* View Tabs */}
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/60 shrink-0 select-none">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/60 shrink-0 select-none overflow-x-auto max-w-full">
           <button
             type="button"
             onClick={() => {

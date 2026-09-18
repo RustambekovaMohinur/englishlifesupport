@@ -149,138 +149,140 @@ export const StudentProgressMatrix: React.FC<StudentProgressMatrixProps> = ({
       </div>
 
       {/* Progress Matrix Table with Pinned Left Column and Horizontal Momentum Scroll */}
-      <div className="overflow-x-auto rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_3px_rgba(0,0,0,0.05),0_8px_20px_rgba(0,0,0,0.03)] touch-pan-x">
-        <table className="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr className="border-b border-black/[0.08] dark:border-white/[0.08] bg-zinc-50/90 dark:bg-[#161B22]/90 backdrop-blur-md text-zinc-600 dark:text-zinc-400">
-              {/* Sticky Column 1: Candidate (Matches Image 3) */}
-              <th className="sticky left-0 z-20 bg-zinc-50 dark:bg-[#161B22] px-4 py-3.5 font-bold uppercase tracking-wider text-[11px] min-w-[200px] border-r border-black/[0.08] dark:border-white/[0.08] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)]">
-                Candidate
-              </th>
-
-              {/* Assignments Horizontal Columns (Matches Image 3) */}
-              {cycleAssignments.length === 0 ? (
-                <th className="px-4 py-3 text-zinc-400 italic font-normal text-xs text-center">
-                  No assignments found {selectedCycle === "all" ? "" : `in Cycle ${selectedCycle}`}
+      <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-thin">
+        <div className="overflow-x-auto rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_3px_rgba(0,0,0,0.05),0_8px_20px_rgba(0,0,0,0.03)] touch-pan-x min-w-[640px]">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-black/[0.08] dark:border-white/[0.08] bg-zinc-50/90 dark:bg-[#161B22]/90 backdrop-blur-md text-zinc-600 dark:text-zinc-400">
+                {/* Sticky Column 1: Candidate (Matches Image 3) */}
+                <th className="sticky left-0 z-20 bg-zinc-50 dark:bg-[#161B22] px-4 py-3.5 font-bold uppercase tracking-wider text-[11px] min-w-[180px] sm:min-w-[200px] border-r border-black/[0.08] dark:border-white/[0.08] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)]">
+                  Candidate
                 </th>
-              ) : (
-                cycleAssignments.map((a) => (
-                  <th
-                    key={a.id}
-                    className="px-4 py-3.5 text-center min-w-[150px] max-w-[180px] border-l border-black/[0.04] dark:border-white/[0.06]"
-                  >
-                    <div className="flex items-center justify-center gap-1.5 text-zinc-900 dark:text-white font-bold truncate">
-                      <span className="text-sm">{getAssignmentIcon(a.title)}</span>
-                      <span className="truncate text-xs" title={a.title}>
-                        {a.title}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-normal mt-0.5">
-                      Due: {new Date(a.deadline).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                    </div>
+
+                {/* Assignments Horizontal Columns (Matches Image 3) */}
+                {cycleAssignments.length === 0 ? (
+                  <th className="px-4 py-3 text-zinc-400 italic font-normal text-xs text-center">
+                    No assignments found {selectedCycle === "all" ? "" : `in Cycle ${selectedCycle}`}
                   </th>
+                ) : (
+                  cycleAssignments.map((a) => (
+                    <th
+                      key={a.id}
+                      className="px-4 py-3.5 text-center min-w-[130px] sm:min-w-[150px] max-w-[180px] border-l border-black/[0.04] dark:border-white/[0.06]"
+                    >
+                      <div className="flex items-center justify-center gap-1.5 text-zinc-900 dark:text-white font-bold truncate">
+                        <span className="text-sm">{getAssignmentIcon(a.title)}</span>
+                        <span className="truncate text-xs" title={a.title}>
+                          {a.title}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-normal mt-0.5 whitespace-nowrap">
+                        Due: {new Date(a.deadline).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      </div>
+                    </th>
+                  ))
+                )}
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
+              {filteredStudents.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={Math.max(2, cycleAssignments.length + 1)}
+                    className="px-4 py-12 text-center text-zinc-400 dark:text-zinc-500 text-xs"
+                  >
+                    No students found matching "{searchQuery}"
+                  </td>
+                </tr>
+              ) : (
+                filteredStudents.map((st) => (
+                  <tr
+                    key={st.student_id}
+                    className="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30 transition-colors group"
+                  >
+                    {/* Sticky Pinned Candidate Identity (Matches Image 3) */}
+                    <td className="sticky left-0 z-10 bg-white dark:bg-[#111827] px-4 py-3 border-r border-black/[0.08] dark:border-white/[0.08] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] group-hover:bg-zinc-50/90 dark:group-hover:bg-zinc-800/60 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="relative shrink-0">
+                          <UserAvatar
+                            src={st.avatar_url}
+                            name={st.full_name}
+                            size="xs"
+                          />
+                        </div>
+                        <div className="min-w-0 max-w-[140px] sm:max-w-none">
+                          <p
+                            onClick={() => onStudentClick && onStudentClick(st.student_id)}
+                            className={`font-semibold text-zinc-900 dark:text-white truncate text-xs ${
+                              onStudentClick
+                                ? "hover:text-brand-600 dark:hover:text-brand-400 cursor-pointer underline decoration-dotted"
+                                : ""
+                            }`}
+                            title={st.full_name}
+                          >
+                            {st.full_name}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono truncate">
+                            {st.username ? `@${st.username}` : (st.telegram_username ? `@${st.telegram_username.replace("@", "")}` : "Student")}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Horizontal Assignment Status Badges (DONE / NOT YET / PENDING) */}
+                    {cycleAssignments.map((a) => {
+                      const item = st.assignments?.find((asg) => asg && asg.assignment_id === a.id);
+                      const isDone = item?.has_submission && item.score !== null;
+                      const isPending = item?.has_submission && item.score === null;
+
+                      return (
+                        <td
+                          key={a.id}
+                          className={`px-3 py-3 text-center border-l border-black/[0.04] dark:border-white/[0.06] ${
+                            isTeacher ? "cursor-pointer hover:bg-brand-50/40 dark:hover:bg-brand-950/20" : ""
+                          }`}
+                          onClick={() => {
+                            if (onCellClick) {
+                              onCellClick(st, a, item);
+                            }
+                          }}
+                        >
+                          {isDone ? (
+                            <span
+                              className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-200/80 text-slate-700 dark:bg-slate-800 dark:text-slate-300 shadow-2xs whitespace-nowrap"
+                              title={`Graded: ${item.score}/10`}
+                            >
+                              DONE {item.score !== null && item.score !== undefined ? `(${item.score}/10)` : ""}
+                            </span>
+                          ) : isPending ? (
+                            <span
+                              className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 shadow-2xs gap-1.5 whitespace-nowrap"
+                              title="Submitted, awaiting instructor evaluation"
+                            >
+                              <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+                              </span>
+                              PENDING
+                            </span>
+                          ) : (
+                            <span
+                              className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-400 dark:bg-slate-900/50 dark:text-slate-500 shadow-2xs whitespace-nowrap"
+                              title="Not submitted yet"
+                            >
+                              NOT YET
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
                 ))
               )}
-            </tr>
-          </thead>
-
-          <tbody className="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
-            {filteredStudents.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={Math.max(2, cycleAssignments.length + 1)}
-                  className="px-4 py-12 text-center text-zinc-400 dark:text-zinc-500 text-xs"
-                >
-                  No students found matching "{searchQuery}"
-                </td>
-              </tr>
-            ) : (
-              filteredStudents.map((st) => (
-                <tr
-                  key={st.student_id}
-                  className="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30 transition-colors group"
-                >
-                  {/* Sticky Pinned Candidate Identity (Matches Image 3) */}
-                  <td className="sticky left-0 z-10 bg-white dark:bg-[#111827] px-4 py-3 border-r border-black/[0.08] dark:border-white/[0.08] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] group-hover:bg-zinc-50/90 dark:group-hover:bg-zinc-800/60 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="relative shrink-0">
-                        <UserAvatar
-                          src={st.avatar_url}
-                          name={st.full_name}
-                          size="xs"
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <p
-                          onClick={() => onStudentClick && onStudentClick(st.student_id)}
-                          className={`font-semibold text-zinc-900 dark:text-white truncate text-xs ${
-                            onStudentClick
-                              ? "hover:text-brand-600 dark:hover:text-brand-400 cursor-pointer underline decoration-dotted"
-                              : ""
-                          }`}
-                          title={st.full_name}
-                        >
-                          {st.full_name}
-                        </p>
-                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono truncate">
-                          {st.username ? `@${st.username}` : (st.telegram_username ? `@${st.telegram_username.replace("@", "")}` : "Student")}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Horizontal Assignment Status Badges (DONE / NOT YET / PENDING) */}
-                  {cycleAssignments.map((a) => {
-                    const item = st.assignments?.find((asg) => asg && asg.assignment_id === a.id);
-                    const isDone = item?.has_submission && item.score !== null;
-                    const isPending = item?.has_submission && item.score === null;
-
-                    return (
-                      <td
-                        key={a.id}
-                        className={`px-3 py-3 text-center border-l border-black/[0.04] dark:border-white/[0.06] ${
-                          isTeacher ? "cursor-pointer hover:bg-brand-50/40 dark:hover:bg-brand-950/20" : ""
-                        }`}
-                        onClick={() => {
-                          if (onCellClick) {
-                            onCellClick(st, a, item);
-                          }
-                        }}
-                      >
-                        {isDone ? (
-                          <span
-                            className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-200/80 text-slate-700 dark:bg-slate-800 dark:text-slate-300 shadow-2xs"
-                            title={`Graded: ${item.score}/10`}
-                          >
-                            DONE {item.score !== null && item.score !== undefined ? `(${item.score}/10)` : ""}
-                          </span>
-                        ) : isPending ? (
-                          <span
-                            className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 shadow-2xs gap-1.5"
-                            title="Submitted, awaiting instructor evaluation"
-                          >
-                            <span className="relative flex h-1.5 w-1.5">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
-                            </span>
-                            PENDING
-                          </span>
-                        ) : (
-                          <span
-                            className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-400 dark:bg-slate-900/50 dark:text-slate-500 shadow-2xs"
-                            title="Not submitted yet"
-                          >
-                            NOT YET
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Helper Legend / Instructions Footer */}

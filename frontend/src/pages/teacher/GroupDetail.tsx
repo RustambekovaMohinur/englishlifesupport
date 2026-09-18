@@ -77,8 +77,12 @@ export default function GroupDetailPage() {
   const [resettingStudent, setResettingStudent] = useState<GroupStudentDetail | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [isPublishBatchOpen, setIsPublishBatchOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"table" | "cards" | "matrix">("table");
-  const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<"table" | "cards" | "matrix">(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 640) {
+      return "cards";
+    }
+    return "table";
+  });
   const [activeGradingCell, setActiveGradingCell] = useState<{
     student: GroupStudentDetail;
     assignment: GroupAssignmentHeader;
@@ -161,21 +165,7 @@ export default function GroupDetailPage() {
       }
     }
 
-    // Strip out any 0-star/0-submission ghost stubs entirely from this UI
-    const activeList = Array.from(map.values()).filter((s) => {
-      const stars = Number(s.total_stars ?? (s as any).stars ?? 0);
-      const assignmentsList = Array.isArray(s.assignments) ? s.assignments : [];
-      const completed = Number(
-        s.completed_assignments_count ??
-        (s as any).completed_tasks ??
-        assignmentsList.filter((a) => a && a.completion_percentage >= 100).length ??
-        0
-      );
-      const hasSub = completed > 0 || Boolean(assignmentsList.some((a) => a && a.has_submission));
-      return stars > 0 || hasSub;
-    });
-
-    return activeList.length > 0 ? activeList : Array.from(map.values());
+    return Array.from(map.values());
   }, [groupDetail?.students]);
 
   // Calculate unified active cohort assignments to ensure consistent task denominators across all students
@@ -420,7 +410,7 @@ export default function GroupDetailPage() {
       </div>
 
       {/* Tabs / Switch between Student Cards & Assignment Matrix */}
-      <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-3">
         <div>
           <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Enrolled Students ({totalStudents})</h2>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -428,10 +418,10 @@ export default function GroupDetailPage() {
           </p>
         </div>
 
-        <div className="flex gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs font-semibold">
+        <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs font-semibold overflow-x-auto max-w-full">
           <button
             onClick={() => setActiveTab("table")}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg whitespace-nowrap transition ${
               activeTab === "table"
                 ? "bg-white dark:bg-[#161B22] text-zinc-900 dark:text-white shadow-xs"
                 : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
@@ -442,7 +432,7 @@ export default function GroupDetailPage() {
           </button>
           <button
             onClick={() => setActiveTab("cards")}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg whitespace-nowrap transition ${
               activeTab === "cards"
                 ? "bg-white dark:bg-[#161B22] text-zinc-900 dark:text-white shadow-xs"
                 : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
@@ -453,7 +443,7 @@ export default function GroupDetailPage() {
           </button>
           <button
             onClick={() => setActiveTab("matrix")}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg whitespace-nowrap transition ${
               activeTab === "matrix"
                 ? "bg-white dark:bg-[#161B22] text-zinc-900 dark:text-white shadow-xs"
                 : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
@@ -472,7 +462,8 @@ export default function GroupDetailPage() {
         />
       ) : activeTab === "table" ? (
         /* ================= 1. CLEAN DIRECTORY TABLE (DEFAULT) ================= */
-        <div className="card overflow-x-auto p-0 border border-[#EAE9E5] dark:border-[#30363D]">
+        <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-thin">
+          <div className="card overflow-x-auto p-0 border border-[#EAE9E5] dark:border-[#30363D] min-w-[640px]">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs">
@@ -623,6 +614,7 @@ export default function GroupDetailPage() {
             </tbody>
           </table>
         </div>
+      </div>
       ) : activeTab === "cards" ? (
         /* ================= 2. STUDENTS LIST / CARDS VIEW ================= */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -735,26 +727,29 @@ export default function GroupDetailPage() {
                     <button
                       type="button"
                       onClick={() => setPlacementStudent(student)}
-                      className="p-1.5 rounded-md text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                      className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition"
                       title="Migrate Cohort"
+                      aria-label="Migrate Cohort"
                     >
-                      <ArrowRightLeft className="w-3.5 h-3.5" />
+                      <ArrowRightLeft className="w-4 h-4" />
                     </button>
                     <button
                       type="button"
                       onClick={() => setResettingStudent(student)}
-                      className="p-1.5 rounded-md text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
                       title="Reset Password"
+                      aria-label="Reset Password"
                     >
-                      <Key className="w-3.5 h-3.5" />
+                      <Key className="w-4 h-4" />
                     </button>
                     <button
                       type="button"
                       onClick={() => handleRemoveStudent(student)}
-                      className="p-1.5 rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                      className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
                       title="Remove from Cohort"
+                      aria-label="Remove from Cohort"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
