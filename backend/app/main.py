@@ -9,7 +9,7 @@ _backend_dir = str(Path(__file__).resolve().parent.parent)
 if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -113,19 +113,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_origin_regex=settings.CORS_ORIGIN_REGEX if getattr(settings, "CORS_ORIGIN_REGEX", None) else None,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["Content-Disposition", "Content-Length", "Content-Type"],
-)
-
-
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -133,6 +124,33 @@ async def security_headers_middleware(request: Request, call_next):
     if settings.ENVIRONMENT == "production":
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
+
+
+# CORSMiddleware is placed at the VERY TOP of the middleware stack
+# so that all OPTIONS preflight requests are intercepted immediately
+# without touching downstream middlewares, rate limiters, or database sessions.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    max_age=3600,
+)
+
+
+@app.options("/{rest_of_path:path}", include_in_schema=False)
+async def preflight_handler(request: Request, rest_of_path: str):
+    """Immediate CORS preflight responder to guarantee zero preflight hangs."""
+    origin = request.headers.get("origin") or "*"
+    headers = {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD",
+        "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "*"),
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Max-Age": "3600",
+    }
+    return Response(status_code=204, headers=headers)
 
 
 app.include_router(auth.router)
@@ -209,17 +227,8 @@ async def bootstrap_teacher_account(max_retries: int = 5, retry_delay: float = 2
                 logger.exception("Could not bootstrap teacher account after %d attempts: %s", max_retries, exc)
 
 
-@app.on_event("startup")
-async def startup_event():
-    # In test environment, ensure a fresh SQLite database file
-    if settings.ENVIRONMENT == "test":
-        # Extract file path from DATABASE_URL (expects sqlite:///./<filename>)
-        db_path_str = settings.DATABASE_URL.split('/')[-1]
-        db_path = pathlib.Path(db_path_str)
-        if db_path.exists():
-            db_path.unlink()
-            logger.info("Deleted existing test SQLite DB to ensure clean state")
-
+async def _run_startup_tasks():
+    """Executes DB table verification, migrations, and teacher bootstrap in the background without blocking HTTP serving."""
     # 1. Ensure wordlist and other metadata tables exist safely without blocking
     try:
         from app.db.base_class import Base
@@ -256,7 +265,6 @@ async def startup_event():
             from alembic.config import Config
             from alembic import command
 
-
             def _run_migrations():
                 backend_dir = Path(__file__).resolve().parents[1]
                 alembic_ini_path = backend_dir / "alembic.ini"
@@ -280,7 +288,21 @@ async def startup_event():
     except Exception as exc:
         logger.exception("Error during bootstrap_teacher_account execution: %s", exc)
 
-    # 4. Verify registered preview-bulk routes on startup
+
+@app.on_event("startup")
+async def startup_event():
+    # In test environment, ensure a fresh SQLite database file
+    if settings.ENVIRONMENT == "test":
+        db_path_str = settings.DATABASE_URL.split('/')[-1]
+        db_path = Path(db_path_str)
+        if db_path.exists():
+            db_path.unlink()
+            logger.info("Deleted existing test SQLite DB to ensure clean state")
+
+    # Launch background DB warmup/migration task so FastAPI accepts HTTP requests immediately
+    asyncio.create_task(_run_startup_tasks())
+
+    # Log registered preview-bulk routes
     for route in app.routes:
         if "preview-bulk" in getattr(route, "path", ""):
             methods = list(getattr(route, "methods", []))

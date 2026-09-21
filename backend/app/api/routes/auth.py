@@ -1,7 +1,8 @@
+import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jose import JWTError
 from sqlalchemy import select, func, or_
 from sqlalchemy.exc import IntegrityError
@@ -90,10 +91,11 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
     if existing_email.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
+    pwd_hash = await asyncio.to_thread(hash_password, body.password)
     user = User(
         username=username,
         email=email,
-        password_hash=hash_password(body.password),
+        password_hash=pwd_hash,
         role=UserRole.STUDENT,
         approval_status=ApprovalStatus.PENDING,
     )
@@ -119,6 +121,12 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
         "access_token": "",
         "refresh_token": "",
     }
+
+
+@router.options("/login", include_in_schema=False)
+@router.options("/login/", include_in_schema=False)
+async def login_options():
+    return Response(status_code=204)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -162,7 +170,11 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
         if not user:
             user = users[0]
 
-    if user is None or not verify_password(body.password, user.password_hash):
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
+
+    is_valid = await asyncio.to_thread(verify_password, body.password, user.password_hash)
+    if not is_valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
     if user.approval_status != ApprovalStatus.APPROVED:

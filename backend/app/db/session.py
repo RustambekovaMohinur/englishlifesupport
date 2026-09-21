@@ -36,8 +36,8 @@ def _build_async_engine_url(raw_url: str) -> tuple[URL, dict]:
     connect_args: dict = {}
     if ssl_required:
         connect_args["ssl"] = True
-    connect_args["timeout"] = 10
-    connect_args["command_timeout"] = 15
+    connect_args["timeout"] = 20
+    connect_args["command_timeout"] = 30
     return clean_url, connect_args
 
 import os
@@ -49,10 +49,10 @@ _clean_url, _connect_args = _build_async_engine_url(_async_url)
 engine = create_async_engine(
     _clean_url,
     pool_pre_ping=True,
-    pool_recycle=300,
-    pool_timeout=10,
-    pool_size=10,
-    max_overflow=5,
+    pool_recycle=180,
+    pool_timeout=25,
+    pool_size=20,
+    max_overflow=10,
     echo=False,
     connect_args=_connect_args,
 )
@@ -71,5 +71,8 @@ async def get_db():
     async with AsyncSessionLocal() as session:
         try:
             yield session
+        except Exception:
+            await session.rollback()
+            raise
         finally:
             await session.close()
