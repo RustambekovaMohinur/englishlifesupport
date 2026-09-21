@@ -84,6 +84,11 @@ class WordlistSetDetailOut(BaseModel):
         from_attributes = True
 
 
+# Aliases to match schema specifications
+WordlistSetSummary = WordlistSetBriefOut
+WordlistSetDetail = WordlistSetDetailOut
+
+
 class PreviewBulkRequest(BaseModel):
     words: list[str] = Field(..., max_items=50)
 

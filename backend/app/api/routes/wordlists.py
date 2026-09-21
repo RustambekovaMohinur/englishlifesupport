@@ -235,14 +235,18 @@ async def preview_bulk_slash(payload: dict | BulkPreviewRequest | None = None):
 
 
 @router.post("", response_model=WordlistSetDetailOut, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=WordlistSetDetailOut, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def create_wordlist_set(
     data: WordlistSetCreate,
-    current_user: User = Depends(require_teacher),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Creates a new WordlistSet and its WordlistItem records.
     """
+    if current_user.role != UserRole.TEACHER and not getattr(current_user, "is_superuser", False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only teachers can create wordlists")
+
     new_set = WordlistSet(
         title=data.title.strip(),
         group_id=data.group_id,
@@ -289,6 +293,7 @@ async def create_wordlist_set(
 
 
 @router.get("", response_model=list[WordlistSetBriefOut])
+@router.get("/", response_model=list[WordlistSetBriefOut], include_in_schema=False)
 async def list_wordlist_sets(
     group_id: uuid.UUID | None = Query(default=None),
     current_user: User = Depends(get_current_user),
@@ -373,6 +378,7 @@ async def list_wordlist_sets(
 
 
 @router.get("/{set_id}", response_model=WordlistSetDetailOut)
+@router.get("/{set_id}/", response_model=WordlistSetDetailOut, include_in_schema=False)
 async def get_wordlist_set(
     set_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -444,6 +450,7 @@ async def get_wordlist_set(
 
 
 @router.post("/{set_id}/submit-quiz", response_model=QuizAttemptOut)
+@router.post("/{set_id}/submit-quiz/", response_model=QuizAttemptOut, include_in_schema=False)
 async def submit_quiz(
     set_id: uuid.UUID,
     data: SubmitQuizRequest,
@@ -497,6 +504,7 @@ async def submit_quiz(
 
 
 @router.delete("/{set_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{set_id}/", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)
 async def delete_wordlist_set(
     set_id: uuid.UUID,
     current_user: User = Depends(require_teacher),
@@ -513,3 +521,8 @@ async def delete_wordlist_set(
     await db.delete(w_set)
     await db.commit()
     return None
+
+
+# Route function aliases
+list_wordlists = list_wordlist_sets
+create_wordlist = create_wordlist_set

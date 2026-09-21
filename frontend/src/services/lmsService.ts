@@ -293,8 +293,10 @@ export const addFeedbackReply = (feedbackId: string, message: string) =>
   api.post<FeedbackReplyItem>(`/feedback/${feedbackId}/replies`, { message }).then((r) => r.data);
 
 // --- Wordlists & Flashcards ---
+const getWordlistsBasePath = () => (api.defaults.baseURL?.endsWith("/api") ? "/wordlists" : "/api/wordlists");
+
 export const previewBulkWords = (words: string[]) =>
-  api.post<import("@/types").WordDetailPreview[]>("/wordlists/preview-bulk", { words }).then((r) => r.data);
+  api.post<import("@/types").WordDetailPreview[]>(`${getWordlistsBasePath()}/preview-bulk`, { words }).then((r) => r.data);
 
 export const createWordlistSet = (data: {
   title: string;
@@ -309,16 +311,16 @@ export const createWordlistSet = (data: {
     audio_gb_url?: string | null;
     order_index?: number;
   }>;
-}) => api.post<import("@/types").WordlistSetDetail>("/wordlists", data).then((r) => r.data);
+}) => api.post<import("@/types").WordlistSetDetail>(getWordlistsBasePath(), data).then((r) => r.data);
 
 export const listWordlistSets = (params?: { group_id?: string }) =>
-  api.get<import("@/types").WordlistSetBrief[]>("/wordlists", { params }).then((r) => r.data);
+  api.get<import("@/types").WordlistSetBrief[]>(getWordlistsBasePath(), { params }).then((r) => r.data);
 
 export const getWordlistSet = (setId: string) =>
-  api.get<import("@/types").WordlistSetDetail>(`/wordlists/${setId}`).then((r) => r.data);
+  api.get<import("@/types").WordlistSetDetail>(`${getWordlistsBasePath()}/${setId}`).then((r) => r.data);
 
 export const deleteWordlistSet = (setId: string) =>
-  api.delete(`/wordlists/${setId}`).then((r) => r.data);
+  api.delete(`${getWordlistsBasePath()}/${setId}`).then((r) => r.data);
 
 export const submitWordlistQuiz = (
   setId: string,
@@ -331,4 +333,4 @@ export const submitWordlistQuiz = (
     anti_cheat_triggered?: boolean;
     incorrect_word_ids?: string[];
   }
-) => api.post<import("@/types").QuizAttempt>(`/wordlists/${setId}/submit-quiz`, data).then((r) => r.data);
+) => api.post<import("@/types").QuizAttempt>(`${getWordlistsBasePath()}/${setId}/submit-quiz`, data).then((r) => r.data);

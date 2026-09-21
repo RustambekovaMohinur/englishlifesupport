@@ -60,14 +60,17 @@ export default function TeacherWordlistsPage() {
     listGroups().then(setGroups).catch(() => {});
   }, []);
 
-  const loadSets = () => {
+  const loadSets = async () => {
     setIsLoadingSets(true);
-    listWordlistSets()
-      .then(setSets)
-      .catch((err) => {
-        toast.error(err?.response?.data?.detail ?? "Failed to load wordlists");
-      })
-      .finally(() => setIsLoadingSets(false));
+    try {
+      const basePath = api.defaults.baseURL?.endsWith("/api") ? "/wordlists" : "/api/wordlists";
+      const { data } = await api.get<WordlistSetBrief[]>(basePath);
+      setSets(data);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Failed to load wordlists");
+    } finally {
+      setIsLoadingSets(false);
+    }
   };
 
   const sanitizeVocabularyInput = (raw: string): string[] => {
@@ -237,7 +240,8 @@ export default function TeacherWordlistsPage() {
 
     setIsSaving(true);
     try {
-      await createWordlistSet({
+      const basePath = api.defaults.baseURL?.endsWith("/api") ? "/wordlists" : "/api/wordlists";
+      const payload = {
         title: title.trim(),
         group_id: selectedGroupId || null,
         items: previews.map((item, idx) => ({
@@ -250,7 +254,9 @@ export default function TeacherWordlistsPage() {
           audio_gb_url: item.audio_gb_url || null,
           order_index: idx,
         })),
-      });
+      };
+
+      await api.post(basePath, payload);
 
       toast.success("Vocabulary set created successfully!");
       // Reset form
@@ -271,7 +277,8 @@ export default function TeacherWordlistsPage() {
       `Are you sure you want to permanently delete "${setTitle}" and all its flashcards?`,
       async () => {
         try {
-          await deleteWordlistSet(setId);
+          const basePath = api.defaults.baseURL?.endsWith("/api") ? "/wordlists" : "/api/wordlists";
+          await api.delete(`${basePath}/${setId}`);
           toast.success("Wordlist deleted.");
           setSets((prev) => prev.filter((s) => s.id !== setId));
         } catch (err: any) {
@@ -285,8 +292,9 @@ export default function TeacherWordlistsPage() {
     setIsLoadingDetail(true);
     setPreviewModalOpen(true);
     try {
-      const detail = await getWordlistSet(setId);
-      setActiveSetDetail(detail);
+      const basePath = api.defaults.baseURL?.endsWith("/api") ? "/wordlists" : "/api/wordlists";
+      const { data } = await api.get<WordlistSetDetail>(`${basePath}/${setId}`);
+      setActiveSetDetail(data);
     } catch (err: any) {
       toast.error(err?.response?.data?.detail ?? "Failed to load flashcard deck.");
       setPreviewModalOpen(false);
