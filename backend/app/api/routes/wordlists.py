@@ -14,6 +14,7 @@ from app.models.student import StudentProfile
 from app.models.user import User, UserRole
 from app.models.wordlist import WordlistItem, WordlistSet, WordlistQuizAttempt
 from app.schemas.wordlist import (
+    BulkPreviewRequest,
     PreviewBulkRequest,
     QuizAttemptOut,
     SubmitQuizRequest,
@@ -181,15 +182,14 @@ async def fetch_word_details(raw_line: str, client: httpx.AsyncClient | None = N
 
 
 @router.post("/preview-bulk", response_model=list[WordDetailPreview])
-async def preview_bulk_words(
-    req: PreviewBulkRequest,
-    current_user: User = Depends(require_teacher),
+async def preview_bulk(
+    data: BulkPreviewRequest,
 ):
     """
     Takes up to 50 words (or 'word - translation' lines), concurrently resolves
     dictionary details, and returns structured preview list for teacher editing.
     """
-    raw_lines = [w.strip() for w in req.words if w.strip()]
+    raw_lines = [w.strip() for w in data.words if w.strip()]
     seen = set()
     lines = []
     for l in raw_lines:

@@ -88,6 +88,10 @@ class PreviewBulkRequest(BaseModel):
     words: list[str] = Field(..., max_items=50)
 
 
+# Alias to match BulkPreviewRequest specification
+BulkPreviewRequest = PreviewBulkRequest
+
+
 class WordDetailPreview(BaseModel):
     word: str
     custom_translation: str = ""

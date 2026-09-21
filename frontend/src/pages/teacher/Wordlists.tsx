@@ -23,6 +23,7 @@ import {
   previewBulkWords,
   listGroups,
 } from "@/services/lmsService";
+import { api } from "@/services/api";
 import {
   Group,
   WordlistSetBrief,
@@ -69,27 +70,83 @@ export default function TeacherWordlistsPage() {
       .finally(() => setIsLoadingSets(false));
   };
 
-  const handleGenerateBulk = async () => {
-    const rawLines = rawWordsInput.includes("\n")
-      ? rawWordsInput.split("\n")
-      : rawWordsInput.split(",");
-    const rawList = rawLines
-      .map((w) => w.trim())
-      .filter((w) => w.length > 0);
+  const sanitizeVocabularyInput = (raw: string): string[] => {
+    const lines = raw.split(/\r?\n/);
+    const validLines: string[] = [];
 
-    if (rawList.length === 0) {
-      toast.error("Please enter at least one word to generate definitions.");
+    for (let line of lines) {
+      line = line.trim();
+      if (!line) continue;
+
+      // Filter out git logs, commit hashes, code blocks, diffs, terminal outputs
+      if (
+        /^commit\s+[a-f0-9]{7,40}/i.test(line) ||
+        /^Author:\s+/i.test(line) ||
+        /^Date:\s+/i.test(line) ||
+        /^Merge:\s+/i.test(line) ||
+        /^diff\s+--git/i.test(line) ||
+        /^index\s+[a-f0-9]+/i.test(line) ||
+        /^[+-]{3}\s+/i.test(line) ||
+        /^@@\s+-\d+/i.test(line) ||
+        line.startsWith("```") ||
+        line.startsWith("#") ||
+        /^(fatal|error|warning):/i.test(line)
+      ) {
+        continue;
+      }
+
+      // Strip bullet points, leading numbers, markdown list indicators: "1. word - translation" -> "word - translation"
+      const cleaned = line.replace(/^(\d+[\.\)]|\*|-|\+)\s+/, "").trim();
+      if (!cleaned) continue;
+
+      // Filter code statements or shell commands
+      if (
+        /^(import|export|const|let|var|function|class|def|curl|git|npm|pnpm|yarn|docker)\b/.test(cleaned) ||
+        cleaned.includes("http://") ||
+        cleaned.includes("https://")
+      ) {
+        continue;
+      }
+
+      // If comma-separated words on single line without bilingual delimiter, extract words
+      if (!cleaned.includes("-") && !cleaned.includes("=") && !cleaned.includes(":") && cleaned.includes(",")) {
+        const parts = cleaned.split(",").map((p) => p.trim()).filter(Boolean);
+        for (const p of parts) {
+          if (/^[a-zA-Z\s'-]+$/.test(p) && p.length < 50) {
+            validLines.push(p);
+          }
+        }
+        continue;
+      }
+
+      validLines.push(cleaned);
+    }
+
+    return validLines;
+  };
+
+  const handleGenerateBulk = async () => {
+    const sanitizedWords = sanitizeVocabularyInput(rawWordsInput);
+
+    if (sanitizedWords.length === 0) {
+      toast.error(
+        "No valid vocabulary words found. Please enter words in 'word - translation' format or one word per line."
+      );
       return;
     }
 
-    if (rawList.length > 50) {
+    if (sanitizedWords.length > 50) {
       toast.error("Maximum 50 words per bulk import batch.");
       return;
     }
 
     setIsGenerating(true);
     try {
-      const results = await previewBulkWords(rawList);
+      // Axios client baseURL is "/api" (or "https://.../api"), so "/wordlists/preview-bulk" resolves to "/api/wordlists/preview-bulk"
+      const res = await api.post<WordDetailPreview[]>("/wordlists/preview-bulk", {
+        words: sanitizedWords,
+      });
+      const results = res.data;
       setPreviews(results);
       toast.success(`Successfully analyzed ${results.length} words!`);
     } catch (err: any) {

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import sys
@@ -149,6 +150,7 @@ app.include_router(profile.users_avatar_router)
 app.include_router(profile.v1_profile_router)
 app.include_router(feedback.router)
 app.include_router(wordlists.router, prefix="/api/wordlists", tags=["Wordlists"])
+app.include_router(wordlists.router, prefix="/wordlists", tags=["Wordlists"])
 
 
 @app.get("/")
@@ -166,8 +168,6 @@ async def bootstrap_teacher_account(max_retries: int = 5, retry_delay: float = 2
     account is created - there is no public "register as teacher" endpoint.
     Safe to run on every startup: it's a no-op once a teacher exists.
     """
-    import asyncio
-
     for attempt in range(1, max_retries + 1):
         try:
             async with AsyncSessionLocal() as db:
@@ -232,7 +232,6 @@ async def startup_event():
     # 2. Ensure database schema is migrated before application queries tables
     if os.environ.get("RUN_MIGRATIONS_ON_STARTUP") == "true":
         try:
-            import asyncio
             from pathlib import Path
             from alembic.config import Config
             from alembic import command
