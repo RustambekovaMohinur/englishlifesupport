@@ -36,6 +36,10 @@ from app.models.gamification import (  # noqa: F401
     TaskLockOverride,
     XPTransaction,
 )
+from app.models.wordlist import (  # noqa: F401
+    WordlistItem,
+    WordlistSet,
+)
 
 __all__ = [
     "Base",
@@ -69,5 +73,6 @@ __all__ = [
     "Achievement",
     "TaskLockOverride",
     "StudentOfTheWeek",
+    "WordlistSet",
+    "WordlistItem",
 ]
-

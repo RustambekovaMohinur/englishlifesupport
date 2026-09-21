@@ -292,5 +292,30 @@ export const toggleFeedbackLike = (feedbackId: string) =>
 export const addFeedbackReply = (feedbackId: string, message: string) =>
   api.post<FeedbackReplyItem>(`/feedback/${feedbackId}/replies`, { message }).then((r) => r.data);
 
+// --- Wordlists & Flashcards ---
+export const previewBulkWords = (words: string[]) =>
+  api.post<import("@/types").WordDetailPreview[]>("/wordlists/preview-bulk", { words }).then((r) => r.data);
 
+export const createWordlistSet = (data: {
+  title: string;
+  group_id?: string | null;
+  items: Array<{
+    word: string;
+    part_of_speech?: string | null;
+    phonetic?: string | null;
+    definition?: string | null;
+    example?: string | null;
+    audio_us_url?: string | null;
+    audio_gb_url?: string | null;
+    order_index?: number;
+  }>;
+}) => api.post<import("@/types").WordlistSetDetail>("/wordlists", data).then((r) => r.data);
 
+export const listWordlistSets = (params?: { group_id?: string }) =>
+  api.get<import("@/types").WordlistSetBrief[]>("/wordlists", { params }).then((r) => r.data);
+
+export const getWordlistSet = (setId: string) =>
+  api.get<import("@/types").WordlistSetDetail>(`/wordlists/${setId}`).then((r) => r.data);
+
+export const deleteWordlistSet = (setId: string) =>
+  api.delete(`/wordlists/${setId}`).then((r) => r.data);

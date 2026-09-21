@@ -14,11 +14,13 @@ import GroupDetailPage from "@/pages/teacher/GroupDetail";
 import AssignmentsPage from "@/pages/teacher/Assignments";
 import SubmissionsPage from "@/pages/teacher/Submissions";
 import TeacherProfilePage from "@/pages/teacher/Profile";
+import TeacherWordlistsPage from "@/pages/teacher/Wordlists";
 
 import StudentLayout from "@/layouts/StudentLayout";
 import StudentDashboardPage from "@/pages/student/Dashboard";
 import StudentAssignmentsPage from "@/pages/student/Assignments";
 import StudentAssignmentSubmitPage from "@/pages/student/AssignmentSubmit";
+import StudentWordlistsPage from "@/pages/student/Wordlists";
 import StudentSubmissionsPage from "@/pages/student/Submissions";
 import StudentResultsPage from "@/pages/student/Results";
 import StudentProgressPage from "@/pages/student/Progress";
@@ -49,6 +51,7 @@ export default function App() {
               <Route path="groups" element={<GroupsPage />} />
               <Route path="groups/:groupId" element={<GroupDetailPage />} />
               <Route path="assignments" element={<AssignmentsPage />} />
+              <Route path="wordlists" element={<TeacherWordlistsPage />} />
               <Route path="submissions" element={<SubmissionsPage />} />
               <Route path="profile" element={<TeacherProfilePage />} />
             </Route>
@@ -60,7 +63,7 @@ export default function App() {
               <Route path="assignments" element={<StudentAssignmentsPage />} />
               <Route path="past-deadlines" element={<StudentPastDeadlinesPage />} />
               <Route path="assignments/:assignmentId/submit" element={<StudentAssignmentSubmitPage />} />
-              <Route path="vocabulary" element={<StudentAssignmentsPage />} />
+              <Route path="vocabulary" element={<StudentWordlistsPage />} />
               <Route path="submissions" element={<StudentSubmissionsPage />} />
               <Route path="results" element={<StudentResultsPage />} />
               <Route path="leaderboard" element={<StudentDashboardPage />} />

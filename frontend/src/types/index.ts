@@ -546,3 +546,48 @@ export interface TeacherGroupReport {
     reason: string | null;
   } | null;
 }
+
+// --- Wordlists & Flashcards ---
+export interface WordlistItem {
+  id?: string;
+  word: string;
+  part_of_speech?: string | null;
+  phonetic?: string | null;
+  definition?: string | null;
+  example?: string | null;
+  audio_us_url?: string | null;
+  audio_gb_url?: string | null;
+  order_index?: number;
+}
+
+export interface WordlistSetBrief {
+  id: string;
+  title: string;
+  group_id: string | null;
+  group_name: string | null;
+  created_by: string;
+  created_at: string;
+  word_count: number;
+}
+
+export interface WordlistSetDetail {
+  id: string;
+  title: string;
+  group_id: string | null;
+  group_name: string | null;
+  created_by: string;
+  created_at: string;
+  items: WordlistItem[];
+}
+
+export interface WordDetailPreview {
+  word: string;
+  part_of_speech: string;
+  phonetic: string;
+  definition: string;
+  example: string;
+  audio_us_url?: string | null;
+  audio_gb_url?: string | null;
+  source?: string;
+}
+

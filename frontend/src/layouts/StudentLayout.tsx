@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   LogOut,
   Clock,
+  Layers,
 } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/ui";
 import { MarqueeTicker } from "@/components/MarqueeTicker";
@@ -21,6 +22,7 @@ import { listPastDeadlineAssignments } from "@/services/lmsService";
 const sidebarNavItems = [
   { to: "/student", label: "Dashboard", icon: LayoutDashboard, end: true, hasBadge: false },
   { to: "/student/assignments", label: "My Assignments", icon: BookOpen, hasBadge: false },
+  { to: "/student/vocabulary", label: "Vocabulary Decks", icon: Layers, hasBadge: false },
   { to: "/student/past-deadlines", label: "Past Deadlines", icon: Clock, hasBadge: true },
   { to: "/student/submissions", label: "My Submissions", icon: CheckSquare, hasBadge: false },
   { to: "/student/results", label: "My Results", icon: Trophy, hasBadge: false },
@@ -31,6 +33,7 @@ const sidebarNavItems = [
 const bottomNavItems = [
   { to: "/student", label: "Home", icon: LayoutDashboard, end: true, hasBadge: false },
   { to: "/student/assignments", label: "Tasks", icon: BookOpen, hasBadge: false },
+  { to: "/student/vocabulary", label: "Cards", icon: Layers, hasBadge: false },
   { to: "/student/past-deadlines", label: "Past Due", icon: Clock, hasBadge: true },
   { to: "/student/leaderboard", label: "Rank", icon: Trophy, hasBadge: false },
   { to: "/student/profile", label: "Profile", icon: User, hasBadge: false },

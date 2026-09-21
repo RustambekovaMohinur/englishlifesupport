@@ -9,6 +9,7 @@ import {
   User,
   ChevronLeft,
   LogOut,
+  BookOpen,
 } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/ui";
 import { MarqueeTicker } from "@/components/MarqueeTicker";
@@ -21,6 +22,7 @@ const sidebarNavItems = [
   { to: "/teacher/students", label: "Students", icon: Users },
   { to: "/teacher/groups", label: "Groups", icon: Grid3X3 },
   { to: "/teacher/assignments", label: "Assignments", icon: FileText },
+  { to: "/teacher/wordlists", label: "Wordlists", icon: BookOpen },
   { to: "/teacher/submissions", label: "Submissions", icon: CheckSquare },
   { to: "/teacher/profile", label: "Profile", icon: User },
 ];
@@ -29,6 +31,7 @@ const bottomNavItems = [
   { to: "/teacher", label: "Desk", icon: LayoutDashboard, end: true },
   { to: "/teacher/groups", label: "Matrix", icon: Grid3X3 },
   { to: "/teacher/assignments", label: "Tasks", icon: FileText },
+  { to: "/teacher/wordlists", label: "Words", icon: BookOpen },
   { to: "/teacher/submissions", label: "Review", icon: CheckSquare },
   { to: "/teacher/profile", label: "Profile", icon: User },
 ];
