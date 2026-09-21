@@ -182,14 +182,26 @@ async def fetch_word_details(raw_line: str, client: httpx.AsyncClient | None = N
 
 
 @router.post("/preview-bulk", response_model=list[WordDetailPreview])
+@router.post("/preview-bulk/", response_model=list[WordDetailPreview])
 async def preview_bulk(
-    data: BulkPreviewRequest,
+    payload: dict | BulkPreviewRequest | None = None,
 ):
     """
     Takes up to 50 words (or 'word - translation' lines), concurrently resolves
     dictionary details, and returns structured preview list for teacher editing.
     """
-    raw_lines = [w.strip() for w in data.words if w.strip()]
+    if payload is None:
+        raw_words = []
+    elif isinstance(payload, dict):
+        raw_words = payload.get("words", [])
+    elif hasattr(payload, "words"):
+        raw_words = payload.words
+    elif isinstance(payload, list):
+        raw_words = payload
+    else:
+        raw_words = []
+
+    raw_lines = [str(w).strip() for w in raw_words if str(w).strip()]
     seen = set()
     lines = []
     for l in raw_lines:
@@ -215,6 +227,11 @@ async def preview_bulk(
             previews.append(WordDetailPreview(word=w, definition=t, custom_translation=t))
 
     return previews
+
+
+@router.post("/preview-bulk-slash", response_model=list[WordDetailPreview], include_in_schema=False)
+async def preview_bulk_slash(payload: dict | BulkPreviewRequest | None = None):
+    return await preview_bulk(payload)
 
 
 @router.post("", response_model=WordlistSetDetailOut, status_code=status.HTTP_201_CREATED)

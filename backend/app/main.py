@@ -151,6 +151,7 @@ app.include_router(profile.v1_profile_router)
 app.include_router(feedback.router)
 app.include_router(wordlists.router, prefix="/api/wordlists", tags=["Wordlists"])
 app.include_router(wordlists.router, prefix="/wordlists", tags=["Wordlists"])
+app.include_router(wordlists.router, prefix="/api", tags=["Wordlists"])
 
 
 @app.get("/")
@@ -259,5 +260,12 @@ async def startup_event():
         logger.warning("bootstrap_teacher_account timed out; server continuing startup.")
     except Exception as exc:
         logger.exception("Error during bootstrap_teacher_account execution: %s", exc)
+
+    # 4. Verify registered preview-bulk routes on startup
+    for route in app.routes:
+        if "preview-bulk" in getattr(route, "path", ""):
+            methods = list(getattr(route, "methods", []))
+            logger.info("[ROUTE MATCH]: %s -> %s", methods, route.path)
+            print(f"[ROUTE MATCH]: {methods} -> {route.path}")
 
 

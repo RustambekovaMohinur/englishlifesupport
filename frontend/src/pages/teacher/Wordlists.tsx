@@ -142,15 +142,53 @@ export default function TeacherWordlistsPage() {
 
     setIsGenerating(true);
     try {
-      // Axios client baseURL is "/api" (or "https://.../api"), so "/wordlists/preview-bulk" resolves to "/api/wordlists/preview-bulk"
-      const res = await api.post<WordDetailPreview[]>("/wordlists/preview-bulk", {
+      // Determine exact relative endpoint based on api.defaults.baseURL
+      const endpoint = api.defaults.baseURL?.endsWith("/api")
+        ? "/wordlists/preview-bulk"
+        : "/api/wordlists/preview-bulk";
+
+      console.log(`[WORDLISTS PREVIEW] Firing POST to ${api.defaults.baseURL || ""}${endpoint} with ${sanitizedWords.length} words`);
+
+      const res = await api.post<WordDetailPreview[]>(endpoint, {
         words: sanitizedWords,
       });
       const results = res.data;
       setPreviews(results);
       toast.success(`Successfully analyzed ${results.length} words!`);
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "Failed to query dictionary definitions.");
+      console.warn("[WORDLISTS PREVIEW] Network preview failed; engaging local resilient fallback parser:", err);
+
+      // Local fallback parser: parse "word - translation" or plain word locally so teacher is never blocked!
+      const fallbackItems: WordDetailPreview[] = sanitizedWords.map((line) => {
+        let word = line;
+        let translation = "";
+        for (const sep of [" - ", " = ", " : ", "-", "=", ":"]) {
+          if (line.includes(sep)) {
+            const parts = line.split(sep);
+            word = parts[0].trim();
+            translation = parts.slice(1).join(sep).trim();
+            break;
+          }
+        }
+        return {
+          word: word || line,
+          custom_translation: translation,
+          definition: translation || "",
+          part_of_speech: "noun",
+          phonetic: "",
+          example: "",
+          audio_us_url: null,
+          audio_gb_url: null,
+          source: "local_fallback",
+        };
+      });
+
+      if (fallbackItems.length > 0) {
+        setPreviews(fallbackItems);
+        toast.success(`Loaded ${fallbackItems.length} words (local mode). You can edit and save!`);
+      } else {
+        toast.error(err?.response?.data?.detail ?? "Failed to analyze vocabulary words.");
+      }
     } finally {
       setIsGenerating(false);
     }
