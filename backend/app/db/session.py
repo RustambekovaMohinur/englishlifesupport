@@ -36,6 +36,8 @@ def _build_async_engine_url(raw_url: str) -> tuple[URL, dict]:
     connect_args: dict = {}
     if ssl_required:
         connect_args["ssl"] = True
+    connect_args["timeout"] = 10
+    connect_args["command_timeout"] = 15
     return clean_url, connect_args
 
 import os
@@ -46,8 +48,9 @@ _clean_url, _connect_args = _build_async_engine_url(_async_url)
 
 engine = create_async_engine(
     _clean_url,
-    pool_pre_ping=False,
+    pool_pre_ping=True,
     pool_recycle=300,
+    pool_timeout=10,
     pool_size=10,
     max_overflow=5,
     echo=False,

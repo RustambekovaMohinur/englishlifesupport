@@ -213,7 +213,23 @@ async def startup_event():
         if db_path.exists():
             db_path.unlink()
             logger.info("Deleted existing test SQLite DB to ensure clean state")
-    # 1. Ensure database schema is migrated before application queries tables
+
+    # 1. Ensure wordlist and other metadata tables exist safely without blocking
+    try:
+        from app.db.base_class import Base
+        from app.db.session import engine
+        from app.models.wordlist import WordlistSet, WordlistItem  # noqa: F401
+
+        async def _init_models():
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+
+        await asyncio.wait_for(_init_models(), timeout=8.0)
+        logger.info("Database metadata verified.")
+    except Exception as exc:
+        logger.warning("Startup metadata create_all check: %s", exc)
+
+    # 2. Ensure database schema is migrated before application queries tables
     if os.environ.get("RUN_MIGRATIONS_ON_STARTUP") == "true":
         try:
             import asyncio
@@ -237,9 +253,12 @@ async def startup_event():
         except Exception as exc:
             logger.warning("Startup database migration check note: %s", exc)
 
-    # 2. Bootstrap initial teacher account
+    # 3. Bootstrap initial teacher account (guarded by timeout so startup never deadlocks)
     try:
-        await bootstrap_teacher_account()
+        await asyncio.wait_for(bootstrap_teacher_account(max_retries=3, retry_delay=1.0), timeout=10.0)
+    except asyncio.TimeoutError:
+        logger.warning("bootstrap_teacher_account timed out; server continuing startup.")
     except Exception as exc:
         logger.exception("Error during bootstrap_teacher_account execution: %s", exc)
+
 
