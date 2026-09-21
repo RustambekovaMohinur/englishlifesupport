@@ -7,14 +7,16 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_user, require_teacher
+from app.api.deps import get_current_user, require_teacher, require_student
 from app.db.session import get_db
 from app.models.group import Group
 from app.models.student import StudentProfile
 from app.models.user import User, UserRole
-from app.models.wordlist import WordlistItem, WordlistSet
+from app.models.wordlist import WordlistItem, WordlistSet, WordlistQuizAttempt
 from app.schemas.wordlist import (
     PreviewBulkRequest,
+    QuizAttemptOut,
+    SubmitQuizRequest,
     WordDetailPreview,
     WordlistSetBriefOut,
     WordlistSetCreate,
@@ -23,8 +25,7 @@ from app.schemas.wordlist import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/wordlists", tags=["wordlists"])
-
+router = APIRouter(tags=["Wordlists"])
 
 POS_MAP = {
     "noun": "n",
@@ -36,19 +37,48 @@ POS_MAP = {
     "conjunction": "conj",
     "interjection": "interj",
     "exclamation": "interj",
+    "phrase": "phrase",
+    "idiom": "phrase",
 }
 
 
-async def fetch_word_details(word: str, client: httpx.AsyncClient | None = None) -> WordDetailPreview:
+def parse_bilingual_line(line: str) -> tuple[str, str]:
     """
-    Defensive dictionary resolution:
-    1. Tries Free Dictionary API (https://api.dictionaryapi.dev/api/v2/entries/en/{word}) with 4.0s timeout.
-    2. Fallback to Datamuse API (https://api.datamuse.com/words?sp={word}&md=dr) if DictionaryAPI fails/times out.
-    3. Always returns safe WordDetailPreview and NEVER raises 500.
+    Parses inputs like:
+    'conserve - asramoq, tejamoq'
+    'drama = sahna asari'
+    'reluctant: istaksiz'
+    'reluctant'
     """
+    clean = line.strip()
+    if not clean:
+        return "", ""
+
+    for sep in [" - ", " = ", " : ", "-", "=", ":"]:
+        if sep in clean:
+            parts = clean.split(sep, 1)
+            raw_w = parts[0].strip()
+            raw_trans = parts[1].strip()
+            if raw_w:
+                return raw_w, raw_trans
+
+    return clean, ""
+
+
+async def fetch_word_details(raw_line: str, client: httpx.AsyncClient | None = None) -> WordDetailPreview:
+    """
+    Smart bilingual resolver:
+    1. Parses 'word - translation' or raw 'word'.
+    2. Queries Free Dictionary API with 3.5s timeout for phonetics, US/GB audio, POS, example.
+    3. If translation provided by teacher, sets definition = translation (or supplements).
+    4. Falls back to Datamuse if definition is absent and no custom translation was provided.
+    5. NEVER raises 500.
+    """
+    word, custom_translation = parse_bilingual_line(raw_line)
     clean_word = word.strip().lower()
+
     if not clean_word:
-        return WordDetailPreview(word=word)
+        return WordDetailPreview(word=raw_line)
 
     close_client = False
     if client is None:
@@ -57,13 +87,13 @@ async def fetch_word_details(word: str, client: httpx.AsyncClient | None = None)
 
     part_of_speech = ""
     phonetic = ""
-    definition = ""
+    definition = custom_translation
     example = ""
     audio_us_url = None
     audio_gb_url = None
 
     try:
-        # 1. Primary: Free Dictionary API
+        # 1. Free Dictionary API
         try:
             url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{clean_word}"
             resp = await client.get(url, timeout=3.5)
@@ -73,7 +103,6 @@ async def fetch_word_details(word: str, client: httpx.AsyncClient | None = None)
                     entry = data[0]
                     phonetic = entry.get("phonetic") or ""
 
-                    # Phonetics / Audio
                     for ph in entry.get("phonetics", []):
                         if not phonetic and ph.get("text"):
                             phonetic = ph.get("text")
@@ -89,7 +118,6 @@ async def fetch_word_details(word: str, client: httpx.AsyncClient | None = None)
                             elif not audio_us_url and not audio_gb_url:
                                 audio_us_url = aud
 
-                    # Meanings / Definitions
                     meanings = entry.get("meanings", [])
                     if meanings:
                         raw_pos = (meanings[0].get("partOfSpeech") or "").lower()
@@ -112,7 +140,7 @@ async def fetch_word_details(word: str, client: httpx.AsyncClient | None = None)
         except Exception as e:
             logger.info("Free Dictionary API lookup failed for '%s': %s", clean_word, e)
 
-        # 2. Fallback: Datamuse API if definition is still missing
+        # 2. Datamuse fallback if definition is still empty
         if not definition:
             try:
                 dm_url = f"https://api.datamuse.com/words?sp={clean_word}&md=dr&max=1"
@@ -124,7 +152,6 @@ async def fetch_word_details(word: str, client: httpx.AsyncClient | None = None)
                         defs = dm_item.get("defs", [])
                         if defs:
                             first_def = defs[0]
-                            # Format: 'n\tdefinition text'
                             if "\t" in first_def:
                                 d_pos, d_text = first_def.split("\t", 1)
                                 if not part_of_speech:
@@ -136,16 +163,17 @@ async def fetch_word_details(word: str, client: httpx.AsyncClient | None = None)
                 logger.info("Datamuse fallback lookup failed for '%s': %s", clean_word, e)
 
     except Exception as exc:
-        logger.warning("Error fetching word details for '%s': %s", clean_word, exc)
+        logger.warning("Error resolving word '%s': %s", clean_word, exc)
     finally:
         if close_client:
             await client.aclose()
 
     return WordDetailPreview(
         word=clean_word or word.strip(),
-        part_of_speech=part_of_speech,
+        custom_translation=custom_translation,
+        part_of_speech=part_of_speech or "n",
         phonetic=phonetic,
-        definition=definition,
+        definition=definition or custom_translation or "",
         example=example,
         audio_us_url=audio_us_url,
         audio_gb_url=audio_gb_url,
@@ -158,33 +186,33 @@ async def preview_bulk_words(
     current_user: User = Depends(require_teacher),
 ):
     """
-    Takes up to 50 words, concurrently fetches dictionary details,
-    and returns a structured list for teacher editing.
+    Takes up to 50 words (or 'word - translation' lines), concurrently resolves
+    dictionary details, and returns structured preview list for teacher editing.
     """
-    raw_words = [w.strip() for w in req.words if w.strip()]
-    # Deduplicate while preserving order
+    raw_lines = [w.strip() for w in req.words if w.strip()]
     seen = set()
-    words = []
-    for w in raw_words:
-        w_lower = w.lower()
-        if w_lower not in seen:
-            seen.add(w_lower)
-            words.append(w)
+    lines = []
+    for l in raw_lines:
+        w_key = parse_bilingual_line(l)[0].lower()
+        if w_key and w_key not in seen:
+            seen.add(w_key)
+            lines.append(l)
 
-    words = words[:50]
-    if not words:
+    lines = lines[:50]
+    if not lines:
         return []
 
     async with httpx.AsyncClient(timeout=4.0) as client:
-        tasks = [fetch_word_details(w, client=client) for w in words]
+        tasks = [fetch_word_details(l, client=client) for l in lines]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
     previews: list[WordDetailPreview] = []
-    for w, res in zip(words, results):
+    for l, res in zip(lines, results):
         if isinstance(res, WordDetailPreview):
             previews.append(res)
         else:
-            previews.append(WordDetailPreview(word=w))
+            w, t = parse_bilingual_line(l)
+            previews.append(WordDetailPreview(word=w, definition=t, custom_translation=t))
 
     return previews
 
@@ -196,7 +224,7 @@ async def create_wordlist_set(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Creates a new WordlistSet and its associated WordlistItem records.
+    Creates a new WordlistSet and its WordlistItem records.
     """
     new_set = WordlistSet(
         title=data.title.strip(),
@@ -222,7 +250,6 @@ async def create_wordlist_set(
 
     await db.commit()
 
-    # Reload with relations
     res = await db.execute(
         select(WordlistSet)
         .options(selectinload(WordlistSet.items), selectinload(WordlistSet.group))
@@ -238,6 +265,9 @@ async def create_wordlist_set(
         created_by=loaded_set.created_by,
         created_at=loaded_set.created_at,
         items=loaded_set.items,
+        recent_attempts=[],
+        student_is_mastered=False,
+        student_best_score=None,
     )
 
 
@@ -248,10 +278,13 @@ async def list_wordlist_sets(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    List wordlist sets.
-    - If user is student: returns sets belonging to their cohort OR global sets (group_id is None).
-    - If user is teacher: returns all sets or filtered by group_id if provided.
+    Lists sets with word counts and mastery stats.
     """
+    st_profile = None
+    if current_user.role == UserRole.STUDENT:
+        st_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
+        st_profile = st_res.scalar_one_or_none()
+
     query = (
         select(
             WordlistSet,
@@ -265,11 +298,7 @@ async def list_wordlist_sets(
     )
 
     if current_user.role == UserRole.STUDENT:
-        # Find student's cohort
-        st_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
-        st_profile = st_res.scalar_one_or_none()
         st_group_id = st_profile.group_id if st_profile else None
-
         if st_group_id:
             query = query.where(
                 (WordlistSet.group_id == st_group_id) | (WordlistSet.group_id.is_(None))
@@ -282,8 +311,31 @@ async def list_wordlist_sets(
     res = await db.execute(query)
     rows = res.all()
 
+    # If student, fetch their best score and mastery status per set
+    student_stats_map = {}
+    if st_profile:
+        att_res = await db.execute(
+            select(
+                WordlistQuizAttempt.set_id,
+                func.max(WordlistQuizAttempt.score_percentage).label("best_score"),
+                func.min(WordlistQuizAttempt.time_spent_seconds).label("best_time"),
+                func.count(WordlistQuizAttempt.id).label("attempts_cnt"),
+                func.bool_or(WordlistQuizAttempt.is_mastered).label("mastered"),
+            )
+            .where(WordlistQuizAttempt.student_id == st_profile.id)
+            .group_by(WordlistQuizAttempt.set_id)
+        )
+        for r in att_res.all():
+            student_stats_map[r[0]] = {
+                "best_score": r[1],
+                "best_time": r[2],
+                "attempts_cnt": r[3],
+                "mastered": bool(r[4]),
+            }
+
     output: list[WordlistSetBriefOut] = []
     for w_set, g_name, w_count in rows:
+        st_data = student_stats_map.get(w_set.id, {})
         output.append(
             WordlistSetBriefOut(
                 id=w_set.id,
@@ -293,6 +345,10 @@ async def list_wordlist_sets(
                 created_by=w_set.created_by,
                 created_at=w_set.created_at,
                 word_count=w_count or 0,
+                is_mastered=st_data.get("mastered", False),
+                best_score=st_data.get("best_score"),
+                best_time_seconds=st_data.get("best_time"),
+                attempts_count=st_data.get("attempts_cnt", 0),
             )
         )
 
@@ -306,7 +362,7 @@ async def get_wordlist_set(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Get full wordlist set with items.
+    Get full wordlist set with items and recent student / teacher attempt telemetry.
     """
     res = await db.execute(
         select(WordlistSet)
@@ -317,6 +373,45 @@ async def get_wordlist_set(
     if not w_set:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wordlist set not found")
 
+    st_profile = None
+    if current_user.role == UserRole.STUDENT:
+        st_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
+        st_profile = st_res.scalar_one_or_none()
+
+    # Fetch attempts
+    att_query = (
+        select(WordlistQuizAttempt)
+        .options(selectinload(WordlistQuizAttempt.student))
+        .where(WordlistQuizAttempt.set_id == set_id)
+        .order_by(WordlistQuizAttempt.created_at.desc())
+    )
+    if st_profile:
+        att_query = att_query.where(WordlistQuizAttempt.student_id == st_profile.id)
+
+    att_res = await db.execute(att_query.limit(20))
+    attempts = att_res.scalars().all()
+
+    student_is_mastered = any(a.is_mastered for a in attempts)
+    student_best_score = max((a.score_percentage for a in attempts), default=None)
+
+    attempts_out = [
+        QuizAttemptOut(
+            id=a.id,
+            student_id=a.student_id,
+            student_name=a.student.full_name if a.student else "Student",
+            mode=a.mode,
+            total_questions=a.total_questions,
+            correct_answers=a.correct_answers,
+            score_percentage=a.score_percentage,
+            time_spent_seconds=a.time_spent_seconds,
+            is_mastered=a.is_mastered,
+            terminated_early=a.terminated_early,
+            anti_cheat_triggered=a.anti_cheat_triggered,
+            created_at=a.created_at,
+        )
+        for a in attempts
+    ]
+
     return WordlistSetDetailOut(
         id=w_set.id,
         title=w_set.title,
@@ -325,6 +420,62 @@ async def get_wordlist_set(
         created_by=w_set.created_by,
         created_at=w_set.created_at,
         items=w_set.items,
+        recent_attempts=attempts_out,
+        student_is_mastered=student_is_mastered,
+        student_best_score=student_best_score,
+    )
+
+
+@router.post("/{set_id}/submit-quiz", response_model=QuizAttemptOut)
+async def submit_quiz(
+    set_id: uuid.UUID,
+    data: SubmitQuizRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Records a completed or terminated quiz attempt with anti-cheat telemetry.
+    Computes mastery score: round((correct / total) * 100).
+    Award 100% mastery if score is 100%.
+    """
+    st_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
+    st_profile = st_res.scalar_one_or_none()
+    if not st_profile:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only students can submit quiz telemetry")
+
+    total_q = max(1, data.total_questions)
+    correct_q = min(total_q, max(0, data.correct_answers))
+    score_pct = int(round((correct_q / total_q) * 100))
+    is_mastered = score_pct == 100 and not data.terminated_early and not data.anti_cheat_triggered
+
+    attempt = WordlistQuizAttempt(
+        set_id=set_id,
+        student_id=st_profile.id,
+        mode=data.mode,
+        total_questions=total_q,
+        correct_answers=correct_q,
+        score_percentage=score_pct,
+        time_spent_seconds=data.time_spent_seconds,
+        is_mastered=is_mastered,
+        terminated_early=data.terminated_early,
+        anti_cheat_triggered=data.anti_cheat_triggered,
+    )
+    db.add(attempt)
+    await db.commit()
+
+    return QuizAttemptOut(
+        id=attempt.id,
+        student_id=attempt.student_id,
+        student_name=st_profile.full_name,
+        mode=attempt.mode,
+        total_questions=attempt.total_questions,
+        correct_answers=attempt.correct_answers,
+        score_percentage=attempt.score_percentage,
+        time_spent_seconds=attempt.time_spent_seconds,
+        is_mastered=attempt.is_mastered,
+        terminated_early=attempt.terminated_early,
+        anti_cheat_triggered=attempt.anti_cheat_triggered,
+        created_at=attempt.created_at,
     )
 
 
@@ -335,7 +486,7 @@ async def delete_wordlist_set(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Hard delete a wordlist set and all associated items.
+    Hard delete a wordlist set and all associated items and attempts.
     """
     res = await db.execute(select(WordlistSet).where(WordlistSet.id == set_id))
     w_set = res.scalar_one_or_none()

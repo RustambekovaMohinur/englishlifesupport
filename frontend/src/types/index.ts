@@ -560,6 +560,21 @@ export interface WordlistItem {
   order_index?: number;
 }
 
+export interface QuizAttempt {
+  id: string;
+  student_id: string;
+  student_name?: string;
+  mode: string;
+  total_questions: number;
+  correct_answers: number;
+  score_percentage: number;
+  time_spent_seconds: number;
+  is_mastered: boolean;
+  terminated_early: boolean;
+  anti_cheat_triggered: boolean;
+  created_at: string;
+}
+
 export interface WordlistSetBrief {
   id: string;
   title: string;
@@ -568,6 +583,10 @@ export interface WordlistSetBrief {
   created_by: string;
   created_at: string;
   word_count: number;
+  is_mastered?: boolean;
+  best_score?: number | null;
+  best_time_seconds?: number | null;
+  attempts_count?: number;
 }
 
 export interface WordlistSetDetail {
@@ -578,10 +597,14 @@ export interface WordlistSetDetail {
   created_by: string;
   created_at: string;
   items: WordlistItem[];
+  recent_attempts?: QuizAttempt[];
+  student_is_mastered?: boolean;
+  student_best_score?: number | null;
 }
 
 export interface WordDetailPreview {
   word: string;
+  custom_translation?: string;
   part_of_speech: string;
   phonetic: string;
   definition: string;

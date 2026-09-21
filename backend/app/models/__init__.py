@@ -38,6 +38,7 @@ from app.models.gamification import (  # noqa: F401
 )
 from app.models.wordlist import (  # noqa: F401
     WordlistItem,
+    WordlistQuizAttempt,
     WordlistSet,
 )
 
@@ -75,4 +76,5 @@ __all__ = [
     "StudentOfTheWeek",
     "WordlistSet",
     "WordlistItem",
+    "WordlistQuizAttempt",
 ]

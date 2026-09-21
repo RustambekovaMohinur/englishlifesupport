@@ -319,3 +319,16 @@ export const getWordlistSet = (setId: string) =>
 
 export const deleteWordlistSet = (setId: string) =>
   api.delete(`/wordlists/${setId}`).then((r) => r.data);
+
+export const submitWordlistQuiz = (
+  setId: string,
+  data: {
+    mode: string;
+    total_questions: number;
+    correct_answers: number;
+    time_spent_seconds: number;
+    terminated_early?: boolean;
+    anti_cheat_triggered?: boolean;
+    incorrect_word_ids?: string[];
+  }
+) => api.post<import("@/types").QuizAttempt>(`/wordlists/${setId}/submit-quiz`, data).then((r) => r.data);

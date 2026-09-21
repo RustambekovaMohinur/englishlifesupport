@@ -70,8 +70,10 @@ export default function TeacherWordlistsPage() {
   };
 
   const handleGenerateBulk = async () => {
-    const rawList = rawWordsInput
-      .split(/[\n,]+/)
+    const rawLines = rawWordsInput.includes("\n")
+      ? rawWordsInput.split("\n")
+      : rawWordsInput.split(",");
+    const rawList = rawLines
       .map((w) => w.trim())
       .filter((w) => w.length > 0);
 
@@ -95,6 +97,21 @@ export default function TeacherWordlistsPage() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleAddBlankRow = () => {
+    setPreviews((prev) => [
+      ...prev,
+      {
+        word: "",
+        part_of_speech: "noun",
+        phonetic: "",
+        definition: "",
+        example: "",
+        audio_us_url: null,
+        audio_gb_url: null,
+      },
+    ]);
   };
 
   const handleUpdatePreview = (
@@ -361,9 +378,12 @@ export default function TeacherWordlistsPage() {
                   rows={6}
                   value={rawWordsInput}
                   onChange={(e) => setRawWordsInput(e.target.value)}
-                  placeholder={`drama\nconserve\nreluctant\nsubtle\nambiguous`}
+                  placeholder={`drama - sahna asari\nconserve - asramoq, tejamoq\nreluctant - istaksiz, ikkilanuvchi\nsubtle\nambiguous`}
                   className="input font-mono text-xs"
                 />
+                <p className="text-[11px] text-zinc-400 mt-1">
+                  Supports plain words (<code>drama</code>) or custom bilingual translations (<code>drama - sahna asari</code> or <code>conserve = asramoq</code>).
+                </p>
               </div>
 
               <div className="flex items-center justify-between pt-2">
@@ -371,24 +391,35 @@ export default function TeacherWordlistsPage() {
                   Definitions, phonetic transcriptions, and audio links will be automatically resolved.
                 </p>
 
-                <button
-                  type="button"
-                  onClick={handleGenerateBulk}
-                  disabled={isGenerating || !rawWordsInput.trim()}
-                  className="btn-primary"
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Resolving Dictionary...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>⚡ Generate Wordlist</span>
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddBlankRow}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300 transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Add Row</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleGenerateBulk}
+                    disabled={isGenerating || !rawWordsInput.trim()}
+                    className="btn-primary"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Resolving Dictionary...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>⚡ Generate Wordlist</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -405,24 +436,35 @@ export default function TeacherWordlistsPage() {
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleSaveSet}
-                    disabled={isSaving}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50"
-                  >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Saving...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>💾 Save & Publish Wordlist</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddBlankRow}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300 transition"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Add Row</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveSet}
+                      disabled={isSaving}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50"
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>💾 Save & Publish Wordlist</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-thin">
@@ -458,13 +500,22 @@ export default function TeacherWordlistsPage() {
                             )}
                           </td>
                           <td className="py-2 px-3">
-                            <input
-                              type="text"
-                              value={item.part_of_speech}
+                            <select
+                              value={item.part_of_speech || ""}
                               onChange={(e) => handleUpdatePreview(idx, "part_of_speech", e.target.value)}
-                              placeholder="n / v / adj"
                               className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2 py-1 border border-zinc-200 dark:border-zinc-700 text-xs text-center"
-                            />
+                            >
+                              <option value="">-</option>
+                              <option value="noun">noun (n)</option>
+                              <option value="verb">verb (v)</option>
+                              <option value="adjective">adjective (adj)</option>
+                              <option value="adverb">adverb (adv)</option>
+                              <option value="phrase">phrase</option>
+                              {item.part_of_speech &&
+                                !["", "noun", "verb", "adjective", "adverb", "phrase"].includes(item.part_of_speech) && (
+                                  <option value={item.part_of_speech}>{item.part_of_speech}</option>
+                                )}
+                            </select>
                           </td>
                           <td className="py-2 px-3">
                             <textarea

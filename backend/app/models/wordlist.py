@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 import sqlalchemy as sa
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -30,6 +30,13 @@ class WordlistSet(UUIDPKMixin, TimestampMixin, Base):
     )
     group = relationship("Group", lazy="selectin")
     creator = relationship("User", lazy="selectin")
+    attempts: Mapped[list["WordlistQuizAttempt"]] = relationship(
+        "WordlistQuizAttempt",
+        back_populates="wordlist_set",
+        cascade="all, delete-orphan",
+        order_by="WordlistQuizAttempt.created_at.desc()",
+        lazy="selectin",
+    )
 
 
 class WordlistItem(UUIDPKMixin, TimestampMixin, Base):
@@ -48,3 +55,25 @@ class WordlistItem(UUIDPKMixin, TimestampMixin, Base):
     order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     wordlist_set: Mapped["WordlistSet"] = relationship("WordlistSet", back_populates="items")
+
+
+class WordlistQuizAttempt(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "wordlist_quiz_attempts"
+
+    set_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("wordlist_sets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    student_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    mode: Mapped[str] = mapped_column(String(32), default="mixed", nullable=False)
+    total_questions: Mapped[int] = mapped_column(Integer, nullable=False)
+    correct_answers: Mapped[int] = mapped_column(Integer, nullable=False)
+    score_percentage: Mapped[int] = mapped_column(Integer, nullable=False)
+    time_spent_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_mastered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    terminated_early: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    anti_cheat_triggered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    wordlist_set: Mapped["WordlistSet"] = relationship("WordlistSet", back_populates="attempts")
+    student: Mapped["StudentProfile"] = relationship(lazy="selectin")
