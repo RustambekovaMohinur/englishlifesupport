@@ -38,6 +38,7 @@ def _build_async_engine_url(raw_url: str) -> tuple[URL, dict]:
         connect_args["ssl"] = True
     connect_args["timeout"] = 20
     connect_args["command_timeout"] = 30
+    connect_args["statement_cache_size"] = 0
     return clean_url, connect_args
 
 import os
