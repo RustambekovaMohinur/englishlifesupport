@@ -22,6 +22,8 @@ const API_BASE_URL = RAW_API_URL
   ? (RAW_API_URL.startsWith("http") && !RAW_API_URL.endsWith("/api") ? `${RAW_API_URL}/api` : RAW_API_URL)
   : "/api";
 
+console.log("BASE_URL:", API_BASE_URL);
+
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },

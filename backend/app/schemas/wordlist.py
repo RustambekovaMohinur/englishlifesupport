@@ -63,6 +63,8 @@ class WordlistSetBriefOut(BaseModel):
     best_score: int | None = None
     best_time_seconds: int | None = None
     attempts_count: int = 0
+    b2_file_url: str | None = None
+    total_words: int = 0
 
     class Config:
         from_attributes = True
@@ -75,6 +77,8 @@ class WordlistSetDetailOut(BaseModel):
     group_name: str | None = None
     created_by: uuid.UUID
     created_at: datetime
+    b2_file_url: str | None = None
+    total_words: int = 0
     items: list[WordlistItemOut] = Field(default_factory=list)
     recent_attempts: list[QuizAttemptOut] = Field(default_factory=list)
     student_is_mastered: bool = False

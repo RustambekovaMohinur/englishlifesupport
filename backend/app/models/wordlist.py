@@ -20,6 +20,8 @@ class WordlistSet(UUIDPKMixin, TimestampMixin, Base):
     created_by: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
+    b2_file_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    total_words: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     items: Mapped[list["WordlistItem"]] = relationship(
         "WordlistItem",

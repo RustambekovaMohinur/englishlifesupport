@@ -62,12 +62,16 @@ export default function TeacherWordlistsPage() {
 
   const loadSets = async () => {
     setIsLoadingSets(true);
+    console.log("BASE_URL:", api.defaults.baseURL);
     try {
       const basePath = api.defaults.baseURL?.endsWith("/api") ? "/wordlists" : "/api/wordlists";
       const { data } = await api.get<WordlistSetBrief[]>(basePath);
       setSets(data);
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "Failed to load wordlists");
+      console.warn("[WORDLISTS] Failed to load wordlists from server:", err);
+      if (err?.response?.status !== 404) {
+        toast.error(err?.response?.data?.detail ?? "Failed to load wordlists");
+      }
     } finally {
       setIsLoadingSets(false);
     }

@@ -160,6 +160,12 @@ async def health_check():
     return {"status": "ok", "service": "English Life LMS API"}
 
 
+@app.get("/api/wordlists-ping")
+@app.get("/wordlists-ping")
+async def wordlists_ping():
+    return {"status": "ok", "routes": "mounted"}
+
+
 
 async def bootstrap_teacher_account(max_retries: int = 5, retry_delay: float = 2.0):
     """
@@ -223,6 +229,20 @@ async def startup_event():
         async def _init_models():
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
+                try:
+                    import sqlalchemy as sa
+                    if conn.dialect.name == "postgresql":
+                        await conn.execute(sa.text("ALTER TABLE wordlist_sets ADD COLUMN IF NOT EXISTS b2_file_url TEXT"))
+                        await conn.execute(sa.text("ALTER TABLE wordlist_sets ADD COLUMN IF NOT EXISTS total_words INTEGER DEFAULT 0"))
+                    else:
+                        res = await conn.execute(sa.text("PRAGMA table_info(wordlist_sets)"))
+                        cols = [r[1] for r in res.fetchall()]
+                        if "b2_file_url" not in cols:
+                            await conn.execute(sa.text("ALTER TABLE wordlist_sets ADD COLUMN b2_file_url TEXT"))
+                        if "total_words" not in cols:
+                            await conn.execute(sa.text("ALTER TABLE wordlist_sets ADD COLUMN total_words INTEGER DEFAULT 0"))
+                except Exception as ex:
+                    logger.debug("Column check note: %s", ex)
 
         await asyncio.wait_for(_init_models(), timeout=8.0)
         logger.info("Database metadata verified.")
