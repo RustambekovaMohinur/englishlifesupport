@@ -361,6 +361,58 @@ async def create_wordlist_set(
     now_dt = utcnow()
     now_iso = now_dt.isoformat()
     group_slug = str(data.group_id) if data.group_id else "global"
+
+    # Direct B2 Storage URL optimization: bypass backend memory completely
+    if data.storage_url:
+        b2_key = data.storage_url.strip()
+        total_count = data.total_words if (data.total_words is not None and data.total_words > 0) else len(data.items)
+        new_set = WordlistSet(
+            id=set_id,
+            title=data.title.strip(),
+            group_id=data.group_id,
+            created_by=current_user.id,
+            created_at=now_dt,
+            b2_file_url=b2_key,
+            total_words=total_count,
+        )
+        db.add(new_set)
+        await db.commit()
+
+        group_name = "All Cohorts (Global)"
+        if new_set.group_id:
+            grp_res = await db.execute(select(Group.name).where(Group.id == new_set.group_id))
+            grp_val = grp_res.scalar_one_or_none()
+            if grp_val:
+                group_name = grp_val
+
+        items_out = [
+            WordlistItemOut(
+                id=uuid.uuid4(),
+                set_id=set_id,
+                word=it.word,
+                part_of_speech=it.part_of_speech,
+                phonetic=it.phonetic,
+                definition=it.definition,
+                example=it.example,
+                audio_us_url=it.audio_us_url,
+                audio_gb_url=it.audio_gb_url,
+                order_index=it.order_index,
+                created_at=now_dt,
+            )
+            for it in data.items
+        ]
+        return WordlistSetDetailOut(
+            id=new_set.id,
+            title=new_set.title,
+            group_id=new_set.group_id,
+            group_name=group_name,
+            total_words=new_set.total_words,
+            b2_file_url=new_set.b2_file_url,
+            created_by=new_set.created_by,
+            created_at=new_set.created_at,
+            items=items_out,
+        )
+
     b2_key = f"wordlists/{group_slug}/{set_id}.json"
 
     formatted_items = []

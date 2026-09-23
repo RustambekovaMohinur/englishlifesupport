@@ -143,6 +143,11 @@ export function AuthenticatedAudio({ url, className }: { url: string; className?
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
 
   useEffect(() => {
+    if (!url) return;
+    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) {
+      setSrc(url);
+      return;
+    }
     let objectUrl: string | null = null;
     let cancelled = false;
     fetchAuthenticatedBlobUrl(url)

@@ -31,6 +31,8 @@ class WordlistSetCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     group_id: uuid.UUID | None = None
     items: list[WordlistItemCreate] = Field(default_factory=list)
+    storage_url: str | None = None
+    total_words: int | None = None
 
 
 class QuizAttemptOut(BaseModel):

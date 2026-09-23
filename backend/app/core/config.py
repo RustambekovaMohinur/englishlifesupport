@@ -101,11 +101,18 @@ class Settings(BaseSettings):
             if not ep.startswith("http"):
                 ep = f"https://{ep}"
             self.B2_ENDPOINT = ep
+            self.B2_ENDPOINT_URL = ep
         elif self.B2_ENDPOINT:
             if not self.B2_ENDPOINT.startswith("http"):
                 self.B2_ENDPOINT = f"https://{self.B2_ENDPOINT}"
+            self.B2_ENDPOINT_URL = self.B2_ENDPOINT
+        elif self.B2_ENDPOINT_URL:
+            if not self.B2_ENDPOINT_URL.startswith("http"):
+                self.B2_ENDPOINT_URL = f"https://{self.B2_ENDPOINT_URL}"
+            self.B2_ENDPOINT = self.B2_ENDPOINT_URL
         else:
             self.B2_ENDPOINT = "https://s3.us-east-005.backblazeb2.com"
+            self.B2_ENDPOINT_URL = "https://s3.us-east-005.backblazeb2.com"
 
         return self
 
@@ -133,6 +140,7 @@ class Settings(BaseSettings):
     # Storage Backend (b2, database, or local)
     STORAGE_BACKEND: str = "b2"
     B2_ENDPOINT: str = "https://s3.us-east-005.backblazeb2.com"
+    B2_ENDPOINT_URL: str = "https://s3.us-east-005.backblazeb2.com"
     B2_REGION: str = "us-east-005"
     B2_BUCKET_NAME: str = "english-life-files"
     B2_KEY_ID: str = ""

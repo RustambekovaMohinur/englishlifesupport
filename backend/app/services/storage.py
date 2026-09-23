@@ -305,6 +305,40 @@ class StorageService:
         """Generates a presigned GET URL for a private B2 object (default 1 hour / 3600s TTL)."""
         return await asyncio.to_thread(self._sync_generate_presigned_url, object_key, expires_in)
 
+    def generate_presigned_upload_url(
+        self, object_name: str, content_type: str = "application/octet-stream", expires_in: int = 3600
+    ) -> str:
+        """Generates a presigned PUT URL for direct client upload to Backblaze B2."""
+        norm_key = object_name.replace("\\", "/").lstrip("/")
+        client = self.get_s3_client()
+        try:
+            return client.generate_presigned_url(
+                "put_object",
+                Params={
+                    "Bucket": self.bucket_name,
+                    "Key": norm_key,
+                    "ContentType": content_type,
+                },
+                ExpiresIn=expires_in,
+            )
+        except Exception as e:
+            logger.error("B2 presigned PUT URL generation failed for key '%s': %s", norm_key, e)
+            raise StorageError(f"Failed to generate presigned upload URL: {e}") from e
+
+    async def get_presigned_upload_url(
+        self, object_name: str, content_type: str = "application/octet-stream", expires_in: int = 3600
+    ) -> str:
+        """Asynchronously generates a presigned PUT URL for direct client upload."""
+        return await asyncio.to_thread(self.generate_presigned_upload_url, object_name, content_type, expires_in)
+
+    def get_public_url(self, object_name: str) -> str:
+        """Builds a public or direct download URL pointing to the B2 object."""
+        norm_key = object_name.replace("\\", "/").lstrip("/")
+        endpoint = self.endpoint_url.rstrip("/")
+        if f"/{self.bucket_name}" in endpoint:
+            return f"{endpoint}/{norm_key}"
+        return f"{endpoint}/{self.bucket_name}/{norm_key}"
+
 
 _storage_service: Optional[StorageService] = None
 

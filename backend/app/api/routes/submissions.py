@@ -148,7 +148,11 @@ def _submission_to_out(sub: Submission) -> SubmissionOut:
         student_id=sub.student_id,
         student_name=sub.student.full_name,
         text_answer=sub.text_answer,
-        file_url=f"/api/submissions/{sub.id}/file" if sub.file_path else None,
+        file_url=(
+            sub.file_path
+            if (sub.file_path and (sub.file_path.startswith("http://") or sub.file_path.startswith("https://")))
+            else (f"/api/submissions/{sub.id}/file" if sub.file_path else None)
+        ),
         file_original_name=sub.file_original_name,
         images=images_out,
         status=sub.status.value,
@@ -180,6 +184,12 @@ async def submit_homework(
     image_files: list[UploadFile] | None = File(default=None),
     photos: list[UploadFile] | None = File(default=None),
     photo: UploadFile | None = File(default=None),
+    storage_url: str | None = Form(default=None),
+    file_url: str | None = Form(default=None),
+    voice_url: str | None = Form(default=None),
+    file_name: str | None = Form(default=None),
+    file_type: str | None = Form(default=None),
+    file_size_bytes: int | None = Form(default=None),
     profile: StudentProfile = Depends(get_current_student_profile),
     db: AsyncSession = Depends(get_db),
 ):
@@ -260,7 +270,9 @@ async def submit_homework(
             detail="Maximum 10 images allowed per submission",
         )
 
-    if not raw_text and not primary_file and not valid_images:
+    direct_storage_url = (storage_url or file_url or voice_url or "").strip() or None
+
+    if not raw_text and not primary_file and not valid_images and not direct_storage_url:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide a text answer, file, voice audio, or images")
 
     now = utcnow()
@@ -315,7 +327,13 @@ async def submit_homework(
     file_content_type = existing.file_content_type if existing else None
     file_size = existing.file_size_bytes if existing else None
 
-    if primary_res is not None:
+    if direct_storage_url:
+        file_path = direct_storage_url
+        file_original_name = file_name or "voice_recording.webm"
+        file_content_type = file_type or "audio/webm"
+        file_size = file_size_bytes or 0
+        await record_file_blob(db, file_path, file_size, file_content_type, file_original_name, storage_backend="b2")
+    elif primary_res is not None:
         file_path, file_original_name, file_content_type, file_size, backend_used = primary_res
         await record_file_blob(db, file_path, file_size, file_content_type, file_original_name, storage_backend=backend_used)
 
@@ -582,6 +600,9 @@ async def download_submission_file(
 
     if not submission.file_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This submission has no file")
+
+    if submission.file_path.startswith("http://") or submission.file_path.startswith("https://"):
+        return RedirectResponse(submission.file_path, status_code=307)
 
     absolute_path = await resolve_submission_file_async(submission.file_path, db=db, fallback_name=submission.file_original_name)
     return FileResponse(

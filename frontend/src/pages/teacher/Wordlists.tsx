@@ -22,6 +22,7 @@ import {
   getWordlistSet,
   previewBulkWords,
   listGroups,
+  uploadDirectToB2,
 } from "@/services/lmsService";
 import { api } from "@/services/api";
 import {
@@ -303,17 +304,40 @@ export default function TeacherWordlistsPage() {
         })),
       };
 
+      // Direct-to-B2 Upload Optimization: upload JSON directly to B2 to bypass backend memory
+      let storageUrl: string | null = null;
+      try {
+        const jsonBlob = new Blob([JSON.stringify(payload.items, null, 2)], {
+          type: "application/json",
+        });
+        const safeTitle = title.trim().toLowerCase().replace(/[^a-z0-9]/g, "_") || "wordlist";
+        storageUrl = await uploadDirectToB2(
+          jsonBlob,
+          `${safeTitle}_${Date.now()}.json`,
+          "application/json"
+        );
+      } catch (b2Err) {
+        console.warn("[B2 DIRECT] Direct B2 wordlist upload bypassed; sending payload to server:", b2Err);
+        storageUrl = null;
+      }
+
+      const savePayload = {
+        ...payload,
+        storage_url: storageUrl,
+        total_words: payload.items.length,
+      };
+
       const BACKEND_URL = import.meta.env.VITE_API_URL || "https://englishlifesupport.onrender.com";
       const targetUrl = `${BACKEND_URL.replace(/\/api\/?$/, "")}/api/wordlists`;
 
       try {
-        await api.post(targetUrl, payload);
+        await api.post(targetUrl, savePayload);
       } catch (postErr: any) {
         if (postErr?.response?.status === 404) {
           const fallbackUrl = `${BACKEND_URL.replace(/\/api\/?$/, "")}/wordlists`;
-          await api.post(fallbackUrl, payload);
+          await api.post(fallbackUrl, savePayload);
         } else {
-          await createWordlistSet(payload);
+          await createWordlistSet(savePayload);
         }
       }
 

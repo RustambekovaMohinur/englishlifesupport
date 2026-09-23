@@ -46,6 +46,7 @@ import {
   listMyAssignments,
   listPastDeadlineAssignments,
   submitHomework,
+  uploadDirectToB2,
   useFreePass,
   recordVocabPractice,
   getSubmission,
@@ -540,7 +541,46 @@ export default function StudentAssignmentSubmitPage() {
         combinedText = combinedText ? `${linkBlock}\n\n${combinedText}` : linkBlock;
       }
 
-      await submitHomework(assignment.id, combinedText, primaryFile, finalImages, voiceFile, docFile);
+      // Direct-to-B2 Upload Optimization: bypass backend memory for voice notes and documents
+      let directStorageUrl: string | null = null;
+      let directFileName: string | null = null;
+
+      if (voiceFile) {
+        try {
+          directStorageUrl = await uploadDirectToB2(
+            voiceFile,
+            voiceFile.name || `voice_${Date.now()}.webm`,
+            voiceFile.type || "audio/webm"
+          );
+          directFileName = voiceFile.name || "voice_recording.webm";
+        } catch (uploadErr) {
+          console.warn("[B2 DIRECT] Direct B2 upload bypassed; falling back to server multipart:", uploadErr);
+          directStorageUrl = null;
+        }
+      } else if (docFile) {
+        try {
+          directStorageUrl = await uploadDirectToB2(
+            docFile,
+            docFile.name || `doc_${Date.now()}.bin`,
+            docFile.type || "application/octet-stream"
+          );
+          directFileName = docFile.name;
+        } catch (uploadErr) {
+          console.warn("[B2 DIRECT] Direct B2 upload bypassed; falling back to server multipart:", uploadErr);
+          directStorageUrl = null;
+        }
+      }
+
+      await submitHomework(
+        assignment.id,
+        combinedText,
+        directStorageUrl ? null : primaryFile,
+        finalImages,
+        directStorageUrl ? null : voiceFile,
+        directStorageUrl ? null : docFile,
+        directStorageUrl,
+        directFileName
+      );
 
       // Clean up saved draft on successful submission
       try {

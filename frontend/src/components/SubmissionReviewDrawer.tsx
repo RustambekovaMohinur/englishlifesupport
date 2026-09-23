@@ -195,7 +195,7 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                         )}
                       </div>
                       <AuthenticatedAudio
-                        url={`/submissions/${submission.id}/file`}
+                        url={submission.file_url || `/submissions/${submission.id}/file`}
                         className="w-full mt-1"
                       />
                     </div>
@@ -211,7 +211,7 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                         </span>
                       </div>
                       <FileDownloadButton
-                        url={`/submissions/${submission.id}/file`}
+                        url={submission.file_url || `/submissions/${submission.id}/file`}
                         filename={submission.file_original_name || "homework-file"}
                         className="btn-secondary text-xs py-1.5 px-3 shrink-0"
                       >

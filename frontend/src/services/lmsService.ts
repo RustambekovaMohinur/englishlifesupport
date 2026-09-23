@@ -1,3 +1,4 @@
+import axios from "axios";
 import { api } from "./api";
 import {
   AssignmentComment,
@@ -151,13 +152,65 @@ export const listSubmissions = (params: SubmissionQuery) =>
 export const listMySubmissions = () => api.get<SubmissionOut[]>("/submissions/mine").then((r) => r.data);
 export const getSubmission = (id: string) => api.get<SubmissionOut>(`/submissions/${id}`).then((r) => r.data);
 
+export interface PresignedUploadResult {
+  upload_url: string;
+  public_url: string;
+  object_key: string;
+}
+
+export const getPresignedUploadUrl = async (
+  fileName: string,
+  fileType: string = "application/octet-stream"
+): Promise<PresignedUploadResult> => {
+  const BACKEND_BASE = (
+    import.meta.env.VITE_API_URL ||
+    import.meta.env.VITE_API_BASE_URL ||
+    "https://englishlifesupport.onrender.com"
+  ).toString().trim().replace(/\/api\/?$/, "");
+
+  const url = `${BACKEND_BASE}/api/storage/presigned-upload-url`;
+  const fallbackUrl = `${BACKEND_BASE}/storage/presigned-upload-url`;
+
+  try {
+    const r = await api.get<PresignedUploadResult>(url, {
+      params: { file_name: fileName, file_type: fileType },
+    });
+    return r.data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      const r = await api.get<PresignedUploadResult>(fallbackUrl, {
+        params: { file_name: fileName, file_type: fileType },
+      });
+      return r.data;
+    }
+    throw err;
+  }
+};
+
+export const uploadDirectToB2 = async (
+  file: File | Blob,
+  fileName: string,
+  fileType: string = "application/octet-stream"
+): Promise<string> => {
+  const { upload_url, public_url } = await getPresignedUploadUrl(fileName, fileType);
+  await axios.put(upload_url, file, {
+    headers: {
+      "Content-Type": fileType || "application/octet-stream",
+    },
+    timeout: 120000,
+  });
+  return public_url;
+};
+
 export const submitHomework = (
   assignment_id: string,
   text_answer?: string | null,
   file?: File | null,
   images?: File[],
   voice_file?: File | null,
-  doc_file?: File | null
+  doc_file?: File | null,
+  storage_url?: string | null,
+  file_original_name?: string | null
 ) => {
   const formData = new FormData();
   formData.append("assignment_id", String(assignment_id));
@@ -168,9 +221,18 @@ export const submitHomework = (
     formData.append("text_answer", textContent);
   }
 
+  if (storage_url) {
+    formData.append("storage_url", storage_url);
+    formData.append("file_url", storage_url);
+    formData.append("voice_url", storage_url);
+    if (file_original_name) {
+      formData.append("file_name", file_original_name);
+    }
+  }
+
   // Audio: send "audio_file", "voice_file", and "audio"
   const audioBlobOrFile = voice_file || (file && (file.type.startsWith("audio/") || /\.(mp3|wav|ogg|webm|m4a)$/i.test(file.name)) ? file : null);
-  if (audioBlobOrFile && audioBlobOrFile instanceof File && audioBlobOrFile.size > 0) {
+  if (!storage_url && audioBlobOrFile && audioBlobOrFile instanceof File && audioBlobOrFile.size > 0) {
     formData.append("audio_file", audioBlobOrFile);
     formData.append("voice_file", audioBlobOrFile);
     formData.append("audio", audioBlobOrFile);
@@ -178,7 +240,7 @@ export const submitHomework = (
 
   // Documents: send "document_file" and "doc_file"
   const documentFile = doc_file || (file && !audioBlobOrFile && !(file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(file.name)) ? file : null);
-  if (documentFile && documentFile instanceof File && documentFile.size > 0) {
+  if (!storage_url && documentFile && documentFile instanceof File && documentFile.size > 0) {
     formData.append("document_file", documentFile);
     formData.append("doc_file", documentFile);
   }
@@ -195,7 +257,7 @@ export const submitHomework = (
     if (attachedPhotos[0] instanceof File && attachedPhotos[0].size > 0) {
       formData.append("file", attachedPhotos[0]);
     }
-  } else if (file && file instanceof File && file.size > 0 && !audioBlobOrFile && !documentFile) {
+  } else if (file && file instanceof File && file.size > 0 && !audioBlobOrFile && !documentFile && !storage_url) {
     formData.append("file", file);
   }
 
@@ -321,6 +383,8 @@ export const previewBulkWords = async (words: string[]) => {
 export const createWordlistSet = async (data: {
   title: string;
   group_id?: string | null;
+  storage_url?: string | null;
+  total_words?: number;
   items: Array<{
     word: string;
     part_of_speech?: string | null;
