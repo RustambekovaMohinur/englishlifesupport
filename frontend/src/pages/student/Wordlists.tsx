@@ -48,7 +48,15 @@ export default function StudentWordlistsPage() {
     setStudyMode(mode);
     try {
       const detail = await getWordlistSet(setId);
-      setSelectedSet(detail);
+      const safeItems = Array.isArray(detail?.items)
+        ? detail.items
+        : (Array.isArray((detail as any)?.words)
+            ? (detail as any).words
+            : []);
+      setSelectedSet({
+        ...detail,
+        items: safeItems,
+      });
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err: any) {
       toast.error(err?.response?.data?.detail ?? "Failed to load flashcard deck");
@@ -119,7 +127,7 @@ export default function StudentWordlistsPage() {
             <div className="card p-4 sm:p-8 bg-white dark:bg-[#111827] border border-zinc-200/80 dark:border-zinc-800">
               {studyMode === "flashcards" && (
                 <FlashcardDeck
-                  items={selectedSet.items}
+                  items={selectedSet.items || []}
                   title={selectedSet.title}
                   onClose={handleExitDeck}
                 />
@@ -128,7 +136,7 @@ export default function StudentWordlistsPage() {
                 <VocabularyQuiz
                   setId={selectedSet.id}
                   title={selectedSet.title}
-                  items={selectedSet.items}
+                  items={selectedSet.items || []}
                   onFinish={() => {
                     loadSets();
                   }}
@@ -137,7 +145,7 @@ export default function StudentWordlistsPage() {
               )}
               {studyMode === "match" && (
                 <MatchPairsGame
-                  items={selectedSet.items}
+                  items={selectedSet.items || []}
                   title={selectedSet.title}
                   onExit={handleExitDeck}
                 />

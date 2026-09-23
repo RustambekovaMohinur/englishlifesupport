@@ -488,8 +488,18 @@ async def get_wordlist_set(
     # 3. Parse JSON items if loaded
     if raw_bytes:
         try:
-            raw_items = json.loads(raw_bytes.decode("utf-8"))
-            for it in raw_items:
+            parsed_data = json.loads(raw_bytes.decode("utf-8"))
+            if isinstance(parsed_data, dict):
+                raw_items = parsed_data.get("items") or parsed_data.get("words") or []
+            elif isinstance(parsed_data, list):
+                raw_items = parsed_data
+            else:
+                raw_items = []
+
+            for idx, it in enumerate(raw_items):
+                if not isinstance(it, dict):
+                    continue
+
                 c_at = w_set.created_at
                 if it.get("created_at"):
                     try:
@@ -497,18 +507,31 @@ async def get_wordlist_set(
                     except Exception:
                         c_at = w_set.created_at
 
+                word_val = (it.get("term") or it.get("word") or "").strip()
+                def_val = (it.get("translation") or it.get("definition") or it.get("custom_translation") or "").strip()
+                pos_val = (it.get("pos") or it.get("part_of_speech") or "").strip() or None
+
+                if not word_val and not def_val:
+                    continue
+
+                item_id_raw = it.get("id")
+                try:
+                    item_id = uuid.UUID(str(item_id_raw)) if item_id_raw else uuid.uuid4()
+                except Exception:
+                    item_id = uuid.uuid4()
+
                 items_out.append(
                     WordlistItemOut(
-                        id=uuid.UUID(it["id"]) if it.get("id") else uuid.uuid4(),
+                        id=item_id,
                         set_id=w_set.id,
-                        word=it.get("word", ""),
-                        part_of_speech=it.get("part_of_speech"),
-                        phonetic=it.get("phonetic"),
-                        definition=it.get("definition"),
-                        example=it.get("example"),
-                        audio_us_url=it.get("audio_us_url"),
-                        audio_gb_url=it.get("audio_gb_url"),
-                        order_index=it.get("order_index", 0),
+                        word=word_val or def_val,
+                        part_of_speech=pos_val,
+                        phonetic=it.get("phonetic") or None,
+                        definition=def_val or word_val,
+                        example=it.get("example") or None,
+                        audio_us_url=it.get("audio_us_url") or None,
+                        audio_gb_url=it.get("audio_gb_url") or None,
+                        order_index=it.get("order_index", idx),
                         created_at=c_at,
                     )
                 )
@@ -521,10 +544,10 @@ async def get_wordlist_set(
             WordlistItemOut(
                 id=item.id,
                 set_id=item.set_id,
-                word=item.word,
+                word=item.word or "",
                 part_of_speech=item.part_of_speech,
                 phonetic=item.phonetic,
-                definition=item.definition,
+                definition=item.definition or "",
                 example=item.example,
                 audio_us_url=item.audio_us_url,
                 audio_gb_url=item.audio_gb_url,
@@ -582,7 +605,7 @@ async def get_wordlist_set(
         created_at=w_set.created_at,
         b2_file_url=w_set.b2_file_url,
         total_words=len(items_out) if items_out else (w_set.total_words or 0),
-        items=items_out,
+        items=items_out or [],
         recent_attempts=attempts_out,
         student_is_mastered=student_is_mastered,
         student_best_score=student_best_score,

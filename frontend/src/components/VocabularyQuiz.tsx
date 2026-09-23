@@ -19,7 +19,7 @@ import toast from "react-hot-toast";
 interface VocabularyQuizProps {
   setId: string;
   title: string;
-  items: WordlistItem[];
+  items?: WordlistItem[] | any;
   onFinish?: (attempt: QuizAttempt) => void;
   onExit?: () => void;
 }
@@ -35,6 +35,32 @@ interface QuizQuestion {
 }
 
 export function VocabularyQuiz({ setId, title, items, onFinish, onExit }: VocabularyQuizProps) {
+  // Defensive extraction: support Array, { words: [...] }, { items: [...] }, or undefined
+  const rawList: any[] = useMemo(() => {
+    if (Array.isArray(items)) return items;
+    if (items && Array.isArray((items as any).words)) return (items as any).words;
+    if (items && Array.isArray((items as any).items)) return (items as any).items;
+    return [];
+  }, [items]);
+
+  const safeItems: WordlistItem[] = useMemo(() => {
+    return rawList
+      .map((item: any, idx: number) => ({
+        id: item.id || `item-${idx}`,
+        set_id: item.set_id || setId,
+        word: (item.term || item.word || "").trim(),
+        definition: (item.translation || item.definition || item.custom_translation || "").trim(),
+        part_of_speech: item.pos || item.part_of_speech || null,
+        phonetic: item.phonetic || null,
+        example: item.example || null,
+        audio_us_url: item.audio_us_url || null,
+        audio_gb_url: item.audio_gb_url || null,
+        order_index: item.order_index ?? idx,
+        created_at: item.created_at || new Date().toISOString(),
+      }))
+      .filter((i) => Boolean(i.word));
+  }, [rawList, setId]);
+
   // Setup mode
   const [mode, setMode] = useState<QuizMode>("mixed");
   const [hasStarted, setHasStarted] = useState(false);
@@ -103,7 +129,7 @@ export function VocabularyQuiz({ setId, title, items, onFinish, onExit }: Vocabu
 
   // Start quiz
   const handleStartQuiz = (activeMode: QuizMode, customItems?: WordlistItem[]) => {
-    const list = customItems || items;
+    const list = customItems || safeItems;
     if (list.length < 2) {
       toast.error("This set needs at least 2 words with definitions to generate a quiz.");
       return;

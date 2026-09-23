@@ -10,7 +10,7 @@ import {
 import { WordlistItem } from "@/types";
 
 interface MatchPairsGameProps {
-  items: WordlistItem[];
+  items?: WordlistItem[] | any;
   title?: string;
   onExit?: () => void;
 }
@@ -24,6 +24,32 @@ interface MatchCard {
 }
 
 export function MatchPairsGame({ items, title, onExit }: MatchPairsGameProps) {
+  // Defensive extraction: support Array, { words: [...] }, { items: [...] }, or undefined
+  const rawList: any[] = useMemo(() => {
+    if (Array.isArray(items)) return items;
+    if (items && Array.isArray((items as any).words)) return (items as any).words;
+    if (items && Array.isArray((items as any).items)) return (items as any).items;
+    return [];
+  }, [items]);
+
+  const safeItems: WordlistItem[] = useMemo(() => {
+    return rawList
+      .map((item: any, idx: number) => ({
+        id: item.id || `match-${idx}`,
+        set_id: item.set_id || "",
+        word: (item.term || item.word || "").trim(),
+        definition: (item.translation || item.definition || item.custom_translation || "").trim(),
+        part_of_speech: item.pos || item.part_of_speech || null,
+        phonetic: item.phonetic || null,
+        example: item.example || null,
+        audio_us_url: item.audio_us_url || null,
+        audio_gb_url: item.audio_gb_url || null,
+        order_index: item.order_index ?? idx,
+        created_at: item.created_at || new Date().toISOString(),
+      }))
+      .filter((i) => Boolean(i.word && (i.definition || i.word)));
+  }, [rawList]);
+
   const [cards, setCards] = useState<MatchCard[]>([]);
   const [selectedFirst, setSelectedFirst] = useState<MatchCard | null>(null);
   const [selectedSecond, setSelectedSecond] = useState<MatchCard | null>(null);
@@ -42,11 +68,11 @@ export function MatchPairsGame({ items, title, onExit }: MatchPairsGameProps) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [items]);
+  }, [safeItems]);
 
   const initGame = () => {
     // Select up to 8 pairs for a balanced grid
-    const valid = items.filter((i) => i.word && (i.definition || i.word));
+    const valid = safeItems;
     const selectedItems = [...valid].sort(() => Math.random() - 0.5).slice(0, 8);
     setTotalPairs(selectedItems.length);
     setMatchesCount(0);
@@ -139,6 +165,29 @@ export function MatchPairsGame({ items, title, onExit }: MatchPairsGameProps) {
     const remainder = secs % 60;
     return `${mins.toString().padStart(2, "0")}:${remainder.toString().padStart(2, "0")}`;
   };
+
+  if (safeItems.length < 2) {
+    return (
+      <div className="card text-center p-8 sm:p-12 space-y-3 max-w-md mx-auto my-6 border border-zinc-200 dark:border-zinc-800">
+        <Sparkles className="w-10 h-10 text-zinc-400 mx-auto" />
+        <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-200">
+          Not Enough Words for Match Game
+        </h3>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          This vocabulary set needs at least 2 words to play the Match Pairs game.
+        </p>
+        {onExit && (
+          <button
+            type="button"
+            onClick={onExit}
+            className="mt-3 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 transition"
+          >
+            Exit Game
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto w-full select-none space-y-5 p-2 sm:p-4">

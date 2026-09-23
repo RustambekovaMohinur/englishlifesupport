@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Volume2,
   ChevronLeft,
@@ -11,18 +11,54 @@ import {
 import { WordlistItem } from "@/types";
 
 interface FlashcardDeckProps {
-  items: WordlistItem[];
+  items?: WordlistItem[] | any;
   title?: string;
   onClose?: () => void;
 }
 
 export function FlashcardDeck({ items, title, onClose }: FlashcardDeckProps) {
+  // Defensive extraction: support Array, { words: [...] }, { items: [...] }, or undefined
+  const rawCards = useMemo(() => {
+    if (Array.isArray(items)) return items;
+    if (items && Array.isArray((items as any).words)) return (items as any).words;
+    if (items && Array.isArray((items as any).items)) return (items as any).items;
+    return [];
+  }, [items]);
+
+  // Normalize both flat schemas (term/word, translation/definition, pos/part_of_speech)
+  const cards = useMemo(() => {
+    return rawCards
+      .map((item: any, idx: number) => {
+        if (!item || typeof item !== "object") return null;
+        const word = (item.term || item.word || "").trim();
+        const definition = (item.translation || item.definition || item.custom_translation || "").trim();
+        const part_of_speech = (item.pos || item.part_of_speech || "").trim();
+        const phonetic = (item.phonetic || "").trim();
+        const example = (item.example || "").trim();
+        const audio_us_url = item.audio_us_url || null;
+        const audio_gb_url = item.audio_gb_url || null;
+        const id = item.id || `card-${idx}`;
+
+        return {
+          id,
+          word: word || definition,
+          definition: definition || word,
+          part_of_speech,
+          phonetic,
+          example,
+          audio_us_url,
+          audio_gb_url,
+        };
+      })
+      .filter((c: any) => Boolean(c && (c.word || c.definition)));
+  }, [rawCards]);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [playingAudio, setPlayingAudio] = useState<"us" | "gb" | null>(null);
 
-  const total = items.length;
-  const currentItem = items[currentIndex];
+  const total = cards.length;
+  const currentItem = cards[currentIndex] || cards[0];
 
   const handleNext = useCallback(() => {
     if (currentIndex < total - 1) {
@@ -119,16 +155,25 @@ export function FlashcardDeck({ items, title, onClose }: FlashcardDeckProps) {
     window.speechSynthesis.speak(utterance);
   };
 
-  if (!items || items.length === 0) {
+  if (!cards.length) {
     return (
-      <div className="card text-center p-12 space-y-3">
+      <div className="card text-center p-8 sm:p-12 space-y-3 max-w-md mx-auto my-6 border border-zinc-200 dark:border-zinc-800">
         <Layers className="w-10 h-10 text-zinc-400 mx-auto" />
         <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-200">
           No Flashcards in this Deck
         </h3>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          This wordlist currently does not have any vocabulary items.
+        <p className="p-2 text-center text-slate-400 text-xs sm:text-sm">
+          No flashcards available in this set.
         </p>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 transition"
+          >
+            Exit Deck
+          </button>
+        )}
       </div>
     );
   }
