@@ -303,7 +303,19 @@ export default function TeacherWordlistsPage() {
         })),
       };
 
-      await createWordlistSet(payload);
+      const BACKEND_URL = import.meta.env.VITE_API_URL || "https://englishlifesupport.onrender.com";
+      const targetUrl = `${BACKEND_URL.replace(/\/api\/?$/, "")}/api/wordlists`;
+
+      try {
+        await api.post(targetUrl, payload);
+      } catch (postErr: any) {
+        if (postErr?.response?.status === 404) {
+          const fallbackUrl = `${BACKEND_URL.replace(/\/api\/?$/, "")}/wordlists`;
+          await api.post(fallbackUrl, payload);
+        } else {
+          await createWordlistSet(payload);
+        }
+      }
 
       toast.success("Vocabulary set created successfully!");
       // Reset form

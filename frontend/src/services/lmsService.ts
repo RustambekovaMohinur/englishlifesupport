@@ -293,20 +293,25 @@ export const addFeedbackReply = (feedbackId: string, message: string) =>
   api.post<FeedbackReplyItem>(`/feedback/${feedbackId}/replies`, { message }).then((r) => r.data);
 
 // --- Wordlists & Flashcards ---
-const getWordlistsBasePath = () => {
-  const base = api.defaults.baseURL || "";
-  return base.endsWith("/api") ? "/wordlists" : "/api/wordlists";
-};
+const BACKEND_URL = (
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://englishlifesupport.onrender.com"
+).toString().trim();
+
+const BASE_RENDER_URL = BACKEND_URL.replace(/\/api\/?$/, "");
+const WORDLISTS_URL = `${BASE_RENDER_URL}/api/wordlists`;
+const WORDLISTS_FALLBACK_URL = `${BASE_RENDER_URL}/wordlists`;
 
 export const previewBulkWords = async (words: string[]) => {
-  const path = `${getWordlistsBasePath()}/preview-bulk`;
+  const primaryUrl = `${WORDLISTS_URL}/preview-bulk`;
+  const fallbackUrl = `${WORDLISTS_FALLBACK_URL}/preview-bulk`;
   try {
-    const r = await api.post<import("@/types").WordDetailPreview[]>(path, { words });
+    const r = await api.post<import("@/types").WordDetailPreview[]>(primaryUrl, { words });
     return r.data;
   } catch (err: any) {
     if (err?.response?.status === 404) {
-      const altPath = path.startsWith("/api") ? path.replace(/^\/api/, "") : `/api${path}`;
-      const r = await api.post<import("@/types").WordDetailPreview[]>(altPath, { words });
+      const r = await api.post<import("@/types").WordDetailPreview[]>(fallbackUrl, { words });
       return r.data;
     }
     throw err;
@@ -327,14 +332,14 @@ export const createWordlistSet = async (data: {
     order_index?: number;
   }>;
 }) => {
-  const path = getWordlistsBasePath();
+  const primaryUrl = WORDLISTS_URL;
+  const fallbackUrl = WORDLISTS_FALLBACK_URL;
   try {
-    const r = await api.post<import("@/types").WordlistSetDetail>(path, data);
+    const r = await api.post<import("@/types").WordlistSetDetail>(primaryUrl, data);
     return r.data;
   } catch (err: any) {
     if (err?.response?.status === 404) {
-      const altPath = path.startsWith("/api") ? path.replace(/^\/api/, "") : `/api${path}`;
-      const r = await api.post<import("@/types").WordlistSetDetail>(altPath, data);
+      const r = await api.post<import("@/types").WordlistSetDetail>(fallbackUrl, data);
       return r.data;
     }
     throw err;
@@ -342,14 +347,14 @@ export const createWordlistSet = async (data: {
 };
 
 export const listWordlistSets = async (params?: { group_id?: string }) => {
-  const path = getWordlistsBasePath();
+  const primaryUrl = WORDLISTS_URL;
+  const fallbackUrl = WORDLISTS_FALLBACK_URL;
   try {
-    const r = await api.get<import("@/types").WordlistSetBrief[]>(path, { params });
+    const r = await api.get<import("@/types").WordlistSetBrief[]>(primaryUrl, { params });
     return r.data;
   } catch (err: any) {
     if (err?.response?.status === 404) {
-      const altPath = path.startsWith("/api") ? path.replace(/^\/api/, "") : `/api${path}`;
-      const r = await api.get<import("@/types").WordlistSetBrief[]>(altPath, { params });
+      const r = await api.get<import("@/types").WordlistSetBrief[]>(fallbackUrl, { params });
       return r.data;
     }
     throw err;
@@ -357,14 +362,14 @@ export const listWordlistSets = async (params?: { group_id?: string }) => {
 };
 
 export const getWordlistSet = async (setId: string) => {
-  const path = `${getWordlistsBasePath()}/${setId}`;
+  const primaryUrl = `${WORDLISTS_URL}/${setId}`;
+  const fallbackUrl = `${WORDLISTS_FALLBACK_URL}/${setId}`;
   try {
-    const r = await api.get<import("@/types").WordlistSetDetail>(path);
+    const r = await api.get<import("@/types").WordlistSetDetail>(primaryUrl);
     return r.data;
   } catch (err: any) {
     if (err?.response?.status === 404) {
-      const altPath = path.startsWith("/api") ? path.replace(/^\/api/, "") : `/api${path}`;
-      const r = await api.get<import("@/types").WordlistSetDetail>(altPath);
+      const r = await api.get<import("@/types").WordlistSetDetail>(fallbackUrl);
       return r.data;
     }
     throw err;
@@ -372,21 +377,21 @@ export const getWordlistSet = async (setId: string) => {
 };
 
 export const deleteWordlistSet = async (setId: string) => {
-  const path = `${getWordlistsBasePath()}/${setId}`;
+  const primaryUrl = `${WORDLISTS_URL}/${setId}`;
+  const fallbackUrl = `${WORDLISTS_FALLBACK_URL}/${setId}`;
   try {
-    const r = await api.delete(path);
+    const r = await api.delete(primaryUrl);
     return r.data;
   } catch (err: any) {
     if (err?.response?.status === 404) {
-      const altPath = path.startsWith("/api") ? path.replace(/^\/api/, "") : `/api${path}`;
-      const r = await api.delete(altPath);
+      const r = await api.delete(fallbackUrl);
       return r.data;
     }
     throw err;
   }
 };
 
-export const submitWordlistQuiz = (
+export const submitWordlistQuiz = async (
   setId: string,
   data: {
     mode: string;
@@ -397,4 +402,17 @@ export const submitWordlistQuiz = (
     anti_cheat_triggered?: boolean;
     incorrect_word_ids?: string[];
   }
-) => api.post<import("@/types").QuizAttempt>(`${getWordlistsBasePath()}/${setId}/submit-quiz`, data).then((r) => r.data);
+) => {
+  const primaryUrl = `${WORDLISTS_URL}/${setId}/submit-quiz`;
+  const fallbackUrl = `${WORDLISTS_FALLBACK_URL}/${setId}/submit-quiz`;
+  try {
+    const r = await api.post<import("@/types").QuizAttempt>(primaryUrl, data);
+    return r.data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      const r = await api.post<import("@/types").QuizAttempt>(fallbackUrl, data);
+      return r.data;
+    }
+    throw err;
+  }
+};
