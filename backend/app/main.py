@@ -126,15 +126,22 @@ async def security_headers_middleware(request: Request, call_next):
     return response
 
 
-# CORSMiddleware is placed at the VERY TOP of the middleware stack
-# so that all OPTIONS preflight requests are intercepted immediately
-# without touching downstream middlewares, rate limiters, or database sessions.
+origins = [
+    "https://englishlifesupport.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
     max_age=3600,
 )
 
