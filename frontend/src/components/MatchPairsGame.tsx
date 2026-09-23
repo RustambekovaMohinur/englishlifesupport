@@ -190,21 +190,21 @@ export function MatchPairsGame({ items, title, onExit }: MatchPairsGameProps) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto w-full select-none space-y-5 p-2 sm:p-4">
+    <div className="max-w-2xl mx-auto w-full select-none space-y-4 sm:space-y-5 px-1 sm:px-4 py-2 overflow-x-hidden">
       {/* Top Header */}
-      <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
-        <div>
-          <h2 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-            <span>🧩 Match Pairs Game</span>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 dark:border-zinc-800 pb-3">
+        <div className="min-w-0">
+          <h2 className="text-sm sm:text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+            <span className="truncate">🧩 Match Pairs Game</span>
+            <span className="text-[11px] sm:text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 shrink-0">
               {matchesCount} / {totalPairs} matched
             </span>
           </h2>
-          {title && <p className="text-xs text-zinc-400">{title}</p>}
+          {title && <p className="text-xs text-zinc-400 truncate mt-0.5">{title}</p>}
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 font-mono text-xs font-bold text-zinc-700 dark:text-zinc-300">
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 font-mono text-xs font-bold text-zinc-700 dark:text-zinc-300">
             <Clock className="w-3.5 h-3.5 text-zinc-400" />
             <span>{formatTime(timeSpent)}</span>
           </div>
@@ -212,8 +212,9 @@ export function MatchPairsGame({ items, title, onExit }: MatchPairsGameProps) {
           <button
             type="button"
             onClick={initGame}
-            className="p-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 transition"
+            className="min-h-[36px] min-w-[36px] p-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 transition flex items-center justify-center"
             title="Reset Game"
+            aria-label="Reset Game"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -222,25 +223,25 @@ export function MatchPairsGame({ items, title, onExit }: MatchPairsGameProps) {
 
       {/* Completion Banner */}
       {isCompleted && (
-        <div className="card p-6 text-center space-y-3 bg-gradient-to-b from-emerald-50/50 to-white dark:from-emerald-950/20 dark:to-[#161B22] border border-emerald-200 dark:border-emerald-800/60 shadow-lg">
+        <div className="card p-5 sm:p-6 text-center space-y-3 bg-gradient-to-b from-emerald-50/50 to-white dark:from-emerald-950/20 dark:to-[#161B22] border border-emerald-200 dark:border-emerald-800/60 shadow-lg">
           <div className="inline-flex p-3 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-300">
             <Trophy className="w-8 h-8" />
           </div>
-          <h3 className="text-xl font-extrabold text-zinc-900 dark:text-white">
+          <h3 className="text-lg sm:text-xl font-extrabold text-zinc-900 dark:text-white">
             All Pairs Matched! 🎉
           </h3>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
             You matched all {totalPairs} vocabulary pairs in{" "}
             <strong className="text-emerald-600 dark:text-emerald-400 font-mono">
               {formatTime(timeSpent)}
             </strong>
             !
           </p>
-          <div className="pt-2 flex items-center justify-center gap-3">
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
             <button
               type="button"
               onClick={initGame}
-              className="btn-primary py-2 px-5 text-xs"
+              className="btn-primary min-h-[44px] py-2.5 px-5 text-xs sm:text-sm"
             >
               <RotateCcw className="w-4 h-4" />
               <span>Play Again</span>
@@ -249,7 +250,7 @@ export function MatchPairsGame({ items, title, onExit }: MatchPairsGameProps) {
               <button
                 type="button"
                 onClick={onExit}
-                className="btn-secondary py-2 px-5 text-xs"
+                className="btn-secondary min-h-[44px] py-2.5 px-5 text-xs sm:text-sm"
               >
                 Exit Game
               </button>
@@ -259,7 +260,7 @@ export function MatchPairsGame({ items, title, onExit }: MatchPairsGameProps) {
       )}
 
       {/* Grid of Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
         {cards.map((card) => {
           const isSelected =
             selectedFirst?.id === card.id || selectedSecond?.id === card.id;
@@ -284,14 +285,14 @@ export function MatchPairsGame({ items, title, onExit }: MatchPairsGameProps) {
               type="button"
               onClick={() => handleCardClick(card)}
               disabled={card.isMatched}
-              className={`h-24 sm:h-28 p-3 rounded-2xl border flex flex-col items-center justify-center text-center transition-all duration-200 ${cardClasses}`}
+              className={`min-h-[76px] sm:min-h-[96px] p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border flex flex-col items-center justify-center text-center transition-all duration-200 active:scale-[0.97] touch-manipulation ${cardClasses}`}
             >
-              <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 block mb-1">
+              <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider text-zinc-400 dark:text-zinc-500 block mb-1">
                 {card.type === "en" ? "English" : "Uzbek"}
               </span>
               <span
-                className={`text-xs sm:text-sm font-semibold leading-tight line-clamp-3 ${
-                  card.type === "en" ? "font-bold" : "font-normal"
+                className={`text-xs sm:text-sm font-semibold leading-snug break-words hyphens-auto line-clamp-3 ${
+                  card.type === "en" ? "font-bold text-zinc-900 dark:text-white" : "font-medium"
                 }`}
               >
                 {card.text}

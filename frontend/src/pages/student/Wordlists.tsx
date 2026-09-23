@@ -71,25 +71,25 @@ export default function StudentWordlistsPage() {
 
   return (
     <ErrorBoundary>
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
         {/* If a deck is open, display the interactive Flashcard player / Quiz / Match Game */}
         {selectedSet ? (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="space-y-3 sm:space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
               <button
                 type="button"
                 onClick={handleExitDeck}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition w-fit"
+                className="inline-flex items-center gap-1.5 min-h-[36px] text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition w-fit touch-manipulation"
               >
                 <ChevronLeft className="w-4 h-4" />
                 <span>Back to Vocabulary Decks</span>
               </button>
 
-              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/60 shrink-0 select-none">
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/60 select-none overflow-x-auto max-w-full scrollbar-none w-full sm:w-auto justify-start sm:justify-center">
                 <button
                   type="button"
                   onClick={() => setStudyMode("flashcards")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  className={`flex items-center gap-1.5 min-h-[36px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap touch-manipulation ${
                     studyMode === "flashcards"
                       ? "bg-white dark:bg-[#111827] text-brand-600 dark:text-brand-400 shadow-xs"
                       : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
@@ -101,7 +101,7 @@ export default function StudentWordlistsPage() {
                 <button
                   type="button"
                   onClick={() => setStudyMode("quiz")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  className={`flex items-center gap-1.5 min-h-[36px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap touch-manipulation ${
                     studyMode === "quiz"
                       ? "bg-white dark:bg-[#111827] text-brand-600 dark:text-brand-400 shadow-xs"
                       : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
@@ -113,7 +113,7 @@ export default function StudentWordlistsPage() {
                 <button
                   type="button"
                   onClick={() => setStudyMode("match")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  className={`flex items-center gap-1.5 min-h-[36px] px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap touch-manipulation ${
                     studyMode === "match"
                       ? "bg-white dark:bg-[#111827] text-brand-600 dark:text-brand-400 shadow-xs"
                       : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
@@ -124,7 +124,7 @@ export default function StudentWordlistsPage() {
               </div>
             </div>
 
-            <div className="card p-4 sm:p-8 bg-white dark:bg-[#111827] border border-zinc-200/80 dark:border-zinc-800">
+            <div className="card p-2 sm:p-6 lg:p-8 bg-white dark:bg-[#111827] border border-zinc-200/80 dark:border-zinc-800 overflow-x-hidden">
               {studyMode === "flashcards" && (
                 <FlashcardDeck
                   items={selectedSet.items || []}
@@ -155,15 +155,15 @@ export default function StudentWordlistsPage() {
         ) : (
           <>
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white flex items-center gap-2.5">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-white flex items-center gap-2 flex-wrap">
                   <span>Vocabulary & Flashcards</span>
                   <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-brand-50 dark:bg-brand-950/50 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800">
                     Interactive Practice
                   </span>
                 </h1>
-                <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+                <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
                   Master new words, definitions, and American / British pronunciations using 3D interactive flashcard decks, bilingual quizzes, and matching games.
                 </p>
               </div>

@@ -387,7 +387,7 @@ export default function TeacherWordlistsPage() {
   return (
     <ErrorBoundary>
       <ConfirmDialog />
-      <div className="space-y-6">
+      <div className="space-y-6 overflow-x-hidden">
         {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -402,11 +402,11 @@ export default function TeacherWordlistsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/60 shrink-0 select-none">
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/60 w-full sm:w-auto select-none">
             <button
               type="button"
               onClick={() => setActiveTab("manage")}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-all touch-manipulation ${
                 activeTab === "manage"
                   ? "bg-white dark:bg-[#111827] text-brand-600 dark:text-brand-400 shadow-xs"
                   : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
@@ -418,7 +418,7 @@ export default function TeacherWordlistsPage() {
             <button
               type="button"
               onClick={() => setActiveTab("create")}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-all touch-manipulation ${
                 activeTab === "create"
                   ? "bg-white dark:bg-[#111827] text-brand-600 dark:text-brand-400 shadow-xs"
                   : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
