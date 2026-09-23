@@ -83,8 +83,8 @@ def normalize_pos(raw_pos: str | None) -> str:
 
 
 def get_gemini_api_key() -> str:
-    """Fetch GEMINI_API_KEY safely from server environment or .env files."""
-    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    """Fetch GEMINI_API_KEY or GOOGLE_API_KEY safely from server environment or .env files."""
+    key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
     if key:
         return key
 
@@ -94,13 +94,13 @@ def get_gemini_api_key() -> str:
         env_path = Path(__file__).resolve().parent.parent.parent / ".env"
         if env_path.exists():
             load_dotenv(env_path, override=True)
-            key = os.environ.get("GEMINI_API_KEY", "").strip()
+            key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
             if key:
                 return key
         root_env = Path(__file__).resolve().parent.parent.parent.parent / ".env"
         if root_env.exists():
             load_dotenv(root_env, override=True)
-            key = os.environ.get("GEMINI_API_KEY", "").strip()
+            key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
             if key:
                 return key
     except Exception:

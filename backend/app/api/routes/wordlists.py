@@ -265,7 +265,16 @@ async def preview_bulk(
     if payload is None:
         raw_words = []
     elif isinstance(payload, dict):
-        raw_words = payload.get("words", [])
+        if "words" in payload and isinstance(payload["words"], list):
+            raw_words = payload["words"]
+        elif "words" in payload and isinstance(payload["words"], str):
+            raw_words = [w.strip() for w in payload["words"].replace("\r\n", "\n").replace(",", "\n").split("\n")]
+        elif "text" in payload and isinstance(payload["text"], str):
+            raw_words = [w.strip() for w in payload["text"].replace("\r\n", "\n").replace(",", "\n").split("\n")]
+        elif "text" in payload and isinstance(payload["text"], list):
+            raw_words = payload["text"]
+        else:
+            raw_words = payload.get("words", [])
     elif hasattr(payload, "words"):
         raw_words = payload.words
     elif isinstance(payload, list):
