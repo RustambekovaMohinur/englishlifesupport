@@ -301,6 +301,7 @@ async def preview_bulk(
                     audio_us_url=item.get("audio_us_url") or None,
                     audio_gb_url=None,
                     source="gemini_ai",
+                    ai_generated=True,
                 )
                 for item in enriched_list
                 if isinstance(item, dict) and item.get("word")

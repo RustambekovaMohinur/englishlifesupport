@@ -647,7 +647,7 @@ export default function TeacherWordlistsPage() {
                                   {item.phonetic}
                                 </span>
                               )}
-                              {item.source === "gemini_ai" && (
+                              {(item.source === "gemini_ai" || item.ai_generated) && (
                                 <span className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.2 rounded bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 font-semibold">
                                   ✨ AI
                                 </span>

@@ -111,6 +111,7 @@ class WordDetailPreview(BaseModel):
     audio_us_url: str | None = None
     audio_gb_url: str | None = None
     source: str = "dictionary"
+    ai_generated: bool = False
 
 
 class SubmitQuizRequest(BaseModel):

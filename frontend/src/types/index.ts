@@ -612,5 +612,6 @@ export interface WordDetailPreview {
   audio_us_url?: string | null;
   audio_gb_url?: string | null;
   source?: string;
+  ai_generated?: boolean;
 }
 

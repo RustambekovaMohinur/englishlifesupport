@@ -14,7 +14,25 @@ import json
 import logging
 import os
 import re
+import sys
+from pathlib import Path
 from typing import Any
+
+# Ensure backend root is on sys.path so 'app.*' imports resolve cleanly
+_backend_dir = str(Path(__file__).resolve().parent.parent.parent)
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
+
+try:
+    from dotenv import load_dotenv
+    _backend_env = Path(_backend_dir) / ".env"
+    if _backend_env.exists():
+        load_dotenv(_backend_env)
+    _root_env = Path(_backend_dir).parent / ".env"
+    if _root_env.exists():
+        load_dotenv(_root_env)
+except Exception:
+    pass
 
 import httpx
 
@@ -65,22 +83,26 @@ def normalize_pos(raw_pos: str | None) -> str:
 
 
 def get_gemini_api_key() -> str:
-    """Fetch GEMINI_API_KEY safely from server environment."""
+    """Fetch GEMINI_API_KEY safely from server environment or .env files."""
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if key:
         return key
 
-    # Secondary check in case loaded into environment via backend/.env
+    # Reload explicitly using python-dotenv
     try:
-        from pathlib import Path
+        from dotenv import load_dotenv
         env_path = Path(__file__).resolve().parent.parent.parent / ".env"
         if env_path.exists():
-            for line in env_path.read_text(encoding="utf-8").splitlines():
-                stripped = line.strip()
-                if stripped.startswith("GEMINI_API_KEY="):
-                    val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
-                    if val:
-                        return val
+            load_dotenv(env_path, override=True)
+            key = os.environ.get("GEMINI_API_KEY", "").strip()
+            if key:
+                return key
+        root_env = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+        if root_env.exists():
+            load_dotenv(root_env, override=True)
+            key = os.environ.get("GEMINI_API_KEY", "").strip()
+            if key:
+                return key
     except Exception:
         pass
     return ""
@@ -184,9 +206,9 @@ async def enrich_vocabulary_list(raw_words: list[dict] | list[str]) -> list[dict
             return None
 
         # Strip markdown fences if present
-        clean_json_str = raw_text
-        if clean_json_str.startswith("```"):
-            clean_json_str = re.sub(r"^```(?:json)?\s*", "", clean_json_str)
+        clean_json_str = raw_text.strip()
+        if "```" in clean_json_str:
+            clean_json_str = re.sub(r"^```(?:json)?\s*", "", clean_json_str, flags=re.IGNORECASE)
             clean_json_str = re.sub(r"\s*```$", "", clean_json_str)
         clean_json_str = clean_json_str.strip()
 
@@ -224,6 +246,8 @@ async def enrich_vocabulary_list(raw_words: list[dict] | list[str]) -> list[dict
                 "definition": definition,
                 "example": example,
                 "audio_us_url": audio_us,
+                "ai_generated": True,
+                "source": "gemini_ai",
             })
 
         if results:
@@ -258,6 +282,7 @@ async def enrich_words_with_gemini(raw_entries: list[str]) -> list[WordDetailPre
                 audio_us_url=item["audio_us_url"],
                 audio_gb_url=None,
                 source="gemini_ai",
+                ai_generated=True,
             )
         )
     return previews
