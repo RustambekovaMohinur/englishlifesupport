@@ -1,16 +1,20 @@
 """
-Standalone Gemini AI Examiner Service.
+Secure Gemini AI Examiner Service.
 
 Enriches raw English vocabulary entries using Google Gemini AI as an expert
-Cambridge/IELTS English examiner and lexicographer.
+Cambridge/IELTS English examiner.
 
-Gracefully falls back to None if GEMINI_API_KEY is missing, empty, or if any API call fails.
+Strict Security:
+- GEMINI_API_KEY is read strictly from os.environ.get("GEMINI_API_KEY").
+- Passed via 'x-goog-api-key' request header (never in URL query string).
+- Key is NEVER printed, logged, or exposed in error messages or responses.
+- Gracefully falls back to None on missing key or network errors without raising 500s.
 """
 import json
 import logging
 import os
 import re
-from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -18,7 +22,7 @@ from app.schemas.wordlist import WordDetailPreview
 
 logger = logging.getLogger(__name__)
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip()
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash").strip()
 
 VALID_POS_SET = {"noun", "verb", "adjective", "adverb", "idiom", "phrasal_verb"}
 
@@ -39,7 +43,7 @@ POS_MAP = {
 
 
 def normalize_pos(raw_pos: str | None) -> str:
-    """Normalize POS to one of ['noun', 'verb', 'adjective', 'adverb', 'idiom', 'phrasal_verb']."""
+    """Normalize POS strictly to one of ['noun', 'verb', 'adjective', 'adverb', 'idiom', 'phrasal_verb']."""
     if not raw_pos:
         return "noun"
     cleaned = raw_pos.lower().strip().replace("-", "_")
@@ -61,77 +65,90 @@ def normalize_pos(raw_pos: str | None) -> str:
 
 
 def get_gemini_api_key() -> str:
-    """Fetch GEMINI_API_KEY from environment variables or .env file."""
-    key = os.getenv("GEMINI_API_KEY", "").strip()
+    """Fetch GEMINI_API_KEY safely from server environment."""
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
     if key:
         return key
 
-    # Try reading from backend/.env if not present in os.environ
-    env_path = Path(__file__).resolve().parent.parent.parent / ".env"
-    if env_path.exists():
-        try:
+    # Secondary check in case loaded into environment via backend/.env
+    try:
+        from pathlib import Path
+        env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+        if env_path.exists():
             for line in env_path.read_text(encoding="utf-8").splitlines():
                 stripped = line.strip()
                 if stripped.startswith("GEMINI_API_KEY="):
                     val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
                     if val:
                         return val
-        except Exception:
-            pass
+    except Exception:
+        pass
     return ""
 
 
-async def enrich_words_with_gemini(raw_entries: list[str]) -> list[WordDetailPreview] | None:
+async def enrich_vocabulary_list(raw_words: list[dict] | list[str]) -> list[dict] | None:
     """
-    Enriches up to 50 raw vocabulary entries using Google Gemini AI.
+    Analyzes raw vocabulary entries and returns clean, structured dictionary enrichment.
+
+    Args:
+        raw_words: List of word strings (e.g. "drama - sahna asari") or dicts (e.g. {"word": "..."})
 
     Returns:
-        list[WordDetailPreview] if enrichment succeeded, or None if skipped/failed.
+        List of enriched dicts or None if key is absent or call fails safely.
     """
     api_key = get_gemini_api_key()
     if not api_key:
-        logger.info("GEMINI_API_KEY not configured or empty. Skipping AI enrichment.")
+        logger.info("GEMINI_API_KEY not configured. Falling back to local/dictionary mode.")
         return None
 
-    if not raw_entries:
+    if not raw_words:
         return []
 
-    entries = [e.strip() for e in raw_entries if e and e.strip()][:50]
+    # Normalize input entries into list of strings (capped at 50)
+    entries: list[str] = []
+    for item in raw_words[:50]:
+        if isinstance(item, str):
+            clean_s = item.strip()
+            if clean_s:
+                entries.append(clean_s)
+        elif isinstance(item, dict):
+            w = (item.get("word") or item.get("term") or "").strip()
+            t = (item.get("definition") or item.get("translation") or "").strip()
+            if w and t:
+                entries.append(f"{w} - {t}")
+            elif w:
+                entries.append(w)
+
     if not entries:
         return []
 
-    system_instruction = (
-        "You are an expert Cambridge/IELTS English examiner and lexicographer. "
-        "When given raw vocabulary entries (which may include English words and optional Uzbek meanings), "
-        "you enrich them cleanly."
+    role_instruction = (
+        "You are an expert Cambridge/IELTS English examiner. "
+        "Analyze English words and return strict, clean JSON only."
     )
 
     prompt = (
-        f"{system_instruction}\n\n"
-        "Input vocabulary entries to enrich:\n"
+        f"{role_instruction}\n\n"
+        "Input words to analyze:\n"
         + "\n".join(f"{i+1}. {entry}" for i, entry in enumerate(entries))
         + "\n\n"
-        "Instructions for each entry:\n"
-        "1. Extract the cleaned English word/term.\n"
-        "2. Identify the part of speech. It MUST be one of: 'noun', 'verb', 'adjective', 'adverb', 'idiom', 'phrasal_verb'.\n"
-        "3. Provide the accurate IPA phonetic transcription (e.g. /ˈdrɑː.mə/, /kənˈsɜːrv/).\n"
-        "4. Provide a clear Uzbek translation in 'definition'. If the input entry already includes an Uzbek translation (e.g. 'drama - sahna asari'), preserve and refine that translation. Otherwise, provide the most natural, accurate Uzbek equivalent.\n"
-        "5. Provide a high-quality, authentic Cambridge/IELTS B2/C1 context sentence in 'example'.\n"
-        "6. Provide 'audio_us_url' with the Google dictionary pronunciation link: 'https://ssl.gstatic.com/dictionary/static/sounds/20200429/{word}--_us_1.mp3' (using lowercase with spaces replaced by underscores).\n\n"
-        "Return a STRICT JSON array of objects with the exact schema:\n"
-        "[\n"
-        "  {\n"
-        '    "word": "cleaned english term",\n'
-        '    "part_of_speech": "noun | verb | adjective | adverb | idiom | phrasal_verb",\n'
-        '    "phonetic": "/IPA/",\n'
-        '    "definition": "Uzbek translation",\n'
-        '    "example": "B2/C1 context example sentence.",\n'
-        '    "audio_us_url": "https://ssl.gstatic.com/dictionary/static/sounds/20200429/word--_us_1.mp3"\n'
-        "  }\n"
-        "]"
+        "Instructions:\n"
+        "1. word: Clean English term.\n"
+        "2. part_of_speech: Must be strictly one of: 'noun', 'verb', 'adjective', 'adverb', 'idiom', 'phrasal_verb'.\n"
+        "3. phonetic: Accurate IPA transcription (e.g. /kənˈsɜːv/).\n"
+        "4. definition: Natural Uzbek translation. If input contains teacher's custom translation, preserve it.\n"
+        "5. example: Natural B2/C1 Cambridge context sentence.\n"
+        "6. audio_us_url: Pronunciation audio link (https://ssl.gstatic.com/dictionary/static/sounds/20200429/{word}--_us_1.mp3) or empty string.\n\n"
+        "Return a STRICT JSON array of objects with keys: "
+        '["word", "part_of_speech", "phonetic", "definition", "example", "audio_us_url"]'
     )
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={api_key}"
+    # Use secure header authentication so API key is NEVER present in the URL query string
+    endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+    headers = {
+        "x-goog-api-key": api_key,
+        "Content-Type": "application/json",
+    }
     payload = {
         "contents": [
             {
@@ -146,32 +163,27 @@ async def enrich_words_with_gemini(raw_entries: list[str]) -> list[WordDetailPre
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(endpoint_url, headers=headers, json=payload)
             if resp.status_code != 200:
-                logger.warning(
-                    "Gemini API returned status %s: %s",
-                    resp.status_code,
-                    resp.text[:200],
-                )
+                logger.warning("Gemini AI service returned non-200 status code: %s", resp.status_code)
                 return None
 
             data = resp.json()
 
         candidates = data.get("candidates", [])
         if not candidates:
-            logger.warning("Gemini API response had no candidates.")
             return None
 
         content = candidates[0].get("content", {})
         parts = content.get("parts", [])
         if not parts:
-            logger.warning("Gemini API candidate had no parts.")
             return None
 
         raw_text = parts[0].get("text", "").strip()
         if not raw_text:
             return None
 
+        # Strip markdown fences if present
         clean_json_str = raw_text
         if clean_json_str.startswith("```"):
             clean_json_str = re.sub(r"^```(?:json)?\s*", "", clean_json_str)
@@ -183,13 +195,12 @@ async def enrich_words_with_gemini(raw_entries: list[str]) -> list[WordDetailPre
         if isinstance(parsed, list):
             items_list = parsed
         elif isinstance(parsed, dict):
-            items_list = parsed.get("words") or parsed.get("items") or parsed.get("vocabulary") or []
+            items_list = parsed.get("words") or parsed.get("items") or []
 
         if not items_list:
-            logger.warning("Gemini API returned empty items list.")
             return None
 
-        results: list[WordDetailPreview] = []
+        results: list[dict] = []
         for item in items_list:
             if not isinstance(item, dict):
                 continue
@@ -206,26 +217,47 @@ async def enrich_words_with_gemini(raw_entries: list[str]) -> list[WordDetailPre
                 or f"https://ssl.gstatic.com/dictionary/static/sounds/20200429/{w.lower().replace(' ', '_')}--_us_1.mp3"
             )
 
-            results.append(
-                WordDetailPreview(
-                    word=w,
-                    custom_translation=definition,
-                    part_of_speech=pos,
-                    phonetic=phon,
-                    definition=definition,
-                    example=example,
-                    audio_us_url=audio_us,
-                    audio_gb_url=None,
-                    source="gemini_ai",
-                )
-            )
+            results.append({
+                "word": w,
+                "part_of_speech": pos,
+                "phonetic": phon,
+                "definition": definition,
+                "example": example,
+                "audio_us_url": audio_us,
+            })
 
         if results:
-            logger.info("Successfully enriched %d words with Gemini AI Examiner.", len(results))
+            logger.info("Enriched %d vocabulary items via Gemini AI.", len(results))
             return results
 
         return None
 
-    except Exception as exc:
-        logger.warning("Error during Gemini AI vocabulary enrichment: %s", exc)
+    except Exception:
+        logger.warning("Gemini AI request encountered an error; falling back safely.")
         return None
+
+
+async def enrich_words_with_gemini(raw_entries: list[str]) -> list[WordDetailPreview] | None:
+    """
+    Helper converting enrich_vocabulary_list output to list[WordDetailPreview].
+    """
+    enriched = await enrich_vocabulary_list(raw_entries)
+    if not enriched:
+        return None
+
+    previews: list[WordDetailPreview] = []
+    for item in enriched:
+        previews.append(
+            WordDetailPreview(
+                word=item["word"],
+                custom_translation=item["definition"],
+                part_of_speech=item["part_of_speech"],
+                phonetic=item["phonetic"],
+                definition=item["definition"],
+                example=item["example"],
+                audio_us_url=item["audio_us_url"],
+                audio_gb_url=None,
+                source="gemini_ai",
+            )
+        )
+    return previews

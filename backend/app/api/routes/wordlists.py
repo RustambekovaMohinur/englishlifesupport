@@ -29,7 +29,7 @@ from app.schemas.wordlist import (
     WordlistSetDetailOut,
 )
 from app.services.storage import get_storage_service
-from app.services.ai_examiner import enrich_words_with_gemini
+from app.services.ai_examiner import enrich_vocabulary_list, enrich_words_with_gemini
 from app.utils.datetimes import utcnow
 
 logger = logging.getLogger(__name__)
@@ -222,13 +222,29 @@ async def preview_bulk(
     if not lines:
         return []
 
-    # 1. Attempt enrichment via Gemini AI Examiner
+    # 1. Attempt secure enrichment via Gemini AI Examiner
     try:
-        ai_results = await enrich_words_with_gemini(lines)
-        if ai_results:
-            return ai_results
-    except Exception as exc:
-        logger.warning("Gemini AI enrichment failed: %s; falling back to dictionary", exc)
+        enriched_list = await enrich_vocabulary_list(lines)
+        if enriched_list:
+            ai_results = [
+                WordDetailPreview(
+                    word=item["word"],
+                    custom_translation=item.get("definition", ""),
+                    part_of_speech=item.get("part_of_speech", "noun"),
+                    phonetic=item.get("phonetic", ""),
+                    definition=item.get("definition", ""),
+                    example=item.get("example", ""),
+                    audio_us_url=item.get("audio_us_url") or None,
+                    audio_gb_url=None,
+                    source="gemini_ai",
+                )
+                for item in enriched_list
+                if isinstance(item, dict) and item.get("word")
+            ]
+            if ai_results:
+                return ai_results
+    except Exception:
+        logger.warning("AI vocabulary enrichment failed; engaging safe dictionary fallback.")
 
     # 2. Fallback to existing Free Dictionary API & Datamuse
     async with httpx.AsyncClient(timeout=4.0) as client:

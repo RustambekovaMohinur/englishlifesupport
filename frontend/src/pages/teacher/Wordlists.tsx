@@ -248,23 +248,16 @@ export default function TeacherWordlistsPage() {
   const handlePlayPreviewAudio = (item: WordDetailPreview) => {
     if (!item.word?.trim()) return;
 
-    const playSpeechFallback = () => {
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(item.word);
-        utterance.lang = "en-US";
-        window.speechSynthesis.speak(utterance);
-      }
-    };
-
-    const audioUrl = item.audio_us_url || item.audio_gb_url;
-    if (audioUrl) {
-      const audio = new Audio(audioUrl);
-      audio.play().catch(() => {
-        playSpeechFallback();
-      });
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(item.word);
+      utterance.lang = "en-US";
+      window.speechSynthesis.speak(utterance);
     } else {
-      playSpeechFallback();
+      const audioUrl = item.audio_us_url || item.audio_gb_url;
+      if (audioUrl) {
+        new Audio(audioUrl).play().catch(() => {});
+      }
     }
   };
 
