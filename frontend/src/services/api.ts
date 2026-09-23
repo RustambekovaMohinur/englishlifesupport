@@ -1,4 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import { apiCache } from "./apiCache";
+
+export { apiCache };
 
 const ACCESS_TOKEN_KEY = "el_access_token";
 const REFRESH_TOKEN_KEY = "el_refresh_token";
@@ -14,6 +17,7 @@ export const tokenStorage = {
   clear: () => {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
+    apiCache.invalidate();
   },
 };
 
@@ -224,7 +228,33 @@ function onRefreshed(token: string | null) {
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const method = response.config.method?.toUpperCase();
+    if (method && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+      const url = response.config.url || "";
+      if (url.includes("/assignments") || url.includes("/submissions")) {
+        apiCache.invalidate("/assignments");
+        apiCache.invalidate("/submissions");
+        apiCache.invalidate("/dashboard");
+      } else if (url.includes("/wordlists")) {
+        apiCache.invalidate("/wordlists");
+        apiCache.invalidate("/dashboard");
+      } else if (url.includes("/groups")) {
+        apiCache.invalidate("/groups");
+        apiCache.invalidate("/dashboard");
+      } else if (url.includes("/students")) {
+        apiCache.invalidate("/students");
+        apiCache.invalidate("/dashboard");
+      } else if (url.includes("/feedback")) {
+        apiCache.invalidate("/feedback");
+      } else if (url.includes("/gamification")) {
+        apiCache.invalidate("/gamification");
+      } else {
+        apiCache.invalidate(url);
+      }
+    }
+    return response;
+  },
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 

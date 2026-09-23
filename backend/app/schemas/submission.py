@@ -71,6 +71,7 @@ class SubmissionOut(BaseModel):
     images: list[SubmissionImageOut] = []
     status: str
     is_late: bool = False
+    is_relevant: bool = True
     submitted_at: datetime
     grade: GradeOut | None = None
     corrections: list[SubmissionCorrectionOut] = []

@@ -1,5 +1,5 @@
 import axios from "axios";
-import { api } from "./api";
+import { api, apiCache } from "./api";
 import {
   AssignmentComment,
   AssignmentForStudent,
@@ -30,9 +30,21 @@ import {
   WeeklyLeaderboardOut,
 } from "@/types";
 
+/**
+ * Cached GET helper: returns data from memory if valid, otherwise queries backend
+ */
+export const cachedGet = <T>(
+  url: string,
+  params?: Record<string, any>,
+  ttlMs: number = 90_000
+): Promise<T> => {
+  const key = apiCache.makeKey(url, params);
+  return apiCache.fetch(key, () => api.get<T>(url, { params }).then((r) => r.data), { ttlMs });
+};
+
 // --- Dashboard ---
-export const getTeacherDashboard = () => api.get<TeacherDashboard>("/dashboard/teacher").then((r) => r.data);
-export const getStudentDashboard = () => api.get<StudentDashboard>("/dashboard/student").then((r) => r.data);
+export const getTeacherDashboard = () => cachedGet<TeacherDashboard>("/dashboard/teacher");
+export const getStudentDashboard = () => cachedGet<StudentDashboard>("/dashboard/student");
 
 // --- Students (teacher) ---
 export interface StudentQuery {
@@ -44,19 +56,19 @@ export interface StudentQuery {
   page_size?: number;
 }
 export const listStudents = (params: StudentQuery) =>
-  api.get<Paginated<StudentListItem>>("/students", { params }).then((r) => r.data);
+  cachedGet<Paginated<StudentListItem>>("/students", params);
 export const listPendingStudents = (params?: { page?: number; page_size?: number }) =>
-  api.get<PaginatedPendingStudents>("/students/pending", { params }).then((r) => r.data);
+  cachedGet<PaginatedPendingStudents>("/students/pending", params);
 export const approveStudent = (student_id: string) =>
   api.post<{ success: boolean; message: string; student: any }>(`/students/${student_id}/approve`).then((r) => r.data);
 export const rejectStudent = (student_id: string) =>
   api.post<{ success: boolean; message: string; student: any }>(`/students/${student_id}/reject`).then((r) => r.data);
 export const handleStudentApproval = (student_id: string, action: "approve" | "reject") =>
   action === "approve" ? approveStudent(student_id) : rejectStudent(student_id);
-export const getStudent = (id: string) => api.get<StudentOut>(`/students/${id}`).then((r) => r.data);
+export const getStudent = (id: string) => cachedGet<StudentOut>(`/students/${id}`);
 export const getStudentHistory = (student_id: string) =>
-  api.get<StudentHistoryOut>(`/students/${student_id}/history`).then((r) => r.data);
-export const getMyStudentProfile = () => api.get<StudentOut>("/students/me").then((r) => r.data);
+  cachedGet<StudentHistoryOut>(`/students/${student_id}/history`);
+export const getMyStudentProfile = () => cachedGet<StudentOut>("/students/me");
 export const updateStudent = (id: string, body: Partial<{ full_name: string; phone: string; group_id: string | null }>) =>
   api.patch<StudentOut>(`/students/${id}`, body).then((r) => r.data);
 export const deleteStudent = (id: string) => api.delete(`/students/${id}`);
@@ -68,11 +80,11 @@ export const resetStudentPassword = (student_id: string, new_password: string) =
 
 // --- Groups ---
 export const listGroups = (include_archived: boolean = false) =>
-  api.get<Group[]>("/groups", { params: { include_archived } }).then((r) => r.data);
+  cachedGet<Group[]>("/groups", { include_archived });
 export const getGroupDetail = (group_id: string) =>
-  api.get<GroupDetailOut>(`/groups/${group_id}/detail`).then((r) => r.data);
+  cachedGet<GroupDetailOut>(`/groups/${group_id}/detail`);
 export const getMyCohortMatrix = () =>
-  api.get<GroupDetailOut>("/groups/my/matrix").then((r) => r.data);
+  cachedGet<GroupDetailOut>("/groups/my/matrix");
 export const createGroup = (body: { name: string; english_level: string; schedule?: string; default_homework_time?: string }) =>
   api.post<Group>("/groups", body).then((r) => r.data);
 export const updateGroup = (id: string, body: Partial<{ name: string; english_level: string; schedule: string; default_homework_time?: string; is_active: boolean }>) =>
@@ -103,14 +115,14 @@ export const updateStudentPlacement = (student_id: string, group_id: string | nu
   api.put<StudentOut>(`/teacher/students/${student_id}/placement`, { group_id }).then((r) => r.data);
 
 // --- Teacher Profile ---
-export const getMyTeacherProfile = () => api.get<TeacherProfileOut>("/teachers/me").then((r) => r.data);
+export const getMyTeacherProfile = () => cachedGet<TeacherProfileOut>("/teachers/me");
 export const updateTeacherProfile = (body: Partial<{ full_name: string; phone: string; bio: string; email: string; current_password?: string }>) =>
   api.patch("/teachers/me", body).then((r) => r.data);
 export const changeTeacherPassword = (body: { current_password: string; new_password: string; confirm_password: string }) =>
   api.post("/teachers/me/password", body).then((r) => r.data);
 
 // --- Unified User Profile (Students & Teachers) ---
-export const getMyUnifiedProfile = () => api.get<UserProfileOut>("/profile/me").then((r) => r.data);
+export const getMyUnifiedProfile = () => cachedGet<UserProfileOut>("/profile/me");
 export const updateMyUnifiedProfile = (body: UserProfileUpdate) => api.patch<UserProfileOut>("/profile/me", body).then((r) => r.data);
 export const changeUserPassword = (body: { old_password: string; new_password: string }) =>
   api.put<{ success: boolean; message: string }>("/users/me/password", body).then((r) => r.data);
@@ -124,7 +136,7 @@ export const removeMyAvatar = () => api.delete<UserProfileOut>("/profile/me/avat
 
 // --- Assignments ---
 export const listAssignments = (group_id?: string) =>
-  api.get<AssignmentOut[]>("/assignments", { params: { group_id } }).then((r) => r.data);
+  cachedGet<AssignmentOut[]>("/assignments", { group_id });
 export const createAssignment = (formData: FormData) =>
   api.post<AssignmentOut>("/assignments", formData, { timeout: 120000 }).then((r) => r.data);
 export const updateAssignmentInPlace = (id: string, formData: FormData) =>
@@ -133,10 +145,10 @@ export const updateAssignment = (id: string, body: Partial<{ title: string; desc
   api.patch<AssignmentOut>(`/assignments/${id}`, body).then((r) => r.data);
 export const deleteAssignment = (id: string) => api.delete(`/assignments/${id}`);
 export const getAssignment = (id: string) =>
-  api.get<AssignmentForStudent>(`/assignments/${id}`).then((r) => r.data);
-export const listMyAssignments = () => api.get<AssignmentForStudent[]>("/assignments/mine").then((r) => r.data);
+  cachedGet<AssignmentForStudent>(`/assignments/${id}`);
+export const listMyAssignments = () => cachedGet<AssignmentForStudent[]>("/assignments/mine");
 export const listPastDeadlineAssignments = () =>
-  api.get<AssignmentForStudent[]>("/assignments/past-deadlines").then((r) => r.data);
+  cachedGet<AssignmentForStudent[]>("/assignments/past-deadlines");
 
 
 // --- Submissions ---
@@ -148,9 +160,9 @@ export interface SubmissionQuery {
   page_size?: number;
 }
 export const listSubmissions = (params: SubmissionQuery) =>
-  api.get<Paginated<SubmissionOut>>("/submissions", { params }).then((r) => r.data);
-export const listMySubmissions = () => api.get<SubmissionOut[]>("/submissions/mine").then((r) => r.data);
-export const getSubmission = (id: string) => api.get<SubmissionOut>(`/submissions/${id}`).then((r) => r.data);
+  cachedGet<Paginated<SubmissionOut>>("/submissions", params);
+export const listMySubmissions = () => cachedGet<SubmissionOut[]>("/submissions/mine");
+export const getSubmission = (id: string) => cachedGet<SubmissionOut>(`/submissions/${id}`);
 
 export interface PresignedUploadResult {
   upload_url: string;
@@ -286,7 +298,7 @@ export const deleteSubmissionComment = (submissionId: string, commentId: string)
 
 // --- Gamification & Sequential Tasks ---
 export const getGamificationSummary = () =>
-  api.get<StudentGamificationSummary>("/gamification/summary").then((r) => r.data);
+  cachedGet<StudentGamificationSummary>("/gamification/summary");
 
 export const useFreePass = (assignment_id: string) =>
   api.post<{ status: string; message: string }>("/gamification/free-pass/use", null, {
@@ -294,7 +306,7 @@ export const useFreePass = (assignment_id: string) =>
   }).then((r) => r.data);
 
 export const getWeeklyLeaderboard = (group_id?: string) =>
-  api.get<WeeklyLeaderboardOut>("/gamification/leaderboard", { params: { group_id } }).then((r) => r.data);
+  cachedGet<WeeklyLeaderboardOut>("/gamification/leaderboard", { group_id });
 
 export const recordVocabPractice = (body: { assignment_id?: string; total_words: number; correct_words: number }) =>
   api.post<{ status: string; xp_earned: number; stars_earned: number; accuracy: number }>("/gamification/vocabulary/practice", body).then((r) => r.data);
@@ -334,19 +346,19 @@ export const submitPlatformFeedback = (data: {
 }) => api.post<PlatformFeedback>("/feedback", data).then((r) => r.data);
 
 export const getPlatformFeedbackSummary = () =>
-  api.get<PlatformFeedbackSummary>("/feedback/summary").then((r) => r.data);
+  cachedGet<PlatformFeedbackSummary>("/feedback/summary");
 
 export const getAllPlatformFeedback = () =>
-  api.get<PlatformFeedback[]>("/feedback/all").then((r) => r.data);
+  cachedGet<PlatformFeedback[]>("/feedback/all");
 
 export const getTeacherPlatformFeedback = (params?: { rating?: number; limit?: number; offset?: number }) =>
-  api.get<PlatformFeedback[]>("/feedback", { params }).then((r) => r.data);
+  cachedGet<PlatformFeedback[]>("/feedback", params);
 
 export const getTeacherPlatformFeedbackStats = () =>
-  api.get<PlatformFeedbackStats>("/feedback/stats").then((r) => r.data);
+  cachedGet<PlatformFeedbackStats>("/feedback/stats");
 
 export const getPublicFeedbacks = () =>
-  api.get<PublicFeedbackItem[]>("/feedback/public").then((r) => r.data);
+  cachedGet<PublicFeedbackItem[]>("/feedback/public");
 
 export const toggleFeedbackLike = (feedbackId: string) =>
   api.post<{ liked: boolean; likes_count: number }>(`/feedback/${feedbackId}/like`).then((r) => r.data);
@@ -411,33 +423,35 @@ export const createWordlistSet = async (data: {
 };
 
 export const listWordlistSets = async (params?: { group_id?: string }) => {
-  const primaryUrl = WORDLISTS_URL;
-  const fallbackUrl = WORDLISTS_FALLBACK_URL;
-  try {
-    const r = await api.get<import("@/types").WordlistSetBrief[]>(primaryUrl, { params });
-    return r.data;
-  } catch (err: any) {
-    if (err?.response?.status === 404) {
-      const r = await api.get<import("@/types").WordlistSetBrief[]>(fallbackUrl, { params });
+  const key = apiCache.makeKey(WORDLISTS_URL, params);
+  return apiCache.fetch(key, async () => {
+    try {
+      const r = await api.get<import("@/types").WordlistSetBrief[]>(WORDLISTS_URL, { params });
       return r.data;
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        const r = await api.get<import("@/types").WordlistSetBrief[]>(WORDLISTS_FALLBACK_URL, { params });
+        return r.data;
+      }
+      throw err;
     }
-    throw err;
-  }
+  }, { ttlMs: 120_000 });
 };
 
 export const getWordlistSet = async (setId: string) => {
-  const primaryUrl = `${WORDLISTS_URL}/${setId}`;
-  const fallbackUrl = `${WORDLISTS_FALLBACK_URL}/${setId}`;
-  try {
-    const r = await api.get<import("@/types").WordlistSetDetail>(primaryUrl);
-    return r.data;
-  } catch (err: any) {
-    if (err?.response?.status === 404) {
-      const r = await api.get<import("@/types").WordlistSetDetail>(fallbackUrl);
+  const key = `${WORDLISTS_URL}/${setId}`;
+  return apiCache.fetch(key, async () => {
+    try {
+      const r = await api.get<import("@/types").WordlistSetDetail>(`${WORDLISTS_URL}/${setId}`);
       return r.data;
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        const r = await api.get<import("@/types").WordlistSetDetail>(`${WORDLISTS_FALLBACK_URL}/${setId}`);
+        return r.data;
+      }
+      throw err;
     }
-    throw err;
-  }
+  }, { ttlMs: 180_000 });
 };
 
 export const deleteWordlistSet = async (setId: string) => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { PlatformFeedbackFloatingTrigger } from "@/components/PlatformFeedbackModal";
 import { listPastDeadlineAssignments } from "@/services/lmsService";
+import { PageLoadingFallback } from "@/components/common/PageLoadingFallback";
 
 const sidebarNavItems = [
   { to: "/student", label: "Dashboard", icon: LayoutDashboard, end: true, hasBadge: false },
@@ -48,13 +49,13 @@ export default function StudentLayout() {
     return localStorage.getItem("sidebar_collapsed") === "true";
   });
 
-  const toggleSidebar = () => {
+  const toggleSidebar = useCallback(() => {
     setIsCollapsed((prev) => {
       const next = !prev;
       localStorage.setItem("sidebar_collapsed", String(next));
       return next;
     });
-  };
+  }, []);
 
   // Keyboard shortcut: Ctrl + B to toggle sidebar
   useEffect(() => {
@@ -299,7 +300,9 @@ export default function StudentLayout() {
             isSubmitPage ? "p-0 pb-0" : "p-3 sm:p-6 lg:p-8 pb-28 sm:pb-24 lg:pb-8"
           } scrollbar-none`}
         >
-          <Outlet />
+          <Suspense fallback={<PageLoadingFallback />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 

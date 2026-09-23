@@ -18,8 +18,15 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+import os
+
 def _get_sync_url() -> str:
-    url = settings.DATABASE_URL or settings.ASYNC_DATABASE_URL
+    url = (
+        os.environ.get("DATABASE_URL")
+        or os.environ.get("ASYNC_DATABASE_URL")
+        or settings.DATABASE_URL
+        or settings.ASYNC_DATABASE_URL
+    )
     if url.startswith("postgres://"):
         url = "postgresql+psycopg2://" + url[len("postgres://"):]
     elif url.startswith("postgresql+asyncpg://"):

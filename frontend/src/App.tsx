@@ -1,31 +1,38 @@
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { PageLoadingFallback } from "@/components/common/PageLoadingFallback";
 
-import LoginPage from "@/pages/Login";
-import RegisterPage from "@/pages/Register";
-
+// Eager layouts for instant shell rendering
 import TeacherLayout from "@/layouts/TeacherLayout";
-import TeacherDashboardPage from "@/pages/teacher/Dashboard";
-import StudentsPage from "@/pages/teacher/Students";
-import GroupsPage from "@/pages/teacher/Groups";
-import GroupDetailPage from "@/pages/teacher/GroupDetail";
-import AssignmentsPage from "@/pages/teacher/Assignments";
-import SubmissionsPage from "@/pages/teacher/Submissions";
-import TeacherProfilePage from "@/pages/teacher/Profile";
-import TeacherWordlistsPage from "@/pages/teacher/Wordlists";
-
 import StudentLayout from "@/layouts/StudentLayout";
-import StudentDashboardPage from "@/pages/student/Dashboard";
-import StudentAssignmentsPage from "@/pages/student/Assignments";
-import StudentAssignmentSubmitPage from "@/pages/student/AssignmentSubmit";
-import StudentWordlistsPage from "@/pages/student/Wordlists";
-import StudentSubmissionsPage from "@/pages/student/Submissions";
-import StudentResultsPage from "@/pages/student/Results";
-import StudentProgressPage from "@/pages/student/Progress";
-import StudentProfilePage from "@/pages/student/Profile";
-import StudentPastDeadlinesPage from "@/pages/student/PastDeadlines";
+
+// Lazy-loaded auth pages
+const LoginPage = lazy(() => import("@/pages/Login"));
+const RegisterPage = lazy(() => import("@/pages/Register"));
+
+// Lazy-loaded teacher pages
+const TeacherDashboardPage = lazy(() => import("@/pages/teacher/Dashboard"));
+const StudentsPage = lazy(() => import("@/pages/teacher/Students"));
+const GroupsPage = lazy(() => import("@/pages/teacher/Groups"));
+const GroupDetailPage = lazy(() => import("@/pages/teacher/GroupDetail"));
+const AssignmentsPage = lazy(() => import("@/pages/teacher/Assignments"));
+const SubmissionsPage = lazy(() => import("@/pages/teacher/Submissions"));
+const TeacherProfilePage = lazy(() => import("@/pages/teacher/Profile"));
+const TeacherWordlistsPage = lazy(() => import("@/pages/teacher/Wordlists"));
+
+// Lazy-loaded student pages
+const StudentDashboardPage = lazy(() => import("@/pages/student/Dashboard"));
+const StudentAssignmentsPage = lazy(() => import("@/pages/student/Assignments"));
+const StudentAssignmentSubmitPage = lazy(() => import("@/pages/student/AssignmentSubmit"));
+const StudentWordlistsPage = lazy(() => import("@/pages/student/Wordlists"));
+const StudentSubmissionsPage = lazy(() => import("@/pages/student/Submissions"));
+const StudentResultsPage = lazy(() => import("@/pages/student/Results"));
+const StudentProgressPage = lazy(() => import("@/pages/student/Progress"));
+const StudentProfilePage = lazy(() => import("@/pages/student/Profile"));
+const StudentPastDeadlinesPage = lazy(() => import("@/pages/student/PastDeadlines"));
 
 function RootRedirect() {
   const { user, isLoading } = useAuth();
@@ -39,7 +46,8 @@ export default function App() {
     <AuthProvider>
       <div className="w-full max-w-full overflow-x-hidden min-h-screen">
         <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
-        <Routes>
+        <Suspense fallback={<PageLoadingFallback />}>
+          <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -74,6 +82,7 @@ export default function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </div>
     </AuthProvider>
   );

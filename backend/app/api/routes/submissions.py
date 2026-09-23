@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status, BackgroundTasks
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -160,6 +160,7 @@ def _submission_to_out(sub: Submission) -> SubmissionOut:
             sub.status == SubmissionStatus.LATE
             or (sub.assignment and ensure_utc(sub.submitted_at) > ensure_utc(sub.assignment.deadline))
         ),
+        is_relevant=getattr(sub, "is_relevant", True),
         submitted_at=sub.submitted_at,
         grade=grade_out,
         corrections=corrections_out,

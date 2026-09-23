@@ -108,7 +108,48 @@ def get_gemini_api_key() -> str:
     return ""
 
 
-async def enrich_vocabulary_list(raw_words: list[dict] | list[str]) -> list[dict] | None:
+async def run_prompt(prompt: str) -> dict | None:
+    """Send a prompt to Gemini and return parsed JSON response.
+    Returns None on error or missing API key.
+    """
+    api_key = get_gemini_api_key()
+    if not api_key:
+        logger.info("GEMINI_API_KEY not configured. Skipping AI call.")
+        return None
+
+    endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(endpoint_url, headers=headers, json=payload)
+        if resp.status_code != 200:
+            logger.warning("Gemini AI service returned non-200 status code: %s", resp.status_code)
+            return None
+        data = resp.json()
+        candidates = data.get("candidates", [])
+        if not candidates:
+            return None
+        content = candidates[0].get("content", {})
+        parts = content.get("parts", [])
+        if not parts:
+            return None
+        # Assume the first part text contains JSON
+        text = parts[0].get("text", "")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse Gemini response as JSON.")
+            return None
+    except Exception as e:
+        logger.exception("Error calling Gemini API: %s", e)
+        return None
+
+
+async def enrich_vocabulary_list(raw_words: list[str | dict]) -> list[dict] | None:
     """
     Analyzes raw vocabulary entries and returns clean, structured dictionary enrichment.
 

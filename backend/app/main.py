@@ -126,13 +126,14 @@ async def security_headers_middleware(request: Request, call_next):
     return response
 
 
-origins = [
+origins = list({
     "https://englishlifesupport.vercel.app",
     "http://localhost:5173",
     "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
-]
+    *settings.cors_origins_list,
+})
 
 app.add_middleware(
     CORSMiddleware,

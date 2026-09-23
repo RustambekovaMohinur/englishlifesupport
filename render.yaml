@@ -4,7 +4,7 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
@@ -22,13 +22,15 @@ services:
       - key: BOOTSTRAP_TEACHER_NAME
         sync: false
       - key: CORS_ORIGINS
-        sync: false
+        value: https://englishlifesupport.vercel.app,http://localhost:5173
       - key: ENVIRONMENT
         value: production
       - key: STORAGE_BACKEND
         value: b2
       - key: B2_ENDPOINT
-        sync: false
+        value: https://s3.us-east-005.backblazeb2.com
+      - key: B2_ENDPOINT_URL
+        value: https://s3.us-east-005.backblazeb2.com
       - key: B2_BUCKET_NAME
         value: english-life-files
       - key: B2_REGION
@@ -37,3 +39,7 @@ services:
         sync: false
       - key: B2_APPLICATION_KEY
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-1.5-flash

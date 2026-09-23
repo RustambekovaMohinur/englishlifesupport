@@ -47,6 +47,7 @@ class Submission(UUIDPKMixin, TimestampMixin, Base):
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     cycle_number: Mapped[int] = mapped_column(BigInteger, default=1, server_default=sa.text("1"), nullable=False)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.text("false"), nullable=False)
+    is_relevant: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa.text("true"), nullable=False)
 
     assignment: Mapped["Assignment"] = relationship(back_populates="submissions")
     student: Mapped["StudentProfile"] = relationship(back_populates="submissions")
