@@ -17,10 +17,35 @@ export const tokenStorage = {
   },
 };
 
-const RAW_API_URL = ((import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL) as string | undefined)?.replace(/\/+$/, "");
-const API_BASE_URL = RAW_API_URL
-  ? (RAW_API_URL.startsWith("http") && !RAW_API_URL.endsWith("/api") ? `${RAW_API_URL}/api` : RAW_API_URL)
-  : "/api";
+const PRODUCTION_BACKEND_URL = "https://englishlifesupport.onrender.com";
+
+const resolveApiBaseUrl = (): string => {
+  const envUrl = (
+    import.meta.env.VITE_API_URL ||
+    import.meta.env.VITE_API_BASE_URL ||
+    ""
+  ).toString().trim();
+
+  // If in production and no absolute backend URL was provided (or just relative "/api"),
+  // use the known Render backend domain so requests never 404 against Vercel.
+  let target = envUrl;
+  if (!target || target === "/api") {
+    target = import.meta.env.PROD ? PRODUCTION_BACKEND_URL : "/api";
+  }
+
+  // Remove trailing slashes
+  target = target.replace(/\/+$/, "");
+
+  // If target is an absolute URL (e.g. https://...), ensure /api suffix is present
+  if (target.startsWith("http://") || target.startsWith("https://")) {
+    return target.endsWith("/api") ? target : `${target}/api`;
+  }
+
+  return target.startsWith("/") ? target : `/${target}`;
+};
+
+export const API_BASE_URL = resolveApiBaseUrl();
+export const RAW_API_URL = API_BASE_URL.replace(/\/api$/, "");
 
 console.log("BASE_URL:", API_BASE_URL);
 
@@ -32,8 +57,12 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   // Avoid duplicate /api/api when baseURL already ends with /api
-  if (config.url && config.baseURL?.endsWith("/api") && config.url.startsWith("/api/")) {
-    config.url = config.url.slice(4);
+  if (config.url && config.baseURL?.endsWith("/api")) {
+    if (config.url.startsWith("/api/")) {
+      config.url = config.url.slice(4);
+    } else if (config.url === "/api") {
+      config.url = "";
+    }
   }
 
   const isPublicAuthRoute = config.url && (

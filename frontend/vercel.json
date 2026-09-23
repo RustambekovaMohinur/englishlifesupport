@@ -1,6 +1,18 @@
 {
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://englishlifesupport.onrender.com/api/$1"
+    },
+    {
+      "source": "/wordlists/(.*)",
+      "destination": "https://englishlifesupport.onrender.com/wordlists/$1"
+    },
+    {
+      "source": "/wordlists",
+      "destination": "https://englishlifesupport.onrender.com/wordlists"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
