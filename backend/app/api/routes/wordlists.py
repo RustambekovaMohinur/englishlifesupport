@@ -29,6 +29,7 @@ from app.schemas.wordlist import (
     WordlistSetDetailOut,
 )
 from app.services.storage import get_storage_service
+from app.services.ai_examiner import enrich_words_with_gemini
 from app.utils.datetimes import utcnow
 
 logger = logging.getLogger(__name__)
@@ -221,6 +222,15 @@ async def preview_bulk(
     if not lines:
         return []
 
+    # 1. Attempt enrichment via Gemini AI Examiner
+    try:
+        ai_results = await enrich_words_with_gemini(lines)
+        if ai_results:
+            return ai_results
+    except Exception as exc:
+        logger.warning("Gemini AI enrichment failed: %s; falling back to dictionary", exc)
+
+    # 2. Fallback to existing Free Dictionary API & Datamuse
     async with httpx.AsyncClient(timeout=4.0) as client:
         tasks = [fetch_word_details(l, client=client) for l in lines]
         results = await asyncio.gather(*tasks, return_exceptions=True)

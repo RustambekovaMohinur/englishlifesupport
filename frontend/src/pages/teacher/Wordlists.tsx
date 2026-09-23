@@ -232,6 +232,42 @@ export default function TeacherWordlistsPage() {
     setPreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const normalizePos = (pos?: string | null): string => {
+    if (!pos) return "";
+    const p = pos.toLowerCase().trim().replace("-", "_");
+    if (p === "n" || p === "noun") return "noun";
+    if (p === "v" || p === "verb") return "verb";
+    if (p === "adj" || p === "adjective") return "adjective";
+    if (p === "adv" || p === "adverb") return "adverb";
+    if (p === "idiom") return "idiom";
+    if (p === "phrasal_verb" || p === "phrasal verb") return "phrasal_verb";
+    if (p === "phrase") return "phrase";
+    return p;
+  };
+
+  const handlePlayPreviewAudio = (item: WordDetailPreview) => {
+    if (!item.word?.trim()) return;
+
+    const playSpeechFallback = () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(item.word);
+        utterance.lang = "en-US";
+        window.speechSynthesis.speak(utterance);
+      }
+    };
+
+    const audioUrl = item.audio_us_url || item.audio_gb_url;
+    if (audioUrl) {
+      const audio = new Audio(audioUrl);
+      audio.play().catch(() => {
+        playSpeechFallback();
+      });
+    } else {
+      playSpeechFallback();
+    }
+  };
+
   const handleSaveSet = async () => {
     if (!title.trim()) {
       toast.error("Please enter a title for this vocabulary set.");
@@ -600,15 +636,22 @@ export default function TeacherWordlistsPage() {
                               onChange={(e) => handleUpdatePreview(idx, "word", e.target.value)}
                               className="w-full bg-transparent border-b border-transparent focus:border-brand-500 outline-none text-xs font-bold"
                             />
-                            {item.phonetic && (
-                              <span className="text-[10px] text-zinc-400 font-mono block">
-                                {item.phonetic}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {item.phonetic && (
+                                <span className="text-[10px] text-zinc-400 font-mono">
+                                  {item.phonetic}
+                                </span>
+                              )}
+                              {item.source === "gemini_ai" && (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.2 rounded bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 font-semibold">
+                                  ✨ AI
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2 px-3">
                             <select
-                              value={item.part_of_speech || ""}
+                              value={normalizePos(item.part_of_speech)}
                               onChange={(e) => handleUpdatePreview(idx, "part_of_speech", e.target.value)}
                               className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2 py-1 border border-zinc-200 dark:border-zinc-700 text-xs text-center"
                             >
@@ -617,9 +660,11 @@ export default function TeacherWordlistsPage() {
                               <option value="verb">verb (v)</option>
                               <option value="adjective">adjective (adj)</option>
                               <option value="adverb">adverb (adv)</option>
+                              <option value="idiom">idiom</option>
+                              <option value="phrasal_verb">phrasal verb</option>
                               <option value="phrase">phrase</option>
                               {item.part_of_speech &&
-                                !["", "noun", "verb", "adjective", "adverb", "phrase"].includes(item.part_of_speech) && (
+                                !["", "noun", "verb", "adjective", "adverb", "idiom", "phrasal_verb", "phrase"].includes(normalizePos(item.part_of_speech)) && (
                                   <option value={item.part_of_speech}>{item.part_of_speech}</option>
                                 )}
                             </select>
@@ -627,7 +672,7 @@ export default function TeacherWordlistsPage() {
                           <td className="py-2 px-3">
                             <textarea
                               rows={2}
-                              value={item.definition}
+                              value={item.definition || ""}
                               onChange={(e) => handleUpdatePreview(idx, "definition", e.target.value)}
                               placeholder="Definition..."
                               className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2 py-1 border border-zinc-200 dark:border-zinc-700 text-xs resize-y"
@@ -636,34 +681,42 @@ export default function TeacherWordlistsPage() {
                           <td className="py-2 px-3">
                             <textarea
                               rows={2}
-                              value={item.example}
+                              value={item.example || ""}
                               onChange={(e) => handleUpdatePreview(idx, "example", e.target.value)}
                               placeholder="Example sentence..."
                               className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2 py-1 border border-zinc-200 dark:border-zinc-700 text-xs italic resize-y"
                             />
                           </td>
                           <td className="py-2 px-3 text-center">
-                            <div className="inline-flex items-center gap-1">
-                              <span
-                                className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                                  item.audio_us_url
-                                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold"
-                                    : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800"
-                                }`}
-                                title={item.audio_us_url ? "US Audio Available" : "Web Speech Synthesis Fallback"}
+                            <div className="inline-flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handlePlayPreviewAudio(item)}
+                                className="p-1.5 rounded-lg text-brand-600 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/40 transition active:scale-95"
+                                title="Listen to pronunciation (Audio or Speech Synthesis)"
                               >
-                                US
-                              </span>
-                              <span
-                                className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                                  item.audio_gb_url
-                                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold"
-                                    : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800"
-                                }`}
-                                title={item.audio_gb_url ? "GB Audio Available" : "Web Speech Synthesis Fallback"}
-                              >
-                                GB
-                              </span>
+                                <Volume2 className="w-4 h-4" />
+                              </button>
+                              <div className="flex flex-col gap-0.5">
+                                <span
+                                  className={`text-[9px] px-1 py-0.2 rounded font-mono ${
+                                    item.audio_us_url
+                                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold"
+                                      : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800"
+                                  }`}
+                                  title={item.audio_us_url ? "US Audio Available" : "Web Speech Synthesis Fallback"}
+                                >
+                                  US
+                                </span>
+                                {item.audio_gb_url && (
+                                  <span
+                                    className="text-[9px] px-1 py-0.2 rounded font-mono bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold"
+                                    title="GB Audio Available"
+                                  >
+                                    GB
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </td>
                           <td className="py-2 px-3 text-center">
