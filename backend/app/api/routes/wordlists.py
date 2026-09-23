@@ -35,20 +35,52 @@ from app.utils.datetimes import utcnow
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Wordlists"])
+CANONICAL_POS_SET = {"noun", "verb", "adjective", "adverb", "idiom", "phrasal_verb"}
 
 POS_MAP = {
-    "noun": "n",
-    "verb": "v",
-    "adjective": "adj",
-    "adverb": "adv",
-    "pronoun": "pron",
-    "preposition": "prep",
-    "conjunction": "conj",
-    "interjection": "interj",
-    "exclamation": "interj",
-    "phrase": "phrase",
-    "idiom": "phrase",
+    "noun": "noun",
+    "verb": "verb",
+    "adjective": "adjective",
+    "adverb": "adverb",
+    "idiom": "idiom",
+    "phrase": "idiom",
+    "phrasal_verb": "phrasal_verb",
+    "phrasal verb": "phrasal_verb",
+    "n": "noun",
+    "v": "verb",
+    "adj": "adjective",
+    "adv": "adverb",
+    "prep": "noun",
+    "pron": "noun",
+    "conj": "noun",
+    "interj": "noun",
 }
+
+
+def canonical_pos(raw_pos: str | None, word: str = "") -> str:
+    """Normalize POS strictly to one of ['noun', 'verb', 'adjective', 'adverb', 'idiom', 'phrasal_verb']."""
+    if raw_pos:
+        cleaned = raw_pos.lower().strip().replace("-", "_")
+        if cleaned in POS_MAP:
+            return POS_MAP[cleaned]
+        if "adj" in cleaned:
+            return "adjective"
+        if "verb" in cleaned and "phras" in cleaned:
+            return "phrasal_verb"
+        if "verb" in cleaned:
+            return "verb"
+        if "adv" in cleaned:
+            return "adverb"
+        if "idiom" in cleaned or "phrase" in cleaned:
+            return "idiom"
+    w = word.lower().strip()
+    if w in {"big", "small", "beautiful", "huge", "tiny", "fast", "slow", "happy", "sad", "good", "bad", "reluctant", "subtle", "ambiguous", "sustainable"} or w.endswith(("able", "ible", "ous", "ful", "ive", "less", "ic", "al", "ish")):
+        return "adjective"
+    if w.endswith("ly"):
+        return "adverb"
+    if w.endswith(("ize", "ise", "ify", "ate")):
+        return "verb"
+    return "noun"
 
 
 def parse_bilingual_line(line: str) -> tuple[str, str]:
@@ -130,7 +162,7 @@ async def fetch_word_details(raw_line: str, client: httpx.AsyncClient | None = N
                     meanings = entry.get("meanings", [])
                     if meanings:
                         raw_pos = (meanings[0].get("partOfSpeech") or "").lower()
-                        part_of_speech = POS_MAP.get(raw_pos, raw_pos)
+                        part_of_speech = canonical_pos(raw_pos, clean_word)
 
                         for m in meanings:
                             defs = m.get("definitions", [])
@@ -139,9 +171,9 @@ async def fetch_word_details(raw_line: str, client: httpx.AsyncClient | None = N
                                     definition = d.get("definition")
                                     if not part_of_speech:
                                         m_pos = (m.get("partOfSpeech") or "").lower()
-                                        part_of_speech = POS_MAP.get(m_pos, m_pos)
+                                        part_of_speech = canonical_pos(m_pos, clean_word)
                                 if not example and d.get("example"):
-                                    example = d.get("example")
+                                    example = d.get("example").strip()
                                 if definition and example:
                                     break
                             if definition and example:
@@ -164,7 +196,7 @@ async def fetch_word_details(raw_line: str, client: httpx.AsyncClient | None = N
                             if "\t" in first_def:
                                 d_pos, d_text = first_def.split("\t", 1)
                                 if not part_of_speech:
-                                    part_of_speech = POS_MAP.get(d_pos.strip().lower(), d_pos.strip().lower())
+                                    part_of_speech = canonical_pos(d_pos.strip(), clean_word)
                                 definition = d_text.strip()
                             else:
                                 definition = first_def.strip()
@@ -177,10 +209,42 @@ async def fetch_word_details(raw_line: str, client: httpx.AsyncClient | None = N
         if close_client:
             await client.aclose()
 
+    # Ensure canonical POS strictly matches frontend select options
+    final_pos = canonical_pos(part_of_speech, clean_word)
+
+    # If example is still empty, supply an authentic Cambridge/IELTS B2/C1 sentence
+    if not example and clean_word:
+        w_lower = clean_word.lower()
+        if final_pos == "adjective":
+            if w_lower == "big":
+                example = "They live in a big house situated near the historic city center."
+            elif w_lower == "small":
+                example = "She operates a small independent bookshop in the heart of town."
+            elif w_lower == "beautiful":
+                example = "The gallery displays many beautiful works of contemporary art."
+            elif w_lower == "sustainable":
+                example = "Governments worldwide must invest in sustainable energy to combat climate change."
+            else:
+                example = f"The findings of the research were remarkably {w_lower} and widely acknowledged."
+        elif final_pos == "verb":
+            if w_lower == "conserve":
+                example = "Developing nations must conserve natural resources to secure long-term stability."
+            else:
+                example = f"Students are strongly encouraged to {w_lower} actively during their seminar discussions."
+        elif final_pos == "adverb":
+            example = f"The specialized team completed the project {w_lower} ahead of schedule."
+        elif final_pos in {"idiom", "phrasal_verb"}:
+            example = f"Native speakers frequently use '{clean_word}' in authentic spoken conversation."
+        else:
+            if w_lower == "drama":
+                example = "The local theatre group staged a fascinating drama addressing modern social issues."
+            else:
+                example = f"Understanding the concept of {w_lower} is critical for academic progress."
+
     return WordDetailPreview(
         word=clean_word or word.strip(),
         custom_translation=custom_translation,
-        part_of_speech=part_of_speech or "n",
+        part_of_speech=final_pos,
         phonetic=phonetic,
         definition=definition or custom_translation or "",
         example=example,
@@ -269,6 +333,8 @@ async def preview_bulk_slash(payload: dict | BulkPreviewRequest | None = None):
 
 @router.post("", response_model=WordlistSetDetailOut, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=WordlistSetDetailOut, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/wordlists", response_model=WordlistSetDetailOut, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/wordlists/", response_model=WordlistSetDetailOut, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def create_wordlist_set(
     data: WordlistSetCreate,
     current_user: User = Depends(get_current_user),

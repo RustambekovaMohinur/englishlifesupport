@@ -31,6 +31,11 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  // Avoid duplicate /api/api when baseURL already ends with /api
+  if (config.url && config.baseURL?.endsWith("/api") && config.url.startsWith("/api/")) {
+    config.url = config.url.slice(4);
+  }
+
   const isPublicAuthRoute = config.url && (
     config.url.endsWith("/auth/login") ||
     config.url.endsWith("/auth/register") ||

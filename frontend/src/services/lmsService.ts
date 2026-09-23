@@ -293,12 +293,27 @@ export const addFeedbackReply = (feedbackId: string, message: string) =>
   api.post<FeedbackReplyItem>(`/feedback/${feedbackId}/replies`, { message }).then((r) => r.data);
 
 // --- Wordlists & Flashcards ---
-const getWordlistsBasePath = () => (api.defaults.baseURL?.endsWith("/api") ? "/wordlists" : "/api/wordlists");
+const getWordlistsBasePath = () => {
+  const base = api.defaults.baseURL || "";
+  return base.endsWith("/api") ? "/wordlists" : "/api/wordlists";
+};
 
-export const previewBulkWords = (words: string[]) =>
-  api.post<import("@/types").WordDetailPreview[]>(`${getWordlistsBasePath()}/preview-bulk`, { words }).then((r) => r.data);
+export const previewBulkWords = async (words: string[]) => {
+  const path = `${getWordlistsBasePath()}/preview-bulk`;
+  try {
+    const r = await api.post<import("@/types").WordDetailPreview[]>(path, { words });
+    return r.data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      const altPath = path.startsWith("/api") ? path.replace(/^\/api/, "") : `/api${path}`;
+      const r = await api.post<import("@/types").WordDetailPreview[]>(altPath, { words });
+      return r.data;
+    }
+    throw err;
+  }
+};
 
-export const createWordlistSet = (data: {
+export const createWordlistSet = async (data: {
   title: string;
   group_id?: string | null;
   items: Array<{
@@ -311,16 +326,65 @@ export const createWordlistSet = (data: {
     audio_gb_url?: string | null;
     order_index?: number;
   }>;
-}) => api.post<import("@/types").WordlistSetDetail>(getWordlistsBasePath(), data).then((r) => r.data);
+}) => {
+  const path = getWordlistsBasePath();
+  try {
+    const r = await api.post<import("@/types").WordlistSetDetail>(path, data);
+    return r.data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      const altPath = path.startsWith("/api") ? path.replace(/^\/api/, "") : `/api${path}`;
+      const r = await api.post<import("@/types").WordlistSetDetail>(altPath, data);
+      return r.data;
+    }
+    throw err;
+  }
+};
 
-export const listWordlistSets = (params?: { group_id?: string }) =>
-  api.get<import("@/types").WordlistSetBrief[]>(getWordlistsBasePath(), { params }).then((r) => r.data);
+export const listWordlistSets = async (params?: { group_id?: string }) => {
+  const path = getWordlistsBasePath();
+  try {
+    const r = await api.get<import("@/types").WordlistSetBrief[]>(path, { params });
+    return r.data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      const altPath = path.startsWith("/api") ? path.replace(/^\/api/, "") : `/api${path}`;
+      const r = await api.get<import("@/types").WordlistSetBrief[]>(altPath, { params });
+      return r.data;
+    }
+    throw err;
+  }
+};
 
-export const getWordlistSet = (setId: string) =>
-  api.get<import("@/types").WordlistSetDetail>(`${getWordlistsBasePath()}/${setId}`).then((r) => r.data);
+export const getWordlistSet = async (setId: string) => {
+  const path = `${getWordlistsBasePath()}/${setId}`;
+  try {
+    const r = await api.get<import("@/types").WordlistSetDetail>(path);
+    return r.data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      const altPath = path.startsWith("/api") ? path.replace(/^\/api/, "") : `/api${path}`;
+      const r = await api.get<import("@/types").WordlistSetDetail>(altPath);
+      return r.data;
+    }
+    throw err;
+  }
+};
 
-export const deleteWordlistSet = (setId: string) =>
-  api.delete(`${getWordlistsBasePath()}/${setId}`).then((r) => r.data);
+export const deleteWordlistSet = async (setId: string) => {
+  const path = `${getWordlistsBasePath()}/${setId}`;
+  try {
+    const r = await api.delete(path);
+    return r.data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      const altPath = path.startsWith("/api") ? path.replace(/^\/api/, "") : `/api${path}`;
+      const r = await api.delete(altPath);
+      return r.data;
+    }
+    throw err;
+  }
+};
 
 export const submitWordlistQuiz = (
   setId: string,

@@ -169,6 +169,7 @@ app.include_router(profile.v1_profile_router)
 app.include_router(feedback.router)
 app.include_router(wordlists.router, prefix="/api/wordlists", tags=["Wordlists"])
 app.include_router(wordlists.router, prefix="/wordlists", tags=["Wordlists"], include_in_schema=False)
+app.include_router(wordlists.router, prefix="/api/api/wordlists", tags=["Wordlists"], include_in_schema=False)
 
 
 @app.get("/")

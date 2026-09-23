@@ -62,10 +62,8 @@ export default function TeacherWordlistsPage() {
 
   const loadSets = async () => {
     setIsLoadingSets(true);
-    console.log("BASE_URL:", api.defaults.baseURL);
     try {
-      const basePath = api.defaults.baseURL?.endsWith("/api") ? "/wordlists" : "/api/wordlists";
-      const { data } = await api.get<WordlistSetBrief[]>(basePath);
+      const data = await listWordlistSets();
       setSets(data);
     } catch (err: any) {
       console.warn("[WORDLISTS] Failed to load wordlists from server:", err);
@@ -149,18 +147,14 @@ export default function TeacherWordlistsPage() {
 
     setIsGenerating(true);
     try {
-      // Determine exact relative endpoint based on api.defaults.baseURL
-      const endpoint = api.defaults.baseURL?.endsWith("/api")
-        ? "/wordlists/preview-bulk"
-        : "/api/wordlists/preview-bulk";
-
-      console.log(`[WORDLISTS PREVIEW] Firing POST to ${api.defaults.baseURL || ""}${endpoint} with ${sanitizedWords.length} words`);
-
-      const res = await api.post<WordDetailPreview[]>(endpoint, {
-        words: sanitizedWords,
-      });
-      const results = res.data;
-      setPreviews(results);
+      const results = await previewBulkWords(sanitizedWords);
+      const normalizedResults: WordDetailPreview[] = results.map((item) => ({
+        ...item,
+        part_of_speech: normalizePos(item.part_of_speech),
+        example: item.example || "",
+        definition: item.definition || item.custom_translation || "",
+      }));
+      setPreviews(normalizedResults);
       toast.success(`Successfully analyzed ${results.length} words!`);
     } catch (err: any) {
       console.warn("[WORDLISTS PREVIEW] Network preview failed; engaging local resilient fallback parser:", err);
@@ -177,14 +171,36 @@ export default function TeacherWordlistsPage() {
             break;
           }
         }
+        const wLower = (word || line).toLowerCase().trim();
+        let detectedPos = "noun";
+        if (
+          ["big", "small", "beautiful", "huge", "tiny", "fast", "slow", "happy", "sad", "good", "bad", "reluctant", "subtle", "ambiguous", "sustainable"].includes(wLower) ||
+          wLower.endsWith("able") || wLower.endsWith("ible") || wLower.endsWith("ous") || wLower.endsWith("ful") || wLower.endsWith("ive")
+        ) {
+          detectedPos = "adjective";
+        } else if (wLower.endsWith("ly")) {
+          detectedPos = "adverb";
+        } else if (["conserve", "protect", "analyze", "create", "discover"].includes(wLower) || wLower.endsWith("ize") || wLower.endsWith("ate")) {
+          detectedPos = "verb";
+        }
+
+        let fallbackExample = "";
+        if (detectedPos === "adjective") {
+          fallbackExample = `This concept is notably ${wLower} and significant.`;
+        } else if (detectedPos === "verb") {
+          fallbackExample = `We must ${wLower} with great care.`;
+        } else {
+          fallbackExample = `The ${wLower} was discussed in class.`;
+        }
+
         return {
           word: word || line,
           custom_translation: translation,
           definition: translation || "",
-          part_of_speech: "noun",
+          part_of_speech: detectedPos,
           phonetic: "",
-          example: "",
-          audio_us_url: null,
+          example: fallbackExample,
+          audio_us_url: `https://ssl.gstatic.com/dictionary/static/sounds/20200429/${wLower.replace(/ /g, "_")}--_us_1.mp3`,
           audio_gb_url: null,
           source: "local_fallback",
         };
@@ -233,16 +249,15 @@ export default function TeacherWordlistsPage() {
   };
 
   const normalizePos = (pos?: string | null): string => {
-    if (!pos) return "";
+    if (!pos) return "noun";
     const p = pos.toLowerCase().trim().replace("-", "_");
-    if (p === "n" || p === "noun") return "noun";
-    if (p === "v" || p === "verb") return "verb";
     if (p === "adj" || p === "adjective") return "adjective";
+    if (p === "v" || p === "verb") return "verb";
+    if (p === "n" || p === "noun") return "noun";
     if (p === "adv" || p === "adverb") return "adverb";
-    if (p === "idiom") return "idiom";
+    if (p === "idiom" || p === "phrase") return "idiom";
     if (p === "phrasal_verb" || p === "phrasal verb") return "phrasal_verb";
-    if (p === "phrase") return "phrase";
-    return p;
+    return "noun";
   };
 
   const handlePlayPreviewAudio = (item: WordDetailPreview) => {
@@ -273,23 +288,22 @@ export default function TeacherWordlistsPage() {
 
     setIsSaving(true);
     try {
-      const basePath = api.defaults.baseURL?.endsWith("/api") ? "/wordlists" : "/api/wordlists";
       const payload = {
         title: title.trim(),
         group_id: selectedGroupId || null,
         items: previews.map((item, idx) => ({
-          word: item.word,
-          part_of_speech: item.part_of_speech || null,
-          phonetic: item.phonetic || null,
-          definition: item.definition || null,
-          example: item.example || null,
-          audio_us_url: item.audio_us_url || null,
-          audio_gb_url: item.audio_gb_url || null,
+          word: item.word.trim(),
+          part_of_speech: item.part_of_speech ? normalizePos(item.part_of_speech) : "noun",
+          phonetic: item.phonetic?.trim() || null,
+          definition: item.definition?.trim() || null,
+          example: item.example?.trim() || null,
+          audio_us_url: item.audio_us_url?.trim() || null,
+          audio_gb_url: item.audio_gb_url?.trim() || null,
           order_index: idx,
         })),
       };
 
-      await api.post(basePath, payload);
+      await createWordlistSet(payload);
 
       toast.success("Vocabulary set created successfully!");
       // Reset form
@@ -310,8 +324,7 @@ export default function TeacherWordlistsPage() {
       `Are you sure you want to permanently delete "${setTitle}" and all its flashcards?`,
       async () => {
         try {
-          const basePath = api.defaults.baseURL?.endsWith("/api") ? "/wordlists" : "/api/wordlists";
-          await api.delete(`${basePath}/${setId}`);
+          await deleteWordlistSet(setId);
           toast.success("Wordlist deleted.");
           setSets((prev) => prev.filter((s) => s.id !== setId));
         } catch (err: any) {
@@ -325,8 +338,7 @@ export default function TeacherWordlistsPage() {
     setIsLoadingDetail(true);
     setPreviewModalOpen(true);
     try {
-      const basePath = api.defaults.baseURL?.endsWith("/api") ? "/wordlists" : "/api/wordlists";
-      const { data } = await api.get<WordlistSetDetail>(`${basePath}/${setId}`);
+      const data = await getWordlistSet(setId);
       setActiveSetDetail(data);
     } catch (err: any) {
       toast.error(err?.response?.data?.detail ?? "Failed to load flashcard deck.");
@@ -646,20 +658,14 @@ export default function TeacherWordlistsPage() {
                             <select
                               value={normalizePos(item.part_of_speech)}
                               onChange={(e) => handleUpdatePreview(idx, "part_of_speech", e.target.value)}
-                              className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2 py-1 border border-zinc-200 dark:border-zinc-700 text-xs text-center"
+                              className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2 py-1 border border-zinc-200 dark:border-zinc-700 text-xs text-center font-medium"
                             >
-                              <option value="">-</option>
                               <option value="noun">noun (n)</option>
                               <option value="verb">verb (v)</option>
                               <option value="adjective">adjective (adj)</option>
                               <option value="adverb">adverb (adv)</option>
                               <option value="idiom">idiom</option>
                               <option value="phrasal_verb">phrasal verb</option>
-                              <option value="phrase">phrase</option>
-                              {item.part_of_speech &&
-                                !["", "noun", "verb", "adjective", "adverb", "idiom", "phrasal_verb", "phrase"].includes(normalizePos(item.part_of_speech)) && (
-                                  <option value={item.part_of_speech}>{item.part_of_speech}</option>
-                                )}
                             </select>
                           </td>
                           <td className="py-2 px-3">
