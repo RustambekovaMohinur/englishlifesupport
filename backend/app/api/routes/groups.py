@@ -237,9 +237,13 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
             )
             .order_by(Submission.submitted_at.desc(), Submission.id.desc())
         )
+        assignment_map = {a.id: a for a in assignments}
         for sub in subs_res.scalars().all():
-            if (sub.assignment_id, sub.student_id) not in submissions_map:
-                submissions_map[(sub.assignment_id, sub.student_id)] = sub
+            target_assign = assignment_map.get(sub.assignment_id)
+            target_cycle = (getattr(target_assign, "cycle_number", 1) or 1) if target_assign else 1
+            if (getattr(sub, "cycle_number", 1) or 1) == target_cycle:
+                if (sub.assignment_id, sub.student_id) not in submissions_map:
+                    submissions_map[(sub.assignment_id, sub.student_id)] = sub
 
         from app.models.gamification import TaskLockOverride
         ov_res = await db.execute(

@@ -165,10 +165,12 @@ async def list_students(
         if all_active_a_ids:
             st_sub_query = (
                 select(Submission.student_id, func.count(func.distinct(Submission.assignment_id)))
+                .join(Assignment, Assignment.id == Submission.assignment_id)
                 .where(
                     Submission.student_id.in_(st_ids),
                     Submission.assignment_id.in_(all_active_a_ids),
                     Submission.is_archived == False,
+                    Submission.cycle_number == Assignment.cycle_number,
                 )
                 .group_by(Submission.student_id)
             )
@@ -718,6 +720,7 @@ async def get_student_history(
         active_assignment_ids = {a.id for a in active_assignments_list}
         cycle_total_tasks = len(active_assignments_list)
 
+        assignment_map = {a.id: a for a in assignments}
         assignment_ids = [a.id for a in assignments]
         submissions_map: dict[uuid.UUID, Submission] = {}
         if assignment_ids:
@@ -731,8 +734,11 @@ async def get_student_history(
                 .order_by(Submission.is_archived.asc(), Submission.submitted_at.desc(), Submission.id.desc())
             )
             for s in subs_res.scalars().all():
-                if s.assignment_id not in submissions_map:
-                    submissions_map[s.assignment_id] = s
+                target_assign = assignment_map.get(s.assignment_id)
+                target_cycle = (getattr(target_assign, "cycle_number", 1) or 1) if target_assign else 1
+                if (getattr(s, "cycle_number", 1) or 1) == target_cycle:
+                    if s.assignment_id not in submissions_map:
+                        submissions_map[s.assignment_id] = s
 
         for a in assignments:
             sub = submissions_map.get(a.id)

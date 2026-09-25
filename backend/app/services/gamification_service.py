@@ -342,7 +342,24 @@ async def is_assignment_locked_for_student(
     if not prereq_id or prereq_id == assignment.id:
         return False, None
 
-    # Check if student has submitted prerequisite assignment (ANY active submission, regardless of grade status)
+    # Load prerequisite assignment
+    prereq = (
+        await db.execute(select(Assignment).where(Assignment.id == prereq_id))
+    ).scalar_one_or_none()
+    if not prereq:
+        return False, None
+
+    assign_cycle = getattr(assignment, "cycle_number", 1) or 1
+    prereq_cycle = getattr(prereq, "cycle_number", 1) or 1
+    prereq_deadline = ensure_utc(prereq.deadline)
+    now_utc = ensure_utc(utcnow())
+    is_prereq_past = prereq_deadline < now_utc
+
+    # Cycle Isolation: an uncompleted task from an expired past cycle or elapsed deadline does NOT lock active tasks
+    if prereq_cycle < assign_cycle or is_prereq_past:
+        return False, None
+
+    # Check if student has submitted prerequisite assignment for that prereq cycle
     prereq_sub = (
         await db.execute(
             select(Submission)
@@ -350,6 +367,7 @@ async def is_assignment_locked_for_student(
                 Submission.assignment_id == prereq_id,
                 Submission.student_id == student_id,
                 Submission.is_archived.is_(False),
+                Submission.cycle_number == prereq_cycle,
             )
             .order_by(Submission.submitted_at.desc(), Submission.id.desc())
             .limit(1)
@@ -360,25 +378,8 @@ async def is_assignment_locked_for_student(
         # Completed / submitted -> next unlocks immediately!
         return False, None
 
-    # Prerequisite not submitted: check cycle isolation and overdue status
-    prereq = (
-        await db.execute(select(Assignment).where(Assignment.id == prereq_id))
-    ).scalar_one_or_none()
-    if prereq:
-        assign_cycle = getattr(assignment, "cycle_number", 1) or 1
-        prereq_cycle = getattr(prereq, "cycle_number", 1) or 1
-        prereq_deadline = ensure_utc(prereq.deadline)
-        now_utc = ensure_utc(utcnow())
-        is_prereq_past = prereq_deadline < now_utc
-
-        # Cycle Isolation: an uncompleted task from an expired past cycle or elapsed deadline does NOT lock active tasks
-        if prereq_cycle < assign_cycle or is_prereq_past:
-            return False, None
-
-        prereq_title = prereq.title
-        return True, f"Please complete prerequisite assignment first: '{prereq_title}'."
-
-    return False, None
+    prereq_title = prereq.title
+    return True, f"Please complete prerequisite assignment first: '{prereq_title}'."
 
 
 async def check_and_apply_overdue_penalties(
@@ -414,15 +415,16 @@ async def check_and_apply_overdue_penalties(
         return 0
 
     assign_ids = [a.id for a in overdue_assignments]
-    submitted_assign_ids = set(
+    submitted_assign_cycles = set(
         (
             await db.execute(
-                select(Submission.assignment_id).where(
+                select(Submission.assignment_id, Submission.cycle_number).where(
                     Submission.student_id == student_id,
                     Submission.assignment_id.in_(assign_ids),
+                    Submission.is_archived.is_(False),
                 )
             )
-        ).scalars().all()
+        ).all()
     )
 
     existing_penalty_refs = set(
@@ -438,7 +440,9 @@ async def check_and_apply_overdue_penalties(
 
     penalties_applied = 0
     for a in overdue_assignments:
-        if a.id not in submitted_assign_ids and str(a.id) not in existing_penalty_refs:
+        a_cycle = getattr(a, "cycle_number", 1) or 1
+        has_sub = (a.id, a_cycle) in submitted_assign_cycles
+        if not has_sub and str(a.id) not in existing_penalty_refs:
             # Apply penalty idempotently
             applied = await award_stars(
                 db,
@@ -576,12 +580,15 @@ async def check_and_award_perfect_week(
 
     # Check each has an on-time submission
     for a in assignments:
+        a_cycle = getattr(a, "cycle_number", 1) or 1
         sub = (
             await db.execute(
                 select(Submission)
                 .where(
                     Submission.assignment_id == a.id,
                     Submission.student_id == student_id,
+                    Submission.cycle_number == a_cycle,
+                    Submission.is_archived.is_(False),
                 )
                 .order_by(Submission.submitted_at.desc(), Submission.id.desc())
                 .limit(1)

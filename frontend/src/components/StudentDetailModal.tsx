@@ -410,8 +410,8 @@ export default function StudentDetailModal({
                 size="xl"
               />
 
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex-1 min-w-0 w-full">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-lg font-bold text-zinc-900 dark:text-white truncate">{fullName}</h3>
                     {username && <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">@{username}</span>}
@@ -427,15 +427,15 @@ export default function StudentDetailModal({
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {/* Quick Group Placement Selector */}
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Cohort:</span>
                       <select
                         disabled={isUpdatingGroup}
                         value={profile?.group?.id || ""}
                         onChange={(e) => handleQuickGroupChange(e.target.value)}
-                        className="text-xs font-semibold py-1 px-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-slate-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                        className="text-xs font-semibold py-1 px-2 max-w-[150px] sm:max-w-xs truncate rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-slate-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                       >
                         <option value="">No Cohort (Unassigned)</option>
                         {groups.map((g) => (
@@ -453,7 +453,7 @@ export default function StudentDetailModal({
                         setConfirmPassword("");
                         setResetModalOpen(true);
                       }}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40 transition shadow-xs"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40 transition shadow-xs shrink-0 whitespace-nowrap"
                       title="Set temporary password for student"
                     >
                       <span>🔑</span>

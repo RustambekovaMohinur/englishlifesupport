@@ -378,14 +378,13 @@ async def _build_student_assignments(
     sub_map = {}
     submitted_assign_ids = set()
     for s in subs:
-        submitted_assign_ids.add(s.assignment_id)
         target_assign = assign_map.get(s.assignment_id)
         target_cycle = (getattr(target_assign, "cycle_number", 1) or 1) if target_assign else 1
-        if (getattr(s, "cycle_number", 1) or 1) == target_cycle:
+        sub_cycle = getattr(s, "cycle_number", 1) or 1
+        if sub_cycle == target_cycle:
+            submitted_assign_ids.add(s.assignment_id)
             if s.assignment_id not in sub_map:
                 sub_map[s.assignment_id] = s
-        elif s.assignment_id not in sub_map:
-            sub_map[s.assignment_id] = s
 
     # Batch 2: Vocabulary assignments with words
     vocabs = (
