@@ -956,12 +956,12 @@ export default function StudentsPage() {
                             </td>
 
                             {/* 3. Stars (⭐️) */}
-                            <td className="py-3 px-3 text-center">
-                              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-bold font-mono text-xs tabular-nums">
-                                <span>⭐️</span>
-                                <span>{stars}</span>
+                            <td className="py-3 px-3 text-center whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1.5 whitespace-nowrap min-w-fit px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-bold font-mono text-xs tabular-nums">
+                                <span className="shrink-0">⭐️</span>
+                                <span className="shrink-0">{stars}</span>
                                 {lightning > 0 && (
-                                  <span className="ml-1 text-yellow-600 dark:text-yellow-400">⚡️ {lightning}</span>
+                                  <span className="shrink-0 ml-0.5 text-yellow-600 dark:text-yellow-400">⚡️ {lightning}</span>
                                 )}
                               </div>
                             </td>

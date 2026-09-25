@@ -129,8 +129,17 @@ export default function SubmissionsPage() {
                         >
                           {s.student_name}
                         </button>
-                     </td>
-                     <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">{s.assignment_title}</td>
+                      </td>
+                      <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="font-medium text-zinc-900 dark:text-white">{s.assignment_title}</span>
+                          {s.vocab_attempt && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 font-mono">
+                              📖 New Words: {s.vocab_attempt.percentage}%
+                            </span>
+                          )}
+                        </div>
+                      </td>
 
                     <td className="py-3.5 px-4 text-zinc-500 dark:text-zinc-400 font-mono text-xs">{format(new Date(s.submitted_at), "MMM d, HH:mm")}</td>
                     <td className="py-3.5 px-4">

@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 
+import sqlalchemy as sa
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -75,6 +76,8 @@ class VocabularyAttempt(UUIDPKMixin, TimestampMixin, Base):
     correct_answers: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     incorrect_answers: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     percentage: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    best_percentage: Mapped[float] = mapped_column(Float, default=0.0, server_default=sa.text("0.0"), nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=1, server_default=sa.text("1"), nullable=False)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

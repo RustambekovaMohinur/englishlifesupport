@@ -28,6 +28,7 @@ from app.models.group import Group
 from app.models.student import StudentProfile
 from app.models.submission import Submission, SubmissionStatus
 from app.models.user import ApprovalStatus, User, UserRole
+from app.models.vocabulary import VocabularyAssignment, VocabularyAttempt
 from app.schemas.gamification import (
     AchievementOut,
     FreePassStatus,
@@ -331,14 +332,16 @@ async def record_vocab_practice(
 ):
     """
     Connects vocabulary quiz/practice completion to real XP and Stars.
+    Records or updates VocabularyAttempt with attempt_count, latest percentage, and best percentage.
     +10 ⭐ on high score (>= 80%)
     +15 XP for practicing vocabulary
-    Enforces idempotency per assignment/day.
+    Enforces idempotency per assignment/day for gamification points.
     """
     if body.total_words <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid word count")
 
     ratio = body.correct_words / body.total_words
+    score_pct = round(ratio * 100, 1)
     today_str = utcnow().strftime("%Y-%m-%d")
     ref_id = f"{body.assignment_id or 'vocab'}_{today_str}"
 
@@ -375,6 +378,70 @@ async def record_vocab_practice(
 
     # Update streak
     await update_student_streak(db, profile.id, today_str)
+
+    # Persistence: Record or update VocabularyAttempt linked to assignment
+    attempt_count = 1
+    best_pct = score_pct
+    if body.assignment_id:
+        assign = await db.get(Assignment, body.assignment_id)
+        if assign:
+            vocab_assign = (
+                await db.execute(
+                    select(VocabularyAssignment).where(VocabularyAssignment.assignment_id == assign.id)
+                )
+            ).scalar_one_or_none()
+
+            if not vocab_assign:
+                vocab_assign = VocabularyAssignment(
+                    teacher_id=assign.created_by,
+                    group_id=assign.group_id,
+                    assignment_id=assign.id,
+                    title=f"Vocabulary: {assign.title}",
+                    description=f"Vocabulary for assignment: {assign.title}",
+                    deadline=assign.deadline,
+                    is_active=True,
+                )
+                db.add(vocab_assign)
+                await db.flush()
+
+            attempt = (
+                await db.execute(
+                    select(VocabularyAttempt).where(
+                        VocabularyAttempt.vocabulary_assignment_id == vocab_assign.id,
+                        VocabularyAttempt.student_id == profile.id,
+                    )
+                )
+            ).scalar_one_or_none()
+
+            if attempt:
+                attempt.attempt_count += 1
+                attempt.percentage = score_pct
+                attempt.best_percentage = max(attempt.best_percentage, score_pct)
+                attempt.total_questions = body.total_words
+                attempt.correct_answers = body.correct_words
+                attempt.incorrect_answers = max(0, body.total_words - body.correct_words)
+                attempt.is_completed = True
+                attempt.completed_at = utcnow()
+                attempt_count = attempt.attempt_count
+                best_pct = attempt.best_percentage
+            else:
+                attempt = VocabularyAttempt(
+                    vocabulary_assignment_id=vocab_assign.id,
+                    student_id=profile.id,
+                    total_questions=body.total_words,
+                    correct_answers=body.correct_words,
+                    incorrect_answers=max(0, body.total_words - body.correct_words),
+                    percentage=score_pct,
+                    best_percentage=score_pct,
+                    attempt_count=1,
+                    is_completed=True,
+                    started_at=utcnow(),
+                    completed_at=utcnow(),
+                )
+                db.add(attempt)
+                attempt_count = 1
+                best_pct = score_pct
+
     await db.commit()
 
     return {
@@ -382,6 +449,10 @@ async def record_vocab_practice(
         "xp_earned": 15,
         "stars_earned": 10 if star_awarded else 0,
         "accuracy": int(ratio * 100),
+        "percentage": score_pct,
+        "best_percentage": best_pct,
+        "attempt_count": attempt_count,
+        "is_completed": True,
     }
 
 

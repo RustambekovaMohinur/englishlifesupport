@@ -148,6 +148,8 @@ export interface StudentHistoryItem {
   stars_earned: number;
   text_answer: string | null;
   file_original_name: string | null;
+  vocab_score?: number | null;
+  vocab_attempt_count?: number | null;
 }
 
 export interface StudentHistoryOut {
@@ -436,6 +438,16 @@ export interface SubmissionAIFeedbackOut {
   updated_at: string;
 }
 
+export interface VocabAttemptOut {
+  percentage: number;
+  best_percentage: number;
+  attempt_count: number;
+  correct_answers: number;
+  total_questions: number;
+  is_completed: boolean;
+  completed_at?: string | null;
+}
+
 export interface SubmissionOut {
   id: string;
   assignment_id: string;
@@ -451,6 +463,7 @@ export interface SubmissionOut {
   submitted_at: string;
   grade: GradeOut | null;
   ai_feedback?: SubmissionAIFeedbackOut | null;
+  vocab_attempt?: VocabAttemptOut | null;
   corrections?: SubmissionCorrectionOut[];
   comments?: SubmissionCommentOut[];
 }

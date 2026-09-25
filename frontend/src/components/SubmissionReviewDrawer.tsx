@@ -14,6 +14,7 @@ import {
   ExternalLink,
   ChevronRight,
   Sparkles,
+  BookOpen,
 } from "lucide-react";
 import {
   AuthenticatedAudio,
@@ -218,6 +219,32 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                     <FileText className="w-4 h-4 text-indigo-500" />
                     <span>Submitted Work</span>
                   </h3>
+
+                  {/* Vocabulary / New Words Mastery Task */}
+                  {submission.vocab_attempt && (
+                    <div className="p-4 rounded-2xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800/60 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                          <BookOpen className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                          <span>New Words Vocabulary Mastery</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 border border-purple-300 dark:border-purple-700 font-mono">
+                          New Words: {submission.vocab_attempt.percentage}%
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-purple-700 dark:text-purple-300 font-medium">
+                        <span>
+                          {submission.vocab_attempt.correct_answers} / {submission.vocab_attempt.total_questions} words correct
+                          {submission.vocab_attempt.attempt_count > 1 && ` · Attempt ${submission.vocab_attempt.attempt_count}`}
+                        </span>
+                        {submission.vocab_attempt.best_percentage !== undefined && (
+                          <span className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold">
+                            Best: {submission.vocab_attempt.best_percentage}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Audio Player if Audio Submission */}
                   {submission.file_url && isAudio && (

@@ -65,10 +65,13 @@ export const StudentProgressMatrix: React.FC<StudentProgressMatrixProps> = ({
     if (lower.includes("listen") || lower.includes("hear") || lower.includes("podcast")) {
       return "🎧";
     }
+    if (lower.includes("vocab") || lower.includes("word") || lower.includes("glossary") || lower.includes("deck")) {
+      return "📖";
+    }
     if (lower.includes("read") || lower.includes("book") || lower.includes("article")) {
       return "📖";
     }
-    if (lower.includes("writ") || lower.includes("essay") || lower.includes("grammar") || lower.includes("vocab")) {
+    if (lower.includes("writ") || lower.includes("essay") || lower.includes("grammar")) {
       return "✍️";
     }
     return "⚡";

@@ -313,7 +313,16 @@ export const getWeeklyLeaderboard = (group_id?: string) =>
   cachedGet<WeeklyLeaderboardOut>("/gamification/leaderboard", { group_id });
 
 export const recordVocabPractice = (body: { assignment_id?: string; total_words: number; correct_words: number }) =>
-  api.post<{ status: string; xp_earned: number; stars_earned: number; accuracy: number }>("/gamification/vocabulary/practice", body).then((r) => r.data);
+  api.post<{
+    status: string;
+    xp_earned: number;
+    stars_earned: number;
+    accuracy: number;
+    percentage?: number;
+    best_percentage?: number;
+    attempt_count?: number;
+    is_completed?: boolean;
+  }>("/gamification/vocabulary/practice", body).then((r) => r.data);
 
 export const overrideTaskLock = (body: { student_id: string; assignment_id: string; is_unlocked: boolean }) =>
   api.post<{ status: string; is_unlocked: boolean }>("/gamification/teacher/override-lock", body).then((r) => r.data);

@@ -242,24 +242,31 @@ export default function StudentDetailModal({
             </div>
           </div>
 
-          {/* Task Item Badges according to Master Spec */}
-          {hasSubmission && isGraded ? (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
-              ✓ Graded ({h.score <= 10 ? h.score * 10 : h.score}%)
-            </span>
-          ) : hasSubmission && !isGraded ? (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
-              ✓ Submitted (Pending Review)
-            </span>
-          ) : isPastDeadline ? (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60">
-              ✕ Overdue
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
-              ○ Not Submitted
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {h.vocab_score !== null && h.vocab_score !== undefined && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-purple-100 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 font-mono">
+                📖 New Words: {h.vocab_score}% {h.vocab_attempt_count && h.vocab_attempt_count > 1 ? `(Attempt ${h.vocab_attempt_count})` : ""}
+              </span>
+            )}
+            {/* Task Item Badges according to Master Spec */}
+            {hasSubmission && isGraded ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+                ✓ Graded ({h.score <= 10 ? h.score * 10 : h.score}%)
+              </span>
+            ) : hasSubmission && !isGraded ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
+                ✓ Submitted (Pending Review)
+              </span>
+            ) : isPastDeadline ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60">
+                ✕ Overdue
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+                ○ Not Submitted
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Score & Stars */}

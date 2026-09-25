@@ -30,6 +30,8 @@ import {
   Eye,
   Camera,
   Plus,
+  RotateCcw,
+  XCircle,
 } from "lucide-react";
 import {
   LoadingRows,
@@ -1065,7 +1067,14 @@ export default function StudentAssignmentSubmitPage() {
                 ))}
               </div>
 
-              <VocabPracticeWidget assignmentId={assignment.id} words={assignment.vocab_words} />
+              <VocabPracticeWidget
+                assignmentId={assignment.id}
+                words={assignment.vocab_words}
+                initialAttempt={existingSubmission?.vocab_attempt}
+                onAttemptCompleted={(newAttempt) => {
+                  setExistingSubmission((prev) => (prev ? { ...prev, vocab_attempt: newAttempt } : prev));
+                }}
+              />
             </div>
           )}
         </section>
@@ -1732,42 +1741,159 @@ export default function StudentAssignmentSubmitPage() {
   );
 }
 
-function VocabPracticeWidget({ assignmentId, words }: { assignmentId: string; words: any[] }) {
+interface VocabQuestion {
+  targetWord: any;
+  promptText: string;
+  correctAnswer: string;
+  options: string[];
+}
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function buildQuizQuestions(wordList: any[]): VocabQuestion[] {
+  if (!wordList || wordList.length === 0) return [];
+  const valid = wordList.filter((w) => w && w.english_word && w.translation);
+  const shuffledWords = shuffleArray(valid);
+
+  return shuffledWords.map((currentWord) => {
+    const promptText = currentWord.english_word.trim();
+    const correctAnswer = currentWord.translation.trim();
+
+    // Pool of other translations
+    const otherTranslations = valid
+      .filter((w) => w.english_word.trim().toLowerCase() !== promptText.toLowerCase() && w.translation.trim().toLowerCase() !== correctAnswer.toLowerCase())
+      .map((w) => w.translation.trim());
+
+    const uniqueDistractors = Array.from(new Set(otherTranslations));
+    const chosenDistractors = shuffleArray(uniqueDistractors).slice(0, 3);
+    const allOptions = shuffleArray([correctAnswer, ...chosenDistractors]);
+
+    return {
+      targetWord: currentWord,
+      promptText,
+      correctAnswer,
+      options: allOptions,
+    };
+  });
+}
+
+function VocabPracticeWidget({
+  assignmentId,
+  words,
+  initialAttempt,
+  onAttemptCompleted,
+}: {
+  assignmentId: string;
+  words: any[];
+  initialAttempt?: any;
+  onAttemptCompleted?: (attempt: any) => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
+  const [questions, setQuestions] = useState<VocabQuestion[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [inputVal, setInputVal] = useState("");
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [isAnswerChecked, setIsAnswerChecked] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
   const [completed, setCompleted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [attemptCount, setAttemptCount] = useState<number>(initialAttempt?.attempt_count || 1);
+  const [activeAttempt, setActiveAttempt] = useState<any>(initialAttempt || null);
+
+  useEffect(() => {
+    if (initialAttempt) {
+      setActiveAttempt(initialAttempt);
+      if (initialAttempt.attempt_count) {
+        setAttemptCount(initialAttempt.attempt_count);
+      }
+    }
+  }, [initialAttempt]);
 
   if (!words || words.length === 0) return null;
 
-  function startQuiz() {
-    setIsOpen(true);
-    setCurrentIdx(0);
-    setCorrectCount(0);
-    setInputVal("");
-    setCompleted(false);
+  function playWordAudio(text: string) {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "en-US";
+      u.rate = 0.9;
+      window.speechSynthesis.speak(u);
+    }
   }
 
-  async function handleNext() {
-    const currentWord = words[currentIdx];
-    const isCorrect = inputVal.trim().toLowerCase() === currentWord.english_word.trim().toLowerCase();
-    const newCorrect = isCorrect ? correctCount + 1 : correctCount;
-    setCorrectCount(newCorrect);
-    setInputVal("");
+  function startQuiz(isReplay = false) {
+    const qList = buildQuizQuestions(words);
+    setQuestions(qList);
+    setCurrentIdx(0);
+    setSelectedOption(null);
+    setIsAnswerChecked(false);
+    setCorrectCount(0);
+    setCompleted(false);
+    setIsOpen(true);
 
-    if (currentIdx + 1 < words.length) {
-      setCurrentIdx(currentIdx + 1);
+    if (isReplay) {
+      setAttemptCount((prev) => prev + 1);
+    }
+
+    if (qList.length > 0) {
+      playWordAudio(qList[0].promptText);
+    }
+  }
+
+  function handleSelectOption(opt: string) {
+    if (isAnswerChecked || isSubmitting) return;
+    setSelectedOption(opt);
+    setIsAnswerChecked(true);
+
+    const q = questions[currentIdx];
+    const isCorrect = opt.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
+    if (isCorrect) {
+      setCorrectCount((prev) => prev + 1);
+    }
+  }
+
+  async function handleNextQuestion() {
+    const q = questions[currentIdx];
+    const isCorrect = selectedOption?.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
+    const finalCorrect = isCorrect ? correctCount : correctCount; // correctCount already updated on select
+
+    if (currentIdx + 1 < questions.length) {
+      const nextIdx = currentIdx + 1;
+      setCurrentIdx(nextIdx);
+      setSelectedOption(null);
+      setIsAnswerChecked(false);
+      playWordAudio(questions[nextIdx].promptText);
     } else {
       setCompleted(true);
       setIsSubmitting(true);
       try {
         const res = await recordVocabPractice({
           assignment_id: assignmentId,
-          total_words: words.length,
-          correct_words: newCorrect,
+          total_words: questions.length,
+          correct_words: finalCorrect,
         });
+
+        const newAttemptData = {
+          percentage: res.percentage ?? Math.round((finalCorrect / questions.length) * 100),
+          best_percentage: res.best_percentage ?? res.percentage,
+          attempt_count: res.attempt_count ?? attemptCount,
+          correct_answers: finalCorrect,
+          total_questions: questions.length,
+          is_completed: true,
+          completed_at: new Date().toISOString(),
+        };
+
+        setActiveAttempt(newAttemptData);
+        if (onAttemptCompleted) {
+          onAttemptCompleted(newAttemptData);
+        }
+
         if (res.stars_earned > 0) {
           toast.success(`🎉 Great job! You earned +${res.stars_earned} ⭐ and +${res.xp_earned} 🎯 XP!`);
         } else {
@@ -1783,65 +1909,212 @@ function VocabPracticeWidget({ assignmentId, words }: { assignmentId: string; wo
 
   if (!isOpen) {
     return (
-      <button
-        type="button"
-        onClick={startQuiz}
-        className="w-full btn-sm bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 font-semibold py-2 rounded-xl"
-      >
-        🎯 Practice Vocabulary Quiz (+15 XP / +10 ⭐)
-      </button>
+      <div className="space-y-2">
+        {activeAttempt ? (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/70 bg-purple-50/60 dark:bg-purple-950/30">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-lg bg-purple-100 dark:bg-purple-900/60 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 flex items-center justify-center text-lg shrink-0">
+                📖
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-xs sm:text-sm text-purple-900 dark:text-purple-200">
+                    New Words Mastery: {activeAttempt.percentage}%
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-mono bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 font-bold border border-purple-200 dark:border-purple-700">
+                    Attempt {activeAttempt.attempt_count}
+                  </span>
+                </div>
+                <p className="text-[11px] text-purple-600 dark:text-purple-400">
+                  {activeAttempt.correct_answers} / {activeAttempt.total_questions} words correct
+                  {activeAttempt.best_percentage !== undefined && ` · Best: ${activeAttempt.best_percentage}%`}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => startQuiz(true)}
+              className="btn-sm bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-3.5 rounded-xl flex items-center gap-1.5 shadow-xs shrink-0 self-stretch sm:self-auto justify-center"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Replay Quiz</span>
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => startQuiz(false)}
+            className="w-full btn-sm bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 font-semibold py-2.5 rounded-xl flex items-center justify-center gap-2 transition"
+          >
+            <span>🎯 Practice "New Words" Quiz (+15 XP / +10 ⭐)</span>
+          </button>
+        )}
+      </div>
     );
   }
 
   if (completed) {
+    const finalPct = questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0;
+    const isHigh = finalPct >= 80;
+
     return (
-      <div className="p-4 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 rounded-xl text-center space-y-2">
-        <p className="font-bold text-sm text-purple-900 dark:text-purple-200">Quiz Completed! 🎉</p>
-        <p className="text-xs text-purple-700 dark:text-purple-300">
-          Result: {correctCount} / {words.length} correct ({Math.round((correctCount / words.length) * 100)}%)
-        </p>
-        <button
-          type="button"
-          onClick={() => setIsOpen(false)}
-          className="btn-sm btn-secondary mt-1"
-        >
-          Done
-        </button>
+      <div className="p-5 bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 rounded-2xl text-center space-y-4 shadow-xs">
+        <div className="space-y-1">
+          <div className="inline-flex p-3 rounded-2xl bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 mb-1">
+            <Sparkles className="w-6 h-6" />
+          </div>
+          <p className="font-bold text-base text-purple-900 dark:text-purple-100">
+            {finalPct === 100 ? "100% Perfect Mastery! 🏆" : isHigh ? "Great Job! Mastery Achieved! 🎉" : "Quiz Finished!"}
+          </p>
+          <p className="text-2xl font-black font-mono text-purple-800 dark:text-purple-200">
+            {finalPct}%
+          </p>
+          <p className="text-xs text-purple-600 dark:text-purple-400">
+            {correctCount} of {questions.length} words correct · Attempt #{attemptCount}
+          </p>
+        </div>
+
+        {/* Gamification badge */}
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white dark:bg-purple-900/40 border border-purple-200 dark:border-purple-700 text-xs font-semibold text-purple-800 dark:text-purple-200 font-mono">
+          <span>🎯 +15 XP</span>
+          {isHigh && <span className="text-amber-600 dark:text-amber-400">· ⭐️ +10 Stars</span>}
+        </div>
+
+        {/* Replay action buttons */}
+        <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+          <button
+            type="button"
+            onClick={() => startQuiz(true)}
+            className="flex-1 btn-primary py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Replay & Beat Score</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="btn-secondary py-2.5 px-5 rounded-xl text-xs font-semibold"
+          >
+            Done
+          </button>
+        </div>
       </div>
     );
   }
 
-  const current = words[currentIdx];
+  const currentQ = questions[currentIdx];
+  if (!currentQ) return null;
+
+  const optionLetters = ["A", "B", "C", "D"];
 
   return (
-    <div className="p-4 bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 rounded-xl space-y-3">
-      <div className="flex justify-between text-xs text-purple-700 dark:text-purple-300 font-medium">
-        <span>Word {currentIdx + 1} of {words.length}</span>
-        <span>Score: {correctCount}</span>
+    <div className="p-4 sm:p-5 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-800/70 rounded-2xl space-y-4 shadow-xs">
+      {/* Top Header */}
+      <div className="flex items-center justify-between border-b border-purple-200/60 dark:border-purple-800/60 pb-3">
+        <div className="flex items-center gap-2">
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 border border-purple-200 dark:border-purple-700">
+            Word {currentIdx + 1} / {questions.length}
+          </span>
+          <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+            Score: {correctCount}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-mono text-purple-600 dark:text-purple-400 bg-white dark:bg-purple-900/40 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-700 font-semibold">
+            Attempt #{attemptCount}
+          </span>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 px-1"
+          >
+            ✕
+          </button>
+        </div>
       </div>
-      <div>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">Translate to English:</p>
-        <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5">{current.translation}</p>
+
+      {/* Target Word Prompt */}
+      <div className="space-y-1 text-center py-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+          Translate to Uzbek:
+        </p>
+        <div className="inline-flex items-center justify-center gap-2.5">
+          <p className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-white tracking-tight">
+            {currentQ.promptText}
+          </p>
+          <button
+            type="button"
+            onClick={() => playWordAudio(currentQ.promptText)}
+            className="p-1.5 rounded-lg bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/60 dark:hover:bg-purple-800/60 text-purple-700 dark:text-purple-300 transition"
+            title="Hear pronunciation"
+          >
+            <Volume2 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={inputVal}
-          onChange={(e) => setInputVal(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleNext()}
-          placeholder="Type English word..."
-          className="input flex-1 text-sm py-2"
-          autoFocus
-        />
-        <button
-          type="button"
-          onClick={handleNext}
-          disabled={!inputVal.trim() || isSubmitting}
-          className="btn-sm btn-primary px-4"
-        >
-          Next
-        </button>
+
+      {/* Shuffled Multiple-Choice Options with Randomized Distractors */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {currentQ.options.map((opt, idx) => {
+          const letter = optionLetters[idx] || String(idx + 1);
+          const isSelected = selectedOption === opt;
+          const isCorrect = opt.trim().toLowerCase() === currentQ.correctAnswer.trim().toLowerCase();
+
+          let btnClass = "border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 hover:border-purple-300 dark:hover:border-purple-700";
+
+          if (isAnswerChecked) {
+            if (isCorrect) {
+              btnClass = "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 font-bold shadow-xs";
+            } else if (isSelected && !isCorrect) {
+              btnClass = "border-rose-500 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200";
+            } else {
+              btnClass = "border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 text-zinc-400 opacity-60";
+            }
+          } else if (isSelected) {
+            btnClass = "border-purple-500 bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-200 shadow-xs";
+          }
+
+          return (
+            <button
+              key={`${opt}-${idx}`}
+              type="button"
+              disabled={isAnswerChecked}
+              onClick={() => handleSelectOption(opt)}
+              className={`p-3 rounded-xl border text-left flex items-center justify-between gap-2.5 transition active:scale-[0.99] text-xs sm:text-sm font-medium ${btnClass}`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="w-6 h-6 rounded-md bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 font-mono text-xs font-bold flex items-center justify-center shrink-0">
+                  {letter}
+                </span>
+                <span className="truncate">{opt}</span>
+              </div>
+
+              {isAnswerChecked && isCorrect && (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              )}
+              {isAnswerChecked && isSelected && !isCorrect && (
+                <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+              )}
+            </button>
+          );
+        })}
       </div>
+
+      {/* Footer: Next Question Button */}
+      {isAnswerChecked && (
+        <div className="pt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={handleNextQuestion}
+            disabled={isSubmitting}
+            className="btn-primary py-2.5 px-5 rounded-xl font-bold text-xs flex items-center gap-1.5"
+          >
+            <span>{currentIdx + 1 === questions.length ? "Finish Quiz & Record Score" : "Next Word ➔"}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

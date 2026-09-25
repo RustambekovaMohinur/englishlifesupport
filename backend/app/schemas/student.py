@@ -158,6 +158,8 @@ class StudentHistoryItem(BaseModel):
     stars_earned: int = 0
     text_answer: str | None = None
     file_original_name: str | None = None
+    vocab_score: float | None = None
+    vocab_attempt_count: int | None = None
 
 
 class StudentHistoryOut(BaseModel):

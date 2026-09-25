@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status, BackgroundTasks
 from fastapi.responses import FileResponse, RedirectResponse
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -26,6 +26,7 @@ from app.models.submission import (
 )
 from app.models.user import User, UserRole
 from app.models.gamification import StarTransaction, StarTransactionReason
+from app.models.vocabulary import VocabularyAssignment, VocabularyAttempt
 from app.schemas.submission import (
     GradeCreate,
     GradeOut,
@@ -36,6 +37,7 @@ from app.schemas.submission import (
     SubmissionCorrectionCreate,
     SubmissionCorrectionOut,
     SubmissionOut,
+    VocabAttemptOut,
 )
 from app.services.ai_evaluation import evaluate_submission_background
 from app.services.gamification_service import (
@@ -99,7 +101,7 @@ from app.schemas.submission import (
 )
 
 
-def _submission_to_out(sub: Submission) -> SubmissionOut:
+def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = None) -> SubmissionOut:
     grade_out = None
     if sub.grade:
         grade_out = GradeOut(
@@ -187,6 +189,7 @@ def _submission_to_out(sub: Submission) -> SubmissionOut:
         submitted_at=sub.submitted_at,
         grade=grade_out,
         ai_feedback=ai_feedback_out,
+        vocab_attempt=vocab_attempt,
         corrections=corrections_out,
         comments=comments_out,
     )
@@ -568,8 +571,34 @@ async def list_submissions(
     query = query.order_by(Submission.submitted_at.desc()).offset((page - 1) * page_size).limit(page_size)
     submissions = (await db.execute(query)).scalars().all()
 
+    va_map = {}
+    if submissions:
+        assign_ids = list({s.assignment_id for s in submissions})
+        st_ids = list({s.student_id for s in submissions})
+        va_res = await db.execute(
+            select(VocabularyAssignment.assignment_id, VocabularyAttempt)
+            .join(VocabularyAssignment, VocabularyAttempt.vocabulary_assignment_id == VocabularyAssignment.id)
+            .where(
+                VocabularyAssignment.assignment_id.in_(assign_ids),
+                VocabularyAttempt.student_id.in_(st_ids),
+            )
+        )
+        for a_id, va in va_res.all():
+            va_map[(a_id, va.student_id)] = VocabAttemptOut(
+                percentage=va.percentage,
+                best_percentage=getattr(va, "best_percentage", va.percentage) or va.percentage,
+                attempt_count=getattr(va, "attempt_count", 1) or 1,
+                correct_answers=va.correct_answers,
+                total_questions=va.total_questions,
+                is_completed=va.is_completed,
+                completed_at=va.completed_at,
+            )
+
     return PaginatedSubmissions(
-        items=[_submission_to_out(s) for s in submissions], total=total, page=page, page_size=page_size
+        items=[_submission_to_out(s, vocab_attempt=va_map.get((s.assignment_id, s.student_id))) for s in submissions],
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -593,7 +622,30 @@ async def list_my_submissions(
         .order_by(Submission.submitted_at.desc())
     )
     submissions = (await db.execute(query)).scalars().all()
-    return [_submission_to_out(s) for s in submissions]
+
+    va_map = {}
+    if submissions:
+        assign_ids = list({s.assignment_id for s in submissions})
+        va_res = await db.execute(
+            select(VocabularyAssignment.assignment_id, VocabularyAttempt)
+            .join(VocabularyAssignment, VocabularyAttempt.vocabulary_assignment_id == VocabularyAssignment.id)
+            .where(
+                VocabularyAssignment.assignment_id.in_(assign_ids),
+                VocabularyAttempt.student_id == profile.id,
+            )
+        )
+        for a_id, va in va_res.all():
+            va_map[a_id] = VocabAttemptOut(
+                percentage=va.percentage,
+                best_percentage=getattr(va, "best_percentage", va.percentage) or va.percentage,
+                attempt_count=getattr(va, "attempt_count", 1) or 1,
+                correct_answers=va.correct_answers,
+                total_questions=va.total_questions,
+                is_completed=va.is_completed,
+                completed_at=va.completed_at,
+            )
+
+    return [_submission_to_out(s, vocab_attempt=va_map.get(s.assignment_id)) for s in submissions]
 
 
 async def _get_submission_or_404(submission_id: uuid.UUID, db: AsyncSession) -> Submission:
@@ -624,7 +676,29 @@ async def get_submission(
 ):
     submission = await _get_submission_or_404(submission_id, db)
     await _authorize_submission_access(submission, current_user, db)
-    return _submission_to_out(submission)
+
+    vocab_attempt_out = None
+    va_res = await db.execute(
+        select(VocabularyAttempt)
+        .join(VocabularyAssignment, VocabularyAttempt.vocabulary_assignment_id == VocabularyAssignment.id)
+        .where(
+            VocabularyAssignment.assignment_id == submission.assignment_id,
+            VocabularyAttempt.student_id == submission.student_id,
+        )
+    )
+    va = va_res.scalars().first()
+    if va:
+        vocab_attempt_out = VocabAttemptOut(
+            percentage=va.percentage,
+            best_percentage=getattr(va, "best_percentage", va.percentage) or va.percentage,
+            attempt_count=getattr(va, "attempt_count", 1) or 1,
+            correct_answers=va.correct_answers,
+            total_questions=va.total_questions,
+            is_completed=va.is_completed,
+            completed_at=va.completed_at,
+        )
+
+    return _submission_to_out(submission, vocab_attempt=vocab_attempt_out)
 
 
 @router.post("/{submission_id}/evaluate-ai", response_model=SubmissionAIFeedbackOut)

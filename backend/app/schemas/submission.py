@@ -77,6 +77,15 @@ class SubmissionAIFeedbackOut(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+class VocabAttemptOut(BaseModel):
+    percentage: float
+    best_percentage: float = 0.0
+    attempt_count: int = 1
+    correct_answers: int = 0
+    total_questions: int = 0
+    is_completed: bool = True
+    completed_at: datetime | None = None
+
     model_config = {"from_attributes": True}
 
 
@@ -96,6 +105,7 @@ class SubmissionOut(BaseModel):
     submitted_at: datetime
     grade: GradeOut | None = None
     ai_feedback: SubmissionAIFeedbackOut | None = None
+    vocab_attempt: VocabAttemptOut | None = None
     corrections: list[SubmissionCorrectionOut] = []
     comments: list[SubmissionCommentOut] = []
 

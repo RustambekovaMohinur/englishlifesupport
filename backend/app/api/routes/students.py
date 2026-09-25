@@ -14,6 +14,7 @@ from app.models.group import Group
 from app.models.student import StudentProfile
 from app.models.submission import Submission
 from app.models.user import ApprovalStatus, User, UserRole
+from app.models.vocabulary import VocabularyAssignment, VocabularyAttempt
 from app.schemas.student import (
     ApprovedStudentData,
     ApproveStudentResponse,
@@ -723,6 +724,7 @@ async def get_student_history(
         assignment_map = {a.id: a for a in assignments}
         assignment_ids = [a.id for a in assignments]
         submissions_map: dict[uuid.UUID, Submission] = {}
+        va_map: dict[uuid.UUID, VocabularyAttempt] = {}
         if assignment_ids:
             subs_res = await db.execute(
                 select(Submission)
@@ -739,6 +741,17 @@ async def get_student_history(
                 if (getattr(s, "cycle_number", 1) or 1) == target_cycle:
                     if s.assignment_id not in submissions_map:
                         submissions_map[s.assignment_id] = s
+
+            va_res = await db.execute(
+                select(VocabularyAssignment.assignment_id, VocabularyAttempt)
+                .join(VocabularyAssignment, VocabularyAttempt.vocabulary_assignment_id == VocabularyAssignment.id)
+                .where(
+                    VocabularyAssignment.assignment_id.in_(assignment_ids),
+                    VocabularyAttempt.student_id == profile.id,
+                )
+            )
+            for a_id, va in va_res.all():
+                va_map[a_id] = va
 
         for a in assignments:
             sub = submissions_map.get(a.id)
@@ -776,6 +789,10 @@ async def get_student_history(
                     comp_pct = 0
                     sub_status = "archived"
 
+            va_attempt = va_map.get(a.id)
+            vocab_score = va_attempt.percentage if va_attempt else None
+            vocab_attempts = getattr(va_attempt, "attempt_count", 1) if va_attempt else None
+
             item = StudentHistoryItem(
                 assignment_id=a.id,
                 title=a.title,
@@ -791,6 +808,8 @@ async def get_student_history(
                 stars_earned=stars_earned,
                 text_answer=text_ans,
                 file_original_name=file_name,
+                vocab_score=vocab_score,
+                vocab_attempt_count=vocab_attempts,
             )
             history_items.append(item)
             if is_active_task:
