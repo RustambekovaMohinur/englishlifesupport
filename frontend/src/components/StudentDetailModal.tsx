@@ -407,7 +407,7 @@ export default function StudentDetailModal({
           </div>
         </div>
       ) : (
-        <div className="space-y-5 max-h-[75vh] overflow-y-auto pr-1 text-sm">
+        <div className="space-y-5 pr-1 text-sm">
           {/* Header Profile Info Card */}
           <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-slate-900/80 p-4 shadow-sm">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">

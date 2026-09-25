@@ -750,7 +750,7 @@ export default function StudentAssignmentSubmitPage() {
     (submissionImages.length > 0 || docFile !== null || voiceFile !== null || externalLink.trim().length > 0 || textAnswer.trim().length > 0);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FBFBFA] dark:bg-[#0B0F19] text-zinc-900 dark:text-zinc-100 pb-20 sm:pb-0">
+    <div className="min-h-screen flex flex-col overflow-x-hidden bg-[#FBFBFA] dark:bg-[#0B0F19] text-zinc-900 dark:text-zinc-100 pb-20 sm:pb-0">
       {/* 1. Rigid Sticky Top Bar */}
       <header className="sticky top-0 z-40 bg-white/95 dark:bg-[#111827]/95 backdrop-blur-md border-b border-zinc-200/80 dark:border-zinc-800/80 px-4 sm:px-6 py-3 transition-colors">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">

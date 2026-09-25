@@ -55,7 +55,7 @@ import {
   StudentListItem,
 } from "@/types";
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 500;
 
 // Precision skill detector helper
 function getSkillBadge(title: string) {
@@ -128,7 +128,6 @@ export default function StudentsPage() {
   // Directory list state
   const [students, setStudents] = useState<StudentListItem[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(true);
@@ -232,14 +231,14 @@ export default function StudentsPage() {
       const timeout = setTimeout(refreshDirectory, 300);
       return () => clearTimeout(timeout);
     }
-  }, [search, groupFilter, page, activeTab]);
+  }, [search, groupFilter, activeTab]);
 
   function refreshDirectory() {
     setIsLoadingDirectory(true);
     listStudents({
       search: search || undefined,
       group_id: groupFilter || undefined,
-      page,
+      page: 1,
       page_size: PAGE_SIZE,
     })
       .then((res) => {
@@ -401,8 +400,6 @@ export default function StudentsPage() {
       }
     });
   }
-
-  const directoryTotalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -847,31 +844,30 @@ export default function StudentsPage() {
       {/* ========================================================================= */}
       {activeTab === "all" && (
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-3">
-            <input
-              className="input max-w-xs"
-              placeholder="Search by name or username..."
-              value={search}
-              onChange={(e) => {
-                setPage(1);
-                setSearch(e.target.value);
-              }}
-            />
-            <select
-              className="input max-w-[180px]"
-              value={groupFilter}
-              onChange={(e) => {
-                setPage(1);
-                setGroupFilter(e.target.value);
-              }}
-            >
-              <option value="">All groups</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                className="input max-w-xs"
+                placeholder="Search by name or username..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <select
+                className="input max-w-[180px]"
+                value={groupFilter}
+                onChange={(e) => setGroupFilter(e.target.value)}
+              >
+                <option value="">All groups</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="self-start sm:self-center text-xs font-semibold px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
+              Showing {students.length} {students.length === 1 ? "student" : "students"}
+            </div>
           </div>
 
           <div className="card overflow-x-auto">
@@ -1034,27 +1030,11 @@ export default function StudentsPage() {
                   </tbody>
                 </table>
 
-                <div className="mt-4 flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
-                  <span>
-                    Page {page} of {directoryTotalPages}
-                  </span>
-                  <div className="space-x-2">
-                    <button
-                      className="btn-secondary text-xs"
-                      disabled={page <= 1}
-                      onClick={() => setPage((p) => p - 1)}
-                    >
-                      Previous
-                    </button>
-                    <button
-                      className="btn-secondary text-xs"
-                      disabled={page >= directoryTotalPages}
-                      onClick={() => setPage((p) => p + 1)}
-                    >
-                      Next
-                    </button>
+                {students.length > 5 && (
+                  <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800 text-center text-xs text-zinc-400 dark:text-zinc-500 font-medium">
+                    All {students.length} students loaded
                   </div>
-                </div>
+                )}
               </>
             )}
           </div>

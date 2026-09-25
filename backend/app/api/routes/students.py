@@ -61,7 +61,7 @@ async def list_students(
     is_active: bool | None = Query(default=None),
     approval_status: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
+    page_size: int = Query(default=500, ge=1, le=1000),
 ):
     """Teacher-only. Server-side paginated/searchable/filterable list.
     Correctly scopes students to groups created by this teacher if created_by is populated.

@@ -161,10 +161,10 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
       />
 
       {/* Slide-out Drawer Panel */}
-      <div className="fixed inset-y-0 right-0 flex max-w-full pl-6 sm:pl-10">
-        <aside className="w-screen max-w-xl bg-white dark:bg-[#111827] shadow-2xl border-l border-zinc-200/80 dark:border-zinc-800 flex flex-col transform transition-transform animate-in slide-in-from-right duration-300">
+      <div className="fixed inset-y-0 right-0 flex max-w-full pointer-events-none pl-0 sm:pl-10">
+        <aside className="w-full sm:max-w-xl pointer-events-auto bg-white dark:bg-[#111827] shadow-2xl border-l border-zinc-200/80 dark:border-zinc-800 flex flex-col transform transition-transform animate-in slide-in-from-right duration-300">
           {/* Drawer Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 sticky top-0 z-10">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 sticky top-0 z-10">
             <div className="min-w-0 pr-4">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
                 Quick Homework Review
@@ -176,14 +176,18 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition active:scale-95"
+              className="p-2 min-h-[44px] min-w-[44px] rounded-xl text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition active:scale-95 flex items-center justify-center"
+              aria-label="Close review drawer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Drawer Body Content */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div
+            className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6"
+            style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch" }}
+          >
             {isLoading || !submission ? (
               <div className="flex flex-col items-center justify-center h-64 space-y-3">
                 <Spinner className="w-8 h-8 text-indigo-600" />
@@ -458,18 +462,18 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                     />
                   </div>
 
-                  <div className="pt-2 flex justify-end gap-2">
+                  <div className="pt-2 flex flex-wrap justify-end gap-2">
                     <button
                       type="button"
                       onClick={onClose}
-                      className="btn-secondary text-xs px-4 py-2"
+                      className="btn-secondary text-xs px-4 py-2.5 min-h-[44px] flex items-center justify-center"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="btn-primary text-xs px-5 py-2 font-semibold flex items-center gap-1.5 shadow-sm active:scale-95"
+                      className="btn-primary text-xs px-5 py-2.5 min-h-[44px] font-semibold flex items-center gap-1.5 shadow-sm active:scale-95"
                     >
                       {isSubmitting ? (
                         <>
