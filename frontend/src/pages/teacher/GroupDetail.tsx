@@ -226,12 +226,32 @@ export default function GroupDetailPage() {
     confirm(
       `Are you sure you want to permanently delete student "${student.full_name}"? All account records, homework submissions, and grades will be permanently purged.`,
       async () => {
+        const targetId = student.student_id;
+        const targetUserId = student.user_id;
+
+        // Optimistic purge from current group detail view
+        setGroupDetail((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            students: prev.students.filter(
+              (s) => s.student_id !== targetId && (targetUserId ? s.user_id !== targetUserId : true)
+            ),
+          };
+        });
+
         try {
-          await deleteStudent(student.student_id);
+          await deleteStudent(targetId);
           toast.success("Student deleted successfully");
           loadDetails();
         } catch (err: any) {
-          toast.error(err?.response?.data?.detail ?? "Failed to delete student");
+          if (err?.response?.status === 404) {
+            toast.success("Student deleted successfully");
+            loadDetails();
+          } else {
+            toast.error(err?.response?.data?.detail ?? "Failed to delete student");
+            loadDetails();
+          }
         }
       }
     );

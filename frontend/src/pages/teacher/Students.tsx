@@ -390,13 +390,44 @@ export default function StudentsPage() {
 
   function handleDelete(student: StudentListItem) {
     confirm(`Are you sure you want to remove this student (${student.full_name})? All homework submissions and grades will be permanently deleted.`, async () => {
+      // 1. Immediate optimistic UI purge: Remove student immediately so UI never lags or shows stale row
+      const targetId = student.id;
+      const targetUserId = student.user_id;
+
+      setStudents((prev) =>
+        prev.filter((s) => s.id !== targetId && (targetUserId ? s.user_id !== targetUserId : true))
+      );
+      setTotal((prev) => Math.max(0, prev - 1));
+
+      // Also purge from cohort matrix if open
+      setCohortDetail((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          students: prev.students.filter(
+            (s) => s.student_id !== targetId && (targetUserId ? s.user_id !== targetUserId : true)
+          ),
+        };
+      });
+
       try {
-        await deleteStudent(student.id);
-        toast.success("Student deleted successfully");
+        await deleteStudent(targetId);
+        toast.success(`Student ${student.full_name} removed`);
+        // Refresh server data in background to stay in sync
         refreshDirectory();
         if (selectedCohortId) loadCohortMatrix(selectedCohortId);
       } catch (err: any) {
-        toast.error(err?.response?.data?.detail ?? "Failed to delete student");
+        if (err?.response?.status === 404) {
+          // 404 Resilience: Student is already absent from DB, local purge is already correct!
+          toast.success(`Student ${student.full_name} removed`);
+          refreshDirectory();
+          if (selectedCohortId) loadCohortMatrix(selectedCohortId);
+        } else {
+          toast.error(err?.response?.data?.detail ?? "Failed to delete student");
+          // Re-sync with server on unexpected failure
+          refreshDirectory();
+          if (selectedCohortId) loadCohortMatrix(selectedCohortId);
+        }
       }
     });
   }

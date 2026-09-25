@@ -1,7 +1,8 @@
+import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, or_, select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -40,6 +41,7 @@ from app.models.refresh_token import RefreshToken
 
 router = APIRouter(prefix="/api/students", tags=["students"])
 teacher_students_router = APIRouter(prefix="/api/teacher/students", tags=["students"])
+logger = logging.getLogger(__name__)
 
 
 class StudentResetPasswordRequest(BaseModel):
@@ -924,37 +926,92 @@ async def update_student_placement(
 @router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_teacher)])
 @teacher_students_router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_teacher)])
 async def delete_student(student_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    """Permanently and safely deletes student profile and user account with zero foreign key violations."""
+    """Permanently and safely deletes student profile and user account with comprehensive cascade cleanup.
+    404 Resilient: If student is already absent (already deleted), returns 204 No Content safely.
+    """
+    # 1. Lookup student profile by either StudentProfile.id or StudentProfile.user_id
     profile = (
-        await db.execute(select(StudentProfile).where(StudentProfile.id == student_id))
+        await db.execute(
+            select(StudentProfile).where(
+                or_(StudentProfile.id == student_id, StudentProfile.user_id == student_id)
+            )
+        )
     ).scalar_one_or_none()
-    if profile is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
 
-    user = (await db.execute(select(User).where(User.id == profile.user_id))).scalar_one_or_none()
-
-    # Manual cascade cleanup of potential dangling references to prevent FK blocks
-    from sqlalchemy import text
-    try:
-        # Clear student of the week
-        await db.execute(text("DELETE FROM student_of_the_week WHERE student_id = :sid"), {"sid": profile.id})
-        # Clear lock overrides
-        await db.execute(text("DELETE FROM task_lock_overrides WHERE student_id = :sid"), {"sid": profile.id})
-        # Clear submission grades for this student
-        await db.execute(text("DELETE FROM grades WHERE submission_id IN (SELECT id FROM submissions WHERE student_id = :sid)"), {"sid": profile.id})
-        # Clear submission corrections & comments
-        await db.execute(text("DELETE FROM submission_corrections WHERE submission_id IN (SELECT id FROM submissions WHERE student_id = :sid)"), {"sid": profile.id})
-        await db.execute(text("DELETE FROM submission_comments WHERE submission_id IN (SELECT id FROM submissions WHERE student_id = :sid)"), {"sid": profile.id})
-    except Exception as e:
-        # If any auxiliary table does not exist or raises error, proceed safely
-        pass
-
-    if user:
-        await db.delete(user)
+    user = None
+    if profile:
+        user = (await db.execute(select(User).where(User.id == profile.user_id))).scalar_one_or_none()
     else:
-        await db.delete(profile)
-    await db.commit()
-    return None
+        # Check if student_id is directly a User.id
+        user = (await db.execute(select(User).where(User.id == student_id))).scalar_one_or_none()
+        if user:
+            profile = (await db.execute(select(StudentProfile).where(StudentProfile.user_id == user.id))).scalar_one_or_none()
+
+    # 404 Resilience: If student is already absent (already deleted), return safe 204 No Content
+    if not profile and not user:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    sid = profile.id if profile else None
+    uid = user.id if user else (profile.user_id if profile else None)
+
+    # 2. Comprehensive child-to-parent cascade deletion in strict foreign key order
+    try:
+        if sid:
+            # Submissions cascade:
+            # - AI feedbacks
+            await db.execute(text("DELETE FROM submission_ai_feedbacks WHERE submission_id IN (SELECT id FROM submissions WHERE student_id = :sid)"), {"sid": sid})
+            # - Images
+            await db.execute(text("DELETE FROM submission_images WHERE submission_id IN (SELECT id FROM submissions WHERE student_id = :sid)"), {"sid": sid})
+            # - Corrections
+            await db.execute(text("DELETE FROM submission_corrections WHERE submission_id IN (SELECT id FROM submissions WHERE student_id = :sid)"), {"sid": sid})
+            # - Comments
+            await db.execute(text("DELETE FROM submission_comments WHERE submission_id IN (SELECT id FROM submissions WHERE student_id = :sid)"), {"sid": sid})
+            # - Grades
+            await db.execute(text("DELETE FROM grades WHERE submission_id IN (SELECT id FROM submissions WHERE student_id = :sid)"), {"sid": sid})
+            # - Submissions themselves
+            await db.execute(text("DELETE FROM submissions WHERE student_id = :sid"), {"sid": sid})
+
+            # Vocabulary & Gamification:
+            # - Vocabulary answers & attempts
+            await db.execute(text("DELETE FROM vocabulary_answers WHERE attempt_id IN (SELECT id FROM vocabulary_attempts WHERE student_id = :sid)"), {"sid": sid})
+            await db.execute(text("DELETE FROM vocabulary_attempts WHERE student_id = :sid"), {"sid": sid})
+            # - Wordlist quiz attempts
+            await db.execute(text("DELETE FROM wordlist_quiz_attempts WHERE student_id = :sid"), {"sid": sid})
+            # - Star & XP transactions
+            await db.execute(text("DELETE FROM star_transactions WHERE student_id = :sid"), {"sid": sid})
+            await db.execute(text("DELETE FROM xp_transactions WHERE student_id = :sid"), {"sid": sid})
+            await db.execute(text("DELETE FROM student_xp WHERE student_id = :sid"), {"sid": sid})
+            await db.execute(text("DELETE FROM student_streaks WHERE student_id = :sid"), {"sid": sid})
+            await db.execute(text("DELETE FROM free_passes WHERE student_id = :sid"), {"sid": sid})
+            await db.execute(text("DELETE FROM achievements WHERE student_id = :sid"), {"sid": sid})
+            # - Teacher desk overrides & honours
+            await db.execute(text("DELETE FROM task_lock_overrides WHERE student_id = :sid"), {"sid": sid})
+            await db.execute(text("DELETE FROM student_of_the_week WHERE student_id = :sid"), {"sid": sid})
+
+        if uid:
+            # User-level records:
+            await db.execute(text("DELETE FROM assignment_comments WHERE user_id = :uid"), {"uid": uid})
+            await db.execute(text("DELETE FROM feedback_likes WHERE user_id = :uid"), {"uid": uid})
+            await db.execute(text("DELETE FROM feedback_replies WHERE user_id = :uid"), {"uid": uid})
+            await db.execute(text("DELETE FROM platform_feedbacks WHERE user_id = :uid"), {"uid": uid})
+            await db.execute(text("DELETE FROM refresh_tokens WHERE user_id = :uid"), {"uid": uid})
+
+        # Finally, delete student profile and user row
+        if sid:
+            await db.execute(text("DELETE FROM student_profiles WHERE id = :sid"), {"sid": sid})
+        if uid:
+            await db.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": uid})
+
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        logger.exception("Failed to delete student %s: %s", student_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete student due to database constraint: {str(e)}",
+        )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 
