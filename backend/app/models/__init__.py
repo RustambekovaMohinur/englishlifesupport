@@ -19,6 +19,10 @@ from app.models.submission import (  # noqa: F401
     SubmissionStatus,
 )
 from app.models.grade import Grade  # noqa: F401
+from app.models.submission_ai_feedback import (  # noqa: F401
+    AIEvaluationStatus,
+    SubmissionAIFeedback,
+)
 from app.models.vocabulary import (  # noqa: F401
     VocabularyAnswer,
     VocabularyAssignment,

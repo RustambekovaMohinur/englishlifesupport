@@ -23,8 +23,9 @@ import {
   Spinner,
   StatusBadge,
 } from "@/components/ui";
-import { getSubmission, gradeSubmission } from "@/services/lmsService";
+import { getSubmission, getSubmissionFresh, gradeSubmission, triggerAIEvaluation } from "@/services/lmsService";
 import { SubmissionOut } from "@/types";
+import { AIFeedbackCard } from "./AIFeedbackCard";
 
 interface SubmissionReviewDrawerProps {
   submissionId: string | null;
@@ -44,6 +45,44 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
   const [feedback, setFeedback] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [isRetryingAI, setIsRetryingAI] = useState(false);
+
+  async function handleTriggerAI() {
+    if (!submission) return;
+    setIsRetryingAI(true);
+    try {
+      const fb = await triggerAIEvaluation(submission.id);
+      setSubmission((prev) => (prev ? { ...prev, ai_feedback: fb } : prev));
+      toast.success("AI evaluation started!");
+
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts++;
+        try {
+          const fresh = await getSubmissionFresh(submission.id);
+          if (fresh.ai_feedback && fresh.ai_feedback.status !== "pending") {
+            setSubmission(fresh);
+            clearInterval(interval);
+          } else if (attempts >= 10) {
+            clearInterval(interval);
+          }
+        } catch {
+          clearInterval(interval);
+        }
+      }, 3000);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Failed to trigger AI evaluation");
+    } finally {
+      setIsRetryingAI(false);
+    }
+  }
+
+  function handleApplyAI(appliedScore: number, appliedStars: number, appliedFeedback: string) {
+    setScore(appliedScore);
+    setStars(appliedStars);
+    setFeedback(appliedFeedback);
+    toast.success("Applied AI evaluation to grading fields!");
+  }
 
   useEffect(() => {
     if (!submissionId) {
@@ -285,6 +324,43 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                       </div>
                     )}
                 </div>
+
+                {/* AI Automated Evaluation Section */}
+                {submission.ai_feedback ? (
+                  <AIFeedbackCard
+                    feedback={submission.ai_feedback}
+                    submissionId={submission.id}
+                    isTeacher={true}
+                    onRetry={handleTriggerAI}
+                    isRetrying={isRetryingAI}
+                    onApplyToGrade={handleApplyAI}
+                  />
+                ) : (
+                  (submission.text_answer || isAudio) && (
+                    <div className="flex items-center justify-between p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-800/40">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                        <div>
+                          <span className="text-xs font-semibold text-zinc-900 dark:text-white block">
+                            AI Examiner Evaluation
+                          </span>
+                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                            Automated IELTS/CEFR scoring for {isAudio ? "speaking audio" : "written text"}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleTriggerAI}
+                        disabled={isRetryingAI}
+                        className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 shrink-0"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>{isRetryingAI ? "Evaluating..." : "Run AI Review"}</span>
+                      </button>
+                    </div>
+                  )
+                )}
 
                 {/* Teacher Evaluation & Grading Section */}
                 <form

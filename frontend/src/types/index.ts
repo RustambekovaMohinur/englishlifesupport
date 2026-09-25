@@ -414,6 +414,28 @@ export interface SubmissionCommentOut {
   created_at: string;
 }
 
+export interface SubmissionAIFeedbackOut {
+  id: string;
+  submission_id: string;
+  assignment_type: "writing" | "speaking" | string;
+  band_score?: number | null;
+  scaled_score_10?: number | null;
+  overall_feedback?: string | null;
+  criteria_scores?: Record<string, number> | null;
+  strengths?: string[] | null;
+  areas_for_improvement?: string[] | null;
+  detailed_corrections?: Array<{
+    original: string;
+    correction: string;
+    explanation?: string;
+  }> | null;
+  transcription?: string | null;
+  status: "pending" | "completed" | "failed" | string;
+  error_message?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SubmissionOut {
   id: string;
   assignment_id: string;
@@ -425,8 +447,10 @@ export interface SubmissionOut {
   file_original_name: string | null;
   images?: SubmissionImageOut[];
   status: "submitted" | "late" | "graded";
+  is_relevant?: boolean;
   submitted_at: string;
   grade: GradeOut | null;
+  ai_feedback?: SubmissionAIFeedbackOut | null;
   corrections?: SubmissionCorrectionOut[];
   comments?: SubmissionCommentOut[];
 }

@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -59,6 +60,26 @@ class SubmissionImageOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SubmissionAIFeedbackOut(BaseModel):
+    id: uuid.UUID
+    submission_id: uuid.UUID
+    assignment_type: str
+    band_score: float | None = None
+    scaled_score_10: float | None = None
+    overall_feedback: str | None = None
+    criteria_scores: dict[str, Any] | None = None
+    strengths: list[str] | None = None
+    areas_for_improvement: list[str] | None = None
+    detailed_corrections: list[dict[str, Any]] | None = None
+    transcription: str | None = None
+    status: str
+    error_message: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class SubmissionOut(BaseModel):
     id: uuid.UUID
     assignment_id: uuid.UUID
@@ -74,6 +95,7 @@ class SubmissionOut(BaseModel):
     is_relevant: bool = True
     submitted_at: datetime
     grade: GradeOut | None = None
+    ai_feedback: SubmissionAIFeedbackOut | None = None
     corrections: list[SubmissionCorrectionOut] = []
     comments: list[SubmissionCommentOut] = []
 

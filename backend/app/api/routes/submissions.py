@@ -30,12 +30,14 @@ from app.schemas.submission import (
     GradeCreate,
     GradeOut,
     PaginatedSubmissions,
+    SubmissionAIFeedbackOut,
     SubmissionCommentCreate,
     SubmissionCommentOut,
     SubmissionCorrectionCreate,
     SubmissionCorrectionOut,
     SubmissionOut,
 )
+from app.services.ai_evaluation import evaluate_submission_background
 from app.services.gamification_service import (
     award_lightning,
     award_stars,
@@ -141,6 +143,27 @@ def _submission_to_out(sub: Submission) -> SubmissionOut:
         )
         for img in (getattr(sub, "images", None) or [])
     ]
+    ai_fb = getattr(sub, "ai_feedback", None)
+    ai_feedback_out = None
+    if ai_fb is not None:
+        ai_feedback_out = SubmissionAIFeedbackOut(
+            id=ai_fb.id,
+            submission_id=ai_fb.submission_id,
+            assignment_type=ai_fb.assignment_type,
+            band_score=ai_fb.band_score,
+            scaled_score_10=ai_fb.scaled_score_10,
+            overall_feedback=ai_fb.overall_feedback,
+            criteria_scores=ai_fb.criteria_scores,
+            strengths=ai_fb.strengths,
+            areas_for_improvement=ai_fb.areas_for_improvement,
+            detailed_corrections=ai_fb.detailed_corrections,
+            transcription=ai_fb.transcription,
+            status=ai_fb.status,
+            error_message=ai_fb.error_message,
+            created_at=ai_fb.created_at,
+            updated_at=ai_fb.updated_at,
+        )
+
     return SubmissionOut(
         id=sub.id,
         assignment_id=sub.assignment_id,
@@ -163,6 +186,7 @@ def _submission_to_out(sub: Submission) -> SubmissionOut:
         is_relevant=getattr(sub, "is_relevant", True),
         submitted_at=sub.submitted_at,
         grade=grade_out,
+        ai_feedback=ai_feedback_out,
         corrections=corrections_out,
         comments=comments_out,
     )
@@ -192,6 +216,7 @@ async def submit_homework(
     file_type: str | None = Form(default=None),
     file_size_bytes: int | None = Form(default=None),
     profile: StudentProfile = Depends(get_current_student_profile),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -481,6 +506,7 @@ async def submit_homework(
             selectinload(Submission.corrections),
             selectinload(Submission.comments),
             selectinload(Submission.images),
+            selectinload(Submission.ai_feedback),
         )
         .where(Submission.id == submission.id)
     )
@@ -490,6 +516,19 @@ async def submit_homework(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Submission not found after creation",
         )
+
+    # Dispatch automated AI evaluation asynchronously for Writing & Speaking submissions
+    has_text = bool(resolved_text and len(resolved_text.strip()) > 0)
+    has_audio = False
+    if file_path:
+        mime = (file_content_type or "").lower()
+        name = (file_original_name or "").lower()
+        if "audio" in mime or re.search(r"\.(mp3|wav|m4a|aac|ogg|webm)$", name):
+            has_audio = True
+
+    if has_text or has_audio:
+        background_tasks.add_task(evaluate_submission_background, submission.id)
+
     return _submission_to_out(sub)
 
 
@@ -512,6 +551,7 @@ async def list_submissions(
             selectinload(Submission.corrections),
             selectinload(Submission.comments),
             selectinload(Submission.images),
+            selectinload(Submission.ai_feedback),
         )
         .join(Assignment, Submission.assignment_id == Assignment.id)
     )
@@ -547,6 +587,7 @@ async def list_my_submissions(
             selectinload(Submission.corrections),
             selectinload(Submission.comments),
             selectinload(Submission.images),
+            selectinload(Submission.ai_feedback),
         )
         .where(Submission.student_id == profile.id)
         .order_by(Submission.submitted_at.desc())
@@ -565,6 +606,7 @@ async def _get_submission_or_404(submission_id: uuid.UUID, db: AsyncSession) -> 
             selectinload(Submission.corrections),
             selectinload(Submission.comments),
             selectinload(Submission.images),
+            selectinload(Submission.ai_feedback),
         )
         .where(Submission.id == submission_id)
     )
@@ -583,6 +625,69 @@ async def get_submission(
     submission = await _get_submission_or_404(submission_id, db)
     await _authorize_submission_access(submission, current_user, db)
     return _submission_to_out(submission)
+
+
+@router.post("/{submission_id}/evaluate-ai", response_model=SubmissionAIFeedbackOut)
+async def trigger_ai_evaluation(
+    submission_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Manually triggers or retries automated AI evaluation for a student's submission.
+    Accessible to the owning student or the teacher.
+    """
+    submission = await _get_submission_or_404(submission_id, db)
+    await _authorize_submission_access(submission, current_user, db)
+
+    from app.models.submission_ai_feedback import AIEvaluationStatus, SubmissionAIFeedback
+
+    # Determine type: speaking if audio file, else writing
+    is_audio = False
+    if submission.file_path:
+        mime = (submission.file_content_type or "").lower()
+        name = (submission.file_original_name or "").lower()
+        if "audio" in mime or re.search(r"\.(mp3|wav|m4a|aac|ogg|webm)$", name):
+            is_audio = True
+
+    assign_type = "speaking" if is_audio else "writing"
+
+    feedback_record = submission.ai_feedback
+    if not feedback_record:
+        feedback_record = SubmissionAIFeedback(
+            submission_id=submission.id,
+            assignment_type=assign_type,
+            status=AIEvaluationStatus.PENDING.value,
+        )
+        db.add(feedback_record)
+    else:
+        feedback_record.assignment_type = assign_type
+        feedback_record.status = AIEvaluationStatus.PENDING.value
+        feedback_record.error_message = None
+
+    await db.commit()
+    await db.refresh(feedback_record)
+
+    background_tasks.add_task(evaluate_submission_background, submission.id)
+
+    return SubmissionAIFeedbackOut(
+        id=feedback_record.id,
+        submission_id=feedback_record.submission_id,
+        assignment_type=feedback_record.assignment_type,
+        band_score=feedback_record.band_score,
+        scaled_score_10=feedback_record.scaled_score_10,
+        overall_feedback=feedback_record.overall_feedback,
+        criteria_scores=feedback_record.criteria_scores,
+        strengths=feedback_record.strengths,
+        areas_for_improvement=feedback_record.areas_for_improvement,
+        detailed_corrections=feedback_record.detailed_corrections,
+        transcription=feedback_record.transcription,
+        status=feedback_record.status,
+        error_message=feedback_record.error_message,
+        created_at=feedback_record.created_at,
+        updated_at=feedback_record.updated_at,
+    )
 
 
 @router.get("/{submission_id}/file")

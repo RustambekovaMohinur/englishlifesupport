@@ -50,8 +50,11 @@ import {
   useFreePass,
   recordVocabPractice,
   getSubmission,
+  getSubmissionFresh,
+  triggerAIEvaluation,
 } from "@/services/lmsService";
 import { AssignmentForStudent, SubmissionOut } from "@/types";
+import { AIFeedbackCard } from "@/components/AIFeedbackCard";
 import { safeCompressImage, compressImage, compressImages, fileToBase64, base64ToFile } from "@/utils/imageCompressor";
 import toast from "react-hot-toast";
 
@@ -238,6 +241,44 @@ export default function StudentAssignmentSubmitPage() {
   const audioFileInputRef = useRef<HTMLInputElement>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [isRetryingAI, setIsRetryingAI] = useState(false);
+
+  async function handleTriggerAI() {
+    if (!existingSubmission?.id) return;
+    setIsRetryingAI(true);
+    try {
+      const fb = await triggerAIEvaluation(existingSubmission.id);
+      setExistingSubmission((prev) => (prev ? { ...prev, ai_feedback: fb } : prev));
+      toast.success("AI evaluation started!");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Failed to trigger AI evaluation");
+    } finally {
+      setIsRetryingAI(false);
+    }
+  }
+
+  // Auto-refresh when AI feedback is pending
+  useEffect(() => {
+    if (!existingSubmission?.id || existingSubmission?.ai_feedback?.status !== "pending") return;
+
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const fresh = await getSubmissionFresh(existingSubmission.id);
+        if (fresh.ai_feedback && fresh.ai_feedback.status !== "pending") {
+          setExistingSubmission(fresh);
+          clearInterval(interval);
+        } else if (attempts >= 12) {
+          clearInterval(interval);
+        }
+      } catch {
+        clearInterval(interval);
+      }
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [existingSubmission?.id, existingSubmission?.ai_feedback?.status]);
 
   // Restore active draft on mount (resilient against mobile browser low-memory reload)
   useEffect(() => {
@@ -1563,6 +1604,43 @@ export default function StudentAssignmentSubmitPage() {
                   ))}
                 </div>
               </div>
+            )}
+
+            {/* AI Automated Feedback Card */}
+            {existingSubmission.ai_feedback ? (
+              <div className="pt-2">
+                <AIFeedbackCard
+                  feedback={existingSubmission.ai_feedback}
+                  submissionId={existingSubmission.id}
+                  isTeacher={false}
+                  onRetry={handleTriggerAI}
+                  isRetrying={isRetryingAI}
+                />
+              </div>
+            ) : (
+              (existingSubmission.text_answer || existingSubmission.file_url) && (
+                <div className="pt-2 flex items-center justify-between p-3.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-800/40">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">✨</span>
+                    <div>
+                      <span className="text-xs font-semibold text-zinc-900 dark:text-white block">
+                        AI Examiner Feedback
+                      </span>
+                      <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                        Get instant Cambridge & IELTS feedback on your submitted work
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleTriggerAI}
+                    disabled={isRetryingAI}
+                    className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 shrink-0"
+                  >
+                    <span>{isRetryingAI ? "Evaluating..." : "Generate AI Review"}</span>
+                  </button>
+                </div>
+              )
             )}
           </section>
         )}

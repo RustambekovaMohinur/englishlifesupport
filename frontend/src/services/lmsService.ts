@@ -21,6 +21,7 @@ import {
   StudentOut,
   SubmissionCommentOut,
   SubmissionCorrectionOut,
+  SubmissionAIFeedbackOut,
   SubmissionOut,
   TeacherDashboard,
   TeacherGroupReport,
@@ -163,6 +164,9 @@ export const listSubmissions = (params: SubmissionQuery) =>
   cachedGet<Paginated<SubmissionOut>>("/submissions", params);
 export const listMySubmissions = () => cachedGet<SubmissionOut[]>("/submissions/mine");
 export const getSubmission = (id: string) => cachedGet<SubmissionOut>(`/submissions/${id}`);
+export const getSubmissionFresh = (id: string) => api.get<SubmissionOut>(`/submissions/${id}`).then((r) => r.data);
+export const triggerAIEvaluation = (submissionId: string) =>
+  api.post<SubmissionAIFeedbackOut>(`/submissions/${submissionId}/evaluate-ai`).then((r) => r.data);
 
 export interface PresignedUploadResult {
   upload_url: string;

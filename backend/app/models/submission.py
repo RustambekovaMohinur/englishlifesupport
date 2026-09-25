@@ -54,6 +54,13 @@ class Submission(UUIDPKMixin, TimestampMixin, Base):
     grade: Mapped["Grade | None"] = relationship(
         back_populates="submission", uselist=False, cascade="all, delete-orphan"
     )
+    ai_feedback: Mapped["SubmissionAIFeedback | None"] = relationship(
+        "SubmissionAIFeedback",
+        back_populates="submission",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
     corrections: Mapped[list["SubmissionCorrection"]] = relationship(
         back_populates="submission",
         cascade="all, delete-orphan",
