@@ -473,6 +473,7 @@ async def create_wordlist_set(
                 part_of_speech=it.part_of_speech,
                 phonetic=it.phonetic,
                 definition=it.definition,
+                uzbek_translation=it.uzbek_translation,
                 example=it.example,
                 audio_us_url=it.audio_us_url,
                 audio_gb_url=it.audio_gb_url,
@@ -498,13 +499,27 @@ async def create_wordlist_set(
     formatted_items = []
     for idx, item_data in enumerate(data.items):
         item_id = str(uuid.uuid4())
+        raw_uz = (item_data.uzbek_translation or "").strip()
+        raw_def = (item_data.definition or "").strip()
+
+        # Clean separation for legacy concatenated strings
+        if not raw_uz and " — " in raw_def:
+            parts = raw_def.split(" — ", 1)
+            raw_uz = parts[0].strip()
+            raw_def = parts[1].strip()
+        elif not raw_uz and " - " in raw_def and len(raw_def.split(" - ")) == 2:
+            parts = raw_def.split(" - ", 1)
+            raw_uz = parts[0].strip()
+            raw_def = parts[1].strip()
+
         formatted_items.append({
             "id": item_id,
             "set_id": str(set_id),
             "word": item_data.word.strip(),
             "part_of_speech": item_data.part_of_speech.strip() if item_data.part_of_speech else None,
             "phonetic": item_data.phonetic.strip() if item_data.phonetic else None,
-            "definition": item_data.definition.strip() if item_data.definition else None,
+            "definition": raw_def or None,
+            "uzbek_translation": raw_uz or None,
             "example": item_data.example.strip() if item_data.example else None,
             "audio_us_url": item_data.audio_us_url.strip() if item_data.audio_us_url else None,
             "audio_gb_url": item_data.audio_gb_url.strip() if item_data.audio_gb_url else None,
@@ -559,6 +574,7 @@ async def create_wordlist_set(
             part_of_speech=it.get("part_of_speech"),
             phonetic=it.get("phonetic"),
             definition=it.get("definition"),
+            uzbek_translation=it.get("uzbek_translation"),
             example=it.get("example"),
             audio_us_url=it.get("audio_us_url"),
             audio_gb_url=it.get("audio_gb_url"),
@@ -742,10 +758,21 @@ async def get_wordlist_set(
                         c_at = w_set.created_at
 
                 word_val = (it.get("term") or it.get("word") or "").strip()
-                def_val = (it.get("translation") or it.get("definition") or it.get("custom_translation") or "").strip()
+                def_val = (it.get("definition") or "").strip()
+                uz_val = (it.get("uzbek_translation") or it.get("translation") or it.get("custom_translation") or "").strip()
                 pos_val = (it.get("pos") or it.get("part_of_speech") or "").strip() or None
 
-                if not word_val and not def_val:
+                # Clean split if legacy combined with " — " or " - "
+                if not uz_val and " — " in def_val:
+                    parts = def_val.split(" — ", 1)
+                    uz_val = parts[0].strip()
+                    def_val = parts[1].strip()
+                elif not uz_val and " - " in def_val and len(def_val.split(" - ")) == 2:
+                    parts = def_val.split(" - ", 1)
+                    uz_val = parts[0].strip()
+                    def_val = parts[1].strip()
+
+                if not word_val and not def_val and not uz_val:
                     continue
 
                 item_id_raw = it.get("id")
@@ -758,10 +785,11 @@ async def get_wordlist_set(
                     WordlistItemOut(
                         id=item_id,
                         set_id=w_set.id,
-                        word=word_val or def_val,
+                        word=word_val or def_val or uz_val,
                         part_of_speech=pos_val,
                         phonetic=it.get("phonetic") or None,
-                        definition=def_val or word_val,
+                        definition=def_val or None,
+                        uzbek_translation=uz_val or None,
                         example=it.get("example") or None,
                         audio_us_url=it.get("audio_us_url") or None,
                         audio_gb_url=it.get("audio_gb_url") or None,
@@ -774,22 +802,36 @@ async def get_wordlist_set(
 
     # 4. Fallback to legacy database items if no items loaded from JSON
     if not items_out and w_set.items:
-        items_out = [
-            WordlistItemOut(
-                id=item.id,
-                set_id=item.set_id,
-                word=item.word or "",
-                part_of_speech=item.part_of_speech,
-                phonetic=item.phonetic,
-                definition=item.definition or "",
-                example=item.example,
-                audio_us_url=item.audio_us_url,
-                audio_gb_url=item.audio_gb_url,
-                order_index=item.order_index,
-                created_at=item.created_at,
+        items_out = []
+        for item in w_set.items:
+            raw_def = item.definition or ""
+            uz_val = None
+            clean_def = raw_def
+            if " — " in raw_def:
+                parts = raw_def.split(" — ", 1)
+                uz_val = parts[0].strip()
+                clean_def = parts[1].strip()
+            elif " - " in raw_def and len(raw_def.split(" - ")) == 2:
+                parts = raw_def.split(" - ", 1)
+                uz_val = parts[0].strip()
+                clean_def = parts[1].strip()
+
+            items_out.append(
+                WordlistItemOut(
+                    id=item.id,
+                    set_id=item.set_id,
+                    word=item.word or "",
+                    part_of_speech=item.part_of_speech,
+                    phonetic=item.phonetic,
+                    definition=clean_def or None,
+                    uzbek_translation=uz_val or None,
+                    example=item.example,
+                    audio_us_url=item.audio_us_url,
+                    audio_gb_url=item.audio_gb_url,
+                    order_index=item.order_index,
+                    created_at=item.created_at,
+                )
             )
-            for item in w_set.items
-        ]
 
     st_profile = None
     if current_user.role == UserRole.STUDENT:

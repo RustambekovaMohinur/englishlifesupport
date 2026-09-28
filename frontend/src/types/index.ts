@@ -592,10 +592,41 @@ export interface WordlistItem {
   part_of_speech?: string | null;
   phonetic?: string | null;
   definition?: string | null;
+  uzbek_translation?: string | null;
   example?: string | null;
   audio_us_url?: string | null;
   audio_gb_url?: string | null;
   order_index?: number;
+}
+
+export function parseWordMeanings(item: {
+  definition?: string | null;
+  uzbek_translation?: string | null;
+  custom_translation?: string | null;
+  word?: string | null;
+}): { uzbek: string; definition: string } {
+  let uzbek = (item.uzbek_translation || item.custom_translation || "").trim();
+  let definition = (item.definition || "").trim();
+
+  // Clean split for legacy concatenated strings e.g. "sud jarayoni — The legal process..."
+  if (definition.includes(" — ")) {
+    const parts = definition.split(" — ");
+    if (!uzbek) {
+      uzbek = parts[0].trim();
+    }
+    definition = parts.slice(1).join(" — ").trim();
+  } else if (!uzbek && definition.includes(" - ") && definition.split(" - ").length === 2) {
+    const parts = definition.split(" - ");
+    uzbek = parts[0].trim();
+    definition = parts[1].trim();
+  }
+
+  // If definition equals uzbek translation, don't duplicate
+  if (definition && uzbek && definition.toLowerCase() === uzbek.toLowerCase()) {
+    definition = "";
+  }
+
+  return { uzbek, definition };
 }
 
 export interface QuizAttempt {

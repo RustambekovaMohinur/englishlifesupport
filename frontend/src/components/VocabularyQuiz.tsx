@@ -12,7 +12,7 @@ import {
   ArrowRight,
   ShieldAlert,
 } from "lucide-react";
-import { WordlistItem, QuizAttempt } from "@/types";
+import { WordlistItem, QuizAttempt, parseWordMeanings } from "@/types";
 import { submitWordlistQuiz } from "@/services/lmsService";
 import toast from "react-hot-toast";
 
@@ -29,6 +29,8 @@ type QuizMode = "en_to_uz" | "uz_to_en" | "mixed";
 interface QuizQuestion {
   item: WordlistItem;
   prompt: string;
+  promptUzbek?: string;
+  promptDefinition?: string;
   promptType: "en" | "uz";
   correctAnswer: string;
   options: string[];
@@ -45,20 +47,24 @@ export function VocabularyQuiz({ setId, title, items, onFinish, onExit }: Vocabu
 
   const safeItems: WordlistItem[] = useMemo(() => {
     return rawList
-      .map((item: any, idx: number) => ({
-        id: item.id || `item-${idx}`,
-        set_id: item.set_id || setId,
-        word: (item.term || item.word || "").trim(),
-        definition: (item.translation || item.definition || item.custom_translation || "").trim(),
-        part_of_speech: item.pos || item.part_of_speech || null,
-        phonetic: item.phonetic || null,
-        example: item.example || null,
-        audio_us_url: item.audio_us_url || null,
-        audio_gb_url: item.audio_gb_url || null,
-        order_index: item.order_index ?? idx,
-        created_at: item.created_at || new Date().toISOString(),
-      }))
-      .filter((i) => Boolean(i.word));
+      .map((item: any, idx: number) => {
+        const { uzbek, definition } = parseWordMeanings(item);
+        return {
+          id: item.id || `item-${idx}`,
+          set_id: item.set_id || setId,
+          word: (item.term || item.word || "").trim(),
+          definition,
+          uzbek_translation: uzbek,
+          part_of_speech: item.pos || item.part_of_speech || null,
+          phonetic: item.phonetic || null,
+          example: item.example_sentence || item.example || null,
+          audio_us_url: item.audio_us_url || null,
+          audio_gb_url: item.audio_gb_url || null,
+          order_index: item.order_index ?? idx,
+          created_at: item.created_at || new Date().toISOString(),
+        };
+      })
+      .filter((i) => Boolean(i.word && (i.uzbek_translation || i.definition)));
   }, [rawList, setId]);
 
   // Setup mode
@@ -93,7 +99,7 @@ export function VocabularyQuiz({ setId, title, items, onFinish, onExit }: Vocabu
     (targetItems: WordlistItem[], selectedMode: QuizMode): QuizQuestion[] => {
       if (targetItems.length < 2) return [];
 
-      const validItems = targetItems.filter((i) => i.word && (i.definition || i.word));
+      const validItems = targetItems.filter((i) => i.word && (i.uzbek_translation || i.definition));
       const pool = validItems;
 
       return shuffle(validItems).map((item) => {
@@ -103,13 +109,18 @@ export function VocabularyQuiz({ setId, title, items, onFinish, onExit }: Vocabu
         else if (selectedMode === "en_to_uz") pType = "en";
         else pType = Math.random() > 0.5 ? "en" : "uz";
 
-        const prompt = pType === "en" ? item.word : (item.definition || item.word);
-        const correctAnswer = pType === "en" ? (item.definition || item.word) : item.word;
+        const uzbekMeaning = item.uzbek_translation || item.definition || item.word;
+        const engDef = item.definition && item.definition !== item.uzbek_translation ? item.definition : "";
+
+        // If pType is "en": prompt is English word, student chooses Uzbek translation
+        // If pType is "uz": prompt is Uzbek translation (+ English definition hint), student chooses English word
+        const prompt = pType === "en" ? item.word : uzbekMeaning;
+        const correctAnswer = pType === "en" ? uzbekMeaning : item.word;
 
         // Distractors sampled from other words in the same set
         const otherChoices = pool
           .filter((x) => x.word !== item.word)
-          .map((x) => (pType === "en" ? (x.definition || x.word) : x.word))
+          .map((x) => (pType === "en" ? (x.uzbek_translation || x.definition || x.word) : x.word))
           .filter((val) => val !== correctAnswer);
 
         const chosenDistractors = shuffle(Array.from(new Set(otherChoices))).slice(0, 3);
@@ -118,6 +129,8 @@ export function VocabularyQuiz({ setId, title, items, onFinish, onExit }: Vocabu
         return {
           item,
           prompt,
+          promptUzbek: uzbekMeaning,
+          promptDefinition: engDef,
           promptType: pType,
           correctAnswer,
           options: allOptions,
@@ -533,32 +546,58 @@ export function VocabularyQuiz({ setId, title, items, onFinish, onExit }: Vocabu
       <div className="card p-5 sm:p-8 text-center space-y-3 sm:space-y-4 bg-gradient-to-b from-white via-white to-zinc-50/60 dark:from-[#161B22] dark:via-[#161B22] dark:to-[#111827] border border-zinc-200/80 dark:border-zinc-800 shadow-md">
         <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block">
           {currentQ.promptType === "en"
-            ? "Choose the Uzbek translation for:"
+            ? "Choose the Uzbek meaning for:"
             : "Choose the English word for:"}
         </span>
 
-        <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
-          <h1 className="text-xl sm:text-3xl font-extrabold text-zinc-900 dark:text-white break-words hyphens-auto">
-            {currentQ.prompt}
-          </h1>
+        {currentQ.promptType === "en" ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
+              <h1 className="text-2xl sm:text-4xl font-extrabold text-zinc-900 dark:text-white break-words hyphens-auto">
+                {currentQ.item.word}
+              </h1>
 
-          {currentQ.promptType === "en" && (
-            <button
-              type="button"
-              onClick={() => playWordAudio(currentQ.prompt)}
-              className="min-h-[36px] min-w-[36px] p-2 rounded-full bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 transition flex items-center justify-center"
-              title="Listen Pronunciation"
-              aria-label="Listen Pronunciation"
-            >
-              <Volume2 className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+              <button
+                type="button"
+                onClick={() => playWordAudio(currentQ.item.word)}
+                className="min-h-[36px] min-w-[36px] p-2 rounded-full bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 transition flex items-center justify-center"
+                title="Listen Pronunciation"
+                aria-label="Listen Pronunciation"
+              >
+                <Volume2 className="w-4 h-4" />
+              </button>
+            </div>
 
-        {currentQ.item.part_of_speech && (
-          <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-serif italic text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40">
-            ({currentQ.item.part_of_speech})
-          </span>
+            {currentQ.item.part_of_speech && (
+              <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-serif italic text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40">
+                ({currentQ.item.part_of_speech})
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2.5 max-w-lg mx-auto">
+            <div className="inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-300 text-xs font-bold">
+              <span>🇺🇿</span>
+              <span>O'zbekcha ma'nosi</span>
+            </div>
+
+            <h1 className="text-xl sm:text-3xl font-extrabold text-zinc-900 dark:text-white break-words leading-tight">
+              {currentQ.promptUzbek || currentQ.prompt}
+            </h1>
+
+            {currentQ.promptDefinition && (
+              <div className="p-2 sm:p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/50 dark:border-zinc-700/40 text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 italic max-w-md mx-auto">
+                <span className="font-semibold not-italic text-zinc-400 mr-1.5">📖 Definition:</span>
+                "{currentQ.promptDefinition}"
+              </div>
+            )}
+
+            {currentQ.item.part_of_speech && (
+              <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-serif italic text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40">
+                ({currentQ.item.part_of_speech})
+              </span>
+            )}
+          </div>
         )}
       </div>
 

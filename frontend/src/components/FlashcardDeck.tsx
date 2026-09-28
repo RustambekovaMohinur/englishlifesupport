@@ -8,7 +8,7 @@ import {
   Layers,
   HelpCircle,
 } from "lucide-react";
-import { WordlistItem } from "@/types";
+import { WordlistItem, parseWordMeanings } from "@/types";
 
 interface FlashcardDeckProps {
   items?: WordlistItem[] | any;
@@ -25,24 +25,25 @@ export function FlashcardDeck({ items, title, onClose }: FlashcardDeckProps) {
     return [];
   }, [items]);
 
-  // Normalize both flat schemas (term/word, translation/definition, pos/part_of_speech)
+  // Normalize and cleanly separate word, uzbek_translation, and english definition
   const cards = useMemo(() => {
     return rawCards
       .map((item: any, idx: number) => {
         if (!item || typeof item !== "object") return null;
         const word = (item.term || item.word || "").trim();
-        const definition = (item.translation || item.definition || item.custom_translation || "").trim();
+        const { uzbek, definition } = parseWordMeanings(item);
         const part_of_speech = (item.pos || item.part_of_speech || "").trim();
         const phonetic = (item.phonetic || "").trim();
-        const example = (item.example || "").trim();
+        const example = (item.example_sentence || item.example || "").trim();
         const audio_us_url = item.audio_us_url || null;
         const audio_gb_url = item.audio_gb_url || null;
         const id = item.id || `card-${idx}`;
 
         return {
           id,
-          word: word || definition,
-          definition: definition || word,
+          word: word || uzbek || definition,
+          uzbek_translation: uzbek,
+          definition,
           part_of_speech,
           phonetic,
           example,
@@ -50,7 +51,7 @@ export function FlashcardDeck({ items, title, onClose }: FlashcardDeckProps) {
           audio_gb_url,
         };
       })
-      .filter((c: any) => Boolean(c && (c.word || c.definition)));
+      .filter((c: any) => Boolean(c && (c.word || c.uzbek_translation || c.definition)));
   }, [rawCards]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -324,30 +325,53 @@ export function FlashcardDeck({ items, title, onClose }: FlashcardDeckProps) {
               </span>
             </div>
 
-            {/* Center Content: Definition & Example */}
-            <div className="overflow-y-auto space-y-3 sm:space-y-4 my-auto pr-1 max-h-[190px] sm:max-h-[220px]">
-              {currentItem.definition ? (
-                <div>
-                  <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-0.5 sm:mb-1">
-                    Definition:
-                  </p>
-                  <p className="text-xs sm:text-base font-medium text-zinc-800 dark:text-zinc-100 leading-relaxed break-words">
-                    {currentItem.definition}
-                  </p>
+            {/* Center Content: Uzbek Translation, English Definition & Example */}
+            <div className="overflow-y-auto space-y-2.5 sm:space-y-3.5 my-auto pr-1 max-h-[200px] sm:max-h-[230px] scrollbar-thin">
+              {/* Uzbek Translation */}
+              {(currentItem.uzbek_translation || (!currentItem.definition && currentItem.word)) && (
+                <div className="space-y-1">
+                  <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                    <span>🇺🇿</span>
+                    <span>O'zbekcha Ma'nosi</span>
+                  </span>
+                  <div className="p-2 sm:p-2.5 rounded-xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs">
+                    <p className="text-sm sm:text-base font-bold text-emerald-950 dark:text-emerald-200 leading-snug break-words">
+                      {currentItem.uzbek_translation || currentItem.definition}
+                    </p>
+                  </div>
                 </div>
-              ) : (
-                <p className="text-xs italic text-zinc-400">No definition provided.</p>
               )}
 
+              {/* English Definition */}
+              {currentItem.definition && currentItem.definition !== currentItem.uzbek_translation && (
+                <div className="space-y-1">
+                  <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 flex items-center gap-1.5">
+                    <span>📖</span>
+                    <span>English Definition</span>
+                  </span>
+                  <div className="p-2 sm:p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/60 dark:border-zinc-700/50">
+                    <p className="text-xs sm:text-sm font-medium text-zinc-700 dark:text-zinc-200 leading-relaxed break-words">
+                      {currentItem.definition}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Example Sentence */}
               {currentItem.example && (
-                <div className="p-2.5 sm:p-3 rounded-2xl bg-zinc-100/70 dark:bg-zinc-800/40 border border-zinc-200/50 dark:border-zinc-700/40">
-                  <p className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-0.5">
-                    Example:
+                <div className="p-2 sm:p-2.5 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/40 dark:border-amber-800/40">
+                  <p className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-0.5 flex items-center gap-1">
+                    <span>💡</span>
+                    <span>Example:</span>
                   </p>
                   <p className="text-xs sm:text-sm italic text-zinc-600 dark:text-zinc-300 leading-relaxed break-words">
                     "{currentItem.example}"
                   </p>
                 </div>
+              )}
+
+              {!currentItem.uzbek_translation && !currentItem.definition && (
+                <p className="text-xs italic text-zinc-400">No definition provided.</p>
               )}
             </div>
 

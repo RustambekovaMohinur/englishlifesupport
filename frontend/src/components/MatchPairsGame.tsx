@@ -7,7 +7,7 @@ import {
   Volume2,
   CheckCircle2,
 } from "lucide-react";
-import { WordlistItem } from "@/types";
+import { WordlistItem, parseWordMeanings } from "@/types";
 
 interface MatchPairsGameProps {
   items?: WordlistItem[] | any;
@@ -34,20 +34,24 @@ export function MatchPairsGame({ items, title, onExit }: MatchPairsGameProps) {
 
   const safeItems: WordlistItem[] = useMemo(() => {
     return rawList
-      .map((item: any, idx: number) => ({
-        id: item.id || `match-${idx}`,
-        set_id: item.set_id || "",
-        word: (item.term || item.word || "").trim(),
-        definition: (item.translation || item.definition || item.custom_translation || "").trim(),
-        part_of_speech: item.pos || item.part_of_speech || null,
-        phonetic: item.phonetic || null,
-        example: item.example || null,
-        audio_us_url: item.audio_us_url || null,
-        audio_gb_url: item.audio_gb_url || null,
-        order_index: item.order_index ?? idx,
-        created_at: item.created_at || new Date().toISOString(),
-      }))
-      .filter((i) => Boolean(i.word && (i.definition || i.word)));
+      .map((item: any, idx: number) => {
+        const { uzbek, definition } = parseWordMeanings(item);
+        return {
+          id: item.id || `match-${idx}`,
+          set_id: item.set_id || "",
+          word: (item.term || item.word || "").trim(),
+          definition,
+          uzbek_translation: uzbek,
+          part_of_speech: item.pos || item.part_of_speech || null,
+          phonetic: item.phonetic || null,
+          example: item.example_sentence || item.example || null,
+          audio_us_url: item.audio_us_url || null,
+          audio_gb_url: item.audio_gb_url || null,
+          order_index: item.order_index ?? idx,
+          created_at: item.created_at || new Date().toISOString(),
+        };
+      })
+      .filter((i) => Boolean(i.word && (i.uzbek_translation || i.definition || i.word)));
   }, [rawList]);
 
   const [cards, setCards] = useState<MatchCard[]>([]);
@@ -92,11 +96,13 @@ export function MatchPairsGame({ items, title, onExit }: MatchPairsGameProps) {
         type: "en",
         isMatched: false,
       });
-      // Uzbek definition card
+
+      // Uzbek meaning card: Show only the Uzbek translation (or brief definition if no Uzbek exists)
+      const meaningText = item.uzbek_translation || item.definition || item.word;
       cardList.push({
         id: `uz-${item.word}-${idx}`,
         itemWord: item.word,
-        text: item.definition || item.word,
+        text: meaningText,
         type: "uz",
         isMatched: false,
       });
@@ -260,13 +266,13 @@ export function MatchPairsGame({ items, title, onExit }: MatchPairsGameProps) {
       )}
 
       {/* Grid of Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
         {cards.map((card) => {
           const isSelected =
             selectedFirst?.id === card.id || selectedSecond?.id === card.id;
 
           let cardClasses =
-            "border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-[#161B22] text-zinc-800 dark:text-zinc-200 hover:border-brand-400 hover:shadow-sm";
+            "border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-[#161B22] text-zinc-800 dark:text-zinc-200 hover:border-brand-400 hover:shadow-md";
 
           if (card.isMatched) {
             cardClasses =
@@ -285,14 +291,22 @@ export function MatchPairsGame({ items, title, onExit }: MatchPairsGameProps) {
               type="button"
               onClick={() => handleCardClick(card)}
               disabled={card.isMatched}
-              className={`min-h-[76px] sm:min-h-[96px] p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border flex flex-col items-center justify-center text-center transition-all duration-200 active:scale-[0.97] touch-manipulation ${cardClasses}`}
+              className={`min-h-[110px] sm:min-h-[120px] p-3 sm:p-4 rounded-2xl border flex flex-col items-center justify-center text-center transition-all duration-200 active:scale-[0.97] touch-manipulation shadow-2xs ${cardClasses}`}
             >
-              <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider text-zinc-400 dark:text-zinc-500 block mb-1">
-                {card.type === "en" ? "English" : "Uzbek"}
+              <span
+                className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] uppercase font-bold tracking-wider mb-1.5 px-2 py-0.5 rounded-full ${
+                  card.type === "en"
+                    ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50"
+                    : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/50"
+                }`}
+              >
+                <span>{card.type === "en" ? "🇬🇧 English" : "🇺🇿 Uzbek"}</span>
               </span>
               <span
-                className={`text-xs sm:text-sm font-semibold leading-snug break-words hyphens-auto line-clamp-3 ${
-                  card.type === "en" ? "font-bold text-zinc-900 dark:text-white" : "font-medium"
+                className={`text-xs sm:text-sm font-semibold leading-relaxed break-words hyphens-auto w-full px-1 ${
+                  card.type === "en"
+                    ? "font-extrabold text-zinc-900 dark:text-white"
+                    : "font-bold text-emerald-950 dark:text-emerald-200"
                 }`}
               >
                 {card.text}

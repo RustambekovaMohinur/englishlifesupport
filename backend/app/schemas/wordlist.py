@@ -8,6 +8,7 @@ class WordlistItemBase(BaseModel):
     part_of_speech: str | None = None
     phonetic: str | None = None
     definition: str | None = None
+    uzbek_translation: str | None = None
     example: str | None = None
     audio_us_url: str | None = None
     audio_gb_url: str | None = None

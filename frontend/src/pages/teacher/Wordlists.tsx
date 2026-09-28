@@ -415,18 +415,13 @@ export default function TeacherWordlistsPage() {
         items: previews.map((item, idx) => {
           const uzTrans = (item.uzbek_translation || item.custom_translation || "").trim();
           const engDef = (item.definition || "").trim();
-          let finalDef = engDef;
-          if (uzTrans && engDef && !engDef.toLowerCase().includes(uzTrans.toLowerCase())) {
-            finalDef = `${uzTrans} — ${engDef}`;
-          } else if (uzTrans && !engDef) {
-            finalDef = uzTrans;
-          }
 
           return {
             word: item.word.trim(),
             part_of_speech: item.part_of_speech ? normalizePos(item.part_of_speech) : "noun",
             phonetic: item.phonetic?.trim() || null,
-            definition: finalDef || null,
+            definition: engDef || null,
+            uzbek_translation: uzTrans || null,
             example: (item.example_sentence || item.example)?.trim() || null,
             audio_us_url: item.audio_us_url?.trim() || null,
             audio_gb_url: item.audio_gb_url?.trim() || null,
