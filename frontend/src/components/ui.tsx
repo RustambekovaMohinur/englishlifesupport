@@ -83,7 +83,21 @@ export function LoadingRows({ rows = 5 }: { rows?: number }) {
   );
 }
 
-export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  maxWidth = "sm:max-w-lg",
+  className = "",
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+  maxWidth?: string;
+  className?: string;
+}) {
   if (!open) return null;
   return (
     <div
@@ -94,7 +108,7 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="fixed inset-x-0 bottom-0 sm:static max-h-[85vh] sm:max-h-[90vh] w-full sm:max-w-lg overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-2xl border-t sm:border border-zinc-200 dark:border-zinc-800 sm:border-[#EAE9E5] sm:dark:border-[#30363D] bg-white dark:bg-[#161B22] p-5 sm:p-6 shadow-2xl text-zinc-900 dark:text-zinc-100 animate-in slide-in-from-bottom duration-200 sm:slide-in-from-bottom-0 sm:zoom-in-95"
+        className={`fixed inset-x-0 bottom-0 sm:static max-h-[85vh] sm:max-h-[90vh] w-full ${maxWidth} overflow-y-auto overflow-x-hidden overscroll-contain rounded-t-3xl sm:rounded-2xl border-t sm:border border-zinc-200 dark:border-zinc-800 sm:border-[#EAE9E5] sm:dark:border-[#30363D] bg-white dark:bg-[#161B22] p-4 sm:p-6 shadow-2xl text-zinc-900 dark:text-zinc-100 animate-in slide-in-from-bottom duration-200 sm:slide-in-from-bottom-0 sm:zoom-in-95 ${className}`}
         style={{ touchAction: "pan-y", WebkitOverflowScrolling: "touch" }}
       >
         {/* Top Drag Indicator (w-10 h-1 rounded-full) */}

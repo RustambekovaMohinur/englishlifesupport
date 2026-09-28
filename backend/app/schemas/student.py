@@ -162,6 +162,38 @@ class StudentHistoryItem(BaseModel):
     vocab_attempt_count: int | None = None
 
 
+class StudentWordlistProgressItem(BaseModel):
+    set_id: uuid.UUID
+    title: str
+    group_name: str | None = None
+    total_words: int = 0
+    is_mastered: bool = False
+    best_score: int | None = None
+    best_time_seconds: int | None = None
+    attempts_count: int = 0
+    last_attempt_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class PeerProfileOut(BaseModel):
+    id: uuid.UUID
+    full_name: str
+    username: str
+    avatar_url: str | None = None
+    bio: str | None = None
+    group_name: str | None = None
+    level: str | None = None
+    total_stars: int = 0
+    total_lightning: int = 0
+    total_assignments_completed: int = 0
+    total_vocabulary_completed: int = 0
+
+    class Config:
+        from_attributes = True
+
+
 class StudentHistoryOut(BaseModel):
     student_id: uuid.UUID
     full_name: str
@@ -177,3 +209,7 @@ class StudentHistoryOut(BaseModel):
     active_assignments: list[StudentHistoryItem] = Field(default_factory=list)
     past_cycles: list[Any] = Field(default_factory=list)
     history: list[StudentHistoryItem] = Field(default_factory=list)
+    vocabulary_sets: list[StudentWordlistProgressItem] = Field(default_factory=list)
+    total_vocabulary_words: int = 0
+    mastered_vocabulary_words: int = 0
+    mastered_vocabulary_sets: int = 0

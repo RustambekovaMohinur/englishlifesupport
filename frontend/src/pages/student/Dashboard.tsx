@@ -5,6 +5,7 @@ import { ArrowRight, CheckCircle2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { EmptyState, LoadingRows, StatCard } from "@/components/ui";
 import { UserAvatar } from "@/components/common/UserAvatar";
+import { PeerProfileModal } from "@/components/PeerProfileModal";
 import { PlatformFeedbackModal, PublicCommunityReviewsWall } from "@/components/PlatformFeedbackModal";
 import {
   getStudentDashboard,
@@ -83,6 +84,8 @@ export default function StudentDashboardPage() {
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [publicFeedbacks, setPublicFeedbacks] = useState<PublicFeedbackItem[]>([]);
   const [isLoadingPublicFeedbacks, setIsLoadingPublicFeedbacks] = useState(true);
+  const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null);
+  const [isPeerModalOpen, setIsPeerModalOpen] = useState(false);
 
   const fetchReviews = () => {
     setIsLoadingPublicFeedbacks(true);
@@ -527,8 +530,17 @@ export default function StudentDashboardPage() {
                   return (
                     <div
                       key={entry.student_id}
-                      className={`p-3 rounded-xl text-xs flex flex-col gap-2 border transition-all ${medalBorder} ${
-                        entry.is_current_user ? "ring-2 ring-indigo-500 shadow-xs" : "hover:border-neutral-300 dark:hover:border-zinc-700"
+                      onClick={() => {
+                        setSelectedPeerId(entry.student_id);
+                        setIsPeerModalOpen(true);
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      title={`View ${entry.student_name}'s profile`}
+                      className={`p-3 rounded-xl text-xs flex flex-col gap-2 border transition-all cursor-pointer ${medalBorder} ${
+                        entry.is_current_user
+                          ? "ring-2 ring-indigo-500 shadow-xs"
+                          : "hover:border-indigo-400 dark:hover:border-indigo-600 hover:shadow-xs"
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -620,6 +632,15 @@ export default function StudentDashboardPage() {
         onSubmitted={() => {
           getPlatformFeedbackSummary().then(setFeedbackSummary).catch(() => null);
           fetchReviews();
+        }}
+      />
+
+      <PeerProfileModal
+        studentId={selectedPeerId}
+        isOpen={isPeerModalOpen}
+        onClose={() => {
+          setIsPeerModalOpen(false);
+          setSelectedPeerId(null);
         }}
       />
     </div>

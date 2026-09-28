@@ -152,6 +152,32 @@ export interface StudentHistoryItem {
   vocab_attempt_count?: number | null;
 }
 
+export interface StudentWordlistProgressItem {
+  set_id: string;
+  title: string;
+  group_name?: string | null;
+  total_words: number;
+  is_mastered: boolean;
+  best_score?: number | null;
+  best_time_seconds?: number | null;
+  attempts_count: number;
+  last_attempt_at?: string | null;
+}
+
+export interface PeerProfileOut {
+  id: string;
+  full_name: string;
+  username: string;
+  avatar_url?: string | null;
+  bio?: string | null;
+  group_name?: string | null;
+  level?: string | null;
+  total_stars: number;
+  total_lightning: number;
+  total_assignments_completed: number;
+  total_vocabulary_completed: number;
+}
+
 export interface StudentHistoryOut {
   student_id: string;
   full_name: string;
@@ -167,6 +193,10 @@ export interface StudentHistoryOut {
   active_assignments?: StudentHistoryItem[];
   past_cycles?: any[];
   history: StudentHistoryItem[];
+  vocabulary_sets?: StudentWordlistProgressItem[];
+  total_vocabulary_words?: number;
+  mastered_vocabulary_words?: number;
+  mastered_vocabulary_sets?: number;
 }
 
 export interface StudentOut {

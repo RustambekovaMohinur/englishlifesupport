@@ -6,7 +6,7 @@ from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_student_profile, require_teacher
+from app.api.deps import get_current_student_profile, get_current_user, require_teacher
 from app.core.config import settings
 from app.db.session import get_db
 from app.utils.datetimes import as_utc, utcnow
@@ -16,12 +16,14 @@ from app.models.student import StudentProfile
 from app.models.submission import Submission
 from app.models.user import ApprovalStatus, User, UserRole
 from app.models.vocabulary import VocabularyAssignment, VocabularyAttempt
+from app.models.wordlist import WordlistSet, WordlistQuizAttempt
 from app.schemas.student import (
     ApprovedStudentData,
     ApproveStudentResponse,
     PaginatedPendingStudents,
     PaginatedStudents,
     PendingStudentItem,
+    PeerProfileOut,
     RejectedStudentData,
     RejectStudentResponse,
     StudentApprovalAction,
@@ -33,6 +35,7 @@ from app.schemas.student import (
     StudentPlacementUpdate,
     StudentStatusUpdate,
     StudentUpdate,
+    StudentWordlistProgressItem,
 )
 
 from pydantic import BaseModel, Field
@@ -819,13 +822,86 @@ async def get_student_history(
             else:
                 past_cycles.append(item)
 
-        cycle_progress_percentage = (
-            int(round((cycle_completed_tasks / cycle_total_tasks) * 100))
-            if cycle_total_tasks > 0
-            else 0
+    grp = profile.group
+
+    # Load all vocabulary sets assigned to this student's group (or global)
+    vocab_query = select(WordlistSet).order_by(WordlistSet.created_at.desc())
+    if profile.group_id:
+        vocab_query = vocab_query.where(
+            or_(WordlistSet.group_id == profile.group_id, WordlistSet.group_id.is_(None))
+        )
+    else:
+        vocab_query = vocab_query.where(WordlistSet.group_id.is_(None))
+
+    vocab_sets_res = await db.execute(vocab_query)
+    vocab_sets = vocab_sets_res.scalars().all()
+    vocab_set_ids = [vs.id for vs in vocab_sets]
+
+    # Query all quiz/flashcard attempts for this student on these sets
+    student_attempts_map: dict[uuid.UUID, list[WordlistQuizAttempt]] = {}
+    if vocab_set_ids:
+        att_res = await db.execute(
+            select(WordlistQuizAttempt)
+            .where(
+                WordlistQuizAttempt.set_id.in_(vocab_set_ids),
+                WordlistQuizAttempt.student_id == profile.id,
+            )
+            .order_by(WordlistQuizAttempt.created_at.desc())
+        )
+        for att in att_res.scalars().all():
+            student_attempts_map.setdefault(att.set_id, []).append(att)
+
+    vocabulary_sets_out: list[StudentWordlistProgressItem] = []
+    total_vocab_words = 0
+    mastered_vocab_words = 0
+    mastered_vocab_sets = 0
+
+    for vs in vocab_sets:
+        set_attempts = student_attempts_map.get(vs.id, [])
+        word_count = vs.total_words or 0
+        total_vocab_words += word_count
+
+        is_mastered = any(a.is_mastered for a in set_attempts)
+        best_score = max((a.score_percentage for a in set_attempts), default=None)
+        best_time = min((a.time_spent_seconds for a in set_attempts if a.time_spent_seconds > 0), default=None)
+        last_attempt_at = set_attempts[0].created_at if set_attempts else None
+
+        if is_mastered or (best_score is not None and best_score >= 100):
+            mastered_vocab_sets += 1
+            mastered_vocab_words += word_count
+
+        grp_label = "Cohort Deck" if vs.group_id == profile.group_id else "Global Deck"
+        vocabulary_sets_out.append(
+            StudentWordlistProgressItem(
+                set_id=vs.id,
+                title=vs.title,
+                group_name=grp.name if (grp and vs.group_id == grp.id) else grp_label,
+                total_words=word_count,
+                is_mastered=is_mastered or (best_score is not None and best_score >= 100),
+                best_score=best_score,
+                best_time_seconds=best_time,
+                attempts_count=len(set_attempts),
+                last_attempt_at=last_attempt_at,
+            )
         )
 
-    grp = profile.group
+    # Combined Cycle Progress: include vocabulary deck completions
+    cohort_vocab_sets = [vs for vs in vocab_sets if vs.group_id == profile.group_id]
+    active_vocab_pool = cohort_vocab_sets if len(cohort_vocab_sets) > 0 else vocab_sets
+    active_vocab_completed = sum(
+        1 for vs in active_vocab_pool
+        if any(a.is_mastered or a.score_percentage >= 100 for a in student_attempts_map.get(vs.id, []))
+    )
+
+    combined_cycle_total = cycle_total_tasks + len(active_vocab_pool)
+    combined_cycle_completed = cycle_completed_tasks + active_vocab_completed
+
+    cycle_progress_percentage = (
+        int(round((combined_cycle_completed / combined_cycle_total) * 100))
+        if combined_cycle_total > 0
+        else 0
+    )
+
     return StudentHistoryOut(
         student_id=profile.id,
         full_name=profile.full_name or "",
@@ -835,12 +911,74 @@ async def get_student_history(
         group_name=grp.name if grp else None,
         total_stars=profile.total_stars or 0,
         total_lightning=getattr(profile, "total_lightning", 0) or 0,
-        cycle_completed_tasks=cycle_completed_tasks,
-        cycle_total_tasks=cycle_total_tasks,
+        cycle_completed_tasks=combined_cycle_completed,
+        cycle_total_tasks=combined_cycle_total,
         cycle_progress_percentage=cycle_progress_percentage,
         active_assignments=active_assignments,
         past_cycles=past_cycles,
         history=history_items,
+        vocabulary_sets=vocabulary_sets_out,
+        total_vocabulary_words=total_vocab_words,
+        mastered_vocabulary_words=mastered_vocab_words,
+        mastered_vocabulary_sets=mastered_vocab_sets,
+    )
+
+
+@router.get("/{student_id}/peer-profile", response_model=PeerProfileOut)
+async def get_peer_profile(
+    student_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Public/peer profile endpoint accessible to students and teachers.
+    Displays public competitive metrics (XP/stars, lightning/streak, assignments & vocab completed).
+    Omits sensitive private fields like email, phone, and reset password.
+    """
+    result = await db.execute(
+        select(StudentProfile)
+        .options(selectinload(StudentProfile.group), selectinload(StudentProfile.user))
+        .where(or_(StudentProfile.id == student_id, StudentProfile.user_id == student_id))
+    )
+    profile = result.scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student profile not found")
+
+    # Count total non-archived completed assignments
+    subs_cnt_res = await db.execute(
+        select(func.count(Submission.id))
+        .where(
+            Submission.student_id == profile.id,
+            Submission.is_archived.is_(False),
+        )
+    )
+    total_assignments_completed = subs_cnt_res.scalar() or 0
+
+    # Count total mastered or completed vocabulary decks
+    vocab_cnt_res = await db.execute(
+        select(func.count(func.distinct(WordlistQuizAttempt.set_id)))
+        .where(
+            WordlistQuizAttempt.student_id == profile.id,
+            or_(WordlistQuizAttempt.is_mastered.is_(True), WordlistQuizAttempt.score_percentage >= 100),
+        )
+    )
+    total_vocab_completed = vocab_cnt_res.scalar() or 0
+
+    grp = profile.group
+    level_str = grp.english_level.value if grp and hasattr(grp.english_level, "value") else (str(grp.english_level) if grp and grp.english_level else None)
+
+    return PeerProfileOut(
+        id=profile.id,
+        full_name=profile.full_name or "Student",
+        username=profile.user.username if profile.user else "",
+        avatar_url=profile.avatar_url,
+        bio=profile.bio,
+        group_name=grp.name if grp else None,
+        level=level_str,
+        total_stars=profile.total_stars or 0,
+        total_lightning=getattr(profile, "total_lightning", 0) or 0,
+        total_assignments_completed=total_assignments_completed,
+        total_vocabulary_completed=total_vocab_completed,
     )
 
 

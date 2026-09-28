@@ -9,6 +9,7 @@ import {
   Paginated,
   PaginatedPendingStudents,
   PendingStudentItem,
+  PeerProfileOut,
   PlatformFeedback,
   PlatformFeedbackStats,
   PlatformFeedbackSummary,
@@ -69,6 +70,8 @@ export const handleStudentApproval = (student_id: string, action: "approve" | "r
 export const getStudent = (id: string) => cachedGet<StudentOut>(`/students/${id}`);
 export const getStudentHistory = (student_id: string) =>
   cachedGet<StudentHistoryOut>(`/students/${student_id}/history`);
+export const getPeerProfile = (student_id: string) =>
+  cachedGet<PeerProfileOut>(`/students/${student_id}/peer-profile`);
 export const getMyStudentProfile = () => cachedGet<StudentOut>("/students/me");
 export const updateStudent = (id: string, body: Partial<{ full_name: string; phone: string; group_id: string | null }>) =>
   api.patch<StudentOut>(`/students/${id}`, body).then((r) => r.data);

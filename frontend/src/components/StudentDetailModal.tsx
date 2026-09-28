@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
-import { ChevronDown, History } from "lucide-react";
+import { ChevronDown, History, BookOpen, Layers, Trophy, Clock, CheckCircle2 } from "lucide-react";
 import { FileDownloadButton, LoadingRows, Modal, Spinner, TelegramLink } from "@/components/ui";
 import { getStudent, getStudentHistory, listGroups, listSubmissions, resetStudentPassword, updateStudentPlacement } from "@/services/lmsService";
-import { Group, StudentHistoryOut, StudentOut, SubmissionOut } from "@/types";
+import { Group, StudentHistoryOut, StudentOut, SubmissionOut, StudentWordlistProgressItem } from "@/types";
 import { UserAvatar } from "@/components/common/UserAvatar";
 
 interface StudentDetailModalProps {
@@ -34,6 +34,7 @@ export default function StudentDetailModal({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isResetting, setIsResetting] = useState(false);
   const [isPastCyclesOpen, setIsPastCyclesOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"assignments" | "vocabulary" | "past">("assignments");
 
   const isModalOpen = (isOpen ?? open) !== undefined ? Boolean(isOpen ?? open) : Boolean(studentId);
 
@@ -384,8 +385,90 @@ export default function StudentDetailModal({
     );
   }
 
+  const vocabSets: StudentWordlistProgressItem[] = useMemo(() => {
+    return Array.isArray(history?.vocabulary_sets) ? history.vocabulary_sets : [];
+  }, [history]);
+
+  const vocabTotalWords = history?.total_vocabulary_words ?? 0;
+  const vocabMasteredWords = history?.mastered_vocabulary_words ?? 0;
+  const vocabMasteredSets = history?.mastered_vocabulary_sets ?? 0;
+  const vocabTotalSets = vocabSets.length;
+  const vocabPct = vocabTotalWords > 0 ? Math.round((vocabMasteredWords / vocabTotalWords) * 100) : 0;
+
+  function renderVocabCard(vs: StudentWordlistProgressItem) {
+    if (!vs) return null;
+    const isMastered = vs.is_mastered || (vs.best_score != null && vs.best_score >= 100);
+    const hasAttempted = vs.attempts_count > 0;
+
+    let lastAttemptStr: string | null = null;
+    try {
+      if (vs.last_attempt_at) {
+        const d = new Date(vs.last_attempt_at);
+        lastAttemptStr = isNaN(d.getTime()) ? null : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      }
+    } catch {}
+
+    return (
+      <div
+        key={vs.set_id}
+        className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-slate-900 p-3.5 space-y-2.5 shadow-xs"
+      >
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <h5 className="font-semibold text-zinc-900 dark:text-white text-sm truncate">{vs.title}</h5>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              <span>{vs.group_name || "Vocabulary Deck"}</span>
+              <span>•</span>
+              <span className="font-mono font-medium">{vs.total_words} words</span>
+              {lastAttemptStr && (
+                <>
+                  <span>•</span>
+                  <span>Last practiced: {lastAttemptStr}</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+            {isMastered ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+                ⭐ 100% Mastered
+              </span>
+            ) : hasAttempted ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-100 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 font-mono">
+                ✓ Practiced ({vs.best_score ?? 0}%)
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+                ○ Not Attempted Yet
+              </span>
+            )}
+          </div>
+        </div>
+
+        {hasAttempted && (
+          <div className="flex flex-wrap items-center gap-3 text-xs font-semibold bg-zinc-50 dark:bg-zinc-850 px-3 py-1.5 rounded-lg border border-zinc-200/60 dark:border-zinc-800">
+            {vs.best_score != null && (
+              <span className="text-zinc-800 dark:text-zinc-200">
+                Best Quiz Score: <span className="text-indigo-600 dark:text-indigo-400 font-bold font-mono">{vs.best_score}%</span>
+              </span>
+            )}
+            {vs.best_time_seconds != null && vs.best_time_seconds > 0 && (
+              <span className="text-zinc-600 dark:text-zinc-400 font-mono text-[11px]">
+                ⏱️ Best Time: {Math.floor(vs.best_time_seconds / 60)}m {vs.best_time_seconds % 60}s
+              </span>
+            )}
+            <span className="text-zinc-500 dark:text-zinc-400 font-mono text-[11px] ml-auto">
+              Total Attempts: {vs.attempts_count}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <Modal open={isModalOpen} onClose={onClose} title={`Student: ${fullName}`}>
+    <Modal open={isModalOpen} onClose={onClose} title={`Student: ${fullName}`} maxWidth="sm:max-w-3xl">
       {isLoading && !profile && !history ? (
         <div className="space-y-4 py-8">
           <div className="flex flex-col items-center justify-center gap-3 text-zinc-500 dark:text-zinc-400">
@@ -407,7 +490,7 @@ export default function StudentDetailModal({
           </div>
         </div>
       ) : (
-        <div className="space-y-5 pr-1 text-sm">
+        <div className="space-y-5 pr-1 text-sm overflow-x-hidden w-full max-w-full">
           {/* Header Profile Info Card */}
           <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-slate-900/80 p-4 shadow-sm">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -499,71 +582,114 @@ export default function StudentDetailModal({
           </div>
 
           {/* Gamification & Progress Stats Row: Synchronized with Active Cohort Progress */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-center">
-              <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">⭐ Stars</span>
+              <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">⭐ Stars</span>
               <span className="text-xl font-black text-amber-600 dark:text-amber-300 mt-0.5 block">{totalStars}</span>
             </div>
             <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-center">
-              <span className="text-xs font-semibold text-yellow-700 dark:text-yellow-400 uppercase tracking-wider block">⚡ Lightning</span>
+              <span className="text-[11px] font-semibold text-yellow-700 dark:text-yellow-400 uppercase tracking-wider block">⚡ Lightning</span>
               <span className="text-xl font-black text-yellow-600 dark:text-yellow-300 mt-0.5 block">{totalLightning}</span>
             </div>
             <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-center">
-              <span className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wider block">Active Cycle Progress</span>
-              <span className="text-xl font-black text-blue-600 dark:text-blue-300 mt-0.5 block">
-                {cycleCompleted} / {cycleTotal} Tasks ({cyclePct}%)
+              <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wider block">Active Cycle</span>
+              <span className="text-sm sm:text-base font-black text-blue-600 dark:text-blue-300 mt-0.5 block">
+                {cycleCompleted} / {cycleTotal} ({cyclePct}%)
               </span>
             </div>
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-center">
-              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">Lifetime Completed</span>
-              <span className="text-xl font-black text-emerald-600 dark:text-emerald-300 mt-0.5 block">
+            <div className="rounded-xl border border-purple-500/20 bg-purple-500/10 p-3 text-center">
+              <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-400 uppercase tracking-wider block">📚 Vocabulary</span>
+              <span className="text-sm sm:text-base font-black text-purple-600 dark:text-purple-300 mt-0.5 block">
+                {vocabMasteredWords} / {vocabTotalWords || vocabMasteredWords} Words
+              </span>
+              <span className="text-[10px] text-purple-600/80 dark:text-purple-400/80 block mt-0.5 font-medium">
+                {vocabMasteredSets} / {vocabTotalSets} decks ({vocabPct}%)
+              </span>
+            </div>
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-center col-span-2 sm:col-span-1">
+              <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">Lifetime Homework</span>
+              <span className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-300 mt-0.5 block">
                 {lifetimeCompleted} / {lifetimeTotal}
               </span>
             </div>
           </div>
 
-          {/* Primary Section: Active Cycle Assignments */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2">
-              <h4 className="font-bold text-zinc-900 dark:text-white text-sm flex items-center gap-1.5">
-                <span>🎯 Active Cycle Assignments</span>
-                <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">({activeCycleItems.length} tasks)</span>
-              </h4>
-            </div>
-
-            {activeCycleItems.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
-                No assignments published in the active cycle yet.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {activeCycleItems.map(renderHistoryCard)}
-              </div>
+          {/* Section Tabs: Active Cycle Assignments, Vocabulary Sets, Past Cycles */}
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/60 overflow-x-auto scrollbar-none">
+            <button
+              type="button"
+              onClick={() => setActiveTab("assignments")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                activeTab === "assignments"
+                  ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs"
+                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+              }`}
+            >
+              <span>🎯 Active Tasks ({activeCycleItems.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("vocabulary")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                activeTab === "vocabulary"
+                  ? "bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-xs"
+                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+              }`}
+            >
+              <span>📚 Vocabulary Sets ({vocabSets.length})</span>
+            </button>
+            {pastCycleItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("past")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                  activeTab === "past"
+                    ? "bg-white dark:bg-slate-900 text-zinc-900 dark:text-white shadow-xs"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+                }`}
+              >
+                <span>🕰️ Past Cycles ({pastCycleItems.length})</span>
+              </button>
             )}
           </div>
 
-          {/* Secondary Section: Past Cycles History (Collapsible Accordion) */}
-          {pastCycleItems.length > 0 && (
-            <div className="pt-2 border-t border-zinc-200/80 dark:border-zinc-800/80">
-              <button
-                type="button"
-                onClick={() => setIsPastCyclesOpen(!isPastCyclesOpen)}
-                className="w-full flex items-center justify-between p-3 rounded-xl bg-zinc-100/70 hover:bg-zinc-100 dark:bg-slate-900/50 dark:hover:bg-slate-900/80 border border-zinc-200/60 dark:border-zinc-800/70 text-zinc-700 dark:text-zinc-300 font-medium transition active:scale-[0.99]"
-              >
-                <div className="flex items-center gap-2">
-                  <History className="w-4 h-4 text-zinc-500" />
-                  <span className="font-semibold text-xs text-zinc-900 dark:text-white">
-                    Past Cycles History ({pastCycleItems.length} archived assignments)
-                  </span>
+          {/* Active Tab Content */}
+          {activeTab === "assignments" && (
+            <div className="space-y-3">
+              {activeCycleItems.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
+                  No assignments published in the active cycle yet.
                 </div>
-                <div className="flex items-center gap-1 text-xs text-zinc-500 font-medium">
-                  <span>{isPastCyclesOpen ? "Collapse" : "Expand"}</span>
-                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isPastCyclesOpen ? "rotate-180" : ""}`} />
+              ) : (
+                <div className="space-y-3">
+                  {activeCycleItems.map(renderHistoryCard)}
                 </div>
-              </button>
+              )}
+            </div>
+          )}
 
-              {isPastCyclesOpen && (
-                <div className="space-y-3 mt-3 pt-1">
+          {activeTab === "vocabulary" && (
+            <div className="space-y-3">
+              {vocabSets.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
+                  No vocabulary decks assigned or attempted yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {vocabSets.map(renderVocabCard)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "past" && (
+            <div className="space-y-3">
+              {pastCycleItems.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
+                  No past cycle archives for this student yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
                   {pastCycleItems.map(renderHistoryCard)}
                 </div>
               )}
