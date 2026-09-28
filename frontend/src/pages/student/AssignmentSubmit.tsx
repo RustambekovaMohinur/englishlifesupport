@@ -235,6 +235,20 @@ export default function StudentAssignmentSubmitPage() {
   const [voiceFile, setVoiceFile] = useState<File | null>(null);
   const [externalLink, setExternalLink] = useState("");
   const [textAnswer, setTextAnswer] = useState("");
+  const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
+
+  // Tab-switch tracker for submission integrity shield
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.hidden) {
+        setTabSwitchCount((prev) => prev + 1);
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   // Dropzone & Lightbox
   const [isDragging, setIsDragging] = useState(false);
@@ -622,7 +636,8 @@ export default function StudentAssignmentSubmitPage() {
         directStorageUrl ? null : voiceFile,
         directStorageUrl ? null : docFile,
         directStorageUrl,
-        directFileName
+        directFileName,
+        tabSwitchCount
       );
 
       // Clean up saved draft on successful submission
@@ -1541,11 +1556,30 @@ export default function StudentAssignmentSubmitPage() {
                     </div>
                   </div>
 
+                  {/* Submission Integrity Shield Warning Banner */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/20 text-xs">
+                    <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-medium">
+                      <Shield className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <span>Akademik halollik: Matn ko'chirish taqiqlangan (Copy-Paste bloklangan). Mustaqil yozing.</span>
+                    </div>
+                    {tabSwitchCount > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-200/80 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-mono">
+                        ⚠️ {tabSwitchCount}x oyna almashildi
+                      </span>
+                    )}
+                  </div>
+
                   <textarea
                     rows={10}
                     value={textAnswer}
                     onChange={(e) => setTextAnswer(e.target.value)}
-                    placeholder="Write your complete essay or homework text response here... You can use paragraphs, bullet points, and citations."
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      toast.error("Mustaqil yozing! Matn ko'chirish taqiqlangan.", {
+                        id: "no-paste-warning",
+                      });
+                    }}
+                    placeholder="Write your complete essay or homework text response here... (Copy-paste disabled)"
                     className="input text-sm w-full bg-white dark:bg-zinc-900 font-sans resize-y leading-relaxed p-4"
                   />
                 </div>

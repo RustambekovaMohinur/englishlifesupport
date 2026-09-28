@@ -1,6 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
+import {
+  Sparkles,
+  Shield,
+  CheckCircle2,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  Lightbulb,
+  Check,
+  Award,
+} from "lucide-react";
 import {
   EmptyState,
   LoadingRows,
@@ -10,6 +22,7 @@ import {
   AuthenticatedAudio,
   AuthenticatedImage,
   ImageLightbox,
+  Spinner,
 } from "@/components/ui";
 import {
   addSubmissionComment,
@@ -20,8 +33,10 @@ import {
   gradeSubmission,
   listGroups,
   listSubmissions,
+  evaluateSubmissionAI,
+  approveAIGrade,
 } from "@/services/lmsService";
-import { Group, SubmissionCommentOut, SubmissionCorrectionOut, SubmissionOut } from "@/types";
+import { AIWritingEvaluation, Group, SubmissionCommentOut, SubmissionCorrectionOut, SubmissionOut } from "@/types";
 import StudentDetailModal from "@/components/StudentDetailModal";
 import DuplicateCompareModal from "@/components/DuplicateCompareModal";
 
@@ -158,6 +173,22 @@ export default function SubmissionsPage() {
                             <span>🚨 {s.similarity_score ? `${Math.round(s.similarity_score * 100)}% Match` : "Flagged Copy"}</span>
                           </button>
                         )}
+                        {s.tab_switch_count !== undefined && s.tab_switch_count > 0 && (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 font-mono shadow-2xs"
+                            title={`O'quvchi matn yozishda boshqa oynaga ${s.tab_switch_count} marta o'tgan`}
+                          >
+                            ⚠️ {s.tab_switch_count}x oyna almashdi
+                          </span>
+                        )}
+                        {s.ai_grade_suggested !== undefined && s.ai_grade_suggested !== null && (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-500/15 text-violet-700 dark:text-violet-400 border border-violet-500/30 font-mono shadow-2xs"
+                            title="AI Examiner tavsiya etgan ball"
+                          >
+                            ✨ AI: {Math.round(s.ai_grade_suggested)}/100
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3.5 px-4">
@@ -229,12 +260,17 @@ function GradeModal({
   onGraded: (grade: SubmissionOut["grade"]) => void;
   onInspectDuplicate?: (id: string) => void;
 }) {
+  const [currentSub, setCurrentSub] = useState<SubmissionOut | null>(submission);
   const [score, setScore] = useState(8);
   const [stars, setStars] = useState(5);
   const [feedback, setFeedback] = useState("");
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEvaluatingAI, setIsEvaluatingAI] = useState(false);
+  const [isApprovingAI, setIsApprovingAI] = useState(false);
+  const [showCorrections, setShowCorrections] = useState(true);
+  const [showVocab, setShowVocab] = useState(true);
 
   // Corrections state
   const [corrections, setCorrections] = useState<SubmissionCorrectionOut[]>([]);
@@ -250,6 +286,7 @@ function GradeModal({
   const [isAddingComment, setIsAddingComment] = useState(false);
 
   useEffect(() => {
+    setCurrentSub(submission);
     if (submission) {
       setScore(submission.grade?.score ?? 8);
       setStars(submission.grade?.stars ?? 5);
@@ -263,6 +300,7 @@ function GradeModal({
       // Fetch fresh details to ensure latest corrections/comments
       getSubmission(submission.id)
         .then((fresh) => {
+          setCurrentSub(fresh);
           if (fresh.corrections) setCorrections(fresh.corrections);
           if (fresh.comments) setComments(fresh.comments);
         })
@@ -270,12 +308,61 @@ function GradeModal({
     }
   }, [submission]);
 
-  if (!submission) return null;
+  const aiEval: AIWritingEvaluation | null = useMemo(() => {
+    if (!currentSub?.ai_evaluation_json) return null;
+    try {
+      return JSON.parse(currentSub.ai_evaluation_json);
+    } catch {
+      return null;
+    }
+  }, [currentSub?.ai_evaluation_json]);
+
+  if (!submission || !currentSub) return null;
+
+  async function handleRunAIEvaluation() {
+    if (!currentSub) return;
+    setIsEvaluatingAI(true);
+    try {
+      const updated = await evaluateSubmissionAI(currentSub.id);
+      setCurrentSub(updated);
+      toast.success("AI Examiner tahlilni yakunladi! ✨");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "AI baholashda xatolik");
+    } finally {
+      setIsEvaluatingAI(false);
+    }
+  }
+
+  async function handleApproveAIGrade() {
+    if (!currentSub) return;
+    setIsApprovingAI(true);
+    try {
+      const updated = await approveAIGrade(currentSub.id);
+      setCurrentSub(updated);
+      toast.success("AI bahosi va tavsiyalari 1-bosishda tasdiqlandi! 🚀");
+      onGraded(updated.grade);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "AI bahosini tasdiqlashda xatolik");
+    } finally {
+      setIsApprovingAI(false);
+    }
+  }
+
+  function handlePreFillFromAI() {
+    if (!aiEval) return;
+    const scoreVal = Math.max(0, Math.min(10, Math.round(aiEval.suggested_score / 10)));
+    setScore(scoreVal);
+    setStars(scoreVal);
+    const text = `✨ [AI Examiner - Band ${aiEval.band} (${aiEval.suggested_score}/100)]\n${aiEval.summary}${aiEval.coherence_feedback ? `\n\nCoherence & Flow: ${aiEval.coherence_feedback}` : ""}`;
+    setFeedback(text);
+    toast.success("Ball va tavsiyalar forma maydonlariga joylandi!");
+  }
 
   async function handleSave() {
+    if (!currentSub) return;
     setIsSaving(true);
     try {
-      const grade = await gradeSubmission(submission!.id, { score, stars, feedback: feedback || undefined });
+      const grade = await gradeSubmission(currentSub.id, { score, stars, feedback: feedback || undefined });
       toast.success("Grade saved");
       onGraded(grade);
     } catch (err: any) {
@@ -386,7 +473,7 @@ function GradeModal({
             {onInspectDuplicate && (
               <button
                 type="button"
-                onClick={() => onInspectDuplicate(submission.id)}
+                onClick={() => onInspectDuplicate(currentSub.id)}
                 className="px-3.5 py-1.5 rounded-xl font-bold bg-rose-600 hover:bg-rose-500 text-white shrink-0 shadow-2xs transition active:scale-95 text-xs self-end sm:self-center"
               >
                 Inspect Match →
@@ -394,9 +481,217 @@ function GradeModal({
             )}
           </div>
         )}
+        {/* Submission Integrity Shield Warning Banner */}
+        {currentSub.tab_switch_count !== undefined && currentSub.tab_switch_count > 0 && (
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/30 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 text-amber-800 dark:text-amber-300">
+              <span className="text-xl shrink-0">⚠️</span>
+              <div>
+                <p className="font-bold">
+                  Akademik halollik ogohlantirishi: O'quvchi boshqa oynaga {currentSub.tab_switch_count} marta o'tdi!
+                </p>
+                <p className="text-[11px] text-amber-700/80 dark:text-amber-300/80">
+                  Insho yozish jarayonida sahifadan chiqib ketilgan (ChatGPT yoki qidiruvdan nusxa olish ehtimoli).
+                </p>
+              </div>
+            </div>
+            <span className="px-3 py-1 rounded-xl font-bold bg-amber-200/80 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-mono text-xs shrink-0 shadow-2xs">
+              {currentSub.tab_switch_count}x oyna almashdi
+            </span>
+          </div>
+        )}
+
+        {/* AI Writing Examiner Card */}
+        {currentSub.text_answer && (
+          <div className="rounded-2xl border border-violet-200 dark:border-violet-900/60 bg-gradient-to-br from-violet-50/40 via-white to-indigo-50/40 dark:from-[#151728] dark:via-[#111827] dark:to-[#161B2E] p-4 sm:p-5 space-y-4 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-violet-100 dark:border-violet-900/40">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-violet-600 text-white flex items-center justify-center shadow-xs">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                    <span>AI Writing Examiner</span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800">
+                      IELTS & CEFR Rubric
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Avtomatlashtirilgan grammatika, leksika va mantiqiy bog'liqlik tahlili
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {aiEval && (
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-violet-100 dark:bg-violet-950 text-violet-800 dark:text-violet-200 border border-violet-200 dark:border-violet-800 text-xs font-bold font-mono shadow-2xs">
+                    <Award className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
+                    <span>Band {aiEval.band} ({aiEval.suggested_score}/100)</span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={handleRunAIEvaluation}
+                  disabled={isEvaluatingAI}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-violet-50 hover:bg-violet-100 dark:bg-violet-900/40 dark:hover:bg-violet-900/70 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 transition active:scale-95 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isEvaluatingAI ? "animate-spin" : ""}`} />
+                  <span>{isEvaluatingAI ? "Tahlil qilinmoqda..." : aiEval ? "Qayta tahlil" : "AI Tahlilni Boshlash"}</span>
+                </button>
+              </div>
+            </div>
+
+            {aiEval ? (
+              <div className="space-y-4 pt-1">
+                {/* 1-Click Approve Bar */}
+                <div className="p-3.5 rounded-xl bg-violet-500/10 dark:bg-violet-950/40 border border-violet-500/30 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="text-xs font-bold text-violet-950 dark:text-violet-200 block">
+                      ✨ 1-Click Tasdiqlash: {Math.round(aiEval.suggested_score / 10)}/10 ball (+{Math.round(aiEval.suggested_score / 10)} ⭐)
+                    </span>
+                    <span className="text-[11px] text-violet-700/80 dark:text-violet-300/80">
+                      Tavsiya etilgan ball va pedagogik xulosani bir bosishda qo'llang va saqlang.
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handlePreFillFromAI}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 transition active:scale-95 shadow-2xs"
+                    >
+                      📝 Formaga joylash
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApproveAIGrade}
+                      disabled={isApprovingAI}
+                      className="px-4 py-1.5 rounded-xl text-xs font-bold bg-violet-600 hover:bg-violet-500 text-white transition active:scale-95 shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{isApprovingAI ? "Saqlanmoqda..." : "Approve AI Grade (1-Click)"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Summary & Coherence */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 space-y-1">
+                    <span className="font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                      Umumiy xulosa & Baholash
+                    </span>
+                    <p className="text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                      {aiEval.summary}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 space-y-1">
+                    <span className="font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
+                      <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                      Mantiqiy izchillik & Coherence
+                    </span>
+                    <p className="text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                      {aiEval.coherence_feedback || "Mantiqiy o'tishlar va paragraflar tuzilishi to'g'ri shakllantirilgan."}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Grammar Corrections */}
+                {aiEval.grammar_corrections && aiEval.grammar_corrections.length > 0 && (
+                  <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900">
+                    <button
+                      type="button"
+                      onClick={() => setShowCorrections((p) => !p)}
+                      className="w-full flex items-center justify-between p-3 bg-zinc-50/60 dark:bg-zinc-850/40 text-xs font-bold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span>✏️ Grammatik tuzatishlar ({aiEval.grammar_corrections.length})</span>
+                      </span>
+                      {showCorrections ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+                    {showCorrections && (
+                      <div className="p-3 space-y-2 divide-y divide-zinc-100 dark:divide-zinc-800/80">
+                        {aiEval.grammar_corrections.map((corr, idx) => (
+                          <div key={idx} className="pt-2 first:pt-0 space-y-1 text-xs">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="line-through text-rose-600 dark:text-rose-400 font-mono bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 rounded">
+                                {corr.original}
+                              </span>
+                              <span className="text-zinc-400">→</span>
+                              <span className="text-emerald-700 dark:text-emerald-300 font-bold font-mono bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+                                {corr.corrected}
+                              </span>
+                            </div>
+                            {corr.explanation && (
+                              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 pl-1">
+                                💡 {corr.explanation}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Vocabulary Upgrades */}
+                {aiEval.vocabulary_improvements && aiEval.vocabulary_improvements.length > 0 && (
+                  <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900">
+                    <button
+                      type="button"
+                      onClick={() => setShowVocab((p) => !p)}
+                      className="w-full flex items-center justify-between p-3 bg-zinc-50/60 dark:bg-zinc-850/40 text-xs font-bold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span>📚 Leksik boylik: C1/B2 Sinonimlar ({aiEval.vocabulary_improvements.length})</span>
+                      </span>
+                      {showVocab ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+                    {showVocab && (
+                      <div className="p-3 space-y-2 divide-y divide-zinc-100 dark:divide-zinc-800/80">
+                        {aiEval.vocabulary_improvements.map((voc, idx) => (
+                          <div key={idx} className="pt-2 first:pt-0 flex flex-wrap items-center gap-2 text-xs">
+                            <span className="font-semibold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded font-mono">
+                              "{voc.word}"
+                            </span>
+                            <span className="text-zinc-400">o'rniga:</span>
+                            <div className="flex flex-wrap gap-1">
+                              {voc.suggestions.map((sug, sIdx) => (
+                                <span
+                                  key={sIdx}
+                                  className="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[11px] font-medium"
+                                >
+                                  {sug}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-violet-50/40 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/30 flex items-center justify-between gap-3 text-xs">
+                <span className="text-zinc-600 dark:text-zinc-400">
+                  Ushbu insho hali AI Examiner tomonidan tahlil qilinmagan. Tahlilni boshlash uchun o'ngdagi tugmani bosing.
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRunAIEvaluation}
+                  disabled={isEvaluatingAI}
+                  className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 shrink-0"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{isEvaluatingAI ? "Tekshirilmoqda..." : "Tahlilni Boshlash"}</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Text answer & Interactive correction */}
-        {submission.text_answer && (
+        {currentSub.text_answer && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
@@ -413,7 +708,7 @@ function GradeModal({
             <div
               className="whitespace-pre-wrap rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 text-sm text-zinc-800 dark:text-zinc-200 selection:bg-brand-200 selection:text-brand-900 dark:selection:bg-brand-900 dark:selection:text-brand-100 leading-relaxed"
             >
-              {submission.text_answer}
+              {currentSub.text_answer}
             </div>
 
             {/* Error Marking Section */}
@@ -516,16 +811,16 @@ function GradeModal({
         )}
 
         {/* Attached images from student */}
-        {submission.images && submission.images.length > 0 && (
+        {currentSub.images && currentSub.images.length > 0 && (
           <div className="space-y-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 bg-zinc-50/50 dark:bg-zinc-900/50">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
-                📸 Submitted Images / Notebook Scans ({submission.images.length})
+                📸 Submitted Images / Notebook Scans ({currentSub.images.length})
               </span>
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Click to enlarge</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
-              {submission.images.map((img, idx) => (
+              {currentSub.images.map((img, idx) => (
                 <div
                   key={img.id}
                   onClick={() => {
@@ -535,7 +830,7 @@ function GradeModal({
                   className="group relative cursor-pointer overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 aspect-square hover:shadow-md transition-shadow"
                 >
                   <AuthenticatedImage
-                    url={`/api/submissions/${submission.id}/images/${img.id}`}
+                    url={`/api/submissions/${currentSub.id}/images/${img.id}`}
                     alt={img.original_name}
                     className="h-full w-full object-cover transition-transform group-hover:scale-105"
                   />
@@ -551,20 +846,20 @@ function GradeModal({
         )}
 
         {/* Attached file & audio */}
-        {submission.file_url && (
+        {currentSub.file_url && (
           <div className="space-y-1">
             <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Attached File / Voice Recording</p>
             <FileDownloadButton
-              url={submission.file_url}
-              filename={submission.file_original_name}
+              url={currentSub.file_url}
+              filename={currentSub.file_original_name}
               className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline inline-block mb-1"
             >
-              📎 {submission.file_original_name ?? "Download attached file"}
+              📎 {currentSub.file_original_name ?? "Download attached file"}
             </FileDownloadButton>
-            {submission.file_original_name && /\.(mp3|wav|ogg|webm|m4a)$/i.test(submission.file_original_name) && (
+            {currentSub.file_original_name && /\.(mp3|wav|ogg|webm|m4a)$/i.test(currentSub.file_original_name) && (
               <div className="mt-2 p-2 bg-purple-50 dark:bg-purple-950/40 rounded-lg border border-purple-200 dark:border-purple-800">
                 <p className="text-xs font-semibold text-purple-900 dark:text-purple-300 mb-1">🎙️ Student Voice Audio Recording</p>
-                <AuthenticatedAudio url={submission.file_url} className="w-full h-9" />
+                <AuthenticatedAudio url={currentSub.file_url} className="w-full h-9" />
               </div>
             )}
           </div>
@@ -767,8 +1062,8 @@ function GradeModal({
 
       <ImageLightbox
         isOpen={lightboxOpen}
-        images={(submission.images || []).map((img) => ({
-          url: `/api/submissions/${submission.id}/images/${img.id}`,
+        images={(currentSub.images || []).map((img) => ({
+          url: `/api/submissions/${currentSub.id}/images/${img.id}`,
           name: img.original_name,
         }))}
         initialIndex={lightboxIndex}

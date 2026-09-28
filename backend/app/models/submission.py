@@ -59,6 +59,12 @@ class Submission(UUIDPKMixin, TimestampMixin, Base):
     )
     flag_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # Submission Integrity Shield & AI Examiner evaluation
+    tab_switch_count: Mapped[int] = mapped_column(BigInteger, default=0, server_default=sa.text("0"), nullable=False)
+    ai_evaluation_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_grade_suggested: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    ai_evaluated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     assignment: Mapped["Assignment"] = relationship(back_populates="submissions")
     student: Mapped["StudentProfile"] = relationship(back_populates="submissions")
     duplicate_of: Mapped["Submission | None"] = relationship(

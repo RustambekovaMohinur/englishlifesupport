@@ -555,6 +555,30 @@ export interface SubmissionOut {
   duplicate_of_submission_id?: string | null;
   flag_reason?: string | null;
   original_student_name?: string | null;
+  tab_switch_count?: number;
+  ai_evaluation_json?: string | null;
+  ai_grade_suggested?: number | null;
+  ai_evaluated_at?: string | null;
+}
+
+export interface AIWritingCorrection {
+  original: string;
+  corrected: string;
+  explanation: string;
+}
+
+export interface AIVocabImprovement {
+  word: string;
+  suggestions: string[];
+}
+
+export interface AIWritingEvaluation {
+  suggested_score: number;
+  band: string;
+  summary: string;
+  grammar_corrections: AIWritingCorrection[];
+  vocabulary_improvements: AIVocabImprovement[];
+  coherence_feedback: string;
 }
 
 export interface SubmissionCompareItem {

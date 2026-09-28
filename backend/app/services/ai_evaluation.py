@@ -381,21 +381,32 @@ async def evaluate_submission_background(submission_id: uuid.UUID) -> None:
 
             elif has_text:
                 feedback_record.assignment_type = "writing"
-                result = await evaluate_writing(
-                    submission_text=submission.text_answer.strip(),
-                    assignment_title=assignment.title,
-                    assignment_prompt=assignment.description,
+                from app.services.ai_examiner import evaluate_writing_submission
+                from app.utils.datetimes import utcnow
+
+                topic = assignment.title
+                if assignment.description:
+                    topic += f"\n{assignment.description}"
+
+                writing_eval = await evaluate_writing_submission(
+                    prompt_topic=topic,
+                    student_text=submission.text_answer.strip()
                 )
 
-                feedback_record.band_score = float(result.get("band_score", 0))
-                feedback_record.scaled_score_10 = float(result.get("scaled_score_10", 0))
-                feedback_record.criteria_scores = result.get("criteria_scores")
-                feedback_record.strengths = result.get("strengths")
-                feedback_record.areas_for_improvement = result.get("areas_for_improvement")
-                feedback_record.detailed_corrections = result.get("detailed_corrections")
-                feedback_record.overall_feedback = result.get("overall_feedback")
+                submission.ai_evaluation_json = json.dumps(writing_eval)
+                submission.ai_grade_suggested = float(writing_eval.get("suggested_score", 85))
+                submission.ai_evaluated_at = utcnow()
+
+                feedback_record.band_score = float(writing_eval.get("band", 6.5))
+                feedback_record.scaled_score_10 = round(float(writing_eval.get("suggested_score", 85)) / 10.0, 1)
+                feedback_record.overall_feedback = writing_eval.get("summary")
+                feedback_record.areas_for_improvement = [writing_eval.get("coherence_feedback", "")] if writing_eval.get("coherence_feedback") else []
+                feedback_record.detailed_corrections = [
+                    {"original": c.get("original", ""), "correction": c.get("corrected", ""), "explanation": c.get("explanation", "")}
+                    for c in writing_eval.get("grammar_corrections", [])
+                ]
                 feedback_record.transcription = None
-                feedback_record.ai_raw_response = result
+                feedback_record.ai_raw_response = writing_eval
                 feedback_record.status = AIEvaluationStatus.COMPLETED.value
                 feedback_record.error_message = None
 

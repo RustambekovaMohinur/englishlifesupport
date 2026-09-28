@@ -118,6 +118,12 @@ class SubmissionOut(BaseModel):
     flag_reason: str | None = None
     original_student_name: str | None = None
 
+    # Submission Integrity Shield & AI Examiner evaluation
+    tab_switch_count: int = 0
+    ai_evaluation_json: str | None = None
+    ai_grade_suggested: float | None = None
+    ai_evaluated_at: datetime | None = None
+
     model_config = {"from_attributes": True}
 
 

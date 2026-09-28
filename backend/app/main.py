@@ -269,6 +269,10 @@ async def _run_startup_tasks():
                         await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS parent_linked_at TIMESTAMP WITH TIME ZONE"))
                         await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS last_parent_digest_sent_at TIMESTAMP WITH TIME ZONE"))
                         await conn.execute(sa.text("ALTER TABLE assignments ADD COLUMN IF NOT EXISTS parent_digest_sent BOOLEAN NOT NULL DEFAULT FALSE"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS tab_switch_count BIGINT NOT NULL DEFAULT 0"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS ai_evaluation_json TEXT"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS ai_grade_suggested DOUBLE PRECISION"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS ai_evaluated_at TIMESTAMP WITH TIME ZONE"))
                     else:
                         res = await conn.execute(sa.text("PRAGMA table_info(wordlist_sets)"))
                         cols = [r[1] for r in res.fetchall()]
@@ -295,6 +299,14 @@ async def _run_startup_tasks():
                             await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN duplicate_of_submission_id TEXT"))
                         if "flag_reason" not in sub_cols:
                             await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN flag_reason VARCHAR(500)"))
+                        if "tab_switch_count" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN tab_switch_count BIGINT NOT NULL DEFAULT 0"))
+                        if "ai_evaluation_json" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN ai_evaluation_json TEXT"))
+                        if "ai_grade_suggested" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN ai_grade_suggested FLOAT"))
+                        if "ai_evaluated_at" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN ai_evaluated_at TIMESTAMP"))
 
                         res_simg = await conn.execute(sa.text("PRAGMA table_info(submission_images)"))
                         simg_cols = [r[1] for r in res_simg.fetchall()]

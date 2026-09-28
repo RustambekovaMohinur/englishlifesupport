@@ -217,6 +217,21 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                   </div>
                 </div>
 
+                {/* Submission Integrity Shield Warning Banner */}
+                {submission.tab_switch_count !== undefined && submission.tab_switch_count > 0 && (
+                  <div className="p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/30 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                      <span className="text-base shrink-0">⚠️</span>
+                      <p className="font-semibold">
+                        O'quvchi topshiriq yozishda boshqa oynaga {submission.tab_switch_count} marta o'tgan
+                      </p>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full font-bold bg-amber-200/80 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-mono text-[11px] shrink-0">
+                      {submission.tab_switch_count}x chiqish
+                    </span>
+                  </div>
+                )}
+
                 {/* Submission Artifacts */}
                 <div className="space-y-4">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">

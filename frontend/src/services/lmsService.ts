@@ -246,7 +246,8 @@ export const submitHomework = (
   voice_file?: File | null,
   doc_file?: File | null,
   storage_url?: string | null,
-  file_original_name?: string | null
+  file_original_name?: string | null,
+  tab_switch_count?: number
 ) => {
   const formData = new FormData();
   formData.append("assignment_id", String(assignment_id));
@@ -255,6 +256,10 @@ export const submitHomework = (
   if (textContent) {
     formData.append("content", textContent);
     formData.append("text_answer", textContent);
+  }
+
+  if (tab_switch_count !== undefined && tab_switch_count > 0) {
+    formData.append("tab_switch_count", String(tab_switch_count));
   }
 
   if (storage_url) {
@@ -301,6 +306,16 @@ export const submitHomework = (
     timeout: 120000, // 2 full minutes for slow mobile connections
     headers: { "Content-Type": undefined },
   }).then((r) => r.data);
+};
+
+export const evaluateSubmissionAI = async (submissionId: string): Promise<SubmissionOut> => {
+  const r = await api.post<SubmissionOut>(`/submissions/${submissionId}/ai-evaluate`);
+  return r.data;
+};
+
+export const approveAIGrade = async (submissionId: string): Promise<SubmissionOut> => {
+  const r = await api.post<SubmissionOut>(`/submissions/${submissionId}/approve-ai-grade`);
+  return r.data;
 };
 
 export const gradeSubmission = (id: string, body: { score: number; feedback?: string; stars: number }) =>

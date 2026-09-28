@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -206,6 +207,10 @@ def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = 
         duplicate_of_submission_id=getattr(sub, "duplicate_of_submission_id", None),
         flag_reason=getattr(sub, "flag_reason", None),
         original_student_name=orig_student_name,
+        tab_switch_count=getattr(sub, "tab_switch_count", 0) or 0,
+        ai_evaluation_json=getattr(sub, "ai_evaluation_json", None),
+        ai_grade_suggested=getattr(sub, "ai_grade_suggested", None),
+        ai_evaluated_at=getattr(sub, "ai_evaluated_at", None),
     )
 
 
@@ -232,6 +237,7 @@ async def submit_homework(
     file_name: str | None = Form(default=None),
     file_type: str | None = Form(default=None),
     file_size_bytes: int | None = Form(default=None),
+    tab_switch_count: int = Form(default=0),
     profile: StudentProfile = Depends(get_current_student_profile),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: AsyncSession = Depends(get_db),
@@ -395,6 +401,7 @@ async def submit_homework(
         existing.file_size_bytes = file_size
         existing.status = submission_status
         existing.submitted_at = now
+        existing.tab_switch_count = max(getattr(existing, "tab_switch_count", 0) or 0, tab_switch_count)
         submission = existing
     else:
         submission = Submission(
@@ -410,6 +417,7 @@ async def submit_homework(
             file_size_bytes=file_size,
             status=submission_status,
             submitted_at=now,
+            tab_switch_count=tab_switch_count,
         )
         db.add(submission)
     await db.flush()
@@ -1333,6 +1341,170 @@ async def dismiss_submission_flag(
     await db.commit()
     await db.refresh(sub)
     return _submission_to_out(sub)
+
+
+@router.post(
+    "/{submission_id}/ai-evaluate",
+    response_model=SubmissionOut,
+    dependencies=[Depends(require_teacher)],
+)
+async def ai_evaluate_submission(
+    submission_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    """
+    Triggers on-demand AI writing rubric examination for the student's submission.
+    Evaluates Grammar & Sentence Structure, Lexical Resource, Task Achievement, and Coherence.
+    Stores structured evaluation JSON and suggested score.
+    """
+    sub = await _get_submission_or_404(submission_id, db)
+    if not sub.text_answer or not sub.text_answer.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ushbu topshiriqda baholash uchun yozma matn (insho) mavjud emas.",
+        )
+
+    prompt_topic = sub.assignment.title if sub.assignment else "Writing Homework"
+    if sub.assignment and sub.assignment.description:
+        prompt_topic += f"\n{sub.assignment.description}"
+
+    from app.services.ai_examiner import evaluate_writing_submission
+    eval_result = await evaluate_writing_submission(prompt_topic, sub.text_answer)
+
+    sub.ai_evaluation_json = json.dumps(eval_result)
+    sub.ai_grade_suggested = float(eval_result.get("suggested_score", 85))
+    sub.ai_evaluated_at = utcnow()
+
+    await db.commit()
+    await db.refresh(sub)
+    return _submission_to_out(sub)
+
+
+@router.post(
+    "/{submission_id}/approve-ai-grade",
+    response_model=SubmissionOut,
+    dependencies=[Depends(require_teacher)],
+)
+async def approve_ai_grade(
+    submission_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    """
+    Teacher 1-click approve endpoint:
+    Applies ai_grade_suggested to grade (scaled 0-10), marks status as GRADED,
+    appends structured AI feedback into teacher_feedback, and awards stars/XP automatically.
+    """
+    sub = await _get_submission_or_404(submission_id, db)
+
+    # If not evaluated yet, run evaluation first
+    if not sub.ai_evaluation_json:
+        if not sub.text_answer or not sub.text_answer.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ushbu topshiriqda baholash uchun yozma matn mavjud emas.",
+            )
+        prompt_topic = sub.assignment.title if sub.assignment else "Writing Homework"
+        if sub.assignment and sub.assignment.description:
+            prompt_topic += f"\n{sub.assignment.description}"
+
+        from app.services.ai_examiner import evaluate_writing_submission
+        eval_result = await evaluate_writing_submission(prompt_topic, sub.text_answer)
+        sub.ai_evaluation_json = json.dumps(eval_result)
+        sub.ai_grade_suggested = float(eval_result.get("suggested_score", 85))
+        sub.ai_evaluated_at = utcnow()
+    else:
+        try:
+            eval_result = json.loads(sub.ai_evaluation_json)
+        except Exception:
+            eval_result = {}
+
+    suggested_score = sub.ai_grade_suggested if sub.ai_grade_suggested is not None else float(eval_result.get("suggested_score", 80))
+    # Convert 0-100 to LMS 0-10 scale
+    score_10 = max(0, min(10, round(suggested_score / 10.0)))
+    stars = score_10
+
+    summary = eval_result.get("summary", "")
+    band = eval_result.get("band", "")
+    coherence = eval_result.get("coherence_feedback", "")
+    ai_feedback_text = f"✨ [AI Examiner - Band {band} ({int(suggested_score)}/100)]\n{summary}"
+    if coherence:
+        ai_feedback_text += f"\n\nCoherence & Flow: {coherence}"
+
+    now = datetime.now(timezone.utc)
+    if sub.grade is not None:
+        sub.grade.score = score_10
+        sub.grade.feedback = ai_feedback_text
+        sub.grade.stars = stars
+        sub.grade.graded_by = current_user.id
+        sub.grade.graded_at = now
+        grade = sub.grade
+    else:
+        grade = Grade(
+            submission_id=sub.id,
+            score=score_10,
+            feedback=ai_feedback_text,
+            stars=stars,
+            graded_by=current_user.id,
+            graded_at=now,
+        )
+        db.add(grade)
+
+    sub.status = SubmissionStatus.GRADED
+
+    # Student StarTransaction and total stars update
+    student = (
+        await db.execute(select(StudentProfile).where(StudentProfile.id == sub.student_id))
+    ).scalar_one()
+
+    ref_id = f"grade_{sub.id}"
+    existing_tx = (
+        await db.execute(
+            select(StarTransaction).where(
+                StarTransaction.student_id == sub.student_id,
+                StarTransaction.reason == StarTransactionReason.TEACHER_ADJUSTMENT,
+                StarTransaction.reference_id == ref_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+    assignment_title = sub.assignment.title if sub.assignment else "homework"
+    if existing_tx:
+        existing_tx.amount = stars
+        existing_tx.description = f"Teacher approved AI grade stars for '{assignment_title}'"
+    elif stars > 0:
+        tx = StarTransaction(
+            student_id=sub.student_id,
+            amount=stars,
+            reason=StarTransactionReason.TEACHER_ADJUSTMENT,
+            reference_id=ref_id,
+            description=f"Teacher approved AI grade stars for '{assignment_title}'",
+        )
+        db.add(tx)
+
+    await db.flush()
+
+    total = (
+        await db.execute(
+            select(func.coalesce(func.sum(StarTransaction.amount), 0)).where(
+                StarTransaction.student_id == sub.student_id
+            )
+        )
+    ).scalar_one()
+    student.total_stars = max(0, int(total))
+
+    if score_10 >= 10:
+        await award_lightning(
+            db,
+            student_id=sub.student_id,
+            assignment_id=sub.assignment_id,
+        )
+
+    await db.commit()
+    await db.refresh(sub)
+    return _submission_to_out(sub)
+
 
 
 
