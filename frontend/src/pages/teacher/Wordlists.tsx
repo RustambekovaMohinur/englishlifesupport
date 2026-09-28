@@ -279,12 +279,13 @@ export default function TeacherWordlistsPage() {
       const normalizedResults: WordDetailPreview[] = results.map((item) => ({
         word: item.word.trim(),
         part_of_speech: normalizePos(item.pos || item.part_of_speech || "phrase"),
-        custom_translation: item.uzbek_translation || item.custom_translation || "",
-        uzbek_translation: item.uzbek_translation || item.custom_translation || "",
-        definition: item.definition || item.uzbek_translation || "",
-        example: item.example_sentence || item.example || "",
-        example_sentence: item.example_sentence || item.example || "",
-        phonetic: item.phonetic || "",
+        pos: normalizePos(item.pos || item.part_of_speech || "phrase"),
+        custom_translation: (item.uzbek_translation || item.custom_translation || "").trim(),
+        uzbek_translation: (item.uzbek_translation || item.custom_translation || "").trim(),
+        definition: (item.definition || "").trim(),
+        example: (item.example_sentence || item.example || "").trim(),
+        example_sentence: (item.example_sentence || item.example || "").trim(),
+        phonetic: item.phonetic?.trim() || "",
         audio_us_url: item.audio_us_url || null,
         audio_gb_url: null,
         source: "gemini_ai",
@@ -307,9 +308,13 @@ export default function TeacherWordlistsPage() {
       {
         word: "",
         part_of_speech: "noun",
+        pos: "noun",
         phonetic: "",
+        uzbek_translation: "",
+        custom_translation: "",
         definition: "",
         example: "",
+        example_sentence: "",
         audio_us_url: null,
         audio_gb_url: null,
       },
@@ -324,6 +329,15 @@ export default function TeacherWordlistsPage() {
     setPreviews((prev) => {
       const copy = [...prev];
       copy[index] = { ...copy[index], [field]: val };
+      if (field === "uzbek_translation") {
+        copy[index].custom_translation = val;
+      } else if (field === "custom_translation") {
+        copy[index].uzbek_translation = val;
+      } else if (field === "example_sentence") {
+        copy[index].example = val;
+      } else if (field === "example") {
+        copy[index].example_sentence = val;
+      }
       return copy;
     });
   };
@@ -375,16 +389,27 @@ export default function TeacherWordlistsPage() {
       const payload = {
         title: title.trim(),
         group_id: selectedGroupId || null,
-        items: previews.map((item, idx) => ({
-          word: item.word.trim(),
-          part_of_speech: item.part_of_speech ? normalizePos(item.part_of_speech) : "noun",
-          phonetic: item.phonetic?.trim() || null,
-          definition: item.definition?.trim() || null,
-          example: item.example?.trim() || null,
-          audio_us_url: item.audio_us_url?.trim() || null,
-          audio_gb_url: item.audio_gb_url?.trim() || null,
-          order_index: idx,
-        })),
+        items: previews.map((item, idx) => {
+          const uzTrans = (item.uzbek_translation || item.custom_translation || "").trim();
+          const engDef = (item.definition || "").trim();
+          let finalDef = engDef;
+          if (uzTrans && engDef && !engDef.toLowerCase().includes(uzTrans.toLowerCase())) {
+            finalDef = `${uzTrans} — ${engDef}`;
+          } else if (uzTrans && !engDef) {
+            finalDef = uzTrans;
+          }
+
+          return {
+            word: item.word.trim(),
+            part_of_speech: item.part_of_speech ? normalizePos(item.part_of_speech) : "noun",
+            phonetic: item.phonetic?.trim() || null,
+            definition: finalDef || null,
+            example: (item.example_sentence || item.example)?.trim() || null,
+            audio_us_url: item.audio_us_url?.trim() || null,
+            audio_gb_url: item.audio_gb_url?.trim() || null,
+            order_index: idx,
+          };
+        }),
       };
 
       // Direct-to-B2 Upload Optimization: upload JSON directly to B2 to bypass backend memory
@@ -846,32 +871,37 @@ export default function TeacherWordlistsPage() {
                 </div>
 
                 <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-thin">
-                  <table className="w-full text-left text-xs border-collapse min-w-[700px]">
+                  <table className="w-full text-left text-xs border-collapse min-w-[960px]">
                     <thead>
                       <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50">
-                        <th className="py-2.5 px-3 font-semibold w-12 text-center">#</th>
-                        <th className="py-2.5 px-3 font-semibold w-36">Word</th>
-                        <th className="py-2.5 px-3 font-semibold w-24">POS</th>
-                        <th className="py-2.5 px-3 font-semibold">Definition</th>
-                        <th className="py-2.5 px-3 font-semibold">Example</th>
-                        <th className="py-2.5 px-3 font-semibold w-24 text-center">Audio</th>
-                        <th className="py-2.5 px-3 font-semibold w-12 text-center">Action</th>
+                        <th className="py-2.5 px-3 font-semibold w-10 text-center">#</th>
+                        <th className="py-2.5 px-3 font-semibold w-48">Word / Phrase</th>
+                        <th className="py-2.5 px-3 font-semibold w-28">POS</th>
+                        <th className="py-2.5 px-3 font-semibold w-56">Uzbek Translation</th>
+                        <th className="py-2.5 px-3 font-semibold w-64">English Definition</th>
+                        <th className="py-2.5 px-3 font-semibold">Example Sentence</th>
+                        <th className="py-2.5 px-3 font-semibold w-20 text-center">Audio</th>
+                        <th className="py-2.5 px-3 font-semibold w-12 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
                       {previews.map((item, idx) => (
                         <tr key={idx} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30">
-                          <td className="py-2 px-3 text-center text-zinc-400 font-mono text-[11px]">
+                          {/* # */}
+                          <td className="py-2.5 px-3 text-center text-zinc-400 font-mono text-[11px]">
                             {idx + 1}
                           </td>
-                          <td className="py-2 px-3 font-bold text-zinc-900 dark:text-white">
+
+                          {/* 1. Word / Phrase */}
+                          <td className="py-2.5 px-3 font-bold text-zinc-900 dark:text-white align-top">
                             <input
                               type="text"
                               value={item.word}
                               onChange={(e) => handleUpdatePreview(idx, "word", e.target.value)}
-                              className="w-full bg-transparent border-b border-transparent focus:border-brand-500 outline-none text-xs font-bold"
+                              placeholder="e.g. eager for, endless"
+                              className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2.5 py-1.5 border border-zinc-200 dark:border-zinc-700 text-xs font-bold focus:border-brand-500 outline-none"
                             />
-                            <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="flex items-center gap-1.5 flex-wrap mt-1">
                               {item.phonetic && (
                                 <span className="text-[10px] text-zinc-400 font-mono">
                                   {item.phonetic}
@@ -884,40 +914,65 @@ export default function TeacherWordlistsPage() {
                               )}
                             </div>
                           </td>
-                          <td className="py-2 px-3">
+
+                          {/* 2. POS */}
+                          <td className="py-2.5 px-3 align-top">
                             <select
-                              value={normalizePos(item.part_of_speech)}
+                              value={normalizePos(item.part_of_speech || item.pos)}
                               onChange={(e) => handleUpdatePreview(idx, "part_of_speech", e.target.value)}
-                              className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2 py-1 border border-zinc-200 dark:border-zinc-700 text-xs text-center font-medium"
+                              className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2 py-1.5 border border-zinc-200 dark:border-zinc-700 text-xs text-center font-medium focus:border-brand-500 outline-none"
                             >
                               <option value="noun">noun (n)</option>
                               <option value="verb">verb (v)</option>
                               <option value="adjective">adjective (adj)</option>
                               <option value="adverb">adverb (adv)</option>
+                              <option value="phrase">phrase</option>
                               <option value="idiom">idiom</option>
                               <option value="phrasal_verb">phrasal verb</option>
                             </select>
                           </td>
-                          <td className="py-2 px-3">
+
+                          {/* 3. Uzbek Translation */}
+                          <td className="py-2.5 px-3 align-top">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 shrink-0 font-mono">
+                                UZ
+                              </span>
+                              <input
+                                type="text"
+                                value={item.uzbek_translation || item.custom_translation || ""}
+                                onChange={(e) => handleUpdatePreview(idx, "uzbek_translation", e.target.value)}
+                                placeholder="O'zbekcha tarjimasi..."
+                                className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2.5 py-1.5 border border-zinc-200 dark:border-zinc-700 text-xs font-medium focus:border-brand-500 outline-none"
+                              />
+                            </div>
+                          </td>
+
+                          {/* 4. English Definition */}
+                          <td className="py-2.5 px-3 align-top">
                             <textarea
                               rows={2}
                               value={item.definition || ""}
                               onChange={(e) => handleUpdatePreview(idx, "definition", e.target.value)}
-                              placeholder="Definition..."
-                              className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2 py-1 border border-zinc-200 dark:border-zinc-700 text-xs resize-y"
+                              placeholder="English definition..."
+                              className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2.5 py-1.5 border border-zinc-200 dark:border-zinc-700 text-xs resize-y focus:border-brand-500 outline-none"
                             />
                           </td>
-                          <td className="py-2 px-3">
+
+                          {/* 5. Example Sentence */}
+                          <td className="py-2.5 px-3 align-top">
                             <textarea
                               rows={2}
-                              value={item.example || ""}
-                              onChange={(e) => handleUpdatePreview(idx, "example", e.target.value)}
-                              placeholder="Example sentence..."
-                              className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2 py-1 border border-zinc-200 dark:border-zinc-700 text-xs italic resize-y"
+                              value={item.example_sentence || item.example || ""}
+                              onChange={(e) => handleUpdatePreview(idx, "example_sentence", e.target.value)}
+                              placeholder="Cambridge context example sentence..."
+                              className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2.5 py-1.5 border border-zinc-200 dark:border-zinc-700 text-xs italic resize-y focus:border-brand-500 outline-none"
                             />
                           </td>
-                          <td className="py-2 px-3 text-center">
-                            <div className="inline-flex items-center justify-center gap-1.5">
+
+                          {/* 6. Audio */}
+                          <td className="py-2.5 px-3 text-center align-top">
+                            <div className="inline-flex items-center justify-center gap-1.5 pt-1">
                               <button
                                 type="button"
                                 onClick={() => handlePlayPreviewAudio(item)}
@@ -926,36 +981,28 @@ export default function TeacherWordlistsPage() {
                               >
                                 <Volume2 className="w-4 h-4" />
                               </button>
-                              <div className="flex flex-col gap-0.5">
-                                <span
-                                  className={`text-[9px] px-1 py-0.2 rounded font-mono ${
-                                    item.audio_us_url
-                                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold"
-                                      : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800"
-                                  }`}
-                                  title={item.audio_us_url ? "US Audio Available" : "Web Speech Synthesis Fallback"}
-                                >
-                                  US
-                                </span>
-                                {item.audio_gb_url && (
-                                  <span
-                                    className="text-[9px] px-1 py-0.2 rounded font-mono bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold"
-                                    title="GB Audio Available"
-                                  >
-                                    GB
-                                  </span>
-                                )}
-                              </div>
+                              <span
+                                className={`text-[9px] px-1 py-0.5 rounded font-mono ${
+                                  item.audio_us_url
+                                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold"
+                                    : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800"
+                                }`}
+                                title={item.audio_us_url ? "US Audio Available" : "Web Speech Synthesis Fallback"}
+                              >
+                                US
+                              </span>
                             </div>
                           </td>
-                          <td className="py-2 px-3 text-center">
+
+                          {/* 7. Action: Delete Row */}
+                          <td className="py-2.5 px-3 text-center align-top">
                             <button
                               type="button"
                               onClick={() => handleRemovePreview(idx)}
-                              className="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                              className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition mt-1"
                               title="Remove item"
                             >
-                              <X className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </td>
                         </tr>

@@ -384,12 +384,30 @@ async def ai_parse_wordlist_endpoint(
             detail="Please provide vocabulary text or upload a document (PDF, TXT, CSV).",
         )
 
-    results = await ai_parse_wordlist_multiformat(
-        raw_text=raw_text,
-        file_bytes=file_bytes,
-        file_name=file_name,
-        mime_type=mime_type,
-    )
+    try:
+        results = await ai_parse_wordlist_multiformat(
+            raw_text=raw_text,
+            file_bytes=file_bytes,
+            file_name=file_name,
+            mime_type=mime_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+    except Exception as exc:
+        logger.exception("AI wordlist parsing failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Gemini AI extraction error: {str(exc)}",
+        )
+
+    if not results:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No vocabulary entries could be identified in the document.",
+        )
 
     return results
 
