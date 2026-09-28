@@ -52,6 +52,8 @@ class UpcomingAssignmentItem(BaseModel):
     title: str
     deadline: datetime
     submitted: bool
+    is_locked: bool = False
+    lock_reason: str | None = None
 
     model_config = {"from_attributes": True}
 

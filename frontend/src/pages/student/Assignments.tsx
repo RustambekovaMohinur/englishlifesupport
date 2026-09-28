@@ -14,6 +14,13 @@ import { AssignmentForStudent } from "@/types";
 import toast from "react-hot-toast";
 
 export function TaskStatusBadge({ assignment }: { assignment: AssignmentForStudent }) {
+  if (assignment.is_exempted) {
+    return (
+      <span className="bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 font-mono font-medium rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1 shadow-xs">
+        🛡️ EXEMPTED
+      </span>
+    );
+  }
   if (assignment.submission_status === "graded") {
     return (
       <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-mono font-medium rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1 shadow-xs">
@@ -29,6 +36,13 @@ export function TaskStatusBadge({ assignment }: { assignment: AssignmentForStude
           <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
         </span>
         PENDING
+      </span>
+    );
+  }
+  if (assignment.is_locked && !assignment.unlocked_by_teacher) {
+    return (
+      <span className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 font-mono font-medium rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1 shadow-xs">
+        <Lock className="w-3 h-3" /> LOCKED
       </span>
     );
   }
@@ -154,126 +168,144 @@ export default function StudentAssignmentsPage() {
     const skillBadge = getSkillBadge(a.title);
     const countdown = getCountdownInfo(a.deadline);
     const hasMySubmission = Boolean(a.submission_status || a.submission_id);
-    const prereqAssignment = a.prerequisite_id ? assignments.find((other) => other.id === a.prerequisite_id) : null;
-    const isPrereqSatisfied = prereqAssignment ? Boolean(prereqAssignment.submission_status || prereqAssignment.submission_id) : false;
+    const prereqTitle = a.prerequisite_title || (a.prerequisite_id ? assignments.find((other) => other.id === a.prerequisite_id)?.title : null) || "previous assignment";
 
     const isTaskLocked = Boolean(
       !hasMySubmission &&
-      !isPrereqSatisfied &&
-      a.is_locked &&
-      a.prerequisite_id !== a.id &&
-      !a.title.toLowerCase().includes("ket listening test2")
+      !a.is_exempted &&
+      !a.unlocked_by_teacher &&
+      a.is_locked
     );
     const dlTime = new Date(a.deadline).getTime();
     const isPastDue = !isNaN(dlTime) && dlTime < Date.now();
 
+    const handleCardClick = (e?: React.MouseEvent) => {
+      if (isTaskLocked) {
+        if (e) e.preventDefault();
+        toast(`🔒 Locked: Please complete and submit "${prereqTitle}" before starting this assignment.`, {
+          icon: "🔒",
+          duration: 4000,
+        });
+        return;
+      }
+      navigate(`/student/assignments/${a.id}/submit`);
+    };
+
     return (
-      <div key={a.id} className="relative group">
-        {/* Mobile High-Density Task Row (< 640px) */}
-        <div
-          className={`sm:hidden flex flex-col p-3.5 rounded-2xl border transition-all ${
-            isArchive
-              ? "bg-zinc-50/70 dark:bg-zinc-900/40 border-zinc-200/50 dark:border-zinc-800/60 opacity-80 hover:opacity-100"
-              : isTaskLocked
-              ? "bg-zinc-50/80 dark:bg-zinc-900/60 border-zinc-200/60 dark:border-zinc-800/80 opacity-80"
-              : "bg-white dark:bg-[#111827] border-indigo-500/30 ring-1 ring-indigo-500/10 shadow-xs"
-          }`}
-        >
-          <div className="flex items-center justify-between gap-2">
+      <div
+        key={a.id}
+        onClick={handleCardClick}
+        className={`group relative flex flex-col justify-between p-4 sm:p-5 rounded-2xl border transition-all duration-200 cursor-pointer ${
+          isArchive
+            ? "bg-zinc-50/70 dark:bg-zinc-900/40 border-zinc-200/50 dark:border-zinc-800/60 opacity-80 hover:opacity-100"
+            : isTaskLocked
+            ? "bg-slate-50/80 dark:bg-slate-900/60 backdrop-blur-xs border-dashed border-amber-300/70 dark:border-amber-500/40 opacity-90 hover:border-amber-400 dark:hover:border-amber-400/70 shadow-xs"
+            : "bg-white dark:bg-[#111827] border-indigo-500/30 ring-1 ring-indigo-500/10 shadow-xs hover:border-indigo-500/50 hover:shadow-md hover:-translate-y-0.5"
+        }`}
+      >
+        <div className="space-y-3">
+          {/* Card Top: Skill Icon + Badges */}
+          <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border text-base ${skillBadge.glow}`}>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border text-lg ${skillBadge.glow}`}>
                 {skillBadge.icon}
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <p className="font-semibold text-zinc-900 dark:text-white text-xs truncate max-w-[150px]">
-                    {a.title}
-                  </p>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 shrink-0">
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
                     C{a.cycle_number ?? 1}
                   </span>
                   {!isArchive && !isPastDue && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-mono">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1 font-mono">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       ACTIVE
                     </span>
                   )}
+                  {!isArchive && isPastDue && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1 font-mono">
+                      ⚡ LATE ALLOWED
+                    </span>
+                  )}
                   {isArchive && (
-                    <span className="text-[9px] font-medium px-1.5 py-0.2 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono">
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono">
                       ARCHIVE
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className={`text-[10px] font-mono ${countdown.isUrgent ? "text-rose-600 dark:text-rose-400 font-bold" : "text-zinc-400 dark:text-zinc-500"}`}>
-                    {countdown.text}
-                  </span>
-                  {a.is_hard_deadline && (
-                    <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-1.5 py-0.2 rounded font-mono">
-                      🔒 Strict
-                    </span>
-                  )}
-                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => setDiscussionAssignment(a)}
-                className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:text-brand-600 transition text-xs flex items-center gap-1"
-                title="Questions & Discussion"
-              >
-                <MessageSquare className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
-                <span className="text-[10px] font-bold">{a.comment_count ?? 0}</span>
-              </button>
-              <button
-                className={`px-3 py-1 text-xs font-semibold rounded-full active:scale-95 transition-transform flex items-center gap-1 ${
-                  isTaskLocked
-                    ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 cursor-not-allowed border border-zinc-300 dark:border-zinc-700"
-                    : isPastDue && !a.submission_status
-                    ? "bg-amber-600 hover:bg-amber-500 text-white shadow-xs"
-                    : "bg-blue-600 hover:bg-blue-500 text-white shadow-xs"
-                }`}
-                disabled={isTaskLocked}
-                onClick={() => navigate(`/student/assignments/${a.id}/submit`)}
-              >
-                {isTaskLocked ? (
-                  <>
-                    <Lock className="w-3 h-3" />
-                    <span>Locked</span>
-                  </>
-                ) : a.submission_status ? (
-                  a.submission_status === "graded" ? "View" : "Edit"
-                ) : isPastDue ? (
-                  "Submit Late ⚠️"
-                ) : (
-                  "Start Assignment →"
-                )}
-              </button>
+            <div className="shrink-0">
+              <TaskStatusBadge assignment={a} />
             </div>
           </div>
 
-          {/* Mobile Lock Warning Banner */}
+          {/* Title */}
+          <div>
+            <h3 className="font-bold text-zinc-900 dark:text-white text-sm sm:text-base tracking-tight leading-snug line-clamp-2">
+              {a.title}
+            </h3>
+            <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-zinc-500 dark:text-zinc-400 font-mono">
+              <span>Due: {format(new Date(a.deadline), "MMM d, HH:mm")}</span>
+              <span>·</span>
+              <span className={countdown.isUrgent ? "text-rose-600 dark:text-rose-400 font-bold animate-pulse" : "text-zinc-500 dark:text-zinc-400"}>
+                {countdown.text}
+              </span>
+              {a.is_hard_deadline && (
+                <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-1.5 py-0.2 rounded font-mono">
+                  🔒 Strict
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Metadata: files, vocab, stars */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">
+            {a.file_url && (
+              <span onClick={(e) => e.stopPropagation()}>
+                <FileDownloadButton
+                  url={a.file_url}
+                  filename={a.file_original_name}
+                  className="inline-flex items-center gap-1 font-medium text-brand-600 dark:text-brand-400 hover:underline"
+                >
+                  📎 Attached
+                </FileDownloadButton>
+              </span>
+            )}
+            {a.vocab_words && a.vocab_words.length > 0 && (
+              <span className="inline-flex items-center gap-1 text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md font-medium border border-purple-200 dark:border-purple-800/50">
+                📖 {a.vocab_words.length} Vocab
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md font-medium border border-amber-200 dark:border-amber-800/50">
+              ⭐ +10 Stars
+            </span>
+          </div>
+
+          {/* Prominent Lock Banner when task is locked */}
           {isTaskLocked && (
-            <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30 p-2 rounded-xl flex items-start gap-1.5 border border-amber-500/20">
-              <span className="shrink-0">⚠️</span>
-              <span>{a.lock_reason || "Please complete the prerequisite assignment first to unlock this task."}</span>
+            <div className="mt-3 p-3 rounded-xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/25 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
+              <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="font-bold text-[11px] uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                  Prerequisite Locked
+                </p>
+                <p className="text-xs font-medium mt-0.5 leading-snug">
+                  {a.lock_reason || `Complete "${prereqTitle}" to unlock this task.`}
+                </p>
+              </div>
             </div>
           )}
 
-          {/* Mobile Graded & Feedback snippet */}
+          {/* Instructor Feedback banner when graded */}
           {a.submission_status === "graded" && (
-            <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800 flex flex-col gap-1">
-              <div className="flex items-center justify-between text-xs font-semibold">
-                <span className="text-emerald-700 dark:text-emerald-400">
-                  Score: {a.score ?? 0}/10
-                </span>
-                <span className="text-amber-600 dark:text-amber-400 font-mono">
-                  ⭐ +{a.stars ?? 0}
-                </span>
+            <div className="mt-2.5 p-2.5 rounded-xl bg-emerald-500/[0.06] dark:bg-emerald-500/[0.1] border border-emerald-500/20 text-xs">
+              <div className="flex items-center justify-between font-semibold text-emerald-800 dark:text-emerald-300 mb-1">
+                <span>👨‍🏫 Feedback</span>
+                <span className="font-mono">Score: {a.score ?? 0}/10 ⭐ +{a.stars ?? 0}</span>
               </div>
               {a.feedback && (
-                <p className="text-[11px] text-zinc-600 dark:text-zinc-300 italic line-clamp-2 bg-emerald-500/5 dark:bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
+                <p className="text-[11px] text-zinc-600 dark:text-zinc-300 italic line-clamp-2">
                   "{a.feedback}"
                 </p>
               )}
@@ -281,183 +313,72 @@ export default function StudentAssignmentsPage() {
           )}
         </div>
 
-        {/* Desktop / Tablet Full Card (>= 640px) */}
-        <div
-          className={`hidden sm:flex sm:flex-col card p-4 sm:p-5 rounded-2xl border transition-all duration-150 ${
-            isArchive
-              ? "bg-zinc-50/70 dark:bg-zinc-900/35 border-zinc-200/60 dark:border-zinc-800/60 opacity-80 hover:opacity-100"
-              : isTaskLocked
-              ? "bg-zinc-50/80 dark:bg-zinc-900/60 border-zinc-200/60 dark:border-zinc-800/80 opacity-85"
-              : "border-indigo-500/30 ring-1 ring-indigo-500/10 shadow-xs bg-white dark:bg-[#111827] hover:border-indigo-500/50 hover:-translate-y-0.5"
-          }`}
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3.5 min-w-0 flex-1">
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border text-xl ${skillBadge.glow}`}>
-                {skillBadge.icon}
-              </div>
+        {/* Card Footer: Action Buttons */}
+        <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDiscussionAssignment(a);
+              }}
+              className="p-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 transition text-xs flex items-center gap-1"
+              title="Assignment Discussion Thread"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
+              <span className="text-[10px] font-bold">{a.comment_count ?? 0}</span>
+            </button>
 
-              <div className="space-y-1 min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-bold text-zinc-900 dark:text-white text-sm tracking-tight">{a.title}</p>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
-                    Cycle {a.cycle_number ?? 1}
-                  </span>
-                  {!isArchive && !isPastDue && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1 font-mono">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      ACTIVE TASK
-                    </span>
-                  )}
-                  {!isArchive && isPastDue && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1 font-mono">
-                      ⚡ PAST DUE (LATE ALLOWED)
-                    </span>
-                  )}
-                  {isArchive && (
-                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono">
-                      ARCHIVED (C{a.cycle_number ?? 1})
-                    </span>
-                  )}
-                  {a.is_hard_deadline && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 font-mono flex items-center gap-1">
-                      <Lock className="w-3 h-3" /> Hard Deadline
-                    </span>
-                  )}
-                  {a.prerequisite_id && (
-                    <span className="text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-1.5 py-0.5 rounded font-medium">
-                      Prerequisite Required
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400 font-mono">
-                  <span>Due: {format(new Date(a.deadline), "MMM d, yyyy HH:mm")}</span>
-                  <span>·</span>
-                  <span className={`${countdown.isUrgent ? "text-rose-600 dark:text-rose-400 font-bold animate-pulse" : "text-zinc-500 dark:text-zinc-400"}`}>
-                    {countdown.text}
-                  </span>
-                  {a.is_overdue && <span className="text-rose-600 dark:text-rose-400 font-bold">· 🔴 Overdue (Penalty applied)</span>}
-                  {isTaskLocked && a.lock_reason && <span className="text-amber-600 dark:text-amber-400">· 🔒 {a.lock_reason}</span>}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-zinc-600 dark:text-zinc-400">
-                  {a.file_url && (
-                    <FileDownloadButton
-                      url={a.file_url}
-                      filename={a.file_original_name}
-                      className="inline-flex items-center gap-1 font-medium text-brand-600 dark:text-brand-400 hover:underline"
-                    >
-                      📎 Attached ({a.file_original_name})
-                    </FileDownloadButton>
-                  )}
-                  {a.vocab_words && a.vocab_words.length > 0 && (
-                    <span className="inline-flex items-center gap-1 text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md font-medium text-[11px] border border-purple-200 dark:border-purple-800/50">
-                      📖 {a.vocab_words.length} Vocab Words
-                    </span>
-                  )}
-                  <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md font-medium text-[11px] border border-amber-200 dark:border-amber-800/50">
-                    ⭐ +10 Stars · 🎯 +25 XP
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0 self-center">
+            {((a.is_past_deadline && !a.submission_status) || isTaskLocked) && (
               <button
                 type="button"
-                onClick={() => setDiscussionAssignment(a)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition active:scale-95 shadow-2xs"
-                title="Assignment Discussion Thread"
+                className="px-2 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 text-[10px] font-semibold"
+                disabled={applyingPassId === a.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleApplyFreePass(a.id);
+                }}
+                title="Use your 1 Monthly Free Pass to bypass lock/penalty"
               >
-                <MessageSquare className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
-                <span>Discussion ({a.comment_count ?? 0})</span>
+                {applyingPassId === a.id ? "Using..." : "🛡 Pass"}
               </button>
-
-              <TaskStatusBadge assignment={a} />
-
-              {/* Free Pass CTA */}
-              {((a.is_past_deadline && !a.submission_status) || isTaskLocked) && (
-                <button
-                  className="btn-sm bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 text-xs px-2.5 py-1"
-                  disabled={applyingPassId === a.id}
-                  onClick={() => handleApplyFreePass(a.id)}
-                  title="Use your 1 Monthly Free Pass to bypass lock/penalty"
-                >
-                  {applyingPassId === a.id ? "Using..." : "🛡 Free Pass"}
-                </button>
-              )}
-
-              <button
-                className={
-                  isTaskLocked
-                    ? "btn-secondary text-xs px-3.5 py-1.5 opacity-60 cursor-not-allowed flex items-center gap-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400"
-                    : isPastDue && !a.submission_status
-                    ? "px-3.5 py-1.5 rounded-lg font-semibold text-xs bg-amber-600 hover:bg-amber-500 text-white shadow-xs flex items-center gap-1 transition active:scale-95"
-                    : "btn-primary text-xs px-3.5 py-1.5 shadow-xs flex items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white"
-                }
-                disabled={isTaskLocked}
-                onClick={() => navigate(`/student/assignments/${a.id}/submit`)}
-              >
-                {isTaskLocked ? (
-                  <>
-                    <Lock className="w-3.5 h-3.5" />
-                    <span>Locked</span>
-                  </>
-                ) : (
-                  <>
-                    <span>
-                      {a.submission_status
-                        ? a.submission_status === "graded"
-                          ? "See Feedback"
-                          : "Update Submission"
-                        : isPastDue
-                        ? "Submit Late ⚠️"
-                        : "Start Assignment →"}
-                    </span>
-                    <ChevronRight className="w-3 h-3" />
-                  </>
-                )}
-              </button>
-            </div>
+            )}
           </div>
 
-          {/* Desktop Lock Warning Helper */}
-          {isTaskLocked && (
-            <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800 text-xs text-amber-800 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/30 p-2.5 rounded-xl flex items-center gap-2 border border-amber-500/20">
-              <span className="text-sm shrink-0">⚠️</span>
-              <span className="font-medium">
-                {a.lock_reason || "Please complete the prerequisite assignment first to unlock this task."}
-              </span>
-            </div>
-          )}
-
-          {/* Desktop Pedagogical Feedback Banner */}
-          {a.submission_status === "graded" && (
-            <div className="mt-3.5 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 bg-emerald-500/[0.04] dark:bg-emerald-500/[0.08] p-3 rounded-xl border border-emerald-500/20">
-              <div className="flex items-start sm:items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs shrink-0">
-                  👨‍🏫
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCardClick(e);
+            }}
+            className={
+              isTaskLocked
+                ? "px-3 py-1.5 rounded-xl font-semibold text-xs bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25 hover:bg-amber-500/20 flex items-center gap-1.5 transition ml-auto"
+                : isPastDue && !a.submission_status
+                ? "px-3.5 py-1.5 rounded-xl font-semibold text-xs bg-amber-600 hover:bg-amber-500 text-white shadow-xs flex items-center gap-1 transition active:scale-95 ml-auto"
+                : "px-3.5 py-1.5 rounded-xl font-semibold text-xs bg-blue-600 hover:bg-blue-500 text-white shadow-xs flex items-center gap-1 transition active:scale-95 ml-auto"
+            }
+          >
+            {isTaskLocked ? (
+              <>
+                <Lock className="w-3 h-3" />
+                <span>Locked</span>
+              </>
+            ) : (
+              <>
+                <span>
+                  {a.submission_status
+                    ? a.submission_status === "graded"
+                      ? "See Feedback"
+                      : "Update"
+                    : isPastDue
+                    ? "Submit Late ⚠️"
+                    : "Start Task →"}
                 </span>
-                <div className="min-w-0">
-                  <span className="font-semibold text-xs text-emerald-800 dark:text-emerald-300 mr-2">
-                    Instructor Feedback:
-                  </span>
-                  <span className="text-xs text-zinc-700 dark:text-zinc-300 italic font-serif">
-                    "{a.feedback || "Good effort! Keep up the consistent practice."}"
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 font-mono text-xs font-bold">
-                <span className="text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                  Score: {a.score ?? 0}/10
-                </span>
-                <span className="text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                  ⭐ +{a.stars ?? 0}
-                </span>
-              </div>
-            </div>
-          )}
+                <ChevronRight className="w-3 h-3" />
+              </>
+            )}
+          </button>
         </div>
       </div>
     );
@@ -567,7 +488,7 @@ export default function StudentAssignmentsPage() {
                 Sequential progression required
               </span>
             </div>
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {activeAssignments.map((a) => renderAssignmentCard(a, false))}
             </div>
           </div>

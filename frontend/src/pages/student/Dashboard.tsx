@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { format } from "date-fns";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Lock } from "lucide-react";
 import toast from "react-hot-toast";
 import { EmptyState, LoadingRows, StatCard } from "@/components/ui";
 import { UserAvatar } from "@/components/common/UserAvatar";
@@ -206,13 +206,28 @@ export default function StudentDashboardPage() {
                 Earn <strong className="text-amber-700 dark:text-amber-300 font-semibold">+10 ⭐ Stars</strong> and <strong className="text-indigo-700 dark:text-indigo-300 font-semibold">+25 XP</strong> upon verified teacher grading.
               </p>
             </div>
-            <Link
-              to="/student/assignments"
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-md hover:shadow-indigo-500/25 transition shrink-0 active:scale-95"
-            >
-              <span>Start Homework</span>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            {urgentMission.is_locked ? (
+              <button
+                type="button"
+                onClick={() =>
+                  toast(urgentMission.lock_reason || "Complete previous assignments to unlock today's mission.", {
+                    icon: "🔒",
+                  })
+                }
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-semibold text-sm border border-zinc-200 dark:border-zinc-700 transition shrink-0 active:scale-95"
+              >
+                <Lock className="h-4 w-4 text-amber-500" />
+                <span>Prerequisite Required</span>
+              </button>
+            ) : (
+              <Link
+                to="/student/assignments"
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-md hover:shadow-indigo-500/25 transition shrink-0 active:scale-95"
+              >
+                <span>Start Homework</span>
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            )}
           </div>
         </div>
       ) : (
@@ -427,6 +442,20 @@ export default function StudentDashboardPage() {
                           <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
                             ✓ Submitted
                           </span>
+                        ) : a.is_locked ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toast(a.lock_reason || "Please complete the prerequisite assignment first.", {
+                                icon: "🔒",
+                              })
+                            }
+                            className="btn-sm bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 font-semibold text-xs py-1.5 px-3 rounded-lg transition shadow-xs flex items-center gap-1.5 border border-zinc-200 dark:border-zinc-700"
+                            title={a.lock_reason || "Locked assignment"}
+                          >
+                            <Lock className="w-3.5 h-3.5 text-amber-500" />
+                            <span>Locked</span>
+                          </button>
                         ) : (
                           <Link
                             to="/student/assignments"

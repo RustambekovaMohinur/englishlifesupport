@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
-import { ChevronDown, History, BookOpen, Layers, Trophy, Clock, CheckCircle2 } from "lucide-react";
+import { ChevronDown, History, BookOpen, Layers, Trophy, Clock, CheckCircle2, Lock, Unlock, Zap } from "lucide-react";
 import { FileDownloadButton, LoadingRows, Modal, Spinner, TelegramLink } from "@/components/ui";
-import { getStudent, getStudentHistory, listGroups, listSubmissions, resetStudentPassword, updateStudentPlacement } from "@/services/lmsService";
+import { getStudent, getStudentHistory, listGroups, listSubmissions, resetStudentPassword, updateStudentPlacement, unlockStudentUpToDate, toggleStudentAssignmentLock } from "@/services/lmsService";
 import { Group, StudentHistoryOut, StudentOut, SubmissionOut, StudentWordlistProgressItem } from "@/types";
 import { UserAvatar } from "@/components/common/UserAvatar";
 
@@ -35,8 +35,42 @@ export default function StudentDetailModal({
   const [isResetting, setIsResetting] = useState(false);
   const [isPastCyclesOpen, setIsPastCyclesOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"assignments" | "vocabulary" | "past">("assignments");
+  const [isUnlockingUpToDate, setIsUnlockingUpToDate] = useState(false);
+  const [togglingAssignmentId, setTogglingAssignmentId] = useState<string | null>(null);
 
   const isModalOpen = (isOpen ?? open) !== undefined ? Boolean(isOpen ?? open) : Boolean(studentId);
+
+  async function handleUnlockUpToDate() {
+    if (!studentId) return;
+    setIsUnlockingUpToDate(true);
+    try {
+      const res = await unlockStudentUpToDate(studentId);
+      toast.success(res.message || "Past assignments exempted! Student is up to date.");
+      const hist = await getStudentHistory(studentId);
+      setHistory(hist);
+      if (onStudentUpdated) onStudentUpdated();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Failed to unlock assignments");
+    } finally {
+      setIsUnlockingUpToDate(false);
+    }
+  }
+
+  async function handleToggleLock(assignmentId: string, currentUnlocked?: boolean) {
+    if (!studentId) return;
+    setTogglingAssignmentId(assignmentId);
+    try {
+      const res = await toggleStudentAssignmentLock(studentId, assignmentId);
+      toast.success(res.is_unlocked ? "Task unlocked for student!" : "Task locked.");
+      const hist = await getStudentHistory(studentId);
+      setHistory(hist);
+      if (onStudentUpdated) onStudentUpdated();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Failed to toggle task lock");
+    } finally {
+      setTogglingAssignmentId(null);
+    }
+  }
 
   async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault();
@@ -250,13 +284,24 @@ export default function StudentDetailModal({
               </span>
             )}
             {/* Task Item Badges according to Master Spec */}
-            {hasSubmission && isGraded ? (
+            {h.is_exempted ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-mono">
+                🛡️ Exempted
+              </span>
+            ) : hasSubmission && isGraded ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
                 ✓ Graded ({h.score <= 10 ? h.score * 10 : h.score}%)
               </span>
             ) : hasSubmission && !isGraded ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
-                ✓ Submitted (Pending Review)
+                ✓ Submitted
+              </span>
+            ) : h.is_locked ? (
+              <span
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-mono"
+                title={h.lock_reason || "Locked by prerequisite"}
+              >
+                🔒 Locked
               </span>
             ) : isPastDeadline ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60">
@@ -264,9 +309,42 @@ export default function StudentDetailModal({
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
-                ○ Not Submitted
+                ⏳ Pending
               </span>
             )}
+
+            {/* Quick-action button to manually lock / unlock task */}
+            <button
+              type="button"
+              disabled={togglingAssignmentId === h.assignment_id}
+              onClick={() => handleToggleLock(h.assignment_id, h.unlocked_by_teacher)}
+              className={`p-1.5 rounded-lg border transition active:scale-95 text-xs flex items-center gap-1 shrink-0 ${
+                h.unlocked_by_teacher || h.is_exempted
+                  ? "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                  : "bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-750"
+              }`}
+              title={
+                h.unlocked_by_teacher
+                  ? "Manually unlocked by teacher (Click to lock)"
+                  : h.is_exempted
+                  ? "Exempted task (Click to lock)"
+                  : "Click to manually unlock this task for student"
+              }
+            >
+              {togglingAssignmentId === h.assignment_id ? (
+                <Spinner className="w-3.5 h-3.5 text-zinc-500" />
+              ) : h.unlocked_by_teacher || h.is_exempted ? (
+                <>
+                  <Unlock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span className="hidden sm:inline text-[10px] font-medium">Unlocked</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-zinc-400" />
+                  <span className="hidden sm:inline text-[10px] font-medium">Unlock</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
@@ -656,6 +734,41 @@ export default function StudentDetailModal({
           {/* Active Tab Content */}
           {activeTab === "assignments" && (
             <div className="space-y-3">
+              {/* Action banner for new or transferred students */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-950/30 dark:via-zinc-900/40 border border-amber-300/60 dark:border-amber-800/60 shadow-2xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 shrink-0">
+                    <Zap className="w-4 h-4 text-amber-500" />
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-xs sm:text-sm text-zinc-900 dark:text-white">
+                      Transferred / New Student Catch-Up
+                    </h5>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                      Exempt past assignments so the student starts directly from today's lesson without penalty.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isUnlockingUpToDate}
+                  onClick={handleUnlockUpToDate}
+                  title="Exempt past assignments for new or transferred students"
+                  className="btn-sm bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs py-2 px-3.5 rounded-xl shadow-xs flex items-center justify-center gap-1.5 shrink-0 transition active:scale-95 disabled:opacity-50"
+                >
+                  {isUnlockingUpToDate ? (
+                    <>
+                      <Spinner className="w-3.5 h-3.5 text-white" />
+                      <span>Unlocking...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>⚡ Unlock All Up-to-Date</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
               {activeCycleItems.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
                   No assignments published in the active cycle yet.

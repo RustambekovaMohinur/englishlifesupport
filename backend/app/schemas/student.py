@@ -160,6 +160,12 @@ class StudentHistoryItem(BaseModel):
     file_original_name: str | None = None
     vocab_score: float | None = None
     vocab_attempt_count: int | None = None
+    is_locked: bool = False
+    lock_reason: str | None = None
+    is_exempted: bool = False
+    unlocked_by_teacher: bool = False
+    prerequisite_id: uuid.UUID | None = None
+    prerequisite_title: str | None = None
 
 
 class StudentWordlistProgressItem(BaseModel):

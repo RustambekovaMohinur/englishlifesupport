@@ -253,6 +253,7 @@ async def _run_startup_tasks():
                     if conn.dialect.name == "postgresql":
                         await conn.execute(sa.text("ALTER TABLE wordlist_sets ADD COLUMN IF NOT EXISTS b2_file_url TEXT"))
                         await conn.execute(sa.text("ALTER TABLE wordlist_sets ADD COLUMN IF NOT EXISTS total_words INTEGER DEFAULT 0"))
+                        await conn.execute(sa.text("ALTER TABLE task_lock_overrides ADD COLUMN IF NOT EXISTS is_exempted BOOLEAN NOT NULL DEFAULT FALSE"))
                     else:
                         res = await conn.execute(sa.text("PRAGMA table_info(wordlist_sets)"))
                         cols = [r[1] for r in res.fetchall()]
@@ -260,6 +261,10 @@ async def _run_startup_tasks():
                             await conn.execute(sa.text("ALTER TABLE wordlist_sets ADD COLUMN b2_file_url TEXT"))
                         if "total_words" not in cols:
                             await conn.execute(sa.text("ALTER TABLE wordlist_sets ADD COLUMN total_words INTEGER DEFAULT 0"))
+                        res_ovr = await conn.execute(sa.text("PRAGMA table_info(task_lock_overrides)"))
+                        ovr_cols = [r[1] for r in res_ovr.fetchall()]
+                        if "is_exempted" not in ovr_cols:
+                            await conn.execute(sa.text("ALTER TABLE task_lock_overrides ADD COLUMN is_exempted BOOLEAN NOT NULL DEFAULT 0"))
                 except Exception as ex:
                     logger.debug("Column check note: %s", ex)
 

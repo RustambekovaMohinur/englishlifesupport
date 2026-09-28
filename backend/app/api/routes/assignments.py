@@ -348,7 +348,32 @@ async def _build_student_assignments(
         a.prerequisite_id for a in assignments
         if a.prerequisite_id and a.prerequisite_id != a.id
     }
-    missing_prereq_ids = explicit_prereq_ids - set(assign_ids)
+
+    # Ensure all published cohort assignments for these cycles are known so N-1 prerequisites are resolved
+    cycles_in_view = {getattr(a, "cycle_number", 1) or 1 for a in assignments}
+    if profile.group_id:
+        cohort_published = (
+            await db.execute(
+                select(Assignment).where(
+                    Assignment.group_id == profile.group_id,
+                    Assignment.status == AssignmentStatus.PUBLISHED,
+                    Assignment.cycle_number.in_(cycles_in_view),
+                )
+            )
+        ).scalars().all()
+    else:
+        cohort_published = assignments
+
+    cycle_assignments_map: dict[int, list[Assignment]] = {}
+    for ca in cohort_published:
+        assign_map[ca.id] = ca
+        c_num = getattr(ca, "cycle_number", 1) or 1
+        cycle_assignments_map.setdefault(c_num, []).append(ca)
+
+    for c_num, c_list in cycle_assignments_map.items():
+        c_list.sort(key=lambda x: (getattr(x, "order_index", 0) or 0, x.deadline, x.created_at))
+
+    missing_prereq_ids = explicit_prereq_ids - set(assign_map.keys())
     if missing_prereq_ids:
         extra_assigns = (
             await db.execute(
@@ -358,7 +383,7 @@ async def _build_student_assignments(
         for ea in extra_assigns:
             assign_map[ea.id] = ea
 
-    all_query_assign_ids = list(set(assign_ids) | explicit_prereq_ids)
+    all_query_assign_ids = list(set(assign_map.keys()) | explicit_prereq_ids)
 
     # Batch 1: Submissions for this student (all relevant assignments)
     subs = (
@@ -402,7 +427,6 @@ async def _build_student_assignments(
         await db.execute(
             select(TaskLockOverride)
             .where(
-                TaskLockOverride.assignment_id.in_(assign_ids),
                 TaskLockOverride.student_id == profile.id,
             )
         )
@@ -454,10 +478,18 @@ async def _build_student_assignments(
         ]
 
         # Sequential & prerequisite lock evaluation
+        ovr = override_map.get(assignment.id)
+        is_ovr_unlocked = bool(ovr and ovr.is_unlocked)
+        is_ovr_exempted = bool(ovr and getattr(ovr, "is_exempted", False))
+
         is_locked = False
         lock_reason = None
-        ovr = override_map.get(assignment.id)
-        if ovr and ovr.is_unlocked:
+        prereq = None
+        prereq_id = assignment.prerequisite_id
+        if prereq_id == assignment.id:
+            prereq_id = None
+
+        if is_ovr_unlocked or is_ovr_exempted:
             is_locked = False
             lock_reason = None
         elif submission is not None:
@@ -466,40 +498,35 @@ async def _build_student_assignments(
             lock_reason = None
         else:
             assign_cycle = getattr(assignment, "cycle_number", 1) or 1
-            prereq_id = assignment.prerequisite_id
-            if prereq_id == assignment.id:
-                prereq_id = None
+            c_list = cycle_assignments_map.get(assign_cycle, [])
+            idx = next((i for i, a in enumerate(c_list) if a.id == assignment.id), None)
 
-            if not prereq_id and getattr(assignment, "order_index", 0) > 0:
-                preceding = [
-                    a for a in assignments
-                    if (getattr(a, "cycle_number", 1) or 1) == assign_cycle
-                    and (getattr(a, "order_index", 0) or 0) < (getattr(assignment, "order_index", 0) or 0)
-                ]
-                if preceding:
-                    preceding.sort(key=lambda x: getattr(x, "order_index", 0) or 0, reverse=True)
-                    prereq_id = preceding[0].id
+            if not prereq_id and idx is not None and idx > 0:
+                prereq_id = c_list[idx - 1].id
 
             if prereq_id and prereq_id != assignment.id:
-                # 1. Prerequisite is SATISFIED if student has ANY valid submission (graded, pending, or late)
-                if prereq_id in submitted_assign_ids:
+                prereq = assign_map.get(prereq_id)
+                prereq_ovr = override_map.get(prereq_id)
+                prereq_satisfied = (
+                    prereq_id in submitted_assign_ids
+                    or (prereq_ovr and (prereq_ovr.is_unlocked or getattr(prereq_ovr, "is_exempted", False)))
+                )
+
+                if prereq_satisfied:
                     is_locked = False
                     lock_reason = None
                 else:
-                    prereq = assign_map.get(prereq_id)
                     prereq_cycle = (getattr(prereq, "cycle_number", 1) or 1) if prereq else assign_cycle
-                    prereq_deadline = ensure_utc(prereq.deadline) if prereq else None
-                    is_prereq_past = prereq_deadline < now if prereq_deadline else False
-
-                    # 2. Cycle Isolation: Dependencies must NOT cross cycle boundaries unless active in current cycle
-                    # An uncompleted task from an expired past cycle or elapsed deadline does NOT lock active tasks!
-                    if prereq_cycle < assign_cycle or is_prereq_past:
+                    if prereq_cycle < assign_cycle:
                         is_locked = False
                         lock_reason = None
                     else:
                         is_locked = True
                         prereq_title = prereq.title if prereq else "previous assignment"
-                        lock_reason = f"Please complete prerequisite assignment first: '{prereq_title}'."
+                        lock_reason = f"Locked: Complete '{prereq_title}' to unlock"
+            else:
+                is_locked = False
+                lock_reason = None
 
         deadline_utc = ensure_utc(assignment.deadline)
         is_past_dl = deadline_utc < now
@@ -560,10 +587,12 @@ async def _build_student_assignments(
                 feedback=feedback,
                 submission_id=submission_id,
                 order_index=getattr(assignment, "order_index", 0) or 0,
-                cycle_number=getattr(assignment, "cycle_number", 1) or 1,
-                prerequisite_id=getattr(assignment, "prerequisite_id", None),
+                prerequisite_id=prereq_id,
+                prerequisite_title=prereq.title if (prereq_id and prereq) else None,
                 is_locked=is_locked,
                 lock_reason=lock_reason,
+                is_exempted=is_ovr_exempted,
+                unlocked_by_teacher=is_ovr_unlocked,
                 comment_count=comment_cnt,
                 detailed_status=detailed_status,
                 group_id=assignment.group_id,

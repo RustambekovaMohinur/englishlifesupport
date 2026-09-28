@@ -150,6 +150,12 @@ export interface StudentHistoryItem {
   file_original_name: string | null;
   vocab_score?: number | null;
   vocab_attempt_count?: number | null;
+  is_locked?: boolean;
+  lock_reason?: string | null;
+  is_exempted?: boolean;
+  unlocked_by_teacher?: boolean;
+  prerequisite_id?: string | null;
+  prerequisite_title?: string | null;
 }
 
 export interface StudentWordlistProgressItem {
@@ -337,6 +343,9 @@ export interface AssignmentForStudent {
   prerequisite_id?: string | null;
   is_locked?: boolean;
   lock_reason?: string | null;
+  is_exempted?: boolean;
+  unlocked_by_teacher?: boolean;
+  prerequisite_title?: string | null;
   comment_count?: number;
   detailed_status?: "SUBMITTED_LATE" | "OVERDUE / PENDING_LATE" | "COMPLETED_ON_TIME" | string | null;
   group_id?: string;
@@ -533,7 +542,7 @@ export interface StudentDashboard {
   average_score: number | null;
   total_assignments: number;
   completed_assignments: number;
-  upcoming_deadlines: { id: string; title: string; deadline: string; submitted: boolean }[];
+  upcoming_deadlines: { id: string; title: string; deadline: string; submitted: boolean; is_locked?: boolean; lock_reason?: string | null }[];
   recent_grades: { assignment_title: string; score: number; stars: number; graded_at: string }[];
 }
 

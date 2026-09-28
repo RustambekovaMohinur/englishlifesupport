@@ -82,6 +82,19 @@ export const setStudentStatus = (id: string, is_active: boolean) =>
 export const resetStudentPassword = (student_id: string, new_password: string) =>
   api.post<{ success: boolean; message: string }>(`/students/${student_id}/reset-password`, { new_password }).then((r) => r.data);
 
+export const unlockStudentUpToDate = (student_id: string) =>
+  api.post<{ status: string; message: string; exempted_count: number }>(`/students/${student_id}/unlock-up-to-date`).then((r) => r.data);
+
+export const toggleStudentAssignmentLock = (
+  student_id: string,
+  assignment_id: string,
+  body?: { is_unlocked?: boolean; is_exempted?: boolean }
+) =>
+  api.patch<{ status: string; assignment_id: string; is_unlocked: boolean; is_exempted: boolean }>(
+    `/students/${student_id}/assignments/${assignment_id}/toggle-lock`,
+    body
+  ).then((r) => r.data);
+
 // --- Groups ---
 export const listGroups = (include_archived: boolean = false) =>
   cachedGet<Group[]>("/groups", { include_archived });

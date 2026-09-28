@@ -724,7 +724,31 @@ async def get_student_history(
             a for a in assignments if a.status == AssignmentStatus.PUBLISHED
         ]
         active_assignment_ids = {a.id for a in active_assignments_list}
-        cycle_total_tasks = len(active_assignments_list)
+
+        # Query all TaskLockOverrides for this student
+        from app.models.gamification import TaskLockOverride
+        overrides_res = await db.execute(
+            select(TaskLockOverride).where(TaskLockOverride.student_id == profile.id)
+        )
+        overrides_list = overrides_res.scalars().all()
+        override_map = {o.assignment_id: o for o in overrides_list}
+        exempted_assignment_ids = {o.assignment_id for o in overrides_list if getattr(o, "is_exempted", False)}
+
+        # Active tasks denominator excludes exempted tasks so transferred/new students are never penalized
+        non_exempt_active_assignments = [
+            a for a in active_assignments_list if a.id not in exempted_assignment_ids
+        ]
+        cycle_total_tasks = len(non_exempt_active_assignments)
+        cycle_completed_tasks = 0
+
+        # Build chronological sequence per cycle
+        cycle_assignments_map: dict[int, list[Assignment]] = {}
+        for ca in assignments:
+            c_num = getattr(ca, "cycle_number", 1) or 1
+            cycle_assignments_map.setdefault(c_num, []).append(ca)
+
+        for c_num, c_list in cycle_assignments_map.items():
+            c_list.sort(key=lambda x: (getattr(x, "order_index", 0) or 0, x.deadline, x.created_at))
 
         assignment_map = {a.id: a for a in assignments}
         assignment_ids = [a.id for a in assignments]
@@ -758,6 +782,11 @@ async def get_student_history(
             for a_id, va in va_res.all():
                 va_map[a_id] = va
 
+        submitted_assign_ids = {
+            s.assignment_id for s in submissions_map.values()
+            if not getattr(s, "is_archived", False)
+        }
+
         for a in assignments:
             sub = submissions_map.get(a.id)
             comp_pct = 0
@@ -788,11 +817,59 @@ async def get_student_history(
                     else:
                         comp_pct = 100
 
-                    if is_active_task:
+                    if is_active_task and a.id not in exempted_assignment_ids:
                         cycle_completed_tasks += 1
                 else:
                     comp_pct = 0
                     sub_status = "archived"
+
+            # Sequential & prerequisite lock determination
+            ovr = override_map.get(a.id)
+            is_ovr_unlocked = bool(ovr and ovr.is_unlocked)
+            is_ovr_exempted = bool(ovr and getattr(ovr, "is_exempted", False))
+
+            is_locked = False
+            lock_reason = None
+            prereq = None
+            prereq_id = a.prerequisite_id
+            if prereq_id == a.id:
+                prereq_id = None
+
+            if is_ovr_unlocked or is_ovr_exempted:
+                is_locked = False
+                lock_reason = None
+            elif sub is not None and not getattr(sub, "is_archived", False):
+                is_locked = False
+                lock_reason = None
+            else:
+                assign_cycle = getattr(a, "cycle_number", 1) or 1
+                c_list = cycle_assignments_map.get(assign_cycle, [])
+                idx = next((i for i, item in enumerate(c_list) if item.id == a.id), None)
+                if not prereq_id and idx is not None and idx > 0:
+                    prereq_id = c_list[idx - 1].id
+
+                if prereq_id and prereq_id != a.id:
+                    prereq = assignment_map.get(prereq_id)
+                    prereq_ovr = override_map.get(prereq_id)
+                    prereq_satisfied = (
+                        prereq_id in submitted_assign_ids
+                        or (prereq_ovr and (prereq_ovr.is_unlocked or getattr(prereq_ovr, "is_exempted", False)))
+                    )
+                    if prereq_satisfied:
+                        is_locked = False
+                        lock_reason = None
+                    else:
+                        prereq_cycle = (getattr(prereq, "cycle_number", 1) or 1) if prereq else assign_cycle
+                        if prereq_cycle < assign_cycle:
+                            is_locked = False
+                            lock_reason = None
+                        else:
+                            is_locked = True
+                            prereq_title = prereq.title if prereq else "previous assignment"
+                            lock_reason = f"Locked: Complete '{prereq_title}' to unlock"
+                else:
+                    is_locked = False
+                    lock_reason = None
 
             va_attempt = va_map.get(a.id)
             vocab_score = va_attempt.percentage if va_attempt else None
@@ -815,6 +892,12 @@ async def get_student_history(
                 file_original_name=file_name,
                 vocab_score=vocab_score,
                 vocab_attempt_count=vocab_attempts,
+                is_locked=is_locked,
+                lock_reason=lock_reason,
+                is_exempted=is_ovr_exempted,
+                unlocked_by_teacher=is_ovr_unlocked,
+                prerequisite_id=prereq_id,
+                prerequisite_title=prereq.title if (prereq_id and prereq) else None,
             )
             history_items.append(item)
             if is_active_task:
@@ -1202,4 +1285,202 @@ async def reset_student_password(
         success=True,
         message="Password reset successfully. Student can now log in with the new password.",
     )
+
+
+class ToggleLockBody(BaseModel):
+    is_unlocked: bool | None = None
+    is_exempted: bool | None = None
+
+
+@router.post("/{student_id}/unlock-up-to-date", dependencies=[Depends(require_teacher)])
+@teacher_students_router.post("/{student_id}/unlock-up-to-date", dependencies=[Depends(require_teacher)])
+async def unlock_student_up_to_date(
+    student_id: uuid.UUID,
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Teacher action for new or transferred students:
+    Exempts all past-due or currently open assignments up to the latest active assignment
+    by marking them is_exempted=True and is_unlocked=True.
+    This unlocks all prerequisites and recalculates student cycle progress so the student
+    can start fresh from today's lesson without penalty.
+    """
+    from app.models.gamification import TaskLockOverride
+
+    profile = (
+        await db.execute(
+            select(StudentProfile)
+            .options(selectinload(StudentProfile.group))
+            .where(or_(StudentProfile.id == student_id, StudentProfile.user_id == student_id))
+        )
+    ).scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
+    if not profile.group_id:
+        return {"status": "success", "message": "Student is not in a group", "exempted_count": 0}
+
+    group = profile.group
+    current_cycle = getattr(group, "current_cycle", 1) or 1
+
+    # Fetch cohort assignments in the current cycle
+    assignments = (
+        await db.execute(
+            select(Assignment).where(
+                Assignment.group_id == profile.group_id,
+                Assignment.status == AssignmentStatus.PUBLISHED,
+                Assignment.cycle_number == current_cycle,
+            )
+        )
+    ).scalars().all()
+
+    if not assignments:
+        assignments = (
+            await db.execute(
+                select(Assignment).where(
+                    Assignment.group_id == profile.group_id,
+                    Assignment.status == AssignmentStatus.PUBLISHED,
+                )
+            )
+        ).scalars().all()
+
+    assignments.sort(key=lambda a: (getattr(a, "order_index", 0) or 0, a.deadline, a.created_at))
+
+    now = ensure_utc(utcnow())
+
+    # Find the current active assignment index (first task whose deadline is >= now)
+    current_active_idx = next(
+        (i for i, a in enumerate(assignments) if ensure_utc(a.deadline) >= now),
+        len(assignments) - 1 if len(assignments) > 0 else 0,
+    )
+
+    # Assignments strictly before the current active task (or past-due) are marked exempted
+    target_exempt_assignments = assignments[:current_active_idx]
+    if not target_exempt_assignments and len(assignments) > 0 and ensure_utc(assignments[0].deadline) < now:
+        target_exempt_assignments = [a for a in assignments if ensure_utc(a.deadline) < now]
+
+    exempted_count = 0
+    for a in target_exempt_assignments:
+        existing_ovr = (
+            await db.execute(
+                select(TaskLockOverride).where(
+                    TaskLockOverride.student_id == profile.id,
+                    TaskLockOverride.assignment_id == a.id,
+                )
+            )
+        ).scalar_one_or_none()
+
+        if existing_ovr:
+            existing_ovr.is_exempted = True
+            existing_ovr.is_unlocked = True
+            existing_ovr.overridden_by = current_user.id
+        else:
+            new_ovr = TaskLockOverride(
+                student_id=profile.id,
+                assignment_id=a.id,
+                is_unlocked=True,
+                is_exempted=True,
+                overridden_by=current_user.id,
+            )
+            db.add(new_ovr)
+        exempted_count += 1
+
+    # Ensure the current active assignment itself is explicitly unlocked
+    if current_active_idx < len(assignments):
+        active_a = assignments[current_active_idx]
+        active_ovr = (
+            await db.execute(
+                select(TaskLockOverride).where(
+                    TaskLockOverride.student_id == profile.id,
+                    TaskLockOverride.assignment_id == active_a.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if active_ovr:
+            active_ovr.is_unlocked = True
+            active_ovr.overridden_by = current_user.id
+        else:
+            db.add(
+                TaskLockOverride(
+                    student_id=profile.id,
+                    assignment_id=active_a.id,
+                    is_unlocked=True,
+                    is_exempted=False,
+                    overridden_by=current_user.id,
+                )
+            )
+
+    await db.commit()
+    return {
+        "status": "success",
+        "message": f"Successfully exempted {exempted_count} past assignments. Student is up-to-date for today's lesson.",
+        "exempted_count": exempted_count,
+    }
+
+
+@router.patch("/{student_id}/assignments/{assignment_id}/toggle-lock", dependencies=[Depends(require_teacher)])
+@router.post("/{student_id}/assignments/{assignment_id}/toggle-lock", dependencies=[Depends(require_teacher)])
+@teacher_students_router.patch("/{student_id}/assignments/{assignment_id}/toggle-lock", dependencies=[Depends(require_teacher)])
+@teacher_students_router.post("/{student_id}/assignments/{assignment_id}/toggle-lock", dependencies=[Depends(require_teacher)])
+async def toggle_student_assignment_lock(
+    student_id: uuid.UUID,
+    assignment_id: uuid.UUID,
+    body: ToggleLockBody | None = None,
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Teacher can selectively toggle manual unlock / exemption for a single assignment for a student.
+    """
+    from app.models.gamification import TaskLockOverride
+
+    profile = (
+        await db.execute(
+            select(StudentProfile).where(or_(StudentProfile.id == student_id, StudentProfile.user_id == student_id))
+        )
+    ).scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
+    existing = (
+        await db.execute(
+            select(TaskLockOverride).where(
+                TaskLockOverride.student_id == profile.id,
+                TaskLockOverride.assignment_id == assignment_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        if body and body.is_unlocked is not None:
+            existing.is_unlocked = body.is_unlocked
+        elif body and body.is_exempted is not None:
+            existing.is_exempted = body.is_exempted
+        else:
+            existing.is_unlocked = not existing.is_unlocked
+        existing.overridden_by = current_user.id
+        is_unlocked = existing.is_unlocked
+        is_exempted = getattr(existing, "is_exempted", False)
+    else:
+        new_unlocked = body.is_unlocked if (body and body.is_unlocked is not None) else True
+        new_exempted = body.is_exempted if (body and body.is_exempted is not None) else False
+        override = TaskLockOverride(
+            student_id=profile.id,
+            assignment_id=assignment_id,
+            is_unlocked=new_unlocked,
+            is_exempted=new_exempted,
+            overridden_by=current_user.id,
+        )
+        db.add(override)
+        is_unlocked = new_unlocked
+        is_exempted = new_exempted
+
+    await db.commit()
+    return {
+        "status": "success",
+        "assignment_id": assignment_id,
+        "is_unlocked": is_unlocked,
+        "is_exempted": is_exempted,
+    }
 

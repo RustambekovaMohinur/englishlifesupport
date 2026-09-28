@@ -290,12 +290,12 @@ async def is_assignment_locked_for_student(
     """
     Returns (is_locked: bool, reason: str | None).
     Enforces sequential task progression:
-    - COMPLETED -> NEXT UNLOCKS
-    - OVERDUE -> PENALTY -> NEXT UNLOCKS (an expired task never blocks the sequence)
-    - LOCKED only when previous task is still actionable (deadline not passed and not yet submitted)
-    - Teacher override takes precedence.
+    - Assignment N is locked if Assignment N-1 in the same cohort cycle is not submitted,
+      not completed, not exempted, and not manually unlocked.
+    - Assignment N=1 is always unlocked by default.
+    - Explicit teacher unlock or exemption overrides the lock.
     """
-    # 1. Check if teacher granted explicit override
+    # 1. Check if teacher granted explicit override/exemption for this specific assignment
     override = (
         await db.execute(
             select(TaskLockOverride).where(
@@ -304,82 +304,97 @@ async def is_assignment_locked_for_student(
             )
         )
     ).scalar_one_or_none()
-    if override and override.is_unlocked:
+    if override and (override.is_unlocked or getattr(override, "is_exempted", False)):
         return False, None
 
-    # 2. Check assignment's prerequisite
+    # 2. Check if student already submitted this assignment
+    target_sub = (
+        await db.execute(
+            select(Submission.id).where(
+                Submission.assignment_id == assignment_id,
+                Submission.student_id == student_id,
+                Submission.is_archived.is_(False),
+            )
+        )
+    ).first()
+    if target_sub is not None:
+        return False, None
+
+    # 3. Load assignment
     assignment = (
         await db.execute(select(Assignment).where(Assignment.id == assignment_id))
     ).scalar_one_or_none()
     if not assignment:
         return False, None
 
-    now = utcnow()
-
-    # If assignment itself has explicit prerequisite
+    # 4. Determine prerequisite assignment (explicit or chronological N-1)
     prereq_id = assignment.prerequisite_id
     if prereq_id == assignment.id:
         prereq_id = None
 
-    # Or if sequential order within same group and cycle
-    if not prereq_id and getattr(assignment, "order_index", 0) > 0:
-        preceding = (
-            await db.execute(
-                select(Assignment)
-                .where(
-                    Assignment.group_id == assignment.group_id,
-                    Assignment.cycle_number == assignment.cycle_number,
-                    Assignment.status == AssignmentStatus.PUBLISHED,
-                    Assignment.order_index < assignment.order_index,
-                )
-                .order_by(Assignment.order_index.desc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-        if preceding:
-            prereq_id = preceding.id
+    assign_cycle = getattr(assignment, "cycle_number", 1) or 1
 
+    if not prereq_id:
+        cohort_assignments = (
+            await db.execute(
+                select(Assignment).where(
+                    Assignment.group_id == assignment.group_id,
+                    Assignment.cycle_number == assign_cycle,
+                    Assignment.status == AssignmentStatus.PUBLISHED,
+                )
+            )
+        ).scalars().all()
+
+        cohort_assignments.sort(
+            key=lambda a: (getattr(a, "order_index", 0) or 0, a.deadline, a.created_at)
+        )
+        idx = next((i for i, a in enumerate(cohort_assignments) if a.id == assignment.id), None)
+        if idx is not None and idx > 0:
+            prereq_id = cohort_assignments[idx - 1].id
+
+    # The very first assignment (N=1) is always unlocked by default
     if not prereq_id or prereq_id == assignment.id:
         return False, None
 
-    # Load prerequisite assignment
+    # 5. Load prerequisite assignment
     prereq = (
         await db.execute(select(Assignment).where(Assignment.id == prereq_id))
     ).scalar_one_or_none()
     if not prereq:
         return False, None
 
-    assign_cycle = getattr(assignment, "cycle_number", 1) or 1
     prereq_cycle = getattr(prereq, "cycle_number", 1) or 1
-    prereq_deadline = ensure_utc(prereq.deadline)
-    now_utc = ensure_utc(utcnow())
-    is_prereq_past = prereq_deadline < now_utc
-
-    # Cycle Isolation: an uncompleted task from an expired past cycle or elapsed deadline does NOT lock active tasks
-    if prereq_cycle < assign_cycle or is_prereq_past:
+    # Cycle isolation: past cycle does not lock next cycle
+    if prereq_cycle < assign_cycle:
         return False, None
 
-    # Check if student has submitted prerequisite assignment for that prereq cycle
+    # 6. Check if prerequisite is satisfied (submitted, manually unlocked, or exempted)
     prereq_sub = (
         await db.execute(
-            select(Submission)
-            .where(
+            select(Submission.id).where(
                 Submission.assignment_id == prereq_id,
                 Submission.student_id == student_id,
                 Submission.is_archived.is_(False),
                 Submission.cycle_number == prereq_cycle,
             )
-            .order_by(Submission.submitted_at.desc(), Submission.id.desc())
-            .limit(1)
         )
-    ).scalars().first()
-
+    ).first()
     if prereq_sub is not None:
-        # Completed / submitted -> next unlocks immediately!
         return False, None
 
-    prereq_title = prereq.title
-    return True, f"Please complete prerequisite assignment first: '{prereq_title}'."
+    prereq_ovr = (
+        await db.execute(
+            select(TaskLockOverride).where(
+                TaskLockOverride.student_id == student_id,
+                TaskLockOverride.assignment_id == prereq_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if prereq_ovr and (prereq_ovr.is_unlocked or getattr(prereq_ovr, "is_exempted", False)):
+        return False, None
+
+    prereq_title = prereq.title or "previous assignment"
+    return True, f"Locked: Complete '{prereq_title}' to unlock"
 
 
 async def check_and_apply_overdue_penalties(

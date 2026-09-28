@@ -142,6 +142,7 @@ class TaskLockOverride(UUIDPKMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     is_unlocked: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_exempted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.text("false"), nullable=False)
     overridden_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     student: Mapped["StudentProfile"] = relationship()

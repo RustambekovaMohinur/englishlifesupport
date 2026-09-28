@@ -223,11 +223,21 @@ async def student_dashboard(
                     )
                 ).scalars().all()
 
-            total_assignments = len(cycle_assignments)
-            cycle_assign_ids = {a.id for a in cycle_assignments}
+            # Query task lock overrides to exclude exempted tasks from progress denominator
+            from app.models.gamification import TaskLockOverride
+            overrides = (
+                await db.execute(
+                    select(TaskLockOverride).where(TaskLockOverride.student_id == profile.id)
+                )
+            ).scalars().all()
+            exempted_ids = {o.assignment_id for o in overrides if getattr(o, "is_exempted", False)}
 
-            # Active, non-archived submissions for the current cycle submitted >= updated_at
-            cycle_assign_map = {a.id: a for a in cycle_assignments}
+            non_exempt_cycle_assignments = [a for a in cycle_assignments if a.id not in exempted_ids]
+            total_assignments = len(non_exempt_cycle_assignments)
+            cycle_assign_ids = {a.id for a in non_exempt_cycle_assignments}
+
+            # Active, non-archived submissions for non-exempt current cycle tasks
+            cycle_assign_map = {a.id: a for a in non_exempt_cycle_assignments}
             active_cycle_subs = [
                 s for s in submissions
                 if s.assignment_id in cycle_assign_ids
@@ -239,7 +249,7 @@ async def student_dashboard(
                 )
             ]
             completed_assignments = len(active_cycle_subs)
-            submitted_cycle_ids = {s.assignment_id for s in active_cycle_subs}
+            submitted_cycle_ids = {s.assignment_id for s in submissions if not getattr(s, "is_archived", False)} | exempted_ids
 
             upcoming_assignments = (
                 await db.execute(
@@ -254,10 +264,48 @@ async def student_dashboard(
                 )
             ).scalars().all()
 
-            upcoming = [
-                UpcomingAssignmentItem(id=a.id, title=a.title, deadline=a.deadline, submitted=a.id in submitted_cycle_ids)
-                for a in upcoming_assignments
-            ]
+            all_cycle_sorted = sorted(
+                cycle_assignments,
+                key=lambda x: (getattr(x, "order_index", 0) or 0, x.deadline, x.created_at),
+            )
+            override_map = {o.assignment_id: o for o in overrides}
+
+            upcoming = []
+            for a in upcoming_assignments:
+                is_sub = a.id in submitted_cycle_ids
+                ovr = override_map.get(a.id)
+                is_ovr = bool(ovr and (ovr.is_unlocked or getattr(ovr, "is_exempted", False)))
+
+                is_locked = False
+                lock_reason = None
+                if not is_sub and not is_ovr:
+                    prereq_id = a.prerequisite_id
+                    if not prereq_id:
+                        idx = next((i for i, item in enumerate(all_cycle_sorted) if item.id == a.id), None)
+                        if idx is not None and idx > 0:
+                            prereq_id = all_cycle_sorted[idx - 1].id
+                    if prereq_id and prereq_id != a.id:
+                        prereq_ovr = override_map.get(prereq_id)
+                        prereq_sat = (
+                            prereq_id in submitted_cycle_ids
+                            or (prereq_ovr and (prereq_ovr.is_unlocked or getattr(prereq_ovr, "is_exempted", False)))
+                        )
+                        if not prereq_sat:
+                            is_locked = True
+                            prereq_a = next((item for item in all_cycle_sorted if item.id == prereq_id), None)
+                            p_title = prereq_a.title if prereq_a else "previous assignment"
+                            lock_reason = f"Locked: Complete '{p_title}' to unlock"
+
+                upcoming.append(
+                    UpcomingAssignmentItem(
+                        id=a.id,
+                        title=a.title,
+                        deadline=a.deadline,
+                        submitted=is_sub,
+                        is_locked=is_locked,
+                        lock_reason=lock_reason,
+                    )
+                )
 
         recent_grades = []
         try:
