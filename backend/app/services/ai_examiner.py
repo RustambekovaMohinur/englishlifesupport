@@ -10,6 +10,7 @@ Strict Security:
 - Key is NEVER printed, logged, or exposed in error messages or responses.
 - Gracefully falls back to None on missing key or network errors without raising 500s.
 """
+import asyncio
 import base64
 import io
 import json
@@ -46,6 +47,91 @@ logger = logging.getLogger(__name__)
 DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 SUPPORTED_FALLBACK_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-pro"]
 _DISCOVERED_MODELS_CACHE: list[str] = []
+
+QUOTA_FRIENDLY_ERROR = "AI quota limit reached. Please wait a minute or provide an additional Gemini API key in settings."
+_ACTIVE_KEY_INDEX: int = 0
+
+
+def _load_raw_keys_from_env() -> list[str]:
+    raw_list: list[str] = []
+    try:
+        from dotenv import dotenv_values
+        env_paths = [
+            Path(__file__).resolve().parent.parent.parent / ".env",
+            Path(__file__).resolve().parent.parent.parent.parent / ".env",
+        ]
+        for ep in env_paths:
+            if ep.exists():
+                vals = dotenv_values(ep)
+                for k in ["GEMINI_API_KEYS", "GEMINI_API_KEY", "GOOGLE_API_KEY"]:
+                    v = vals.get(k)
+                    if v and str(v).strip():
+                        raw_list.append(str(v).strip())
+    except Exception:
+        pass
+    return raw_list
+
+
+def resolve_gemini_api_keys(provided_key: str | None = None) -> list[str]:
+    """
+    Parses provided key and/or environment keys into a unique, stripped list of non-empty API keys.
+    Supports comma, semicolon, or newline delimited strings in GEMINI_API_KEY, GEMINI_API_KEYS, or GOOGLE_API_KEY.
+    """
+    raw_sources: list[str] = []
+    if provided_key and provided_key.strip():
+        raw_sources.append(provided_key.strip())
+
+    for env_var in ["GEMINI_API_KEYS", "GEMINI_API_KEY", "GOOGLE_API_KEY"]:
+        v = (os.environ.get(env_var) or "").strip()
+        if v:
+            raw_sources.append(v)
+
+    # If still empty, inspect .env files
+    if not raw_sources:
+        raw_sources = _load_raw_keys_from_env()
+
+    resolved_keys: list[str] = []
+    for raw in raw_sources:
+        for token in re.split(r"[,;\n\r]+", raw):
+            clean = token.strip().strip('"\'')
+            if clean and clean not in resolved_keys:
+                resolved_keys.append(clean)
+
+    return resolved_keys
+
+
+def get_gemini_api_keys() -> list[str]:
+    """Returns all configured Gemini API keys."""
+    return resolve_gemini_api_keys()
+
+
+def get_gemini_api_key() -> str:
+    """
+    Fetch active GEMINI_API_KEY safely from server environment or .env files.
+    If multiple keys are configured, returns the current active rotated key.
+    """
+    keys = get_gemini_api_keys()
+    if not keys:
+        return ""
+    global _ACTIVE_KEY_INDEX
+    return keys[_ACTIVE_KEY_INDEX % len(keys)]
+
+
+def rotate_active_gemini_key() -> str:
+    """Rotates to the next available Gemini API key in the configured list."""
+    global _ACTIVE_KEY_INDEX
+    keys = get_gemini_api_keys()
+    if not keys:
+        return ""
+    _ACTIVE_KEY_INDEX = (_ACTIVE_KEY_INDEX + 1) % len(keys)
+    logger.info("Rotated Gemini active API key to index %d/%d.", _ACTIVE_KEY_INDEX + 1, len(keys))
+    return keys[_ACTIVE_KEY_INDEX]
+
+
+def reset_gemini_keys_cache() -> None:
+    """Resets the active key index to 0 (useful for tests)."""
+    global _ACTIVE_KEY_INDEX
+    _ACTIVE_KEY_INDEX = 0
 
 
 def get_clean_gemini_model(raw_name: str | None = None) -> str:
@@ -149,95 +235,153 @@ async def execute_gemini_generate_content(
     api_key: str | None = None,
     timeout: float = 30.0,
     preferred_model: str | None = None,
+    max_backoff_retries: int = 2,
+    backoff_delays: tuple[float, ...] = (2.0, 4.0),
 ) -> tuple[httpx.Response | None, str]:
     """
     Executes a generateContent call against Gemini with:
-    1. Primary candidate model list (['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro']).
-    2. Dynamic model suggestion extraction if Google API suggests a model in the error message.
-    3. Dynamic model discovery fallback via /v1beta/models if candidate models return 404/unsupported/retired.
+    1. Multi-Key Support & Rotation: Automatically rotates to the next available API key if 429 quota is hit.
+    2. Exponential Backoff: Waits 2s, 4s if all configured keys are rate-limited.
+    3. Primary candidate model list (['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro']).
+    4. Dynamic model suggestion extraction if Google API suggests a replacement model in error text.
+    5. Dynamic model discovery fallback via /v1beta/models if candidate models return 404/unsupported/retired.
     Returns (response, last_error_detail).
     """
-    key = api_key or get_gemini_api_key()
-    if not key:
-        return None, "GEMINI_API_KEY is not configured."
+    keys = resolve_gemini_api_keys(api_key)
+    if not keys:
+        return None, "GEMINI_API_KEY is not configured on the server."
 
-    headers = {
-        "x-goog-api-key": key,
-        "Content-Type": "application/json",
-    }
-
+    global _ACTIVE_KEY_INDEX
     candidates = get_gemini_candidate_models(preferred_model)
-    tried_models: set[str] = set()
     last_error_detail = ""
+    num_keys = len(keys)
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        # Step 1: Try initial candidate list
-        idx = 0
-        while idx < len(candidates):
-            model = candidates[idx]
-            idx += 1
-            if model in tried_models:
-                continue
-            tried_models.add(model)
+    # Exponential backoff loop (attempt 0: immediate, attempt 1: 2s delay, attempt 2: 4s delay)
+    for backoff_attempt in range(max_backoff_retries + 1):
+        if backoff_attempt > 0:
+            delay = backoff_delays[min(backoff_attempt - 1, len(backoff_delays) - 1)]
+            logger.warning(
+                "All %d Gemini API key(s) hit rate limit / quota. Retrying with exponential backoff in %.1fs (attempt %d/%d)...",
+                num_keys,
+                delay,
+                backoff_attempt,
+                max_backoff_retries,
+            )
+            await asyncio.sleep(delay)
 
-            endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
-            try:
-                resp = await client.post(endpoint_url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    return resp, ""
+        all_keys_hit_429 = True
 
-                last_error_detail = resp.text[:300]
-                error_lower = resp.text.lower()
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            # Rotate across all keys starting from current active index
+            start_key_idx = _ACTIVE_KEY_INDEX
+            for key_offset in range(num_keys):
+                key_idx = (start_key_idx + key_offset) % num_keys
+                current_key = keys[key_idx]
+                headers = {
+                    "x-goog-api-key": current_key,
+                    "Content-Type": "application/json",
+                }
 
-                # Check if API suggested an alternative model:
-                # e.g., "Please update your code to use models/gemini-3.8-flash for the latest features and improvements."
-                suggested_match = re.search(r"update your code to use models/([a-zA-Z0-9._-]+)", resp.text, re.IGNORECASE)
-                if suggested_match:
-                    suggested_model = get_clean_gemini_model(suggested_match.group(1))
-                    if suggested_model and suggested_model not in tried_models and suggested_model not in candidates:
-                        candidates.insert(idx, suggested_model)
-                        logger.info("Prioritizing Google-suggested Gemini model: %s", suggested_model)
+                current_key_hit_429 = False
+                tried_models: set[str] = set()
 
-                # Check if model is deprecated, not found, or unsupported
-                is_model_issue = resp.status_code in {400, 404} and any(
-                    phrase in error_lower
-                    for phrase in ["not found", "not supported", "no longer available", "deprecated", "update your code"]
-                )
+                m_idx = 0
+                while m_idx < len(candidates):
+                    model = candidates[m_idx]
+                    m_idx += 1
+                    if model in tried_models:
+                        continue
+                    tried_models.add(model)
 
-                if is_model_issue:
-                    logger.warning("Gemini model '%s' returned HTTP %d: %s; trying next fallback...", model, resp.status_code, last_error_detail)
-                    continue
+                    endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={current_key}"
+                    try:
+                        resp = await client.post(endpoint_url, headers=headers, json=payload)
+                        if resp.status_code == 200:
+                            _ACTIVE_KEY_INDEX = key_idx
+                            return resp, ""
 
-                # For quota / auth errors, abort retrying
-                if resp.status_code in {401, 403, 429}:
-                    logger.error("Gemini API call failed with auth/quota error (%d): %s", resp.status_code, last_error_detail)
-                    return resp, last_error_detail
+                        last_error_detail = resp.text[:300]
+                        error_lower = resp.text.lower()
 
-            except Exception as req_err:
-                last_error_detail = str(req_err)
-                logger.warning("Error calling Gemini endpoint for model '%s': %s", model, req_err)
-                continue
+                        # Check 429 Quota Exceeded / Rate Limit
+                        if resp.status_code == 429 or "quota" in error_lower or "resource_exhausted" in error_lower:
+                            current_key_hit_429 = True
+                            logger.warning(
+                                "Gemini API key %d/%d hit HTTP 429 / Quota Exceeded (%s).",
+                                key_idx + 1,
+                                num_keys,
+                                last_error_detail[:120],
+                            )
+                            # Rotate immediately: break out of model loop for this key to try the next key
+                            break
 
-        # Step 2: Dynamic discovery fallback if all candidate models failed
-        logger.info("Candidate Gemini models exhausted. Initiating dynamic model discovery...")
-        discovered = await discover_active_gemini_models(key)
-        for model in discovered:
-            if model in tried_models:
-                continue
-            tried_models.add(model)
+                        # Check if API suggested an alternative model
+                        suggested_match = re.search(r"update your code to use models/([a-zA-Z0-9._-]+)", resp.text, re.IGNORECASE)
+                        if suggested_match:
+                            suggested_model = get_clean_gemini_model(suggested_match.group(1))
+                            if suggested_model and suggested_model not in tried_models and suggested_model not in candidates:
+                                candidates.insert(m_idx, suggested_model)
+                                logger.info("Prioritizing Google-suggested Gemini model: %s", suggested_model)
 
-            endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
-            try:
-                resp = await client.post(endpoint_url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    logger.info("Dynamic discovery succeeded with Gemini model '%s'.", model)
-                    return resp, ""
-                last_error_detail = resp.text[:300]
-                if resp.status_code in {401, 403, 429}:
-                    return resp, last_error_detail
-            except Exception as req_err:
-                last_error_detail = str(req_err)
-                continue
+                        # Check if model is deprecated, not found, or unsupported
+                        is_model_issue = resp.status_code in {400, 404} and any(
+                            phrase in error_lower
+                            for phrase in ["not found", "not supported", "no longer available", "deprecated", "update your code"]
+                        )
+                        if is_model_issue:
+                            logger.warning("Gemini model '%s' returned HTTP %d: %s; trying fallback model...", model, resp.status_code, last_error_detail[:100])
+                            continue
+
+                        # Auth error (invalid key)
+                        if resp.status_code in {401, 403}:
+                            logger.error("Gemini API key %d/%d returned auth error (%d): %s; rotating key...", key_idx + 1, num_keys, resp.status_code, last_error_detail)
+                            break
+
+                    except Exception as req_err:
+                        last_error_detail = str(req_err)
+                        logger.warning("Error calling Gemini endpoint for model '%s' with key %d: %s", model, key_idx + 1, req_err)
+                        continue
+
+                # If key didn't hit 429 and candidates exhausted, try dynamic discovery
+                if not current_key_hit_429:
+                    logger.info("Candidate models exhausted on key %d. Checking dynamic discovery...", key_idx + 1)
+                    discovered = await discover_active_gemini_models(current_key)
+                    for model in discovered:
+                        if model in tried_models:
+                            continue
+                        tried_models.add(model)
+                        endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={current_key}"
+                        try:
+                            resp = await client.post(endpoint_url, headers=headers, json=payload)
+                            if resp.status_code == 200:
+                                _ACTIVE_KEY_INDEX = key_idx
+                                return resp, ""
+                            last_error_detail = resp.text[:300]
+                            if resp.status_code == 429 or "quota" in resp.text.lower() or "resource_exhausted" in resp.text.lower():
+                                current_key_hit_429 = True
+                                break
+                            if resp.status_code in {401, 403}:
+                                break
+                        except Exception as req_err:
+                            last_error_detail = str(req_err)
+                            continue
+
+                if not current_key_hit_429:
+                    all_keys_hit_429 = False
+                else:
+                    # Point active key index to the next key
+                    if num_keys > 1:
+                        _ACTIVE_KEY_INDEX = (key_idx + 1) % num_keys
+                        logger.info("Automatically rotated active key index to %d/%d.", _ACTIVE_KEY_INDEX + 1, num_keys)
+
+        # If not all keys hit 429, don't do exponential backoff (e.g. fatal 400 bad request)
+        if not all_keys_hit_429:
+            break
+
+    # If all keys exhausted quota
+    if all_keys_hit_429 or "quota" in last_error_detail.lower() or "429" in last_error_detail or "resource_exhausted" in last_error_detail.lower():
+        logger.error("Gemini API quota exhausted across all %d configured key(s) after %d retries.", num_keys, max_backoff_retries)
+        return None, QUOTA_FRIENDLY_ERROR
 
     return None, last_error_detail
 
@@ -280,31 +424,6 @@ def normalize_pos(raw_pos: str | None) -> str:
         return "idiom"
     return "noun"
 
-
-def get_gemini_api_key() -> str:
-    """Fetch GEMINI_API_KEY or GOOGLE_API_KEY safely from server environment or .env files."""
-    key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
-    if key:
-        return key
-
-    # Reload explicitly using python-dotenv
-    try:
-        from dotenv import load_dotenv
-        env_path = Path(__file__).resolve().parent.parent.parent / ".env"
-        if env_path.exists():
-            load_dotenv(env_path, override=True)
-            key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
-            if key:
-                return key
-        root_env = Path(__file__).resolve().parent.parent.parent.parent / ".env"
-        if root_env.exists():
-            load_dotenv(root_env, override=True)
-            key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
-            if key:
-                return key
-    except Exception:
-        pass
-    return ""
 
 
 async def run_prompt(prompt: str) -> dict | None:

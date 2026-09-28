@@ -398,6 +398,12 @@ async def ai_parse_wordlist_endpoint(
         )
     except Exception as exc:
         logger.exception("AI wordlist parsing failed: %s", exc)
+        err_str = str(exc)
+        if "quota" in err_str.lower() or "429" in err_str or "resource_exhausted" in err_str.lower():
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="AI quota limit reached. Please wait a minute or provide an additional Gemini API key in settings.",
+            )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Gemini AI extraction error: {str(exc)}",

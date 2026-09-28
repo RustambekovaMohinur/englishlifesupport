@@ -218,7 +218,14 @@ export default function TeacherWordlistsPage() {
         setPreviews(fallbackItems);
         toast.success(`Loaded ${fallbackItems.length} words (local mode). You can edit and save!`);
       } else {
-        toast.error(err?.response?.data?.detail ?? "Failed to analyze vocabulary words.");
+        const detail = err?.response?.data?.detail;
+        if (err?.response?.status === 429 || (detail && /quota|429|resource_exhausted/i.test(detail))) {
+          toast.error("AI quota limit reached. Please wait a minute or provide an additional Gemini API key in settings.", {
+            duration: 6000,
+          });
+        } else {
+          toast.error(detail ?? "Failed to analyze vocabulary words.");
+        }
       }
     } finally {
       setIsGenerating(false);
@@ -296,7 +303,14 @@ export default function TeacherWordlistsPage() {
       toast.success(`✨ Gemini AI extracted ${normalizedResults.length} vocabulary words!`);
     } catch (err: any) {
       console.error("[AI PARSE ERROR]", err);
-      toast.error(err?.response?.data?.detail ?? "Failed to extract vocabulary with Gemini AI.");
+      const detail = err?.response?.data?.detail;
+      if (err?.response?.status === 429 || (detail && /quota|429|resource_exhausted/i.test(detail))) {
+        toast.error("AI quota limit reached. Please wait a minute or provide an additional Gemini API key in settings.", {
+          duration: 6000,
+        });
+      } else {
+        toast.error(detail ?? "Failed to extract vocabulary with Gemini AI.");
+      }
     } finally {
       setIsAiParsing(false);
     }

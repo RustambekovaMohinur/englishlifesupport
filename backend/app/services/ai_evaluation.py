@@ -175,7 +175,7 @@ async def evaluate_writing(
 
     if not resp or resp.status_code != 200:
         logger.error("Gemini writing evaluation failed: %s", last_err)
-        raise RuntimeError(f"Gemini API returned status {resp.status_code if resp else 'None'}: {last_err}")
+        raise RuntimeError(last_err or f"Gemini API returned status {resp.status_code if resp else 'None'}")
 
     data = resp.json()
 
@@ -275,7 +275,7 @@ async def evaluate_speaking(
 
     if not resp or resp.status_code != 200:
         logger.error("Gemini speaking evaluation failed: %s", last_err)
-        raise RuntimeError(f"Gemini API returned status {resp.status_code if resp else 'None'}: {last_err}")
+        raise RuntimeError(last_err or f"Gemini API returned status {resp.status_code if resp else 'None'}")
 
     data = resp.json()
 
@@ -417,7 +417,11 @@ async def evaluate_submission_background(submission_id: uuid.UUID) -> None:
             try:
                 if feedback_record:
                     feedback_record.status = AIEvaluationStatus.FAILED.value
-                    feedback_record.error_message = f"Evaluation error: {str(e)[:300]}"
+                    err_s = str(e)
+                    if "quota" in err_s.lower() or "429" in err_s or "resource_exhausted" in err_s.lower():
+                        feedback_record.error_message = "AI quota limit reached. Please wait a minute or provide an additional Gemini API key in settings."
+                    else:
+                        feedback_record.error_message = f"Evaluation error: {err_s[:300]}"
                     await db.commit()
             except Exception:
                 pass
