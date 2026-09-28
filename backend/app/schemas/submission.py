@@ -124,6 +124,11 @@ class SubmissionOut(BaseModel):
     ai_grade_suggested: float | None = None
     ai_evaluated_at: datetime | None = None
 
+    # AI Speaking Examiner & Transcription
+    audio_transcript: str | None = None
+    speaking_metrics_json: str | None = None
+    ai_speaking_evaluation_json: str | None = None
+
     model_config = {"from_attributes": True}
 
 

@@ -360,22 +360,57 @@ async def evaluate_submission_background(submission_id: uuid.UUID) -> None:
                 audio_bytes = file_path.read_bytes()
                 mime = normalize_audio_mime(submission.file_content_type, submission.file_original_name)
 
-                result = await evaluate_speaking(
+                from app.services.ai_speaking_examiner import evaluate_speaking_submission
+                from app.utils.datetimes import utcnow
+
+                topic = assignment.title
+                if assignment.description:
+                    topic += f"\n{assignment.description}"
+
+                speaking_res = await evaluate_speaking_submission(
                     audio_bytes=audio_bytes,
+                    filename=submission.file_original_name or "recording.webm",
                     mime_type=mime,
-                    assignment_title=assignment.title,
-                    assignment_prompt=assignment.description,
+                    prompt_topic=topic,
                 )
 
-                feedback_record.transcription = result.get("transcription")
-                feedback_record.band_score = float(result.get("band_score", 0))
-                feedback_record.scaled_score_10 = float(result.get("scaled_score_10", 0))
-                feedback_record.criteria_scores = result.get("criteria_scores")
-                feedback_record.strengths = result.get("strengths")
-                feedback_record.areas_for_improvement = result.get("areas_for_improvement")
-                feedback_record.detailed_corrections = result.get("detailed_corrections")
-                feedback_record.overall_feedback = result.get("overall_feedback")
-                feedback_record.ai_raw_response = result
+                submission.audio_transcript = speaking_res.get("transcript")
+                submission.speaking_metrics_json = json.dumps({
+                    "words_count": speaking_res.get("words_count", 0),
+                    "duration_seconds": speaking_res.get("duration_seconds", 0),
+                    "wpm": speaking_res.get("wpm", 0),
+                    "fluency_status": speaking_res.get("fluency_status", "Natural & Fluent"),
+                    "band": speaking_res.get("band", "6.5"),
+                    "cefr": speaking_res.get("cefr", "B2"),
+                    "suggested_score": speaking_res.get("suggested_score", 80),
+                })
+                submission.ai_speaking_evaluation_json = json.dumps(speaking_res)
+                submission.ai_grade_suggested = float(speaking_res.get("suggested_score", 80))
+                submission.ai_evaluated_at = utcnow()
+
+                feedback_record.transcription = speaking_res.get("transcript")
+                try:
+                    feedback_record.band_score = float(speaking_res.get("band", 6.5))
+                except (ValueError, TypeError):
+                    feedback_record.band_score = 6.5
+                feedback_record.scaled_score_10 = round(float(speaking_res.get("suggested_score", 80)) / 10.0, 1)
+                feedback_record.criteria_scores = {
+                    "fluency_status": speaking_res.get("fluency_status"),
+                    "wpm": speaking_res.get("wpm"),
+                    "duration_seconds": speaking_res.get("duration_seconds"),
+                    "cefr": speaking_res.get("cefr"),
+                }
+                feedback_record.strengths = [
+                    f"Fluency: {speaking_res.get('fluency_status')} ({speaking_res.get('wpm')} WPM)",
+                    f"Speaking Duration: {speaking_res.get('duration_seconds')}s ({speaking_res.get('words_count')} words)",
+                ]
+                feedback_record.areas_for_improvement = speaking_res.get("pronunciation_and_vocab_tips") or []
+                feedback_record.detailed_corrections = [
+                    {"original": c.get("spoken", ""), "correction": c.get("corrected", ""), "explanation": c.get("explanation", "")}
+                    for c in speaking_res.get("grammar_corrections", [])
+                ]
+                feedback_record.overall_feedback = speaking_res.get("summary")
+                feedback_record.ai_raw_response = speaking_res
                 feedback_record.status = AIEvaluationStatus.COMPLETED.value
                 feedback_record.error_message = None
 

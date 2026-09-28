@@ -559,6 +559,40 @@ export interface SubmissionOut {
   ai_evaluation_json?: string | null;
   ai_grade_suggested?: number | null;
   ai_evaluated_at?: string | null;
+  audio_transcript?: string | null;
+  speaking_metrics_json?: string | null;
+  ai_speaking_evaluation_json?: string | null;
+}
+
+export interface AISpeakingGrammarCorrection {
+  spoken: string;
+  corrected: string;
+  explanation: string;
+}
+
+export interface SpeakingMetrics {
+  words_count: number;
+  duration_seconds: number;
+  wpm: number;
+  fluency_status: string;
+  band?: string;
+  cefr?: string;
+  suggested_score?: number;
+}
+
+export interface AISpeakingEvaluation {
+  transcript: string;
+  words_count: number;
+  duration_seconds: number;
+  wpm: number;
+  fluency_status: string;
+  suggested_score: number;
+  band: string;
+  cefr?: string;
+  pronunciation_and_vocab_tips: string[];
+  grammar_corrections: AISpeakingGrammarCorrection[];
+  summary: string;
+  is_fallback?: boolean;
 }
 
 export interface AIWritingCorrection {

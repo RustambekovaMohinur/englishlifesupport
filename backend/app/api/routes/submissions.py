@@ -211,6 +211,9 @@ def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = 
         ai_evaluation_json=getattr(sub, "ai_evaluation_json", None),
         ai_grade_suggested=getattr(sub, "ai_grade_suggested", None),
         ai_evaluated_at=getattr(sub, "ai_evaluated_at", None),
+        audio_transcript=getattr(sub, "audio_transcript", None),
+        speaking_metrics_json=getattr(sub, "speaking_metrics_json", None),
+        ai_speaking_evaluation_json=getattr(sub, "ai_speaking_evaluation_json", None),
     )
 
 
@@ -1480,6 +1483,236 @@ async def approve_ai_grade(
             reason=StarTransactionReason.TEACHER_ADJUSTMENT,
             reference_id=ref_id,
             description=f"Teacher approved AI grade stars for '{assignment_title}'",
+        )
+        db.add(tx)
+
+    await db.flush()
+
+    total = (
+        await db.execute(
+            select(func.coalesce(func.sum(StarTransaction.amount), 0)).where(
+                StarTransaction.student_id == sub.student_id
+            )
+        )
+    ).scalar_one()
+    student.total_stars = max(0, int(total))
+
+    if score_10 >= 10:
+        await award_lightning(
+            db,
+            student_id=sub.student_id,
+            assignment_id=sub.assignment_id,
+        )
+
+    await db.commit()
+    await db.refresh(sub)
+    return _submission_to_out(sub)
+
+
+async def _get_submission_audio_bytes(sub: Submission, db: AsyncSession) -> tuple[bytes, str, str]:
+    """
+    Safely retrieves audio bytes, filename, and mime-type for an audio submission.
+    Supports local filesystem storage, database blob resolution, and remote URLs (Backblaze B2/S3).
+    """
+    filename = sub.file_original_name or "recording.webm"
+    mime = sub.file_content_type or "audio/webm"
+
+    if not sub.file_path:
+        return b"", filename, mime
+
+    if sub.file_path.startswith("http://") or sub.file_path.startswith("https://"):
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                res = await client.get(sub.file_path)
+                if res.status_code == 200 and len(res.content) > 0:
+                    return res.content, filename, mime
+        except Exception as e:
+            logger.warning("Could not download remote audio for submission %s: %s", sub.id, e)
+
+    try:
+        abs_path = await resolve_submission_file_async(sub.file_path, db=db, fallback_name=filename)
+        from pathlib import Path
+        p = Path(abs_path)
+        if p.exists() and p.is_file() and p.stat().st_size > 0:
+            return p.read_bytes(), filename, mime
+    except Exception as e:
+        logger.warning("Could not resolve local audio file for submission %s: %s", sub.id, e)
+
+    return b"", filename, mime
+
+
+@router.post(
+    "/{submission_id}/ai-evaluate-speaking",
+    response_model=SubmissionOut,
+    dependencies=[Depends(require_teacher)],
+)
+async def ai_evaluate_speaking_submission_route(
+    submission_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    """
+    On-demand AI Speaking Rubric Evaluation:
+    Transcribes student audio recording, evaluates WPM and fluency metrics,
+    identifies spoken grammar and pronunciation tips, and calculates CEFR/IELTS band and score.
+    """
+    sub = await _get_submission_or_404(submission_id, db)
+    audio_bytes, filename, mime = await _get_submission_audio_bytes(sub, db)
+    if not audio_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ushbu topshiriqda baholash uchun audio yozuv fayli topilmadi.",
+        )
+
+    prompt_topic = sub.assignment.title if sub.assignment else "English Speaking Homework"
+    if sub.assignment and sub.assignment.description:
+        prompt_topic += f"\n{sub.assignment.description}"
+
+    from app.services.ai_speaking_examiner import evaluate_speaking_submission
+    eval_result = await evaluate_speaking_submission(
+        audio_bytes=audio_bytes,
+        filename=filename,
+        mime_type=mime,
+        prompt_topic=prompt_topic,
+    )
+
+    sub.audio_transcript = eval_result.get("transcript")
+    sub.speaking_metrics_json = json.dumps({
+        "words_count": eval_result.get("words_count", 0),
+        "duration_seconds": eval_result.get("duration_seconds", 0),
+        "wpm": eval_result.get("wpm", 0),
+        "fluency_status": eval_result.get("fluency_status", "Natural & Fluent"),
+        "band": eval_result.get("band", "6.5"),
+        "cefr": eval_result.get("cefr", "B2"),
+        "suggested_score": eval_result.get("suggested_score", 80),
+    })
+    sub.ai_speaking_evaluation_json = json.dumps(eval_result)
+    sub.ai_grade_suggested = float(eval_result.get("suggested_score", 80))
+    sub.ai_evaluated_at = utcnow()
+
+    await db.commit()
+    await db.refresh(sub)
+    return _submission_to_out(sub)
+
+
+@router.post(
+    "/{submission_id}/approve-speaking-grade",
+    response_model=SubmissionOut,
+    dependencies=[Depends(require_teacher)],
+)
+async def approve_speaking_grade_route(
+    submission_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    """
+    Teacher 1-click approve speaking grade endpoint:
+    Applies speaking evaluation score (scaled 0-10), marks status as GRADED,
+    appends formatted speaking rubric feedback (Band, WPM, fluency, summary),
+    and awards stars/XP automatically.
+    """
+    sub = await _get_submission_or_404(submission_id, db)
+
+    if not sub.ai_speaking_evaluation_json:
+        audio_bytes, filename, mime = await _get_submission_audio_bytes(sub, db)
+        if not audio_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ushbu topshiriqda baholash uchun audio yozuv topilmadi.",
+            )
+        prompt_topic = sub.assignment.title if sub.assignment else "English Speaking Homework"
+        if sub.assignment and sub.assignment.description:
+            prompt_topic += f"\n{sub.assignment.description}"
+
+        from app.services.ai_speaking_examiner import evaluate_speaking_submission
+        eval_result = await evaluate_speaking_submission(
+            audio_bytes=audio_bytes,
+            filename=filename,
+            mime_type=mime,
+            prompt_topic=prompt_topic,
+        )
+        sub.audio_transcript = eval_result.get("transcript")
+        sub.speaking_metrics_json = json.dumps({
+            "words_count": eval_result.get("words_count", 0),
+            "duration_seconds": eval_result.get("duration_seconds", 0),
+            "wpm": eval_result.get("wpm", 0),
+            "fluency_status": eval_result.get("fluency_status", "Natural & Fluent"),
+            "band": eval_result.get("band", "6.5"),
+            "cefr": eval_result.get("cefr", "B2"),
+            "suggested_score": eval_result.get("suggested_score", 80),
+        })
+        sub.ai_speaking_evaluation_json = json.dumps(eval_result)
+        sub.ai_grade_suggested = float(eval_result.get("suggested_score", 80))
+        sub.ai_evaluated_at = utcnow()
+    else:
+        try:
+            eval_result = json.loads(sub.ai_speaking_evaluation_json)
+        except Exception:
+            eval_result = {}
+
+    suggested_score = sub.ai_grade_suggested if sub.ai_grade_suggested is not None else float(eval_result.get("suggested_score", 80))
+    score_10 = max(0, min(10, round(suggested_score / 10.0)))
+    stars = score_10
+
+    band = eval_result.get("band", "6.5")
+    wpm = eval_result.get("wpm", 0)
+    fluency = eval_result.get("fluency_status", "Natural & Fluent")
+    summary = eval_result.get("summary", "")
+
+    ai_feedback_text = f"🎙️ [AI Speaking Examiner - Band {band} ({int(suggested_score)}/100, {wpm} WPM - {fluency})]\n{summary}"
+
+    tips = eval_result.get("pronunciation_and_vocab_tips") or []
+    if tips:
+        ai_feedback_text += "\n\nPronunciation & Vocabulary Tips:\n" + "\n".join(f"• {t}" for t in tips[:3])
+
+    now = datetime.now(timezone.utc)
+    if sub.grade is not None:
+        sub.grade.score = score_10
+        sub.grade.feedback = ai_feedback_text
+        sub.grade.stars = stars
+        sub.grade.graded_by = current_user.id
+        sub.grade.graded_at = now
+    else:
+        grade = Grade(
+            submission_id=sub.id,
+            score=score_10,
+            feedback=ai_feedback_text,
+            stars=stars,
+            graded_by=current_user.id,
+            graded_at=now,
+        )
+        db.add(grade)
+
+    sub.status = SubmissionStatus.GRADED
+
+    # Student StarTransaction and total stars update
+    student = (
+        await db.execute(select(StudentProfile).where(StudentProfile.id == sub.student_id))
+    ).scalar_one()
+
+    ref_id = f"grade_{sub.id}"
+    existing_tx = (
+        await db.execute(
+            select(StarTransaction).where(
+                StarTransaction.student_id == sub.student_id,
+                StarTransaction.reason == StarTransactionReason.TEACHER_ADJUSTMENT,
+                StarTransaction.reference_id == ref_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+    assignment_title = sub.assignment.title if sub.assignment else "homework"
+    if existing_tx:
+        existing_tx.amount = stars
+        existing_tx.description = f"Teacher approved AI speaking grade stars for '{assignment_title}'"
+    elif stars > 0:
+        tx = StarTransaction(
+            student_id=sub.student_id,
+            amount=stars,
+            reason=StarTransactionReason.TEACHER_ADJUSTMENT,
+            reference_id=ref_id,
+            description=f"Teacher approved AI speaking grade stars for '{assignment_title}'",
         )
         db.add(tx)
 

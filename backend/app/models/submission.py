@@ -65,6 +65,11 @@ class Submission(UUIDPKMixin, TimestampMixin, Base):
     ai_grade_suggested: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     ai_evaluated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # AI Speaking Examiner & Transcription
+    audio_transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
+    speaking_metrics_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_speaking_evaluation_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     assignment: Mapped["Assignment"] = relationship(back_populates="submissions")
     student: Mapped["StudentProfile"] = relationship(back_populates="submissions")
     duplicate_of: Mapped["Submission | None"] = relationship(

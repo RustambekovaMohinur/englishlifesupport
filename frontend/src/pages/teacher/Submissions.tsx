@@ -39,6 +39,7 @@ import {
 import { AIWritingEvaluation, Group, SubmissionCommentOut, SubmissionCorrectionOut, SubmissionOut } from "@/types";
 import StudentDetailModal from "@/components/StudentDetailModal";
 import DuplicateCompareModal from "@/components/DuplicateCompareModal";
+import { AISpeakingExaminerCard } from "@/components/AISpeakingExaminerCard";
 
 const PAGE_SIZE = 15;
 
@@ -187,6 +188,14 @@ export default function SubmissionsPage() {
                             title="AI Examiner tavsiya etgan ball"
                           >
                             ✨ AI: {Math.round(s.ai_grade_suggested)}/100
+                          </span>
+                        )}
+                        {s.audio_transcript && (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-400 border border-indigo-500/30 font-mono shadow-2xs"
+                            title="AI Speaking Examiner transkripsiyasi mavjud"
+                          >
+                            🎙️ Transcribed
                           </span>
                         )}
                       </div>
@@ -689,6 +698,21 @@ function GradeModal({
             )}
           </div>
         )}
+
+        {/* AI Speaking Examiner Card */}
+        <AISpeakingExaminerCard
+          submission={currentSub}
+          onSubmissionUpdated={(updated) => setCurrentSub(updated)}
+          onPreFillGrade={(s, f) => {
+            setScore(s);
+            setStars(s);
+            setFeedback(f);
+          }}
+          onApproveSuccess={(updated) => {
+            setCurrentSub(updated);
+            onGraded(updated.grade);
+          }}
+        />
 
         {/* Text answer & Interactive correction */}
         {currentSub.text_answer && (

@@ -27,6 +27,7 @@ import {
 import { getSubmission, getSubmissionFresh, gradeSubmission, triggerAIEvaluation } from "@/services/lmsService";
 import { SubmissionOut } from "@/types";
 import { AIFeedbackCard } from "./AIFeedbackCard";
+import { AISpeakingExaminerCard } from "./AISpeakingExaminerCard";
 
 interface SubmissionReviewDrawerProps {
   submissionId: string | null;
@@ -265,25 +266,28 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                     </div>
                   )}
 
-                  {/* Audio Player if Audio Submission */}
-                  {submission.file_url && isAudio && (
-                    <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-800/60 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
-                          <Volume2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                          <span>Voice Recording / Speaking Task</span>
-                        </span>
-                        {submission.file_original_name && (
-                          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono truncate max-w-[180px]">
-                            {submission.file_original_name}
-                          </span>
-                        )}
-                      </div>
-                      <AuthenticatedAudio
-                        url={submission.file_url || `/submissions/${submission.id}/file`}
-                        className="w-full mt-1"
-                      />
-                    </div>
+                  {/* AI Speaking Examiner Card if Audio Submission */}
+                  {isAudio && (
+                    <AISpeakingExaminerCard
+                      submission={submission}
+                      onSubmissionUpdated={(updated) => setSubmission(updated)}
+                      onPreFillGrade={(s, f) => {
+                        setScore(s);
+                        setStars(s);
+                        setFeedback(f);
+                      }}
+                      onApproveSuccess={(updated) => {
+                        setSubmission(updated);
+                        if (onGraded) {
+                          onGraded(
+                            updated.id,
+                            updated.grade?.score ?? 10,
+                            updated.grade?.stars ?? 10,
+                            updated.grade?.feedback ?? undefined
+                          );
+                        }
+                      }}
+                    />
                   )}
 
                   {/* Document Download if non-audio attachment */}

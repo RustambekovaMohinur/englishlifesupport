@@ -318,6 +318,16 @@ export const approveAIGrade = async (submissionId: string): Promise<SubmissionOu
   return r.data;
 };
 
+export const evaluateSubmissionSpeakingAI = async (submissionId: string): Promise<SubmissionOut> => {
+  const r = await api.post<SubmissionOut>(`/submissions/${submissionId}/ai-evaluate-speaking`);
+  return r.data;
+};
+
+export const approveSpeakingGrade = async (submissionId: string): Promise<SubmissionOut> => {
+  const r = await api.post<SubmissionOut>(`/submissions/${submissionId}/approve-speaking-grade`);
+  return r.data;
+};
+
 export const gradeSubmission = (id: string, body: { score: number; feedback?: string; stars: number }) =>
   api.post(`/submissions/${id}/grade`, body).then((r) => r.data);
 

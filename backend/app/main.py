@@ -273,6 +273,9 @@ async def _run_startup_tasks():
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS ai_evaluation_json TEXT"))
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS ai_grade_suggested DOUBLE PRECISION"))
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS ai_evaluated_at TIMESTAMP WITH TIME ZONE"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS audio_transcript TEXT"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS speaking_metrics_json TEXT"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS ai_speaking_evaluation_json TEXT"))
                     else:
                         res = await conn.execute(sa.text("PRAGMA table_info(wordlist_sets)"))
                         cols = [r[1] for r in res.fetchall()]
@@ -307,6 +310,12 @@ async def _run_startup_tasks():
                             await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN ai_grade_suggested FLOAT"))
                         if "ai_evaluated_at" not in sub_cols:
                             await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN ai_evaluated_at TIMESTAMP"))
+                        if "audio_transcript" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN audio_transcript TEXT"))
+                        if "speaking_metrics_json" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN speaking_metrics_json TEXT"))
+                        if "ai_speaking_evaluation_json" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN ai_speaking_evaluation_json TEXT"))
 
                         res_simg = await conn.execute(sa.text("PRAGMA table_info(submission_images)"))
                         simg_cols = [r[1] for r in res_simg.fetchall()]
