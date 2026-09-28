@@ -954,8 +954,23 @@ export default function StudentsPage() {
                                   className="w-9 h-9 rounded-full object-cover aspect-square shrink-0"
                                 />
                                 <div className="min-w-0">
-                                  <div className="font-semibold text-zinc-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate max-w-[140px] sm:max-w-none">
-                                    {fullName}
+                                  <div className="font-semibold text-zinc-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate max-w-[140px] sm:max-w-none flex items-center gap-1.5 flex-wrap">
+                                    <span>{fullName}</span>
+                                    {s?.is_parent_linked ? (
+                                      <span
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0"
+                                        title={`Ota-ona ulangan: ${s.parent_name || `@${s.parent_telegram_username}` || "Telegram"}`}
+                                      >
+                                        📱 Ota-ona
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700 shrink-0"
+                                        title="Ota-ona hali botga ulanmagan"
+                                      >
+                                        ⚪ Ulanmagan
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-[130px] sm:max-w-none">
                                     @{username}

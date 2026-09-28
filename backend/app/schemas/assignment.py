@@ -95,6 +95,7 @@ class AssignmentOut(BaseModel):
     order_index: int = 0
     cycle_number: int = 1
     prerequisite_id: uuid.UUID | None = None
+    parent_digest_sent: bool = False
 
     model_config = {"from_attributes": True}
 

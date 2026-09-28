@@ -43,6 +43,9 @@ class Assignment(UUIDPKMixin, TimestampMixin, Base):
     prerequisite_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("assignments.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    parent_digest_sent: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=sa.text("false"), nullable=False
+    )
 
     group: Mapped["Group"] = relationship(back_populates="assignments", lazy="selectin")
     prerequisite: Mapped["Assignment | None"] = relationship(remote_side="Assignment.id")

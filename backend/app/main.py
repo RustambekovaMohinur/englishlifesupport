@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
 
-from app.api.routes import assignments, auth, dashboard, feedback, gamification, groups, profile, storage, students, submissions, teachers, wordlists
+from app.api.routes import assignments, auth, dashboard, feedback, gamification, groups, profile, storage, students, submissions, teachers, telegram, wordlists
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.security import hash_password
@@ -179,6 +179,7 @@ app.include_router(wordlists.router, prefix="/api/wordlists", tags=["Wordlists"]
 app.include_router(wordlists.router, prefix="/wordlists", tags=["Wordlists Fallback"])
 app.include_router(wordlists.router, prefix="/api/api/wordlists", tags=["Wordlists Fallback"], include_in_schema=False)
 app.include_router(storage.router)
+app.include_router(telegram.router)
 
 
 @app.get("/")
@@ -262,6 +263,12 @@ async def _run_startup_tasks():
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS flag_reason VARCHAR(500)"))
                         await conn.execute(sa.text("ALTER TABLE submission_images ADD COLUMN IF NOT EXISTS image_hash VARCHAR(64)"))
                         await conn.execute(sa.text("ALTER TABLE submission_images ADD COLUMN IF NOT EXISTS file_sha256 VARCHAR(64)"))
+                        await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS parent_telegram_chat_id VARCHAR(64)"))
+                        await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS parent_telegram_username VARCHAR(255)"))
+                        await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS parent_name VARCHAR(255)"))
+                        await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS parent_linked_at TIMESTAMP WITH TIME ZONE"))
+                        await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS last_parent_digest_sent_at TIMESTAMP WITH TIME ZONE"))
+                        await conn.execute(sa.text("ALTER TABLE assignments ADD COLUMN IF NOT EXISTS parent_digest_sent BOOLEAN NOT NULL DEFAULT FALSE"))
                     else:
                         res = await conn.execute(sa.text("PRAGMA table_info(wordlist_sets)"))
                         cols = [r[1] for r in res.fetchall()]
@@ -295,6 +302,24 @@ async def _run_startup_tasks():
                             await conn.execute(sa.text("ALTER TABLE submission_images ADD COLUMN image_hash VARCHAR(64)"))
                         if "file_sha256" not in simg_cols:
                             await conn.execute(sa.text("ALTER TABLE submission_images ADD COLUMN file_sha256 VARCHAR(64)"))
+
+                        res_sp = await conn.execute(sa.text("PRAGMA table_info(student_profiles)"))
+                        sp_cols = [r[1] for r in res_sp.fetchall()]
+                        if "parent_telegram_chat_id" not in sp_cols:
+                            await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN parent_telegram_chat_id VARCHAR(64)"))
+                        if "parent_telegram_username" not in sp_cols:
+                            await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN parent_telegram_username VARCHAR(255)"))
+                        if "parent_name" not in sp_cols:
+                            await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN parent_name VARCHAR(255)"))
+                        if "parent_linked_at" not in sp_cols:
+                            await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN parent_linked_at TIMESTAMP"))
+                        if "last_parent_digest_sent_at" not in sp_cols:
+                            await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN last_parent_digest_sent_at TIMESTAMP"))
+
+                        res_as = await conn.execute(sa.text("PRAGMA table_info(assignments)"))
+                        as_cols = [r[1] for r in res_as.fetchall()]
+                        if "parent_digest_sent" not in as_cols:
+                            await conn.execute(sa.text("ALTER TABLE assignments ADD COLUMN parent_digest_sent BOOLEAN NOT NULL DEFAULT 0"))
                 except Exception as ex:
                     logger.debug("Column check note: %s", ex)
 
@@ -352,6 +377,8 @@ async def startup_event():
         if "preview-bulk" in getattr(route, "path", ""):
             methods = list(getattr(route, "methods", []))
             logger.info("[ROUTE MATCH]: %s -> %s", methods, route.path)
-            print(f"[ROUTE MATCH]: {methods} -> {route.path}")
+    # Launch background parent notification reporter loop
+    from app.services.parent_reporter import start_parent_reporter_loop
+    asyncio.create_task(start_parent_reporter_loop())
 
 

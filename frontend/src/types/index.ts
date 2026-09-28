@@ -73,6 +73,12 @@ export interface StudentListItem {
   cycle_completed_tasks?: number;
   cycle_total_tasks?: number;
   group?: { id: string; name: string; english_level?: string } | null;
+  parent_telegram_chat_id?: string | null;
+  parent_telegram_username?: string | null;
+  parent_name?: string | null;
+  parent_linked_at?: string | null;
+  last_parent_digest_sent_at?: string | null;
+  is_parent_linked?: boolean;
 }
 
 export interface AssignmentItemOverview {
@@ -207,6 +213,12 @@ export interface StudentHistoryOut {
   total_vocabulary_words?: number;
   mastered_vocabulary_words?: number;
   mastered_vocabulary_sets?: number;
+  parent_telegram_chat_id?: string | null;
+  parent_telegram_username?: string | null;
+  parent_name?: string | null;
+  parent_linked_at?: string | null;
+  last_parent_digest_sent_at?: string | null;
+  is_parent_linked?: boolean;
 }
 
 export interface StudentOut {
@@ -222,6 +234,30 @@ export interface StudentOut {
   total_stars: number;
   group: GroupBrief | null;
   created_at: string;
+  parent_telegram_chat_id?: string | null;
+  parent_telegram_username?: string | null;
+  parent_name?: string | null;
+  parent_linked_at?: string | null;
+  last_parent_digest_sent_at?: string | null;
+  is_parent_linked?: boolean;
+}
+
+export interface ParentLinkInfo {
+  student_id: string;
+  bot_username: string;
+  telegram_link: string;
+  is_parent_linked: boolean;
+  parent_telegram_username?: string | null;
+  parent_name?: string | null;
+  parent_linked_at?: string | null;
+  last_parent_digest_sent_at?: string | null;
+}
+
+export interface SendParentDigestResponse {
+  success: boolean;
+  message: string;
+  recipient_chat_id?: string | null;
+  digest_preview?: string | null;
 }
 
 export interface UserProfileOut {

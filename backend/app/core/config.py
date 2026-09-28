@@ -146,6 +146,11 @@ class Settings(BaseSettings):
     B2_KEY_ID: str = ""
     B2_APPLICATION_KEY: str = ""
 
+    # Telegram Bot
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_BOT_USERNAME: str = "EnglishLifeParentBot"
+    TELEGRAM_WEBHOOK_URL: str = ""
+
     # App
     ENVIRONMENT: str = "development"
     OVERDUE_STAR_PENALTY: int = 20

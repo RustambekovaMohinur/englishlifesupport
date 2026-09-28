@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
 import { ChevronDown, History, BookOpen, Layers, Trophy, Clock, CheckCircle2, Lock, Unlock, Zap } from "lucide-react";
 import { FileDownloadButton, LoadingRows, Modal, Spinner, TelegramLink } from "@/components/ui";
-import { getStudent, getStudentHistory, listGroups, listSubmissions, resetStudentPassword, updateStudentPlacement, unlockStudentUpToDate, toggleStudentAssignmentLock } from "@/services/lmsService";
+import { getStudent, getStudentHistory, listGroups, listSubmissions, resetStudentPassword, updateStudentPlacement, unlockStudentUpToDate, toggleStudentAssignmentLock, sendParentDigest } from "@/services/lmsService";
 import { Group, StudentHistoryOut, StudentOut, SubmissionOut, StudentWordlistProgressItem } from "@/types";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import DuplicateCompareModal from "@/components/DuplicateCompareModal";
@@ -39,6 +39,7 @@ export default function StudentDetailModal({
   const [isUnlockingUpToDate, setIsUnlockingUpToDate] = useState(false);
   const [togglingAssignmentId, setTogglingAssignmentId] = useState<string | null>(null);
   const [inspectingDuplicateSubmissionId, setInspectingDuplicateSubmissionId] = useState<string | null>(null);
+  const [isSendingParentDigest, setIsSendingParentDigest] = useState(false);
 
   const isModalOpen = (isOpen ?? open) !== undefined ? Boolean(isOpen ?? open) : Boolean(studentId);
 
@@ -55,6 +56,26 @@ export default function StudentDetailModal({
       toast.error(err?.response?.data?.detail || "Failed to unlock assignments");
     } finally {
       setIsUnlockingUpToDate(false);
+    }
+  }
+
+  async function handleSendParentReport() {
+    if (!studentId) return;
+    const isLinked = history?.is_parent_linked || profile?.is_parent_linked;
+    if (!isLinked) {
+      toast.error("Ushbu talabaga ota-ona Telegram boti ulanmagan.");
+      return;
+    }
+
+    setIsSendingParentDigest(true);
+    try {
+      const res = await sendParentDigest(studentId);
+      toast.success(res.message || "Hisobot ota-onaga muvaffaqiyatli yuborildi! 📩", { duration: 4000 });
+      if (studentId) getStudentHistory(studentId).then(setHistory).catch(() => {});
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Hisobot yuborishda xatolik yuz berdi");
+    } finally {
+      setIsSendingParentDigest(false);
     }
   }
 
@@ -629,12 +650,23 @@ export default function StudentDetailModal({
 
                     <button
                       type="button"
+                      onClick={handleSendParentReport}
+                      disabled={isSendingParentDigest}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-indigo-300 dark:border-indigo-700/60 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300 text-xs font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition shadow-xs shrink-0 whitespace-nowrap active:scale-95 cursor-pointer"
+                      title="Send on-demand performance digest to parent via Telegram"
+                    >
+                      <span>📩</span>
+                      <span>{isSendingParentDigest ? "Yuborilmoqda..." : "Ota-onaga hisobot"}</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => {
                         setNewPassword("");
                         setConfirmPassword("");
                         setResetModalOpen(true);
                       }}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40 transition shadow-xs shrink-0 whitespace-nowrap"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40 transition shadow-xs shrink-0 whitespace-nowrap cursor-pointer"
                       title="Set temporary password for student"
                     >
                       <span>🔑</span>
@@ -651,6 +683,17 @@ export default function StudentDetailModal({
                   )}
                   <span className="flex items-center gap-1.5">
                     Telegram: <TelegramLink username={telegram} />
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    📱 Ota-ona:{" "}
+                    {(history?.is_parent_linked || profile?.is_parent_linked) ? (
+                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Ulangan ({history?.parent_name || profile?.parent_name || `@${history?.parent_telegram_username || profile?.parent_telegram_username}` || "Telegram"})
+                      </span>
+                    ) : (
+                      <span className="text-zinc-400 dark:text-zinc-500 italic">Ulanmagan</span>
+                    )}
                   </span>
                   <span>
                     Cohort: <strong className="text-zinc-900 dark:text-white font-medium">{groupName}</strong>

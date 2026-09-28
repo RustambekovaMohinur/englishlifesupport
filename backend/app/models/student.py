@@ -1,6 +1,7 @@
+from datetime import datetime
 import uuid
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,6 +24,13 @@ class StudentProfile(UUIDPKMixin, TimestampMixin, Base):
     bio: Mapped[str | None] = mapped_column(String, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
+    # Parent notification bot fields
+    parent_telegram_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    parent_telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    parent_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    parent_linked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_parent_digest_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     user: Mapped["User"] = relationship(back_populates="student_profile")
     group: Mapped["Group | None"] = relationship(back_populates="students")
     submissions: Mapped[list["Submission"]] = relationship(back_populates="student", cascade="all, delete-orphan")
@@ -34,4 +42,8 @@ class StudentProfile(UUIDPKMixin, TimestampMixin, Base):
     @telegram_username.setter
     def telegram_username(self, value: str | None) -> None:
         self.phone = value
+
+    @property
+    def is_parent_linked(self) -> bool:
+        return bool(self.parent_telegram_chat_id)
 

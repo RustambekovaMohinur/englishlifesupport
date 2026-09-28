@@ -36,6 +36,7 @@ from app.schemas.student import (
     StudentStatusUpdate,
     StudentUpdate,
     StudentWordlistProgressItem,
+    SendParentDigestResponse,
 )
 
 from pydantic import BaseModel, Field
@@ -231,6 +232,12 @@ async def list_students(
                 cycle_completed_tasks=completed_asgns,
                 cycle_total_tasks=total_asgns,
                 group=group_brief,
+                parent_telegram_chat_id=profile.parent_telegram_chat_id,
+                parent_telegram_username=profile.parent_telegram_username,
+                parent_name=profile.parent_name,
+                parent_linked_at=profile.parent_linked_at,
+                last_parent_digest_sent_at=profile.last_parent_digest_sent_at,
+                is_parent_linked=bool(profile.parent_telegram_chat_id),
             )
         )
     return PaginatedStudents(items=items, total=total, page=page, page_size=page_size)
@@ -585,6 +592,12 @@ async def get_my_profile(
         total_stars=full_profile.total_stars,
         group=full_profile.group,
         created_at=full_profile.created_at,
+        parent_telegram_chat_id=full_profile.parent_telegram_chat_id,
+        parent_telegram_username=full_profile.parent_telegram_username,
+        parent_name=full_profile.parent_name,
+        parent_linked_at=full_profile.parent_linked_at,
+        last_parent_digest_sent_at=full_profile.last_parent_digest_sent_at,
+        is_parent_linked=bool(full_profile.parent_telegram_chat_id),
     )
 
 
@@ -628,6 +641,12 @@ async def update_my_student_profile(
         total_stars=full_profile.total_stars,
         group=full_profile.group,
         created_at=full_profile.created_at,
+        parent_telegram_chat_id=full_profile.parent_telegram_chat_id,
+        parent_telegram_username=full_profile.parent_telegram_username,
+        parent_name=full_profile.parent_name,
+        parent_linked_at=full_profile.parent_linked_at,
+        last_parent_digest_sent_at=full_profile.last_parent_digest_sent_at,
+        is_parent_linked=bool(full_profile.parent_telegram_chat_id),
     )
 
 
@@ -667,6 +686,12 @@ async def get_student(
         total_lightning=getattr(profile, "total_lightning", 0) or 0,
         group=profile.group,
         created_at=profile.created_at,
+        parent_telegram_chat_id=profile.parent_telegram_chat_id,
+        parent_telegram_username=profile.parent_telegram_username,
+        parent_name=profile.parent_name,
+        parent_linked_at=profile.parent_linked_at,
+        last_parent_digest_sent_at=profile.last_parent_digest_sent_at,
+        is_parent_linked=bool(profile.parent_telegram_chat_id),
     )
 
 
@@ -1013,6 +1038,12 @@ async def get_student_history(
         total_vocabulary_words=total_vocab_words,
         mastered_vocabulary_words=mastered_vocab_words,
         mastered_vocabulary_sets=mastered_vocab_sets,
+        parent_telegram_chat_id=profile.parent_telegram_chat_id,
+        parent_telegram_username=profile.parent_telegram_username,
+        parent_name=profile.parent_name,
+        parent_linked_at=profile.parent_linked_at,
+        last_parent_digest_sent_at=profile.last_parent_digest_sent_at,
+        is_parent_linked=bool(profile.parent_telegram_chat_id),
     )
 
 
@@ -1492,4 +1523,38 @@ async def toggle_student_assignment_lock(
         "is_unlocked": is_unlocked,
         "is_exempted": is_exempted,
     }
+
+
+@router.post("/{student_id}/send-parent-digest", response_model=SendParentDigestResponse)
+@teacher_students_router.post("/{student_id}/send-parent-digest", response_model=SendParentDigestResponse)
+async def trigger_manual_parent_digest(
+    student_id: uuid.UUID,
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Teacher triggers an on-demand progress digest to the student's linked parent via Telegram.
+    """
+    from app.services.parent_reporter import send_manual_parent_digest
+
+    try:
+        result = await send_manual_parent_digest(student_id=student_id, db=db)
+        return SendParentDigestResponse(**result)
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err),
+        )
+    except RuntimeError as run_err:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(run_err),
+        )
+    except Exception as ex:
+        logger.exception("Error triggering parent digest: %s", ex)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Hisobot yuborishda xatolik yuz berdi: {ex}",
+        )
+
 

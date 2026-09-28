@@ -30,6 +30,8 @@ import {
   TeacherProfileOut,
   UserProfileOut,
   UserProfileUpdate,
+  ParentLinkInfo,
+  SendParentDigestResponse,
   WeeklyLeaderboardOut,
 } from "@/types";
 
@@ -570,3 +572,34 @@ export const submitWordlistQuiz = async (
     throw err;
   }
 };
+
+// ==========================================
+// TELEGRAM BOT & PARENT NOTIFICATION SERVICE
+// ==========================================
+
+export const getParentLinkInfo = async (): Promise<ParentLinkInfo> => {
+  const res = await api.get<ParentLinkInfo>("/api/telegram/parent-link-info");
+  return res.data;
+};
+
+export const unlinkParent = async (): Promise<{ success: boolean; message: string }> => {
+  const res = await api.post<{ success: boolean; message: string }>("/api/telegram/unlink-parent");
+  return res.data;
+};
+
+export const sendParentDigest = async (studentId: string): Promise<SendParentDigestResponse> => {
+  const res = await api.post<SendParentDigestResponse>(`/api/students/${studentId}/send-parent-digest`);
+  return res.data;
+};
+
+export const testMockLinkParent = async (
+  studentId: string,
+  chatId = "12345678",
+  parentName = "Ota-ona (Test)"
+): Promise<{ success: boolean; message: string }> => {
+  const res = await api.post<{ success: boolean; message: string }>(
+    `/api/telegram/test-mock-link?student_id=${studentId}&chat_id=${chatId}&parent_name=${encodeURIComponent(parentName)}`
+  );
+  return res.data;
+};
+

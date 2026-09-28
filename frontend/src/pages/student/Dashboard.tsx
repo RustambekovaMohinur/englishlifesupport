@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ArrowRight, CheckCircle2, Lock } from "lucide-react";
 import toast from "react-hot-toast";
@@ -13,6 +13,7 @@ import {
   getWeeklyLeaderboard,
   getPlatformFeedbackSummary,
   getPublicFeedbacks,
+  getParentLinkInfo,
 } from "@/services/lmsService";
 import {
   StudentDashboard,
@@ -20,6 +21,7 @@ import {
   WeeklyLeaderboardOut,
   PlatformFeedbackSummary,
   PublicFeedbackItem,
+  ParentLinkInfo,
 } from "@/types";
 
 function getGreeting(name: string): string {
@@ -75,9 +77,11 @@ export function formatEnglishLevel(level?: string | null): string {
 
 export default function StudentDashboardPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [data, setData] = useState<StudentDashboard | null>(null);
   const [gamify, setGamify] = useState<StudentGamificationSummary | null>(null);
   const [leaderboard, setLeaderboard] = useState<WeeklyLeaderboardOut | null>(null);
+  const [parentInfo, setParentInfo] = useState<ParentLinkInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feedbackSummary, setFeedbackSummary] = useState<PlatformFeedbackSummary | null>(null);
@@ -106,6 +110,7 @@ export default function StudentDashboardPage() {
     getGamificationSummary().then(setGamify).catch(() => null);
     getWeeklyLeaderboard().then(setLeaderboard).catch(() => null);
     getPlatformFeedbackSummary().then(setFeedbackSummary).catch(() => null);
+    getParentLinkInfo().then(setParentInfo).catch(() => null);
     fetchReviews();
   };
 
@@ -281,6 +286,32 @@ export default function StudentDashboardPage() {
           <span>{feedbackSummary?.user_has_reviewed ? "Update Review" : "⭐ Review Platform"}</span>
         </button>
       </div>
+
+      {/* Telegram Parent Bot Linking Banner (shown if not yet connected) */}
+      {parentInfo && !parentInfo.is_parent_linked && (
+        <div className="rounded-2xl bg-gradient-to-r from-sky-500/10 via-indigo-500/5 to-transparent dark:from-sky-950/40 dark:via-zinc-900/40 border border-sky-300/60 dark:border-sky-800/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-400 flex items-center justify-center text-lg shrink-0">
+              👨‍👩‍👧
+            </div>
+            <div className="min-w-0">
+              <span className="text-sm font-bold text-zinc-900 dark:text-white block">
+                Ota-onangizni Telegram Botga ulang!
+              </span>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 truncate">
+                Dars natijalaringiz va yulduzlaringiz har bir deadline tugashi bilan ota-onangizga avtomatik yetkaziladi.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/student/profile")}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[#2AABEE] hover:bg-[#229ED9] active:scale-95 text-white shadow-xs transition shrink-0 self-end sm:self-auto cursor-pointer"
+          >
+            <span>Ulash &amp; QR Kod →</span>
+          </button>
+        </div>
+      )}
 
       {/* Hero Banner & Gamification Streak Grid (Desktop: 12-col span-8/span-4, Tablet: 2-col, Mobile: 1-col) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-stretch">

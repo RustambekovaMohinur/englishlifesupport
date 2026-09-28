@@ -29,6 +29,12 @@ class StudentOut(BaseModel):
     total_lightning: int = 0
     group: StudentGroupBrief | None = None
     created_at: datetime
+    parent_telegram_chat_id: str | None = None
+    parent_telegram_username: str | None = None
+    parent_name: str | None = None
+    parent_linked_at: datetime | None = None
+    last_parent_digest_sent_at: datetime | None = None
+    is_parent_linked: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -59,6 +65,12 @@ class StudentListItem(BaseModel):
     cycle_completed_tasks: int = 0
     cycle_total_tasks: int = 0
     group: StudentGroupBrief | None = None
+    parent_telegram_chat_id: str | None = None
+    parent_telegram_username: str | None = None
+    parent_name: str | None = None
+    parent_linked_at: datetime | None = None
+    last_parent_digest_sent_at: datetime | None = None
+    is_parent_linked: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -219,7 +231,30 @@ class StudentHistoryOut(BaseModel):
     active_assignments: list[StudentHistoryItem] = Field(default_factory=list)
     past_cycles: list[Any] = Field(default_factory=list)
     history: list[StudentHistoryItem] = Field(default_factory=list)
-    vocabulary_sets: list[StudentWordlistProgressItem] = Field(default_factory=list)
     total_vocabulary_words: int = 0
     mastered_vocabulary_words: int = 0
     mastered_vocabulary_sets: int = 0
+    parent_telegram_chat_id: str | None = None
+    parent_telegram_username: str | None = None
+    parent_name: str | None = None
+    parent_linked_at: datetime | None = None
+    last_parent_digest_sent_at: datetime | None = None
+    is_parent_linked: bool = False
+
+
+class ParentLinkInfo(BaseModel):
+    student_id: uuid.UUID
+    bot_username: str
+    telegram_link: str
+    is_parent_linked: bool = False
+    parent_telegram_username: str | None = None
+    parent_name: str | None = None
+    parent_linked_at: datetime | None = None
+    last_parent_digest_sent_at: datetime | None = None
+
+
+class SendParentDigestResponse(BaseModel):
+    success: bool
+    message: str
+    recipient_chat_id: str | None = None
+    digest_preview: str | None = None
