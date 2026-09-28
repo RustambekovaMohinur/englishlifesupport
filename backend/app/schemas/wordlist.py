@@ -137,6 +137,8 @@ class AIWordlistParseItem(BaseModel):
     part_of_speech: str | None = None
     custom_translation: str | None = None
     example: str | None = None
+    ai_generated: bool = True
+    fallback_used: bool = False
 
 
 class AIWordlistParseRequest(BaseModel):

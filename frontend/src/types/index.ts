@@ -654,6 +654,7 @@ export interface WordDetailPreview {
   audio_gb_url?: string | null;
   source?: string;
   ai_generated?: boolean;
+  fallback_used?: boolean;
 }
 
 export interface AIWordlistParseItem {
@@ -667,5 +668,7 @@ export interface AIWordlistParseItem {
   part_of_speech?: string | null;
   custom_translation?: string | null;
   example?: string | null;
+  ai_generated?: boolean;
+  fallback_used?: boolean;
 }
 

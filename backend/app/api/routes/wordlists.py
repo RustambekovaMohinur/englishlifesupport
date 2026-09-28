@@ -3,7 +3,7 @@ from datetime import datetime
 import logging
 import uuid
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -346,13 +346,14 @@ async def preview_bulk(
 @router.post("/ai-parse/", response_model=list[AIWordlistParseItem], include_in_schema=False)
 async def ai_parse_wordlist_endpoint(
     request: Request,
+    response: Response,
     current_user: User = Depends(require_teacher),
 ):
     """
     Dedicated AI-Powered Wordlist Importer.
     Accepts raw text or uploaded documents (PDF, TXT, CSV), analyzes collocations,
     phrasal verbs, idioms, parts of speech, English definitions, and Uzbek translations
-    using Gemini 1.5 Flash.
+    using Gemini AI with automatic high-precision local fallback.
     """
     content_type = request.headers.get("content-type", "").lower()
     raw_text = ""
@@ -398,15 +399,9 @@ async def ai_parse_wordlist_endpoint(
         )
     except Exception as exc:
         logger.exception("AI wordlist parsing failed: %s", exc)
-        err_str = str(exc)
-        if "quota" in err_str.lower() or "429" in err_str or "resource_exhausted" in err_str.lower():
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="AI quota limit reached. Please wait a minute or provide an additional Gemini API key in settings.",
-            )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Gemini AI extraction error: {str(exc)}",
+            detail=f"Wordlist extraction error: {str(exc)}",
         )
 
     if not results:
@@ -414,6 +409,9 @@ async def ai_parse_wordlist_endpoint(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="No vocabulary entries could be identified in the document.",
         )
+
+    is_fallback = any(r.get("fallback_used") for r in results if isinstance(r, dict))
+    response.headers["X-Fallback-Used"] = "true" if is_fallback else "false"
 
     return results
 

@@ -283,6 +283,7 @@ export default function TeacherWordlistsPage() {
         return;
       }
 
+      const isFallback = results.some((item) => item.fallback_used);
       const normalizedResults: WordDetailPreview[] = results.map((item) => ({
         word: item.word.trim(),
         part_of_speech: normalizePos(item.pos || item.part_of_speech || "phrase"),
@@ -295,12 +296,20 @@ export default function TeacherWordlistsPage() {
         phonetic: item.phonetic?.trim() || "",
         audio_us_url: item.audio_us_url || null,
         audio_gb_url: null,
-        source: "gemini_ai",
-        ai_generated: true,
+        source: item.fallback_used ? "local_fallback" : "gemini_ai",
+        ai_generated: !item.fallback_used,
+        fallback_used: item.fallback_used ?? false,
       }));
 
       setPreviews(normalizedResults);
-      toast.success(`✨ Gemini AI extracted ${normalizedResults.length} vocabulary words!`);
+      if (isFallback) {
+        toast("Imported via Fast Parser. AI enrichment can be applied later.", {
+          icon: "⚡",
+          duration: 5000,
+        });
+      } else {
+        toast.success(`✨ Gemini AI extracted ${normalizedResults.length} vocabulary words!`);
+      }
     } catch (err: any) {
       console.error("[AI PARSE ERROR]", err);
       const detail = err?.response?.data?.detail;
@@ -884,6 +893,15 @@ export default function TeacherWordlistsPage() {
                   </div>
                 </div>
 
+                {previews.some((p) => p.fallback_used) && (
+                  <div className="flex items-center gap-2 p-2.5 mb-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-800 dark:text-amber-200">
+                    <span className="text-sm shrink-0">⚡</span>
+                    <span>
+                      <strong>Imported via Fast Parser.</strong> AI enrichment can be applied later. All columns are editable before saving.
+                    </span>
+                  </div>
+                )}
+
                 <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-thin">
                   <table className="w-full text-left text-xs border-collapse min-w-[960px]">
                     <thead>
@@ -921,7 +939,11 @@ export default function TeacherWordlistsPage() {
                                   {item.phonetic}
                                 </span>
                               )}
-                              {(item.source === "gemini_ai" || item.ai_generated) && (
+                              {item.fallback_used ? (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.2 rounded bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 font-semibold" title="Imported via high-precision fast local parser">
+                                  ⚡ Fast Parser
+                                </span>
+                              ) : (item.source === "gemini_ai" || item.ai_generated) && (
                                 <span className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.2 rounded bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 font-semibold">
                                   ✨ AI
                                 </span>
