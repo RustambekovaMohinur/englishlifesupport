@@ -43,7 +43,8 @@ async def teacher_dashboard(db: AsyncSession = Depends(get_db)):
             (SELECT count(*) FROM submissions WHERE status != 'graded') as pending_submissions,
             (SELECT count(*) FROM submissions) as total_submissions,
             (SELECT count(*) FROM assignments WHERE status = 'published') as published_assignments,
-            (SELECT count(DISTINCT student_id) FROM submissions WHERE status = 'late') as late_students
+            (SELECT count(DISTINCT student_id) FROM submissions WHERE status = 'late') as late_students,
+            (SELECT count(*) FROM wordlist_sets) as total_wordlists
     ),
     prereqs AS (
         SELECT id, group_id, prerequisite_id
@@ -75,6 +76,7 @@ async def teacher_dashboard(db: AsyncSession = Depends(get_db)):
         total_submissions,
         published_assignments,
         late_students,
+        total_wordlists,
         locked_students_count,
     ) = scalar_row
     inactive_students = total_students - active_students
@@ -102,6 +104,7 @@ async def teacher_dashboard(db: AsyncSession = Depends(get_db)):
         late_students=late_students,
         locked_students=locked_students_count,
         inactive_students=inactive_students,
+        total_wordlists=total_wordlists,
         recent_submissions=[
             RecentSubmissionItem(
                 id=s.id,

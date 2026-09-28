@@ -124,3 +124,22 @@ class SubmitQuizRequest(BaseModel):
     terminated_early: bool = False
     anti_cheat_triggered: bool = False
     incorrect_word_ids: list[str] = Field(default_factory=list)
+
+
+class AIWordlistParseItem(BaseModel):
+    word: str
+    pos: str
+    definition: str
+    uzbek_translation: str
+    example_sentence: str
+    phonetic: str | None = None
+    audio_us_url: str | None = None
+    part_of_speech: str | None = None
+    custom_translation: str | None = None
+    example: str | None = None
+
+
+class AIWordlistParseRequest(BaseModel):
+    text: str | None = None
+    raw_text: str | None = None
+

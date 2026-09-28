@@ -13,6 +13,8 @@ import {
   AlertCircle,
   X,
   FileText,
+  UploadCloud,
+  FileUp,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -21,6 +23,7 @@ import {
   deleteWordlistSet,
   getWordlistSet,
   previewBulkWords,
+  aiParseWordlist,
   listGroups,
   uploadDirectToB2,
 } from "@/services/lmsService";
@@ -44,6 +47,10 @@ export default function TeacherWordlistsPage() {
   const [title, setTitle] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [rawWordsInput, setRawWordsInput] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isAiParsing, setIsAiParsing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [previews, setPreviews] = useState<WordDetailPreview[]>([]);
@@ -218,6 +225,82 @@ export default function TeacherWordlistsPage() {
     }
   };
 
+  const handleFileChange = (file: File | null) => {
+    if (!file) {
+      setSelectedFile(null);
+      return;
+    }
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!ext || !["pdf", "txt", "csv"].includes(ext)) {
+      toast.error("Unsupported file type. Please upload a PDF, TXT, or CSV file.");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error("File is too large. Maximum size is 15 MB.");
+      return;
+    }
+    setSelectedFile(file);
+    if (!title.trim()) {
+      const cleanTitle = file.name
+        .replace(/\.[^/.]+$/, "")
+        .replace(/[-_]/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+      setTitle(cleanTitle);
+    }
+    toast.success(`Selected "${file.name}" (${(file.size / 1024).toFixed(1)} KB)`);
+  };
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleAiParse = async () => {
+    if (!selectedFile && !rawWordsInput.trim()) {
+      toast.error("Please upload a document (.pdf, .txt, .csv) or enter vocabulary text.");
+      return;
+    }
+
+    setIsAiParsing(true);
+    try {
+      const results = await aiParseWordlist({
+        text: rawWordsInput.trim() || undefined,
+        file: selectedFile || undefined,
+        fileName: selectedFile?.name,
+      });
+
+      if (!results || results.length === 0) {
+        toast.error("No vocabulary items could be extracted. Please check the document format.");
+        return;
+      }
+
+      const normalizedResults: WordDetailPreview[] = results.map((item) => ({
+        word: item.word.trim(),
+        part_of_speech: normalizePos(item.pos || item.part_of_speech || "phrase"),
+        custom_translation: item.uzbek_translation || item.custom_translation || "",
+        uzbek_translation: item.uzbek_translation || item.custom_translation || "",
+        definition: item.definition || item.uzbek_translation || "",
+        example: item.example_sentence || item.example || "",
+        example_sentence: item.example_sentence || item.example || "",
+        phonetic: item.phonetic || "",
+        audio_us_url: item.audio_us_url || null,
+        audio_gb_url: null,
+        source: "gemini_ai",
+        ai_generated: true,
+      }));
+
+      setPreviews(normalizedResults);
+      toast.success(`✨ Gemini AI extracted ${normalizedResults.length} vocabulary words!`);
+    } catch (err: any) {
+      console.error("[AI PARSE ERROR]", err);
+      toast.error(err?.response?.data?.detail ?? "Failed to extract vocabulary with Gemini AI.");
+    } finally {
+      setIsAiParsing(false);
+    }
+  };
+
   const handleAddBlankRow = () => {
     setPreviews((prev) => [
       ...prev,
@@ -345,6 +428,8 @@ export default function TeacherWordlistsPage() {
       // Reset form
       setTitle("");
       setRawWordsInput("");
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       setPreviews([]);
       setActiveTab("manage");
       loadSets();
@@ -554,28 +639,115 @@ export default function TeacherWordlistsPage() {
                 </div>
               </div>
 
+              {/* Document Dropzone (PDF, TXT, CSV) */}
               <div>
-                <label className="label">
-                  Vocabulary Words (one per line or comma-separated, max 50)
+                <label className="label flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 font-semibold text-zinc-800 dark:text-zinc-200">
+                    <UploadCloud className="w-4 h-4 text-brand-600 dark:text-brand-400" />
+                    <span>Upload Document (PDF, TXT, CSV)</span>
+                  </span>
+                  <span className="text-[11px] font-normal text-zinc-400">
+                    Supports tables, collocations, and scans up to 15 MB
+                  </span>
+                </label>
+
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".pdf,.txt,.csv"
+                  onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+
+                {!selectedFile ? (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                      handleFileChange(e.dataTransfer.files?.[0] || null);
+                    }}
+                    className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all ${
+                      isDragging
+                        ? "border-brand-500 bg-brand-50/50 dark:bg-brand-950/20 scale-[0.99]"
+                        : "border-zinc-200 dark:border-zinc-800 hover:border-brand-400 dark:hover:border-brand-600 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30"
+                    }`}
+                  >
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="p-3 rounded-full bg-brand-50 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400">
+                        <UploadCloud className="w-6 h-6" />
+                      </div>
+                      <div className="text-xs">
+                        <span className="font-semibold text-brand-600 dark:text-brand-400 hover:underline">
+                          Click to upload
+                        </span>{" "}
+                        <span className="text-zinc-500 dark:text-zinc-400">or drag and drop document</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400">
+                        PDF (Cambridge/IELTS lists, tables), TXT, or CSV
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl border border-brand-200 dark:border-brand-800/60 bg-brand-50/30 dark:bg-brand-950/20">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2.5 rounded-xl bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400 shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">
+                          {selectedFile.name}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                          <span>{(selectedFile.size / 1024).toFixed(1)} KB</span>
+                          <span>•</span>
+                          <span className="uppercase font-semibold tracking-wider text-[10px] px-1.5 py-0.2 rounded bg-brand-100 dark:bg-brand-900/60 text-brand-700 dark:text-brand-300">
+                            {selectedFile.name.split(".").pop() || "DOC"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleRemoveFile}
+                      className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                      title="Remove file"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="label flex items-center justify-between">
+                  <span>Vocabulary Text / Collocations (Optional if document uploaded)</span>
+                  <span className="text-[11px] text-zinc-400 font-normal">One per line or comma-separated</span>
                 </label>
                 <textarea
-                  rows={6}
+                  rows={5}
                   value={rawWordsInput}
                   onChange={(e) => setRawWordsInput(e.target.value)}
-                  placeholder={`drama - sahna asari\nconserve - asramoq, tejamoq\nreluctant - istaksiz, ikkilanuvchi\nsubtle\nambiguous`}
+                  placeholder={`eager for - intiq bo'lmoq\nbloom - gullamoq\nlook forward to = intizorlik bilan kutmoq\nbreak the ice\nsustainable development\nambiguous`}
                   className="input font-mono text-xs"
                 />
                 <p className="text-[11px] text-zinc-400 mt-1">
-                  Supports plain words (<code>drama</code>) or custom bilingual translations (<code>drama - sahna asari</code> or <code>conserve = asramoq</code>).
+                  Supports plain words, collocations, phrasal verbs, idioms, and bilingual notes (<code>e.g. eager for - intiq bo'lmoq</code>).
                 </p>
               </div>
 
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
                 <p className="text-xs text-zinc-400">
-                  Definitions, phonetic transcriptions, and audio links will be automatically resolved.
+                  Gemini extracts words, parts of speech, English definitions, and Uzbek translations automatically.
                 </p>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
                     onClick={handleAddBlankRow}
@@ -585,21 +757,43 @@ export default function TeacherWordlistsPage() {
                     <span>+ Add Row</span>
                   </button>
 
+                  {/* Standard Dictionary Resolve */}
+                  {rawWordsInput.trim() && !selectedFile && (
+                    <button
+                      type="button"
+                      onClick={handleGenerateBulk}
+                      disabled={isGenerating || isAiParsing}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-brand-200 dark:border-brand-800 hover:bg-brand-50 dark:hover:bg-brand-950/40 text-xs font-semibold text-brand-700 dark:text-brand-300 transition disabled:opacity-50"
+                    >
+                      {isGenerating ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Resolving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>⚡ Quick Dict</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Dedicated Gemini AI Parser */}
                   <button
                     type="button"
-                    onClick={handleGenerateBulk}
-                    disabled={isGenerating || !rawWordsInput.trim()}
-                    className="btn-primary"
+                    onClick={handleAiParse}
+                    disabled={isAiParsing || (!selectedFile && !rawWordsInput.trim())}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-brand-600 hover:from-purple-500 hover:to-brand-500 text-white text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50"
                   >
-                    {isGenerating ? (
+                    {isAiParsing ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Resolving Dictionary...</span>
+                        <span>✨ AI Parsing with Gemini...</span>
                       </>
                     ) : (
                       <>
-                        <Sparkles className="w-4 h-4" />
-                        <span>⚡ Generate Wordlist</span>
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>✨ AI Parse with Gemini</span>
                       </>
                     )}
                   </button>

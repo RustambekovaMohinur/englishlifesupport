@@ -390,6 +390,41 @@ const BASE_RENDER_URL = BACKEND_URL.replace(/\/api\/?$/, "");
 const WORDLISTS_URL = `${BASE_RENDER_URL}/api/wordlists`;
 const WORDLISTS_FALLBACK_URL = `${BASE_RENDER_URL}/wordlists`;
 
+export const aiParseWordlist = async (data: {
+  text?: string;
+  file?: File | Blob;
+  fileName?: string;
+}) => {
+  const primaryUrl = `${WORDLISTS_URL}/ai-parse`;
+  const fallbackUrl = `${WORDLISTS_FALLBACK_URL}/ai-parse`;
+
+  let body: any;
+  let headers: Record<string, string> = {};
+
+  if (data.file) {
+    const formData = new FormData();
+    formData.append("file", data.file, data.fileName || (data.file as File).name || "vocabulary_document");
+    if (data.text) {
+      formData.append("text", data.text);
+    }
+    body = formData;
+    headers["Content-Type"] = "multipart/form-data";
+  } else {
+    body = { text: data.text || "" };
+  }
+
+  try {
+    const r = await api.post<import("@/types").AIWordlistParseItem[]>(primaryUrl, body, { headers });
+    return r.data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      const r = await api.post<import("@/types").AIWordlistParseItem[]>(fallbackUrl, body, { headers });
+      return r.data;
+    }
+    throw err;
+  }
+};
+
 export const previewBulkWords = async (words: string[]) => {
   const primaryUrl = `${WORDLISTS_URL}/preview-bulk`;
   const fallbackUrl = `${WORDLISTS_FALLBACK_URL}/preview-bulk`;

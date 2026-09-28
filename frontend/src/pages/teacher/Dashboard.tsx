@@ -246,8 +246,8 @@ export default function TeacherDashboardPage() {
         <LoadingRows rows={4} />
       ) : data ? (
         <>
-          {/* Key LMS Metrics (Responsive 3-Tier Grid: 2-col on mobile, 4-col on tablet, 7-col on desktop) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
+          {/* Key LMS Metrics (Responsive 3-Tier Grid: 2-col on mobile, 4-col on tablet, 8-col on desktop) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
             <StatCard
               label="Total Students"
               value={data.total_students}
@@ -272,6 +272,15 @@ export default function TeacherDashboardPage() {
               icon={<BookOpen className="w-4 h-4 text-violet-600 dark:text-violet-400" />}
               iconBg="bg-violet-50 dark:bg-violet-950/40"
             />
+            <Link to="/teacher/wordlists" className="block focus:outline-none group">
+              <StatCard
+                label="Wordlist Sets"
+                value={data.total_wordlists ?? 0}
+                hint="AI Importer →"
+                icon={<BookOpen className="w-4 h-4 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform" />}
+                iconBg="bg-purple-50 dark:bg-purple-950/40"
+              />
+            </Link>
             <StatCard
               label="Pending Review"
               value={data.pending_submissions}

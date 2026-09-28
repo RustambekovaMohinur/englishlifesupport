@@ -478,6 +478,7 @@ export interface TeacherDashboard {
   late_students?: number;
   locked_students?: number;
   inactive_students?: number;
+  total_wordlists?: number;
   recent_submissions: {
     id: string;
     student_name: string;
@@ -642,13 +643,29 @@ export interface WordlistSetDetail {
 export interface WordDetailPreview {
   word: string;
   custom_translation?: string;
+  uzbek_translation?: string;
+  pos?: string;
   part_of_speech: string;
   phonetic: string;
   definition: string;
   example: string;
+  example_sentence?: string;
   audio_us_url?: string | null;
   audio_gb_url?: string | null;
   source?: string;
   ai_generated?: boolean;
+}
+
+export interface AIWordlistParseItem {
+  word: string;
+  pos: string;
+  definition: string;
+  uzbek_translation: string;
+  example_sentence: string;
+  phonetic?: string | null;
+  audio_us_url?: string | null;
+  part_of_speech?: string | null;
+  custom_translation?: string | null;
+  example?: string | null;
 }
 

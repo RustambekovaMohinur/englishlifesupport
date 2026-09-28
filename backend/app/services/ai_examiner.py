@@ -10,6 +10,8 @@ Strict Security:
 - Key is NEVER printed, logged, or exposed in error messages or responses.
 - Gracefully falls back to None on missing key or network errors without raising 500s.
 """
+import base64
+import io
 import json
 import logging
 import os
@@ -327,3 +329,214 @@ async def enrich_words_with_gemini(raw_entries: list[str]) -> list[WordDetailPre
             )
         )
     return previews
+
+
+async def ai_parse_wordlist_multiformat(
+    raw_text: str | None = None,
+    file_bytes: bytes | None = None,
+    file_name: str | None = None,
+    mime_type: str | None = None,
+) -> list[dict]:
+    """
+    Parses raw text or uploaded documents (PDF, TXT, CSV) using Gemini 1.5 Flash into
+    structured vocabulary items with collocations, phrasal verbs, idioms, pos,
+    English definitions, Uzbek translations, examples, and phonetic transcriptions.
+    """
+    extracted_text = (raw_text or "").strip()
+    is_pdf = False
+
+    if file_bytes:
+        f_name_lower = (file_name or "").lower()
+        if f_name_lower.endswith(".pdf") or (mime_type and "pdf" in mime_type.lower()):
+            is_pdf = True
+            try:
+                import pypdf
+                reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+                pdf_lines: list[str] = []
+                for page in reader.pages[:30]:
+                    page_txt = page.extract_text()
+                    if page_txt and page_txt.strip():
+                        pdf_lines.append(page_txt.strip())
+                if pdf_lines:
+                    extracted_text = (extracted_text + "\n\n" + "\n\n".join(pdf_lines)).strip()
+            except Exception as e:
+                logger.warning("pypdf parsing failed: %s", e)
+        elif f_name_lower.endswith((".txt", ".csv")) or (mime_type and "text" in mime_type.lower()):
+            try:
+                decoded = file_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                decoded = file_bytes.decode("latin-1", errors="replace")
+            extracted_text = (extracted_text + "\n\n" + decoded).strip()
+
+    if not extracted_text and not (is_pdf and file_bytes):
+        return []
+
+    api_key = get_gemini_api_key()
+
+    prompt = (
+        "You are an expert Cambridge/IELTS English lexicographer, linguistic examiner, and bilingual translator. "
+        "Extract every English vocabulary item, multi-word collocation, phrasal verb, idiom, or word from the provided text or document.\n\n"
+        "EXTRACTION RULES:\n"
+        "1. Identify all target terms/expressions. Multi-word collocations (e.g. 'eager for', 'in terms of', 'take into account'), "
+        "phrasal verbs (e.g. 'look forward to', 'break down'), idioms, and single words (e.g. 'bloom') MUST be preserved as complete headwords.\n"
+        "2. For each term, return:\n"
+        "   - 'word': The exact English term/collocation/idiom (e.g. 'eager for', 'bloom').\n"
+        "   - 'pos': Part of speech, strictly one of: 'noun', 'verb', 'adjective', 'adverb', 'phrase', 'idiom', 'phrasal_verb'.\n"
+        "   - 'definition': A concise, high-quality Cambridge English definition explaining the meaning.\n"
+        "   - 'uzbek_translation': Accurate, natural Uzbek translation (e.g. 'intiq bo\\'lmoq, juda xohlamoq'). If the input already contains an Uzbek translation, clean, refine, and preserve it.\n"
+        "   - 'example_sentence': A natural B2/C1 Cambridge context sentence showing authentic usage.\n"
+        "   - 'phonetic': Accurate IPA phonetic transcription (e.g. '/ˈiːɡər fɔːr/').\n\n"
+        "Return a STRICT JSON array of objects with this schema:\n"
+        "[\n"
+        "  {\n"
+        '    "word": "eager for",\n'
+        '    "pos": "phrase",\n'
+        '    "definition": "Wanting something very much.",\n'
+        '    "uzbek_translation": "intiq bo\'lmoq, juda xohlamoq",\n'
+        '    "example_sentence": "She was eager for the holidays to begin.",\n'
+        '    "phonetic": "/ˈiːɡər fɔːr/"\n'
+        "  },\n"
+        "  {\n"
+        '    "word": "bloom",\n'
+        '    "pos": "verb",\n'
+        '    "definition": "To produce flowers; to flourish or develop well.",\n'
+        '    "uzbek_translation": "gullamoq; gul",\n'
+        '    "example_sentence": "The roses bloom in spring.",\n'
+        '    "phonetic": "/bluːm/"\n'
+        "  }\n"
+        "]"
+    )
+
+    if api_key:
+        try:
+            parts: list[dict] = []
+            if extracted_text:
+                parts.append({"text": f"{prompt}\n\nINPUT CONTENT TO PARSE:\n\"\"\"\n{extracted_text[:30000]}\n\"\"\""})
+            else:
+                parts.append({"text": prompt})
+
+            # If PDF document is available and extracted text was empty or short (< 200 chars), pass multimodal inlineData
+            if is_pdf and file_bytes and len(extracted_text) < 200 and len(file_bytes) <= 15 * 1024 * 1024:
+                b64_pdf = base64.b64encode(file_bytes).decode("utf-8")
+                parts.append({
+                    "inlineData": {
+                        "mimeType": "application/pdf",
+                        "data": b64_pdf,
+                    }
+                })
+
+            endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+            headers = {
+                "x-goog-api-key": api_key,
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "contents": [{"parts": parts}],
+                "generationConfig": {
+                    "responseMimeType": "application/json",
+                    "temperature": 0.1,
+                },
+            }
+
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                resp = await client.post(endpoint_url, headers=headers, json=payload)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                candidates = data.get("candidates", [])
+                if candidates:
+                    content_parts = candidates[0].get("content", {}).get("parts", [])
+                    if content_parts:
+                        raw_llm_text = content_parts[0].get("text", "")
+                        clean_json_str = raw_llm_text.strip()
+                        if "```" in clean_json_str:
+                            clean_json_str = re.sub(r"^```(?:json)?\s*", "", clean_json_str, flags=re.IGNORECASE)
+                            clean_json_str = re.sub(r"\s*```$", "", clean_json_str)
+                        clean_json_str = clean_json_str.strip()
+
+                        parsed = json.loads(clean_json_str)
+                        items_list = parsed if isinstance(parsed, list) else (parsed.get("words") or parsed.get("items") or [])
+
+                        results = []
+                        for item in items_list:
+                            if not isinstance(item, dict):
+                                continue
+                            w = (item.get("word") or "").strip()
+                            if not w:
+                                continue
+                            raw_pos = str(item.get("pos") or item.get("part_of_speech") or "phrase").lower().strip()
+                            if raw_pos not in {"noun", "verb", "adjective", "adverb", "phrase", "idiom", "phrasal_verb"}:
+                                raw_pos = normalize_pos(raw_pos)
+
+                            definition = (item.get("definition") or "").strip()
+                            uz_trans = (item.get("uzbek_translation") or item.get("translation") or item.get("custom_translation") or "").strip()
+                            ex_sent = (item.get("example_sentence") or item.get("example") or "").strip()
+                            phon = (item.get("phonetic") or "").strip()
+                            w_slug = w.lower().replace(" ", "_")
+                            audio_us = item.get("audio_us_url") or f"https://ssl.gstatic.com/dictionary/static/sounds/20200429/{w_slug}--_us_1.mp3"
+
+                            results.append({
+                                "word": w,
+                                "pos": raw_pos,
+                                "definition": definition,
+                                "uzbek_translation": uz_trans,
+                                "example_sentence": ex_sent,
+                                "phonetic": phon,
+                                "audio_us_url": audio_us,
+                                "part_of_speech": raw_pos if raw_pos != "phrase" else "idiom",
+                                "custom_translation": uz_trans,
+                                "example": ex_sent,
+                            })
+
+                        if results:
+                            logger.info("Successfully extracted %d vocabulary items via Gemini AI.", len(results))
+                            return results
+
+        except Exception as exc:
+            logger.warning("Gemini AI wordlist extraction encountered error: %s; using resilient fallback", exc)
+
+    # Resilient local fallback if Gemini is offline or fails
+    fallback_items = []
+    lines = [l.strip() for l in extracted_text.splitlines() if l.strip()]
+    for line in lines[:50]:
+        cleaned = re.sub(r"^(\d+[\.\)]|\*|-|\+)\s+", "", line).strip()
+        if not cleaned:
+            continue
+        word = cleaned
+        translation = ""
+        for sep in [" - ", " = ", " : ", "-", "=", ":", "\t"]:
+            if sep in cleaned:
+                parts = cleaned.split(sep, 1)
+                word = parts[0].strip()
+                translation = parts[1].strip()
+                break
+        if not word:
+            continue
+
+        w_lower = word.lower()
+        is_phrase = " " in w_lower or w_lower.startswith(("look ", "eager ", "in ", "take ", "break "))
+        pos = "phrase" if is_phrase else "noun"
+        if not is_phrase:
+            if w_lower.endswith(("able", "ible", "ous", "ful", "ive", "ic", "al")):
+                pos = "adjective"
+            elif w_lower.endswith("ly"):
+                pos = "adverb"
+            elif w_lower.endswith(("ize", "ise", "ate", "ify")):
+                pos = "verb"
+
+        w_slug = word.lower().replace(" ", "_")
+        fallback_items.append({
+            "word": word,
+            "pos": pos,
+            "definition": translation or f"Concept of {word}",
+            "uzbek_translation": translation or "",
+            "example_sentence": f"Understanding '{word}' is important in authentic English.",
+            "phonetic": "",
+            "audio_us_url": f"https://ssl.gstatic.com/dictionary/static/sounds/20200429/{w_slug}--_us_1.mp3",
+            "part_of_speech": pos if pos != "phrase" else "idiom",
+            "custom_translation": translation,
+            "example": f"Understanding '{word}' is important in authentic English.",
+        })
+
+    return fallback_items
+

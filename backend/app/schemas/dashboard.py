@@ -14,6 +14,7 @@ class TeacherDashboard(BaseModel):
     late_students: int = 0
     locked_students: int = 0
     inactive_students: int = 0
+    total_wordlists: int = 0
     recent_submissions: list["RecentSubmissionItem"]
 
 

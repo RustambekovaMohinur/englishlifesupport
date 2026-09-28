@@ -3,7 +3,7 @@ from datetime import datetime
 import logging
 import uuid
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -18,6 +18,8 @@ from app.models.student import StudentProfile
 from app.models.user import User, UserRole
 from app.models.wordlist import WordlistItem, WordlistSet, WordlistQuizAttempt
 from app.schemas.wordlist import (
+    AIWordlistParseItem,
+    AIWordlistParseRequest,
     BulkPreviewRequest,
     PreviewBulkRequest,
     QuizAttemptOut,
@@ -29,7 +31,11 @@ from app.schemas.wordlist import (
     WordlistSetDetailOut,
 )
 from app.services.storage import get_storage_service
-from app.services.ai_examiner import enrich_vocabulary_list, enrich_words_with_gemini
+from app.services.ai_examiner import (
+    ai_parse_wordlist_multiformat,
+    enrich_vocabulary_list,
+    enrich_words_with_gemini,
+)
 from app.utils.datetimes import utcnow
 
 logger = logging.getLogger(__name__)
@@ -334,6 +340,58 @@ async def preview_bulk(
             previews.append(WordDetailPreview(word=w, definition=t, custom_translation=t))
 
     return previews
+
+
+@router.post("/ai-parse", response_model=list[AIWordlistParseItem])
+@router.post("/ai-parse/", response_model=list[AIWordlistParseItem], include_in_schema=False)
+async def ai_parse_wordlist_endpoint(
+    request: Request,
+    current_user: User = Depends(require_teacher),
+):
+    """
+    Dedicated AI-Powered Wordlist Importer.
+    Accepts raw text or uploaded documents (PDF, TXT, CSV), analyzes collocations,
+    phrasal verbs, idioms, parts of speech, English definitions, and Uzbek translations
+    using Gemini 1.5 Flash.
+    """
+    content_type = request.headers.get("content-type", "").lower()
+    raw_text = ""
+    file_bytes: bytes | None = None
+    file_name: str | None = None
+    mime_type: str | None = None
+
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        raw_text = str(form.get("text") or form.get("raw_text") or form.get("words") or "")
+        upload_file = form.get("file")
+        if upload_file and hasattr(upload_file, "filename") and upload_file.filename:
+            file_name = upload_file.filename
+            file_bytes = await upload_file.read()
+            mime_type = upload_file.content_type
+    else:
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                raw_text = str(body.get("text") or body.get("raw_text") or body.get("words") or "")
+            elif isinstance(body, str):
+                raw_text = body
+        except Exception:
+            raw_text = (await request.body()).decode("utf-8", errors="replace")
+
+    if not raw_text.strip() and not file_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide vocabulary text or upload a document (PDF, TXT, CSV).",
+        )
+
+    results = await ai_parse_wordlist_multiformat(
+        raw_text=raw_text,
+        file_bytes=file_bytes,
+        file_name=file_name,
+        mime_type=mime_type,
+    )
+
+    return results
 
 
 @router.post("/preview-bulk-slash", response_model=list[WordDetailPreview], include_in_schema=False)
