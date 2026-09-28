@@ -43,34 +43,203 @@ from app.schemas.wordlist import WordDetailPreview
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
+SUPPORTED_FALLBACK_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-pro"]
+_DISCOVERED_MODELS_CACHE: list[str] = []
+
+
 def get_clean_gemini_model(raw_name: str | None = None) -> str:
     """
     Cleans model name by stripping redundant 'models/' prefix, quotes, and whitespace.
-    Prevents 404 errors caused by '/models/models/gemini-1.5-flash'.
+    Prevents 404 errors caused by '/models/models/gemini-3.8-flash'.
     """
-    val = (raw_name or os.environ.get("GEMINI_MODEL") or "gemini-1.5-flash").strip().strip('"\'')
+    val = (raw_name or os.environ.get("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL).strip().strip('"\'')
     while val.startswith("models/") or val.startswith("/models/"):
         if val.startswith("models/"):
             val = val[len("models/"):]
         elif val.startswith("/models/"):
             val = val[len("/models/"):]
         val = val.strip()
-    return val or "gemini-1.5-flash"
+    return val or DEFAULT_GEMINI_MODEL
 
 
 def get_gemini_candidate_models(primary_name: str | None = None) -> list[str]:
     """
     Returns ordered candidate model identifiers to try in case of 404 or unsupported endpoints.
+    Prioritizes gemini-3.8-flash, gemini-2.5-flash, gemini-2.5-pro.
     """
     primary = get_clean_gemini_model(primary_name)
     candidates = [primary]
-    for fallback in ["gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"]:
+    for fallback in SUPPORTED_FALLBACK_MODELS:
         if fallback not in candidates:
             candidates.append(fallback)
     return candidates
 
 
 GEMINI_MODEL = get_clean_gemini_model()
+
+
+def reset_gemini_models_cache() -> None:
+    """Resets the dynamic discovered models cache (useful for testing or key rotation)."""
+    global _DISCOVERED_MODELS_CACHE
+    _DISCOVERED_MODELS_CACHE = []
+
+
+async def discover_active_gemini_models(api_key: str | None = None) -> list[str]:
+    """
+    Queries Google Generative Language API for currently supported models:
+    GET https://generativelanguage.googleapis.com/v1beta/models?key={api_key}
+    Filters models that support 'generateContent', strips 'models/' prefix,
+    and sorts flash models first. Caches result in-memory.
+    """
+    global _DISCOVERED_MODELS_CACHE
+    if _DISCOVERED_MODELS_CACHE:
+        return list(_DISCOVERED_MODELS_CACHE)
+
+    key = api_key or get_gemini_api_key()
+    if not key:
+        return list(SUPPORTED_FALLBACK_MODELS)
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
+    headers = {"x-goog-api-key": key}
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code != 200:
+                logger.warning("Failed to discover Gemini models (HTTP %d): %s", resp.status_code, resp.text[:200])
+                return list(SUPPORTED_FALLBACK_MODELS)
+
+            data = resp.json()
+            models_data = data.get("models", [])
+            valid_models: list[str] = []
+            for item in models_data:
+                methods = item.get("supportedGenerationMethods", [])
+                if "generateContent" in methods:
+                    raw_model_name = item.get("name", "")
+                    clean_name = get_clean_gemini_model(raw_model_name)
+                    if clean_name and "embedding" not in clean_name.lower():
+                        valid_models.append(clean_name)
+
+            if valid_models:
+                def model_sort_key(m: str) -> tuple[int, int, str]:
+                    m_lower = m.lower()
+                    if m_lower == "gemini-3.8-flash":
+                        return (0, 0, m)
+                    if "3.8" in m_lower and "flash" in m_lower:
+                        return (1, 0, m)
+                    if "flash" in m_lower:
+                        return (2, 0, m)
+                    if "pro" in m_lower:
+                        return (3, 0, m)
+                    return (4, 0, m)
+
+                valid_models.sort(key=model_sort_key)
+                _DISCOVERED_MODELS_CACHE = valid_models
+                logger.info("Successfully discovered %d active Gemini models: %s", len(valid_models), valid_models[:5])
+                return list(_DISCOVERED_MODELS_CACHE)
+
+    except Exception as exc:
+        logger.warning("Exception during dynamic Gemini model discovery: %s", exc)
+
+    return list(SUPPORTED_FALLBACK_MODELS)
+
+
+async def execute_gemini_generate_content(
+    payload: dict,
+    api_key: str | None = None,
+    timeout: float = 30.0,
+    preferred_model: str | None = None,
+) -> tuple[httpx.Response | None, str]:
+    """
+    Executes a generateContent call against Gemini with:
+    1. Primary candidate model list (['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro']).
+    2. Dynamic model suggestion extraction if Google API suggests a model in the error message.
+    3. Dynamic model discovery fallback via /v1beta/models if candidate models return 404/unsupported/retired.
+    Returns (response, last_error_detail).
+    """
+    key = api_key or get_gemini_api_key()
+    if not key:
+        return None, "GEMINI_API_KEY is not configured."
+
+    headers = {
+        "x-goog-api-key": key,
+        "Content-Type": "application/json",
+    }
+
+    candidates = get_gemini_candidate_models(preferred_model)
+    tried_models: set[str] = set()
+    last_error_detail = ""
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        # Step 1: Try initial candidate list
+        idx = 0
+        while idx < len(candidates):
+            model = candidates[idx]
+            idx += 1
+            if model in tried_models:
+                continue
+            tried_models.add(model)
+
+            endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+            try:
+                resp = await client.post(endpoint_url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    return resp, ""
+
+                last_error_detail = resp.text[:300]
+                error_lower = resp.text.lower()
+
+                # Check if API suggested an alternative model:
+                # e.g., "Please update your code to use models/gemini-3.8-flash for the latest features and improvements."
+                suggested_match = re.search(r"update your code to use models/([a-zA-Z0-9._-]+)", resp.text, re.IGNORECASE)
+                if suggested_match:
+                    suggested_model = get_clean_gemini_model(suggested_match.group(1))
+                    if suggested_model and suggested_model not in tried_models and suggested_model not in candidates:
+                        candidates.insert(idx, suggested_model)
+                        logger.info("Prioritizing Google-suggested Gemini model: %s", suggested_model)
+
+                # Check if model is deprecated, not found, or unsupported
+                is_model_issue = resp.status_code in {400, 404} and any(
+                    phrase in error_lower
+                    for phrase in ["not found", "not supported", "no longer available", "deprecated", "update your code"]
+                )
+
+                if is_model_issue:
+                    logger.warning("Gemini model '%s' returned HTTP %d: %s; trying next fallback...", model, resp.status_code, last_error_detail)
+                    continue
+
+                # For quota / auth errors, abort retrying
+                if resp.status_code in {401, 403, 429}:
+                    logger.error("Gemini API call failed with auth/quota error (%d): %s", resp.status_code, last_error_detail)
+                    return resp, last_error_detail
+
+            except Exception as req_err:
+                last_error_detail = str(req_err)
+                logger.warning("Error calling Gemini endpoint for model '%s': %s", model, req_err)
+                continue
+
+        # Step 2: Dynamic discovery fallback if all candidate models failed
+        logger.info("Candidate Gemini models exhausted. Initiating dynamic model discovery...")
+        discovered = await discover_active_gemini_models(key)
+        for model in discovered:
+            if model in tried_models:
+                continue
+            tried_models.add(model)
+
+            endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+            try:
+                resp = await client.post(endpoint_url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    logger.info("Dynamic discovery succeeded with Gemini model '%s'.", model)
+                    return resp, ""
+                last_error_detail = resp.text[:300]
+                if resp.status_code in {401, 403, 429}:
+                    return resp, last_error_detail
+            except Exception as req_err:
+                last_error_detail = str(req_err)
+                continue
+
+    return None, last_error_detail
 
 VALID_POS_SET = {"noun", "verb", "adjective", "adverb", "idiom", "phrasal_verb"}
 
@@ -147,29 +316,16 @@ async def run_prompt(prompt: str) -> dict | None:
         logger.info("GEMINI_API_KEY not configured. Skipping AI call.")
         return None
 
-    candidate_models = get_gemini_candidate_models()
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2},
     }
-    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = None
-            for model in candidate_models:
-                endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-                resp = await client.post(endpoint_url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    break
-                elif resp.status_code in {400, 404} and ("not found" in resp.text.lower() or "not supported" in resp.text.lower()):
-                    continue
-                else:
-                    break
-
-            if not resp or resp.status_code != 200:
-                logger.warning("Gemini AI service returned non-200 status code: %s", resp.status_code if resp else "None")
-                return None
+        resp, last_error = await execute_gemini_generate_content(payload=payload, api_key=api_key, timeout=15.0)
+        if not resp or resp.status_code != 200:
+            logger.warning("Gemini AI service returned error: %s", last_error or (resp.status_code if resp else "None"))
+            return None
         data = resp.json()
         candidates = data.get("candidates", [])
         if not candidates:
@@ -247,11 +403,6 @@ async def enrich_vocabulary_list(raw_words: list[str | dict]) -> list[dict] | No
         '["word", "part_of_speech", "phonetic", "definition", "example", "audio_us_url"]'
     )
 
-    candidate_models = get_gemini_candidate_models()
-    headers = {
-        "x-goog-api-key": api_key,
-        "Content-Type": "application/json",
-    }
     payload = {
         "contents": [
             {
@@ -265,23 +416,12 @@ async def enrich_vocabulary_list(raw_words: list[str | dict]) -> list[dict] | No
     }
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = None
-            for model in candidate_models:
-                endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-                resp = await client.post(endpoint_url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    break
-                elif resp.status_code in {400, 404} and ("not found" in resp.text.lower() or "not supported" in resp.text.lower()):
-                    continue
-                else:
-                    break
+        resp, last_error = await execute_gemini_generate_content(payload=payload, api_key=api_key, timeout=20.0)
+        if not resp or resp.status_code != 200:
+            logger.warning("Gemini AI enrichment returned error: %s", last_error or (resp.status_code if resp else "None"))
+            return None
 
-            if not resp or resp.status_code != 200:
-                logger.warning("Gemini AI service returned non-200 status code: %s", resp.status_code if resp else "None")
-                return None
-
-            data = resp.json()
+        data = resp.json()
 
         candidates = data.get("candidates", [])
         if not candidates:
@@ -466,11 +606,6 @@ async def ai_parse_wordlist_multiformat(
             "text": f"{prompt}\n\nINPUT CONTENT TO PARSE:\n\"\"\"\n{extracted_text[:40000]}\n\"\"\""
         })
 
-    candidate_models = get_gemini_candidate_models()
-    headers = {
-        "x-goog-api-key": api_key,
-        "Content-Type": "application/json",
-    }
     payload = {
         "contents": [{"parts": parts}],
         "generationConfig": {
@@ -479,30 +614,7 @@ async def ai_parse_wordlist_multiformat(
         },
     }
 
-    resp = None
-    last_error_detail = ""
-
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        for model in candidate_models:
-            endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-            try:
-                resp = await client.post(endpoint_url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    logger.info("Gemini AI wordlist parsing succeeded using model '%s'.", model)
-                    break
-                elif resp.status_code in {400, 404} and ("not found" in resp.text.lower() or "not supported" in resp.text.lower()):
-                    logger.warning("Gemini model '%s' returned HTTP %d (%s); attempting fallback model...", model, resp.status_code, resp.text[:120])
-                    last_error_detail = resp.text[:300]
-                    continue
-                else:
-                    last_error_detail = resp.text[:300]
-                    logger.warning("Gemini request returned HTTP %d for model '%s': %s", resp.status_code, model, last_error_detail)
-                    if resp.status_code in {401, 403, 429}:
-                        break
-            except Exception as req_err:
-                logger.warning("Error posting to Gemini with model '%s': %s", model, req_err)
-                last_error_detail = str(req_err)
-                continue
+    resp, last_error_detail = await execute_gemini_generate_content(payload=payload, api_key=api_key, timeout=60.0)
 
     if not resp or resp.status_code != 200:
         err_msg = last_error_detail or (f"HTTP {resp.status_code}" if resp else "No response")

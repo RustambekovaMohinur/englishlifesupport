@@ -31,7 +31,13 @@ from app.db.session import AsyncSessionLocal
 from app.models.assignment import Assignment
 from app.models.submission import Submission
 from app.models.submission_ai_feedback import AIEvaluationStatus, SubmissionAIFeedback
-from app.services.ai_examiner import get_clean_gemini_model, get_gemini_candidate_models, get_gemini_api_key
+from app.services.ai_examiner import (
+    get_clean_gemini_model,
+    get_gemini_candidate_models,
+    get_gemini_api_key,
+    discover_active_gemini_models,
+    execute_gemini_generate_content,
+)
 from app.utils.files import resolve_submission_file_async
 
 logger = logging.getLogger(__name__)
@@ -151,10 +157,6 @@ async def evaluate_writing(
         f"STUDENT WRITTEN SUBMISSION:\n\"\"\"\n{submission_text}\n\"\"\""
     )
 
-    headers = {
-        "x-goog-api-key": api_key,
-        "Content-Type": "application/json",
-    }
     payload = {
         "contents": [
             {
@@ -169,25 +171,13 @@ async def evaluate_writing(
         },
     }
 
-    candidate_models = get_gemini_candidate_models()
-    resp = None
+    resp, last_err = await execute_gemini_generate_content(payload=payload, api_key=api_key, timeout=35.0)
 
-    async with httpx.AsyncClient(timeout=35.0) as client:
-        for model in candidate_models:
-            endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-            resp = await client.post(endpoint_url, headers=headers, json=payload)
-            if resp.status_code == 200:
-                break
-            elif resp.status_code in {400, 404} and ("not found" in resp.text.lower() or "not supported" in resp.text.lower()):
-                continue
-            else:
-                break
+    if not resp or resp.status_code != 200:
+        logger.error("Gemini writing evaluation failed: %s", last_err)
+        raise RuntimeError(f"Gemini API returned status {resp.status_code if resp else 'None'}: {last_err}")
 
-        if not resp or resp.status_code != 200:
-            logger.error("Gemini writing evaluation failed with HTTP %s: %s", resp.status_code if resp else "None", resp.text[:200] if resp else "")
-            raise RuntimeError(f"Gemini API returned status {resp.status_code if resp else 'None'}")
-
-        data = resp.json()
+    data = resp.json()
 
     candidates = data.get("candidates", [])
     if not candidates:
@@ -261,10 +251,6 @@ async def evaluate_speaking(
         "}"
     )
 
-    headers = {
-        "x-goog-api-key": api_key,
-        "Content-Type": "application/json",
-    }
     payload = {
         "contents": [
             {
@@ -285,25 +271,13 @@ async def evaluate_speaking(
         },
     }
 
-    candidate_models = get_gemini_candidate_models()
-    resp = None
+    resp, last_err = await execute_gemini_generate_content(payload=payload, api_key=api_key, timeout=45.0)
 
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        for model in candidate_models:
-            endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-            resp = await client.post(endpoint_url, headers=headers, json=payload)
-            if resp.status_code == 200:
-                break
-            elif resp.status_code in {400, 404} and ("not found" in resp.text.lower() or "not supported" in resp.text.lower()):
-                continue
-            else:
-                break
+    if not resp or resp.status_code != 200:
+        logger.error("Gemini speaking evaluation failed: %s", last_err)
+        raise RuntimeError(f"Gemini API returned status {resp.status_code if resp else 'None'}: {last_err}")
 
-        if not resp or resp.status_code != 200:
-            logger.error("Gemini speaking evaluation failed with HTTP %s: %s", resp.status_code if resp else "None", resp.text[:200] if resp else "")
-            raise RuntimeError(f"Gemini API returned status {resp.status_code if resp else 'None'}")
-
-        data = resp.json()
+    data = resp.json()
 
     candidates = data.get("candidates", [])
     if not candidates:
