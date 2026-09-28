@@ -131,6 +131,9 @@ class AssignmentForStudent(BaseModel):
     group_id: uuid.UUID | None = None
     group_name: str | None = None
     created_at: datetime | None = None
+    is_suspicious: bool = False
+    similarity_score: float | None = None
+    flag_reason: str | None = None
 
     model_config = {"from_attributes": True}
 

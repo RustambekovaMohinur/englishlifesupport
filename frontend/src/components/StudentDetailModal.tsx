@@ -5,6 +5,7 @@ import { FileDownloadButton, LoadingRows, Modal, Spinner, TelegramLink } from "@
 import { getStudent, getStudentHistory, listGroups, listSubmissions, resetStudentPassword, updateStudentPlacement, unlockStudentUpToDate, toggleStudentAssignmentLock } from "@/services/lmsService";
 import { Group, StudentHistoryOut, StudentOut, SubmissionOut, StudentWordlistProgressItem } from "@/types";
 import { UserAvatar } from "@/components/common/UserAvatar";
+import DuplicateCompareModal from "@/components/DuplicateCompareModal";
 
 interface StudentDetailModalProps {
   studentId: string | null;
@@ -37,6 +38,7 @@ export default function StudentDetailModal({
   const [activeTab, setActiveTab] = useState<"assignments" | "vocabulary" | "past">("assignments");
   const [isUnlockingUpToDate, setIsUnlockingUpToDate] = useState(false);
   const [togglingAssignmentId, setTogglingAssignmentId] = useState<string | null>(null);
+  const [inspectingDuplicateSubmissionId, setInspectingDuplicateSubmissionId] = useState<string | null>(null);
 
   const isModalOpen = (isOpen ?? open) !== undefined ? Boolean(isOpen ?? open) : Boolean(studentId);
 
@@ -282,6 +284,17 @@ export default function StudentDetailModal({
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-purple-100 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 font-mono">
                 📖 New Words: {h.vocab_score}% {h.vocab_attempt_count && h.vocab_attempt_count > 1 ? `(Attempt ${h.vocab_attempt_count})` : ""}
               </span>
+            )}
+            {/* Anti-cheat duplicate flag badge */}
+            {h.is_suspicious && (
+              <button
+                type="button"
+                onClick={() => setInspectingDuplicateSubmissionId(h.submission_id || null)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 hover:bg-rose-500/25 transition active:scale-95 animate-pulse font-mono shadow-2xs cursor-pointer"
+                title={h.flag_reason || "Click to inspect duplicate comparison"}
+              >
+                <span>🚨 {h.similarity_score ? `${Math.round(h.similarity_score * 100)}% Match` : "Flagged Copy"}</span>
+              </button>
             )}
             {/* Task Item Badges according to Master Spec */}
             {h.is_exempted ? (
@@ -870,6 +883,20 @@ export default function StudentDetailModal({
           </div>
         </form>
       </Modal>
+
+      <DuplicateCompareModal
+        isOpen={Boolean(inspectingDuplicateSubmissionId)}
+        submissionId={inspectingDuplicateSubmissionId}
+        onClose={() => setInspectingDuplicateSubmissionId(null)}
+        onFlagDismissed={() => {
+          if (studentId) getStudentHistory(studentId).then(setHistory).catch(() => {});
+          if (onStudentUpdated) onStudentUpdated();
+        }}
+        onMarkedCheated={() => {
+          if (studentId) getStudentHistory(studentId).then(setHistory).catch(() => {});
+          if (onStudentUpdated) onStudentUpdated();
+        }}
+      />
     </Modal>
   );
 }

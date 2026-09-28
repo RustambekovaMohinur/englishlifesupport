@@ -156,6 +156,10 @@ export interface StudentHistoryItem {
   unlocked_by_teacher?: boolean;
   prerequisite_id?: string | null;
   prerequisite_title?: string | null;
+  is_suspicious?: boolean;
+  similarity_score?: number | null;
+  duplicate_of_submission_id?: string | null;
+  flag_reason?: string | null;
 }
 
 export interface StudentWordlistProgressItem {
@@ -351,6 +355,9 @@ export interface AssignmentForStudent {
   group_id?: string;
   group_name?: string;
   created_at?: string;
+  is_suspicious?: boolean;
+  similarity_score?: number | null;
+  flag_reason?: string | null;
 }
 
 export interface AssignmentComment {
@@ -505,6 +512,36 @@ export interface SubmissionOut {
   vocab_attempt?: VocabAttemptOut | null;
   corrections?: SubmissionCorrectionOut[];
   comments?: SubmissionCommentOut[];
+  image_hash?: string | null;
+  file_sha256?: string | null;
+  is_suspicious?: boolean;
+  similarity_score?: number | null;
+  duplicate_of_submission_id?: string | null;
+  flag_reason?: string | null;
+  original_student_name?: string | null;
+}
+
+export interface SubmissionCompareItem {
+  submission_id: string;
+  student_id: string;
+  student_name: string;
+  assignment_id: string;
+  assignment_title: string;
+  submitted_at: string;
+  image_urls: string[];
+  file_url?: string | null;
+  file_original_name?: string | null;
+  text_answer?: string | null;
+  image_hash?: string | null;
+  file_sha256?: string | null;
+}
+
+export interface DuplicateCompareOut {
+  current: SubmissionCompareItem;
+  original: SubmissionCompareItem;
+  similarity_score: number;
+  flag_reason?: string | null;
+  is_suspicious: boolean;
 }
 
 export interface TeacherDashboard {

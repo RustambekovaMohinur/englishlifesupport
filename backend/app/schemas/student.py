@@ -166,6 +166,10 @@ class StudentHistoryItem(BaseModel):
     unlocked_by_teacher: bool = False
     prerequisite_id: uuid.UUID | None = None
     prerequisite_title: str | None = None
+    is_suspicious: bool = False
+    similarity_score: float | None = None
+    duplicate_of_submission_id: uuid.UUID | None = None
+    flag_reason: str | None = None
 
 
 class StudentWordlistProgressItem(BaseModel):

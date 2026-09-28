@@ -28,12 +28,15 @@ from app.models.user import User, UserRole
 from app.models.gamification import StarTransaction, StarTransactionReason
 from app.models.vocabulary import VocabularyAssignment, VocabularyAttempt
 from app.schemas.submission import (
+    DuplicateCompareOut,
     GradeCreate,
     GradeOut,
+    MarkCheatedRequest,
     PaginatedSubmissions,
     SubmissionAIFeedbackOut,
     SubmissionCommentCreate,
     SubmissionCommentOut,
+    SubmissionCompareItem,
     SubmissionCorrectionCreate,
     SubmissionCorrectionOut,
     SubmissionOut,
@@ -166,12 +169,16 @@ def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = 
             updated_at=ai_fb.updated_at,
         )
 
+    orig_student_name = None
+    if getattr(sub, "duplicate_of", None) and sub.duplicate_of.student:
+        orig_student_name = sub.duplicate_of.student.full_name
+
     return SubmissionOut(
         id=sub.id,
         assignment_id=sub.assignment_id,
-        assignment_title=sub.assignment.title,
+        assignment_title=sub.assignment.title if sub.assignment else "",
         student_id=sub.student_id,
-        student_name=sub.student.full_name,
+        student_name=sub.student.full_name if sub.student else "",
         text_answer=sub.text_answer,
         file_url=(
             sub.file_path
@@ -192,6 +199,13 @@ def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = 
         vocab_attempt=vocab_attempt,
         corrections=corrections_out,
         comments=comments_out,
+        image_hash=getattr(sub, "image_hash", None),
+        file_sha256=getattr(sub, "file_sha256", None),
+        is_suspicious=bool(getattr(sub, "is_suspicious", False)),
+        similarity_score=getattr(sub, "similarity_score", None),
+        duplicate_of_submission_id=getattr(sub, "duplicate_of_submission_id", None),
+        flag_reason=getattr(sub, "flag_reason", None),
+        original_student_name=orig_student_name,
     )
 
 
@@ -400,6 +414,31 @@ async def submit_homework(
         db.add(submission)
     await db.flush()
 
+    # Anti-cheat fingerprinting & duplicate cross-checking
+    from app.services.anti_cheat import (
+        compute_file_fingerprints_from_bytes,
+        check_duplicate_submission,
+    )
+    from app.utils.files import get_upload_root
+
+    uploaded_fingerprints = []
+    primary_img_hash = None
+    primary_sha256 = None
+
+    if primary_res:
+        pri_disk_path = get_upload_root() / primary_res[0]
+        if pri_disk_path.is_file():
+            try:
+                pri_bytes = pri_disk_path.read_bytes()
+                p_hash, p_sha, p_rots = compute_file_fingerprints_from_bytes(
+                    pri_bytes, filename=primary_res[1], content_type=primary_res[2]
+                )
+                primary_img_hash = p_hash
+                primary_sha256 = p_sha
+                uploaded_fingerprints.append((p_hash, p_sha, p_rots))
+            except Exception as e:
+                logger.warning("Error computing fingerprints for primary file: %s", e)
+
     if image_results:
         from app.models.submission import SubmissionImage
 
@@ -410,6 +449,23 @@ async def submit_homework(
         for img_res in image_results:
             img_path, img_orig_name, img_content_type, img_size, img_order_idx, img_backend = img_res
             await record_file_blob(db, img_path, img_size, img_content_type, img_orig_name, storage_backend=img_backend)
+
+            i_hash, i_sha, i_rots = None, None, None
+            img_disk_path = get_upload_root() / img_path
+            if img_disk_path.is_file():
+                try:
+                    img_bytes = img_disk_path.read_bytes()
+                    i_hash, i_sha, i_rots = compute_file_fingerprints_from_bytes(
+                        img_bytes, filename=img_orig_name, content_type=img_content_type
+                    )
+                    uploaded_fingerprints.append((i_hash, i_sha, i_rots))
+                    if primary_img_hash is None and i_hash is not None:
+                        primary_img_hash = i_hash
+                    if primary_sha256 is None and i_sha is not None:
+                        primary_sha256 = i_sha
+                except Exception as e:
+                    logger.warning("Error computing image fingerprints: %s", e)
+
             sub_img = SubmissionImage(
                 submission_id=submission.id,
                 file_path=img_path,
@@ -417,8 +473,33 @@ async def submit_homework(
                 file_content_type=img_content_type,
                 file_size_bytes=img_size,
                 order_index=img_order_idx,
+                image_hash=i_hash,
+                file_sha256=i_sha,
             )
             db.add(sub_img)
+
+    if primary_img_hash:
+        submission.image_hash = primary_img_hash
+    if primary_sha256:
+        submission.file_sha256 = primary_sha256
+
+    # Fast Duplicate cross-check against cohort/assignment (< 50ms)
+    if uploaded_fingerprints:
+        try:
+            is_susp, sim_score, dup_id, flag_rsn = await check_duplicate_submission(
+                db, submission, uploaded_fingerprints
+            )
+            if is_susp:
+                submission.is_suspicious = True
+                submission.similarity_score = sim_score
+                submission.duplicate_of_submission_id = dup_id
+                submission.flag_reason = flag_rsn
+            elif not submission.is_suspicious:
+                submission.similarity_score = None
+                submission.duplicate_of_submission_id = None
+                submission.flag_reason = None
+        except Exception as e:
+            logger.warning("Error during duplicate submission cross-check: %s", e)
 
     # Gamification calculations
     if is_new_submission:
@@ -510,6 +591,7 @@ async def submit_homework(
             selectinload(Submission.comments),
             selectinload(Submission.images),
             selectinload(Submission.ai_feedback),
+            selectinload(Submission.duplicate_of).selectinload(Submission.student),
         )
         .where(Submission.id == submission.id)
     )
@@ -542,6 +624,7 @@ async def list_submissions(
     group_id: uuid.UUID | None = Query(default=None),
     student_id: uuid.UUID | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
+    is_suspicious: bool | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ):
@@ -555,6 +638,7 @@ async def list_submissions(
             selectinload(Submission.comments),
             selectinload(Submission.images),
             selectinload(Submission.ai_feedback),
+            selectinload(Submission.duplicate_of).selectinload(Submission.student),
         )
         .join(Assignment, Submission.assignment_id == Assignment.id)
     )
@@ -563,7 +647,12 @@ async def list_submissions(
     if student_id:
         query = query.where(Submission.student_id == student_id)
     if status_filter:
-        query = query.where(Submission.status == status_filter)
+        if status_filter in ["suspicious", "flagged"]:
+            query = query.where(Submission.is_suspicious.is_(True))
+        else:
+            query = query.where(Submission.status == status_filter)
+    elif is_suspicious is True:
+        query = query.where(Submission.is_suspicious.is_(True))
 
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar_one()
@@ -617,6 +706,7 @@ async def list_my_submissions(
             selectinload(Submission.comments),
             selectinload(Submission.images),
             selectinload(Submission.ai_feedback),
+            selectinload(Submission.duplicate_of).selectinload(Submission.student),
         )
         .where(Submission.student_id == profile.id)
         .order_by(Submission.submitted_at.desc())
@@ -659,6 +749,7 @@ async def _get_submission_or_404(submission_id: uuid.UUID, db: AsyncSession) -> 
             selectinload(Submission.comments),
             selectinload(Submission.images),
             selectinload(Submission.ai_feedback),
+            selectinload(Submission.duplicate_of).selectinload(Submission.student),
         )
         .where(Submission.id == submission_id)
     )
@@ -1122,5 +1213,126 @@ async def get_submission_image(
             "Access-Control-Allow-Origin": "*",
         },
     )
+
+
+@router.get(
+    "/{submission_id}/compare-duplicate",
+    response_model=DuplicateCompareOut,
+    dependencies=[Depends(require_teacher)],
+)
+async def compare_duplicate_submission(
+    submission_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    sub = await _get_submission_or_404(submission_id, db)
+    if not sub.duplicate_of_submission_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ushbu topshiriqda nusxalanganlik (duplicate) belgilari qayd etilmagan.",
+        )
+    orig = await _get_submission_or_404(sub.duplicate_of_submission_id, db)
+
+    def _build_compare_item(s: Submission) -> SubmissionCompareItem:
+        img_urls = []
+        for im in (getattr(s, "images", None) or []):
+            img_urls.append(f"/api/submissions/{s.id}/images/{im.id}")
+        file_url = (
+            s.file_path
+            if (s.file_path and (s.file_path.startswith("http://") or s.file_path.startswith("https://")))
+            else (f"/api/submissions/{s.id}/file" if s.file_path else None)
+        )
+        return SubmissionCompareItem(
+            submission_id=s.id,
+            student_id=s.student_id,
+            student_name=s.student.full_name if s.student else "Student",
+            assignment_id=s.assignment_id,
+            assignment_title=s.assignment.title if s.assignment else "Assignment",
+            submitted_at=s.submitted_at,
+            image_urls=img_urls,
+            file_url=file_url,
+            file_original_name=s.file_original_name,
+            text_answer=s.text_answer,
+            image_hash=s.image_hash,
+            file_sha256=s.file_sha256,
+        )
+
+    return DuplicateCompareOut(
+        current=_build_compare_item(sub),
+        original=_build_compare_item(orig),
+        similarity_score=sub.similarity_score or 0.85,
+        flag_reason=sub.flag_reason,
+        is_suspicious=sub.is_suspicious,
+    )
+
+
+@router.post(
+    "/{submission_id}/mark-cheated",
+    response_model=SubmissionOut,
+    dependencies=[Depends(require_teacher)],
+)
+async def mark_submission_cheated(
+    submission_id: uuid.UUID,
+    body: MarkCheatedRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    sub = await _get_submission_or_404(submission_id, db)
+    sub.is_suspicious = True
+    now = datetime.now(timezone.utc)
+    feedback_msg = (
+        body.note
+        or "Topshiriq rad etildi: Boshqa o'quvchidan ko'chirib olinganligi (duplicate copy) aniqlandi. Iltimos, o'zingiz mustaqil ravishda daftaringizga yozib qayta topshiring."
+    )
+
+    if sub.grade is not None:
+        sub.grade.score = 0
+        sub.grade.feedback = feedback_msg
+        sub.grade.stars = 0
+        sub.grade.graded_by = current_user.id
+        sub.grade.graded_at = now
+    else:
+        grade = Grade(
+            submission_id=sub.id,
+            score=0,
+            feedback=feedback_msg,
+            stars=0,
+            graded_by=current_user.id,
+            graded_at=now,
+        )
+        db.add(grade)
+
+    sub.status = SubmissionStatus.GRADED
+
+    if body.penalty_stars > 0:
+        await award_stars(
+            db,
+            student_id=sub.student_id,
+            amount=-body.penalty_stars,
+            reason=StarTransactionReason.MANUAL_ADJUSTMENT,
+            reference_id=f"cheat_penalty_{sub.id}",
+            description=f"Academic integrity penalty on '{sub.assignment.title if sub.assignment else 'task'}'",
+        )
+
+    await db.commit()
+    await db.refresh(sub)
+    return _submission_to_out(sub)
+
+
+@router.post(
+    "/{submission_id}/dismiss-flag",
+    response_model=SubmissionOut,
+    dependencies=[Depends(require_teacher)],
+)
+async def dismiss_submission_flag(
+    submission_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    sub = await _get_submission_or_404(submission_id, db)
+    sub.is_suspicious = False
+    await db.commit()
+    await db.refresh(sub)
+    return _submission_to_out(sub)
+
 
 

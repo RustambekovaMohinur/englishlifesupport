@@ -23,6 +23,7 @@ import {
 } from "@/services/lmsService";
 import { Group, SubmissionCommentOut, SubmissionCorrectionOut, SubmissionOut } from "@/types";
 import StudentDetailModal from "@/components/StudentDetailModal";
+import DuplicateCompareModal from "@/components/DuplicateCompareModal";
 
 const PAGE_SIZE = 15;
 
@@ -36,6 +37,7 @@ export default function SubmissionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [grading, setGrading] = useState<SubmissionOut | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [inspectingDuplicateId, setInspectingDuplicateId] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -94,6 +96,7 @@ export default function SubmissionsPage() {
           }}
         >
           <option value="">All statuses</option>
+          <option value="suspicious">🚨 Flagged / Suspicious Only</option>
           <option value="submitted">Submitted</option>
           <option value="late">Late</option>
           <option value="graded">Graded</option>
@@ -143,7 +146,19 @@ export default function SubmissionsPage() {
 
                     <td className="py-3.5 px-4 text-zinc-500 dark:text-zinc-400 font-mono text-xs">{format(new Date(s.submitted_at), "MMM d, HH:mm")}</td>
                     <td className="py-3.5 px-4">
-                      <StatusBadge status={s.status} />
+                      <div className="flex flex-col gap-1.5 items-start">
+                        <StatusBadge status={s.status} />
+                        {s.is_suspicious && (
+                          <button
+                            type="button"
+                            onClick={() => setInspectingDuplicateId(s.id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 hover:bg-rose-500/25 transition active:scale-95 animate-pulse font-mono shadow-2xs cursor-pointer"
+                            title={s.flag_reason || "Click to inspect duplicate comparison"}
+                          >
+                            <span>🚨 {s.similarity_score ? `${Math.round(s.similarity_score * 100)}% Match` : "Flagged Copy"}</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3.5 px-4">
                       <button className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline" onClick={() => setGrading(s)}>
@@ -179,10 +194,19 @@ export default function SubmissionsPage() {
         onStudentUpdated={refresh}
       />
 
+      {/* Anti-Cheat Duplicate Visual Inspector Modal */}
+      <DuplicateCompareModal
+        isOpen={Boolean(inspectingDuplicateId)}
+        submissionId={inspectingDuplicateId}
+        onClose={() => setInspectingDuplicateId(null)}
+        onFlagDismissed={refresh}
+        onMarkedCheated={refresh}
+      />
 
       <GradeModal
         submission={grading}
         onClose={() => setGrading(null)}
+        onInspectDuplicate={(id) => setInspectingDuplicateId(id)}
         onGraded={(updatedGrade) => {
           setSubmissions((prev) =>
             prev.map((s) => (s.id === grading?.id ? { ...s, status: "graded", grade: updatedGrade } : s))
@@ -198,10 +222,12 @@ function GradeModal({
   submission,
   onClose,
   onGraded,
+  onInspectDuplicate,
 }: {
   submission: SubmissionOut | null;
   onClose: () => void;
   onGraded: (grade: SubmissionOut["grade"]) => void;
+  onInspectDuplicate?: (id: string) => void;
 }) {
   const [score, setScore] = useState(8);
   const [stars, setStars] = useState(5);
@@ -342,6 +368,32 @@ function GradeModal({
           </div>
           <StatusBadge status={submission.status} />
         </div>
+
+        {/* Anti-Cheat Duplicate Warning Banner */}
+        {submission.is_suspicious && (
+          <div className="p-3.5 rounded-2xl bg-rose-500/10 dark:bg-rose-950/30 border border-rose-500/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
+            <div className="flex items-start sm:items-center gap-2.5 text-rose-800 dark:text-rose-300">
+              <span className="text-lg shrink-0 mt-0.5 sm:mt-0">🚨</span>
+              <div className="space-y-0.5">
+                <p className="font-bold">
+                  {submission.flag_reason || `Anti-Cheat Alert: ${submission.similarity_score ? `${Math.round(submission.similarity_score * 100)}% Match` : "Duplicate Copy"}`}
+                </p>
+                <p className="text-[11px] text-rose-700/80 dark:text-rose-300/80">
+                  Potential peer copying detected. Inspect the side-by-side evidence before finalizing grade.
+                </p>
+              </div>
+            </div>
+            {onInspectDuplicate && (
+              <button
+                type="button"
+                onClick={() => onInspectDuplicate(submission.id)}
+                className="px-3.5 py-1.5 rounded-xl font-bold bg-rose-600 hover:bg-rose-500 text-white shrink-0 shadow-2xs transition active:scale-95 text-xs self-end sm:self-center"
+              >
+                Inspect Match →
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Text answer & Interactive correction */}
         {submission.text_answer && (

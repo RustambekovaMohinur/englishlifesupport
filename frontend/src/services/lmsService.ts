@@ -4,6 +4,7 @@ import {
   AssignmentComment,
   AssignmentForStudent,
   AssignmentOut,
+  DuplicateCompareOut,
   Group,
   GroupDetailOut,
   Paginated,
@@ -173,6 +174,7 @@ export interface SubmissionQuery {
   group_id?: string;
   student_id?: string;
   status?: string;
+  is_suspicious?: boolean;
   page?: number;
   page_size?: number;
 }
@@ -315,6 +317,16 @@ export const addSubmissionComment = (id: string, body: { comment: string }) =>
 
 export const deleteSubmissionComment = (submissionId: string, commentId: string) =>
   api.delete(`/submissions/${submissionId}/comments/${commentId}`).then((r) => r.data);
+
+// --- Anti-Cheat Duplicate Inspector ---
+export const getDuplicateComparison = (submissionId: string) =>
+  api.get<DuplicateCompareOut>(`/submissions/${submissionId}/compare-duplicate`).then((r) => r.data);
+
+export const markSubmissionCheated = (submissionId: string, penaltyStars: number = 15, note?: string) =>
+  api.post<SubmissionOut>(`/submissions/${submissionId}/mark-cheated`, { penalty_stars: penaltyStars, note }).then((r) => r.data);
+
+export const dismissSubmissionFlag = (submissionId: string) =>
+  api.post<SubmissionOut>(`/submissions/${submissionId}/dismiss-flag`).then((r) => r.data);
 
 // --- Gamification & Sequential Tasks ---
 export const getGamificationSummary = () =>

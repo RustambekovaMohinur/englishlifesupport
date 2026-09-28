@@ -60,8 +60,27 @@ export default function StudentSubmissionsPage() {
                   <p className="font-semibold text-zinc-900 dark:text-white text-base">{s.assignment_title}</p>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">Submitted {format(new Date(s.submitted_at), "MMM d, yyyy HH:mm")}</p>
                 </div>
-                <StatusBadge status={s.status} />
+                <div className="flex items-center gap-2 flex-wrap">
+                  {s.is_suspicious && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 font-mono">
+                      🚨 Duplicate ({s.similarity_score ? `${Math.round(s.similarity_score * 100)}%` : "Flagged"})
+                    </span>
+                  )}
+                  <StatusBadge status={s.status} />
+                </div>
               </div>
+
+              {/* Anti-cheat Duplicate Notice */}
+              {s.is_suspicious && (
+                <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 space-y-1 text-xs text-rose-800 dark:text-rose-300">
+                  <p className="font-bold flex items-center gap-1.5 text-rose-700 dark:text-rose-400">
+                    <span>🚨 Academic Integrity Notice</span>
+                  </p>
+                  <p className="text-[11px] leading-tight">
+                    {s.flag_reason || "This submission matches work submitted by another student and has been flagged for teacher review."}
+                  </p>
+                </div>
+              )}
 
               {/* Student text answer */}
               {s.text_answer && (

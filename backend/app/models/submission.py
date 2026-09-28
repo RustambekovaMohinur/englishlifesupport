@@ -49,8 +49,21 @@ class Submission(UUIDPKMixin, TimestampMixin, Base):
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.text("false"), nullable=False)
     is_relevant: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa.text("true"), nullable=False)
 
+    # Anti-cheat duplicate detection & perceptual fingerprinting
+    image_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    file_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    is_suspicious: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.text("false"), nullable=False, index=True)
+    similarity_score: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    duplicate_of_submission_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("submissions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    flag_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     assignment: Mapped["Assignment"] = relationship(back_populates="submissions")
     student: Mapped["StudentProfile"] = relationship(back_populates="submissions")
+    duplicate_of: Mapped["Submission | None"] = relationship(
+        "Submission", remote_side="Submission.id", foreign_keys=[duplicate_of_submission_id], uselist=False
+    )
     grade: Mapped["Grade | None"] = relationship(
         back_populates="submission", uselist=False, cascade="all, delete-orphan"
     )
@@ -126,6 +139,8 @@ class SubmissionImage(UUIDPKMixin, TimestampMixin, Base):
     file_content_type: Mapped[str] = mapped_column(String(100), nullable=False)
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     order_index: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    image_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    file_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     submission: Mapped["Submission"] = relationship(back_populates="images")
 

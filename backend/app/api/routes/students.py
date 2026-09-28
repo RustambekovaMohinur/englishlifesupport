@@ -875,6 +875,11 @@ async def get_student_history(
             vocab_score = va_attempt.percentage if va_attempt else None
             vocab_attempts = getattr(va_attempt, "attempt_count", 1) if va_attempt else None
 
+            is_susp = bool(sub and getattr(sub, "is_suspicious", False))
+            sim_score = getattr(sub, "similarity_score", None) if sub else None
+            dup_id = getattr(sub, "duplicate_of_submission_id", None) if sub else None
+            flag_rsn = getattr(sub, "flag_reason", None) if sub else None
+
             item = StudentHistoryItem(
                 assignment_id=a.id,
                 title=a.title,
@@ -898,6 +903,10 @@ async def get_student_history(
                 unlocked_by_teacher=is_ovr_unlocked,
                 prerequisite_id=prereq_id,
                 prerequisite_title=prereq.title if (prereq_id and prereq) else None,
+                is_suspicious=is_susp,
+                similarity_score=sim_score,
+                duplicate_of_submission_id=dup_id,
+                flag_reason=flag_rsn,
             )
             history_items.append(item)
             if is_active_task:

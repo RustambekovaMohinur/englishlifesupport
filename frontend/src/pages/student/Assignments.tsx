@@ -14,6 +14,16 @@ import { AssignmentForStudent } from "@/types";
 import toast from "react-hot-toast";
 
 export function TaskStatusBadge({ assignment }: { assignment: AssignmentForStudent }) {
+  if (assignment.is_suspicious) {
+    return (
+      <span
+        className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/30 font-mono font-bold rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1 shadow-xs"
+        title={assignment.flag_reason || "Flagged duplicate submission"}
+      >
+        🚨 FLAGGED
+      </span>
+    );
+  }
   if (assignment.is_exempted) {
     return (
       <span className="bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 font-mono font-medium rounded-full px-2.5 py-0.5 text-xs inline-flex items-center gap-1 shadow-xs">
@@ -294,6 +304,18 @@ export default function StudentAssignmentsPage() {
                   {a.lock_reason || `Complete "${prereqTitle}" to unlock this task.`}
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* Duplicate Suspicion Warning */}
+          {a.is_suspicious && (
+            <div className="mt-2.5 p-2.5 rounded-xl bg-rose-500/10 dark:bg-rose-950/30 border border-rose-500/30 text-xs text-rose-800 dark:text-rose-300">
+              <div className="flex items-center gap-1.5 font-bold text-rose-700 dark:text-rose-400 mb-0.5">
+                <span>🚨 Submission Flagged as Duplicate</span>
+              </div>
+              <p className="text-[11px] leading-tight text-rose-700/90 dark:text-rose-300/90">
+                {a.flag_reason || "This submission matches another student's work and has been flagged for teacher review."}
+              </p>
             </div>
           )}
 

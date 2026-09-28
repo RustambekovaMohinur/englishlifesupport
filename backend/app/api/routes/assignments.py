@@ -598,6 +598,9 @@ async def _build_student_assignments(
                 group_id=assignment.group_id,
                 group_name=assignment.group.name if getattr(assignment, "group", None) else None,
                 created_at=assignment.created_at,
+                is_suspicious=bool(getattr(submission, "is_suspicious", False)) if submission else False,
+                similarity_score=getattr(submission, "similarity_score", None) if submission else None,
+                flag_reason=getattr(submission, "flag_reason", None) if submission else None,
             )
         )
     return result

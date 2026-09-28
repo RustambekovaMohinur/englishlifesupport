@@ -254,6 +254,14 @@ async def _run_startup_tasks():
                         await conn.execute(sa.text("ALTER TABLE wordlist_sets ADD COLUMN IF NOT EXISTS b2_file_url TEXT"))
                         await conn.execute(sa.text("ALTER TABLE wordlist_sets ADD COLUMN IF NOT EXISTS total_words INTEGER DEFAULT 0"))
                         await conn.execute(sa.text("ALTER TABLE task_lock_overrides ADD COLUMN IF NOT EXISTS is_exempted BOOLEAN NOT NULL DEFAULT FALSE"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS image_hash VARCHAR(64)"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS file_sha256 VARCHAR(64)"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS is_suspicious BOOLEAN NOT NULL DEFAULT FALSE"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS similarity_score DOUBLE PRECISION"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS duplicate_of_submission_id UUID"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS flag_reason VARCHAR(500)"))
+                        await conn.execute(sa.text("ALTER TABLE submission_images ADD COLUMN IF NOT EXISTS image_hash VARCHAR(64)"))
+                        await conn.execute(sa.text("ALTER TABLE submission_images ADD COLUMN IF NOT EXISTS file_sha256 VARCHAR(64)"))
                     else:
                         res = await conn.execute(sa.text("PRAGMA table_info(wordlist_sets)"))
                         cols = [r[1] for r in res.fetchall()]
@@ -265,6 +273,28 @@ async def _run_startup_tasks():
                         ovr_cols = [r[1] for r in res_ovr.fetchall()]
                         if "is_exempted" not in ovr_cols:
                             await conn.execute(sa.text("ALTER TABLE task_lock_overrides ADD COLUMN is_exempted BOOLEAN NOT NULL DEFAULT 0"))
+
+                        res_sub = await conn.execute(sa.text("PRAGMA table_info(submissions)"))
+                        sub_cols = [r[1] for r in res_sub.fetchall()]
+                        if "image_hash" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN image_hash VARCHAR(64)"))
+                        if "file_sha256" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN file_sha256 VARCHAR(64)"))
+                        if "is_suspicious" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN is_suspicious BOOLEAN NOT NULL DEFAULT 0"))
+                        if "similarity_score" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN similarity_score FLOAT"))
+                        if "duplicate_of_submission_id" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN duplicate_of_submission_id TEXT"))
+                        if "flag_reason" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN flag_reason VARCHAR(500)"))
+
+                        res_simg = await conn.execute(sa.text("PRAGMA table_info(submission_images)"))
+                        simg_cols = [r[1] for r in res_simg.fetchall()]
+                        if "image_hash" not in simg_cols:
+                            await conn.execute(sa.text("ALTER TABLE submission_images ADD COLUMN image_hash VARCHAR(64)"))
+                        if "file_sha256" not in simg_cols:
+                            await conn.execute(sa.text("ALTER TABLE submission_images ADD COLUMN file_sha256 VARCHAR(64)"))
                 except Exception as ex:
                     logger.debug("Column check note: %s", ex)
 

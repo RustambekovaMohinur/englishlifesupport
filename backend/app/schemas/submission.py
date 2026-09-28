@@ -109,6 +109,15 @@ class SubmissionOut(BaseModel):
     corrections: list[SubmissionCorrectionOut] = []
     comments: list[SubmissionCommentOut] = []
 
+    # Anti-cheat duplicate detection fields
+    image_hash: str | None = None
+    file_sha256: str | None = None
+    is_suspicious: bool = False
+    similarity_score: float | None = None
+    duplicate_of_submission_id: uuid.UUID | None = None
+    flag_reason: str | None = None
+    original_student_name: str | None = None
+
     model_config = {"from_attributes": True}
 
 
@@ -123,4 +132,33 @@ class GradeCreate(BaseModel):
     score: int = Field(ge=0, le=10)
     feedback: str | None = Field(default=None, max_length=2000)
     stars: int = Field(ge=0, le=100, default=5)
+
+
+class SubmissionCompareItem(BaseModel):
+    submission_id: uuid.UUID
+    student_id: uuid.UUID
+    student_name: str
+    assignment_id: uuid.UUID
+    assignment_title: str
+    submitted_at: datetime
+    image_urls: list[str] = []
+    file_url: str | None = None
+    file_original_name: str | None = None
+    text_answer: str | None = None
+    image_hash: str | None = None
+    file_sha256: str | None = None
+
+
+class DuplicateCompareOut(BaseModel):
+    current: SubmissionCompareItem
+    original: SubmissionCompareItem
+    similarity_score: float
+    flag_reason: str | None = None
+    is_suspicious: bool = True
+
+
+class MarkCheatedRequest(BaseModel):
+    penalty_stars: int = Field(default=15, ge=0, le=100)
+    note: str | None = Field(default=None, max_length=1000)
+
 

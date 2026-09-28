@@ -841,6 +841,25 @@ export default function StudentAssignmentSubmitPage() {
           </div>
         )}
 
+        {/* Anti-Cheat Duplicate Flag Notice Banner */}
+        {(assignment.is_suspicious || existingSubmission?.is_suspicious) && (
+          <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 dark:bg-rose-950/40 p-5 space-y-2 text-rose-900 dark:text-rose-200 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center text-sm font-bold">
+                🚨
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-rose-900 dark:text-rose-200">
+                  Duplicate Submission Flagged by Anti-Cheat Inspector
+                </h3>
+                <p className="text-[11px] text-rose-700 dark:text-rose-400">
+                  {assignment.flag_reason || existingSubmission?.flag_reason || "This submission matches work submitted by another student and has been flagged for teacher review."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Pedagogical Feedback Banner (When Graded) */}
         {isGraded && (
           <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.05] dark:bg-emerald-500/[0.08] p-5 space-y-3">

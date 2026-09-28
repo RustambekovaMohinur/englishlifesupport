@@ -278,7 +278,11 @@ export default function PastDeadlinesPage() {
 
                   {/* Status Indicator Badge (Prompt Spec) */}
                   <div className="mb-3">
-                    {isMissing ? (
+                    {a.is_suspicious ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-lg bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 font-mono">
+                        <span>🚨 Duplicate Submission Flagged</span>
+                      </span>
+                    ) : isMissing ? (
                       <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 font-mono">
                         <AlertTriangle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                         <span>Missing / Action Required</span>
@@ -330,6 +334,18 @@ export default function PastDeadlinesPage() {
                       </FileDownloadButton>
                     )}
                   </div>
+
+                  {/* Anti-cheat Duplicate Flag Alert */}
+                  {a.is_suspicious && (
+                    <div className="p-3 rounded-xl bg-rose-500/10 dark:bg-rose-950/30 border border-rose-500/30 text-xs space-y-1 mb-4 text-rose-800 dark:text-rose-300">
+                      <div className="font-bold flex items-center gap-1.5 text-rose-700 dark:text-rose-400">
+                        <span>🚨 Flagged as Duplicate Copy</span>
+                      </div>
+                      <p className="text-[11px] leading-tight text-rose-700/90 dark:text-rose-300/90">
+                        {a.flag_reason || "This submission matches another student's work and has been flagged for teacher review."}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Submission Grade / Feedback details if evaluated */}
                   {a.score !== null && (
