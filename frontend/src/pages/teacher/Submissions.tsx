@@ -35,6 +35,7 @@ import {
   listSubmissions,
   evaluateSubmissionAI,
   approveAIGrade,
+  verifySubmissionCode,
 } from "@/services/lmsService";
 import { AIWritingEvaluation, Group, SubmissionCommentOut, SubmissionCorrectionOut, SubmissionOut } from "@/types";
 import StudentDetailModal from "@/components/StudentDetailModal";
@@ -83,8 +84,8 @@ export default function SubmissionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Submissions</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Review and grade student homework</p>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Topshirilgan vazifalar</h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">O'quvchilar uy vazifalarini tekshirish va baholash</p>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -96,7 +97,7 @@ export default function SubmissionsPage() {
             setGroupFilter(e.target.value);
           }}
         >
-          <option value="">All groups</option>
+          <option value="">Barcha guruhlar</option>
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
               {g.name}
@@ -111,11 +112,11 @@ export default function SubmissionsPage() {
             setStatusFilter(e.target.value);
           }}
         >
-          <option value="">All statuses</option>
-          <option value="suspicious">🚨 Flagged / Suspicious Only</option>
-          <option value="submitted">Submitted</option>
-          <option value="late">Late</option>
-          <option value="graded">Graded</option>
+          <option value="">Barcha holatlar</option>
+          <option value="suspicious">🚨 Faqat shubhali / Nusxa</option>
+          <option value="submitted">Topshirilgan</option>
+          <option value="late">Kechikkan</option>
+          <option value="graded">Baholangan</option>
         </select>
       </div>
 
@@ -123,17 +124,17 @@ export default function SubmissionsPage() {
         {isLoading ? (
           <LoadingRows rows={8} />
         ) : submissions.length === 0 ? (
-          <EmptyState title="No submissions found" description="Try a different filter." />
+          <EmptyState title="Topshiriqlar topilmadi" description="Boshqa filtrni tanlab ko'ring." />
         ) : (
           <>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-200/80 dark:border-zinc-800 text-left bg-zinc-50/50 dark:bg-zinc-900/50">
-                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Student</th>
-                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Assignment</th>
-                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Submitted</th>
-                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Status</th>
-                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Action</th>
+                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">O'quvchi</th>
+                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Vazifa</th>
+                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Topshirildi</th>
+                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Holat</th>
+                  <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Amal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
@@ -144,7 +145,7 @@ export default function SubmissionsPage() {
                           type="button"
                           onClick={() => setSelectedStudentId(s.student_id)}
                           className="text-left font-semibold hover:text-blue-600 dark:hover:text-blue-400 hover:underline decoration-dotted transition cursor-pointer"
-                          title="Inspect student details"
+                          title="O'quvchi profilini ko'rish"
                         >
                           {s.student_name}
                         </button>
@@ -154,7 +155,7 @@ export default function SubmissionsPage() {
                           <span className="font-medium text-zinc-900 dark:text-white">{s.assignment_title}</span>
                           {s.vocab_attempt && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 font-mono">
-                              📖 New Words: {s.vocab_attempt.percentage}%
+                              📖 Yangi so'zlar: {s.vocab_attempt.percentage}%
                             </span>
                           )}
                         </div>
@@ -164,14 +165,38 @@ export default function SubmissionsPage() {
                     <td className="py-3.5 px-4">
                       <div className="flex flex-col gap-1.5 items-start">
                         <StatusBadge status={s.status} />
+                        {s.verification_code && (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono shadow-2xs ${
+                              s.tampering_detected
+                                ? "bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30"
+                                : s.verification_code_matched === true
+                                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30"
+                                : "bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30"
+                            }`}
+                            title={
+                              s.tampering_detected
+                                ? "🚨 Tahrirlangan yoki raqamli yozuv aniqlandi"
+                                : s.verification_code_matched === true
+                                ? "✓ Daftardagi yozma kod tasdiqlangan"
+                                : "⚠️ Kod topilmadi yoki mos kelmadi"
+                            }
+                          >
+                            {s.tampering_detected
+                              ? `🚨 Tahrirlangan (${s.verification_code})`
+                              : s.verification_code_matched === true
+                              ? `✓ Kod tasdiqlandi (${s.verification_code})`
+                              : `⚠️ Kod mos kelmadi (${s.verification_code})`}
+                          </span>
+                        )}
                         {s.is_suspicious && (
                           <button
                             type="button"
                             onClick={() => setInspectingDuplicateId(s.id)}
                             className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 hover:bg-rose-500/25 transition active:scale-95 animate-pulse font-mono shadow-2xs cursor-pointer"
-                            title={s.flag_reason || "Click to inspect duplicate comparison"}
+                            title={s.flag_reason || "Nusxa tekshiruvini ochish"}
                           >
-                            <span>🚨 {s.similarity_score ? `${Math.round(s.similarity_score * 100)}% Match` : "Flagged Copy"}</span>
+                            <span>🚨 {s.similarity_score ? `${Math.round(s.similarity_score * 100)}% O'xshashlik` : "Shubhali nusxa"}</span>
                           </button>
                         )}
                         {s.tab_switch_count !== undefined && s.tab_switch_count > 0 && (
@@ -195,14 +220,14 @@ export default function SubmissionsPage() {
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-400 border border-indigo-500/30 font-mono shadow-2xs"
                             title="AI Speaking Examiner transkripsiyasi mavjud"
                           >
-                            🎙️ Transcribed
+                            🎙️ Transkripsiya
                           </span>
                         )}
                       </div>
                     </td>
                     <td className="py-3.5 px-4">
                       <button className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline" onClick={() => setGrading(s)}>
-                        {s.grade ? "View / Edit grade" : "Grade"}
+                        {s.grade ? "Bahoni ko'rish / Tahrirlash" : "Baholash"}
                       </button>
                     </td>
                   </tr>
@@ -212,14 +237,14 @@ export default function SubmissionsPage() {
 
             <div className="mt-4 flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
               <span>
-                Page {page} of {totalPages}
+                {totalPages} dan {page}-sahifa
               </span>
               <div className="space-x-2">
                 <button className="btn-secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  Previous
+                  Oldingi
                 </button>
                 <button className="btn-secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                  Next
+                  Keyingi
                 </button>
               </div>
             </div>
@@ -293,6 +318,27 @@ function GradeModal({
   const [comments, setComments] = useState<SubmissionCommentOut[]>([]);
   const [newComment, setNewComment] = useState("");
   const [isAddingComment, setIsAddingComment] = useState(false);
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+
+  async function handleVerifyCode() {
+    if (!currentSub) return;
+    setIsVerifyingCode(true);
+    try {
+      const updated = await verifySubmissionCode(currentSub.id, currentSub.verification_code || undefined);
+      setCurrentSub(updated);
+      if (updated.tampering_detected) {
+        toast.error("🚨 Tahrirlangan yoki raqamli yozuv aniqlandi!");
+      } else if (updated.verification_code_matched) {
+        toast.success("✓ Daftardagi qo'lda yozilgan kod muvaffaqiyatli tasdiqlandi!");
+      } else {
+        toast("⚠️ Daftarda kod topilmadi yoki mos kelmadi.", { icon: "⚠️" });
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Kodni qayta tekshirishda xatolik");
+    } finally {
+      setIsVerifyingCode(false);
+    }
+  }
 
   useEffect(() => {
     setCurrentSub(submission);
@@ -454,16 +500,62 @@ function GradeModal({
   }
 
   return (
-    <Modal open={!!submission} onClose={onClose} title={`Homework Review: ${submission.student_name}`}>
+    <Modal open={!!submission} onClose={onClose} title={`Vazifani tekshirish: ${submission.student_name}`}>
       <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-1">
         {/* Assignment info */}
         <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
           <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">Assignment</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">Vazifa</p>
             <p className="text-base font-medium text-zinc-900 dark:text-white">{submission.assignment_title}</p>
           </div>
           <StatusBadge status={submission.status} />
         </div>
+
+        {/* Handwritten Proof-of-Work Verification Code Banner */}
+        {currentSub.verification_code && (
+          <div className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs ${
+            currentSub.tampering_detected
+              ? "bg-rose-500/10 dark:bg-rose-950/30 border-rose-500/30 text-rose-900 dark:text-rose-200"
+              : currentSub.verification_code_matched === true
+              ? "bg-emerald-500/10 dark:bg-emerald-950/30 border-emerald-500/30 text-emerald-900 dark:text-emerald-200"
+              : "bg-amber-500/10 dark:bg-amber-950/30 border-amber-500/30 text-amber-900 dark:text-amber-200"
+          }`}>
+            <div className="flex items-start sm:items-center gap-2.5">
+              <span className="text-xl shrink-0">
+                {currentSub.tampering_detected ? "🚨" : currentSub.verification_code_matched === true ? "✅" : "⚠️"}
+              </span>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold">
+                    {currentSub.tampering_detected
+                      ? "Tahrirlangan / Raqamli yozuv aniqlandi!"
+                      : currentSub.verification_code_matched === true
+                      ? "Daftardagi ruchka bilan yozilgan kod tasdiqlandi"
+                      : "Daftarda kod topilmadi yoki mos kelmadi"}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full font-mono text-[11px] font-bold bg-white/80 dark:bg-zinc-800/80 border border-current">
+                    {currentSub.verification_code}
+                  </span>
+                </div>
+                <p className="text-[11px] opacity-80 mt-0.5">
+                  {currentSub.tampering_detected
+                    ? "Rasm telefonda chizilgan yoki foto-muharrir orqali raqamli o'zgartirilgan deb topildi."
+                    : currentSub.verification_code_matched === true
+                    ? "O'quvchi topshiriqni haqiqatan bugun daftarga yozib bajarganligi OCR tahlilida tasdiqlandi."
+                    : "Daftar varag'ining yuqorisida sana va ushbu kod ruchka bilan yozilganligini ko'zdan kechiring."}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleVerifyCode}
+              disabled={isVerifyingCode}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 shadow-2xs transition active:scale-95 shrink-0 self-end sm:self-center"
+            >
+              {isVerifyingCode ? "Tekshirilmoqda..." : "🔍 Qayta tekshirish"}
+            </button>
+          </div>
+        )}
 
         {/* Anti-Cheat Duplicate Warning Banner */}
         {submission.is_suspicious && (
@@ -472,10 +564,10 @@ function GradeModal({
               <span className="text-lg shrink-0 mt-0.5 sm:mt-0">🚨</span>
               <div className="space-y-0.5">
                 <p className="font-bold">
-                  {submission.flag_reason || `Anti-Cheat Alert: ${submission.similarity_score ? `${Math.round(submission.similarity_score * 100)}% Match` : "Duplicate Copy"}`}
+                  {submission.flag_reason || `Anti-Cheat ogohlantirishi: ${submission.similarity_score ? `${Math.round(submission.similarity_score * 100)}% O'xshashlik` : "Shubhali nusxa"}`}
                 </p>
                 <p className="text-[11px] text-rose-700/80 dark:text-rose-300/80">
-                  Potential peer copying detected. Inspect the side-by-side evidence before finalizing grade.
+                  O'quvchi boshqa tengdoshining daftari yoki rasmini ko'chirgan bo'lishi mumkin. Baho qo'yishdan oldin solishtirib ko'ring.
                 </p>
               </div>
             </div>
@@ -485,7 +577,7 @@ function GradeModal({
                 onClick={() => onInspectDuplicate(currentSub.id)}
                 className="px-3.5 py-1.5 rounded-xl font-bold bg-rose-600 hover:bg-rose-500 text-white shrink-0 shadow-2xs transition active:scale-95 text-xs self-end sm:self-center"
               >
-                Inspect Match →
+                Solishtirishni ko'rish →
               </button>
             )}
           </div>
@@ -839,9 +931,9 @@ function GradeModal({
           <div className="space-y-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 bg-zinc-50/50 dark:bg-zinc-900/50">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
-                📸 Submitted Images / Notebook Scans ({currentSub.images.length})
+                📸 Daftardan yuklangan rasmlar ({currentSub.images.length})
               </span>
-              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Click to enlarge</span>
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Kattalashtirish uchun bosing</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
               {currentSub.images.map((img, idx) => (
@@ -860,7 +952,7 @@ function GradeModal({
                   />
                   <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <span className="text-[11px] font-semibold text-white bg-black/60 px-1.5 py-0.5 rounded">
-                      🔍 View
+                      🔍 Ko'rish
                     </span>
                   </div>
                 </div>
@@ -872,17 +964,17 @@ function GradeModal({
         {/* Attached file & audio */}
         {currentSub.file_url && (
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Attached File / Voice Recording</p>
+            <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Biriktirilgan fayl / Ovozli yozuv</p>
             <FileDownloadButton
               url={currentSub.file_url}
               filename={currentSub.file_original_name}
               className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline inline-block mb-1"
             >
-              📎 {currentSub.file_original_name ?? "Download attached file"}
+              📎 {currentSub.file_original_name ?? "Biriktirilgan faylni yuklab olish"}
             </FileDownloadButton>
             {currentSub.file_original_name && /\.(mp3|wav|ogg|webm|m4a)$/i.test(currentSub.file_original_name) && (
               <div className="mt-2 p-2 bg-purple-50 dark:bg-purple-950/40 rounded-lg border border-purple-200 dark:border-purple-800">
-                <p className="text-xs font-semibold text-purple-900 dark:text-purple-300 mb-1">🎙️ Student Voice Audio Recording</p>
+                <p className="text-xs font-semibold text-purple-900 dark:text-purple-300 mb-1">🎙️ O'quvchining jonli audio yozuvi</p>
                 <AuthenticatedAudio url={currentSub.file_url} className="w-full h-9" />
               </div>
             )}
@@ -892,7 +984,7 @@ function GradeModal({
         {/* General Comments */}
         <div className="space-y-3 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50/50 dark:bg-zinc-900/50">
           <p className="text-xs font-semibold uppercase text-zinc-700 dark:text-zinc-300 tracking-wider">
-            Teacher Submission Comments
+            O'qituvchi izohlari
           </p>
           {comments.length > 0 && (
             <div className="space-y-2">
@@ -922,7 +1014,7 @@ function GradeModal({
             <input
               type="text"
               className="input text-xs flex-1"
-              placeholder="Add feedback comment for the student..."
+              placeholder="O'quvchi uchun izoh yoki xabar yozing..."
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
             />
@@ -931,7 +1023,7 @@ function GradeModal({
               disabled={isAddingComment || !newComment.trim()}
               className="btn-secondary text-xs px-3 py-1.5"
             >
-              {isAddingComment ? "Posting..." : "Comment"}
+              {isAddingComment ? "Yuborilmoqda..." : "Yuborish"}
             </button>
           </form>
         </div>
@@ -939,12 +1031,12 @@ function GradeModal({
         {/* Grading score, custom stars & feedback */}
         <div className="space-y-4 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50/50 dark:bg-zinc-900/50">
           <p className="text-xs font-semibold uppercase text-zinc-700 dark:text-zinc-300 tracking-wider">
-            Pedagogical Grading Studio & Stars
+            Pedagogik baholash va Yulduzlar
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Score (0–10)</label>
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Ball (0–10)</label>
                 <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">{score}/10</span>
               </div>
               <input
@@ -958,11 +1050,11 @@ function GradeModal({
               {/* One-click Score Pills */}
               <div className="flex flex-wrap gap-1 mt-2">
                 {[
-                  { val: 10, label: "10 ★ Max" },
-                  { val: 9, label: "9 ★ Great" },
-                  { val: 8, label: "8 ★ Good" },
-                  { val: 7, label: "7 ★ Fair" },
-                  { val: 6, label: "6 ★ Pass" },
+                  { val: 10, label: "10 ★ A'lo" },
+                  { val: 9, label: "9 ★ Juda yaxshi" },
+                  { val: 8, label: "8 ★ Yaxshi" },
+                  { val: 7, label: "7 ★ Qoniqarli" },
+                  { val: 6, label: "6 ★ O'tdi" },
                 ].map((p) => (
                   <button
                     key={p.val}
@@ -982,7 +1074,7 @@ function GradeModal({
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Stars Awarded (0–100 ⭐)</label>
+                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Berilgan yulduzlar (0–100 ⭐)</label>
                 <span className="text-xs font-bold text-amber-500 font-mono">+{stars} ⭐</span>
               </div>
               <div className="flex flex-col gap-2">
@@ -991,7 +1083,7 @@ function GradeModal({
                     type="button"
                     onClick={() => setStars((s) => Math.max(0, s - 1))}
                     className="h-9 w-9 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center justify-center transition"
-                    title="Decrease 1 star"
+                    title="1 yulduz kamaytirish"
                   >
                     −
                   </button>
@@ -1010,7 +1102,7 @@ function GradeModal({
                     type="button"
                     onClick={() => setStars((s) => Math.min(100, s + 1))}
                     className="h-9 w-9 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center justify-center transition"
-                    title="Increase 1 star"
+                    title="1 yulduz qo'shish"
                   >
                     +
                   </button>
@@ -1039,18 +1131,18 @@ function GradeModal({
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                Teacher Pedagogical Feedback
+                O'qituvchi pedagogik xulosasi & tavsiyalari
               </label>
-              <span className="text-[10px] text-zinc-400">Click a template below to auto-fill</span>
+              <span className="text-[10px] text-zinc-400">Shablondan tanlash</span>
             </div>
 
             {/* Quick Feedback Presets */}
             <div className="flex flex-wrap gap-1.5 mb-2">
               {[
-                "🌟 Excellent fluency, natural intonation, and confident delivery!",
-                "👍 Great effort! Be sure to pay attention to past tense verb endings.",
-                "🎯 Accurate vocabulary usage. Focus on sentence flow and pacing.",
-                "💡 Well-structured ideas! Expand further on supporting examples.",
+                "🌟 Ajoyib ravonlik, tabiiy intonatsiya va ishonchli nutq!",
+                "👍 Yaxshi harakat! O'tgan zamon fe'llari qo'shimchalariga e'tibor qarating.",
+                "🎯 So'z boyligi to'g'ri qo'llangan. Gaplar bog'liqligi ustida ishlang.",
+                "💡 Fikrlar yaxshi tuzilgan! Qo'shimcha misollar bilan boyiting.",
               ].map((template, idx) => (
                 <button
                   key={idx}
@@ -1066,7 +1158,7 @@ function GradeModal({
             <textarea
               rows={3}
               className="input text-sm resize-none"
-              placeholder="Constructive feedback, encouragement, and areas for improvement..."
+              placeholder="Ijobiy fikrlar, motivatsiya va yaxshilash kerak bo'lgan jihatlar..."
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
             />
@@ -1076,10 +1168,10 @@ function GradeModal({
 
         <div className="flex justify-end gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
           <button className="btn-secondary" onClick={onClose}>
-            Close
+            Yopish
           </button>
           <button className="btn-primary" disabled={isSaving} onClick={handleSave}>
-            {isSaving ? "Saving..." : "Save Grade & Feedback"}
+            {isSaving ? "Saqlanmoqda..." : "Bahoni saqlash"}
           </button>
         </div>
       </div>

@@ -129,6 +129,11 @@ class SubmissionOut(BaseModel):
     speaking_metrics_json: str | None = None
     ai_speaking_evaluation_json: str | None = None
 
+    # Dynamic Task Verification Token & Anti-Tamper Shield
+    verification_code: str | None = None
+    verification_code_matched: bool | None = None
+    tampering_detected: bool = False
+
     model_config = {"from_attributes": True}
 
 

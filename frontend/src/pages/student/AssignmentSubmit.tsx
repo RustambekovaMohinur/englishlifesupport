@@ -237,6 +237,19 @@ export default function StudentAssignmentSubmitPage() {
   const [textAnswer, setTextAnswer] = useState("");
   const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
 
+  // Dynamic Task Verification Token (Proof-of-Work)
+  const [verificationCode] = useState(() => {
+    if (!assignmentId) return "EL-" + Math.floor(100 + Math.random() * 900);
+    const cacheKey = `el_vcode_${assignmentId}`;
+    const saved = sessionStorage.getItem(cacheKey);
+    if (saved && /^EL-\d{3,4}$/.test(saved)) return saved;
+    const newCode = `EL-${Math.floor(100 + Math.random() * 900)}`;
+    try {
+      sessionStorage.setItem(cacheKey, newCode);
+    } catch {}
+    return newCode;
+  });
+
   // Tab-switch tracker for submission integrity shield
   useEffect(() => {
     function handleVisibilityChange() {
@@ -637,7 +650,8 @@ export default function StudentAssignmentSubmitPage() {
         directStorageUrl ? null : docFile,
         directStorageUrl,
         directFileName,
-        tabSwitchCount
+        tabSwitchCount,
+        verificationCode
       );
 
       // Clean up saved draft on successful submission
@@ -1150,22 +1164,22 @@ export default function StudentAssignmentSubmitPage() {
                   <span>🚀</span> Universal 4-Way Submission
                 </h2>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Choose your preferred submission method or combine multiple formats
+                  O'zingizga qulay topshirish usulini tanlang yoki bir nechtasini birlashtiring
                 </p>
               </div>
 
               <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 rounded-lg self-start sm:self-auto">
-                Default: {skillBadge.label}
+                Tavsiya: {skillBadge.label}
               </span>
             </div>
 
             {/* 4-Way Segmented Tab Bar (Mobile 2x2 Grid / Desktop Segmented Row) */}
             <div className="grid grid-cols-2 sm:flex sm:items-center p-1.5 rounded-2xl bg-zinc-100 dark:bg-[#0D1117] border border-zinc-200 dark:border-zinc-800/80 shadow-inner gap-1.5 sm:gap-1">
               {[
-                { id: "files", label: "Photos & Files", icon: FolderClosed, count: attachedCount.files, isWord: false, hasCheck: false },
-                { id: "voice", label: "Voice Note", icon: Mic, count: 0, isWord: false, hasCheck: attachedCount.voice > 0 },
-                { id: "link", label: "Web Link", icon: Link2, count: 0, isWord: false, hasCheck: attachedCount.link > 0 },
-                { id: "text", label: "Essay / Text", icon: PenTool, count: wordCount, isWord: true, hasCheck: false },
+                { id: "files", label: "Rasmlar & Fayllar", icon: FolderClosed, count: attachedCount.files, isWord: false, hasCheck: false },
+                { id: "voice", label: "Ovozli xabar", icon: Mic, count: 0, isWord: false, hasCheck: attachedCount.voice > 0 },
+                { id: "link", label: "Havola", icon: Link2, count: 0, isWord: false, hasCheck: attachedCount.link > 0 },
+                { id: "text", label: "Matn / Insho", icon: PenTool, count: wordCount, isWord: true, hasCheck: false },
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -1204,18 +1218,52 @@ export default function StudentAssignmentSubmitPage() {
               {/* TAB 1: PHOTOS & FILES */}
               {activeTab === "files" && (
                 <div className="space-y-4 animate-in fade-in duration-150">
+                  {/* Dynamic Task Verification Token Banner (Proof-of-Work) */}
+                  <div className="rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-gradient-to-r from-indigo-50/70 via-white to-sky-50/60 dark:from-[#131b31] dark:via-[#0f1422] dark:to-[#122030] p-4 sm:p-5 space-y-3 shadow-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
+                          🏷️
+                        </div>
+                        <div>
+                          <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider block">
+                            Daftar Tekshiruv Kodi (Proof-of-Work)
+                          </span>
+                          <span className="text-xs text-zinc-600 dark:text-zinc-400">
+                            Akademik halollik va fotosurat haqiqiyligini tasdiqlash uchun
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-mono font-bold text-base shadow-xs tracking-wider shrink-0">
+                        <span>{verificationCode}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-white/80 dark:bg-zinc-900/80 border border-indigo-100 dark:border-indigo-900/40 text-xs text-zinc-700 dark:text-zinc-300 space-y-1.5">
+                      <p className="font-semibold text-zinc-900 dark:text-white flex items-center gap-1.5">
+                        <span>✍️</span> <span>Majburiy ko'rsatma:</span>
+                      </p>
+                      <p className="leading-relaxed">
+                        Daftaringizning yuqori qismiga bugungi sana va <strong className="text-indigo-600 dark:text-indigo-400 font-mono font-bold text-sm bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">{verificationCode}</strong> kodini ruchka bilan qo'lda yozib, so'ng rasmga oling va yuklang.
+                      </p>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 italic pt-0.5">
+                        * Eslatma: Telefon tahrirlovchisida matn yozish yoki chizish taqiqlanadi (Vision AI tekshiruvida aniqlanadi).
+                      </p>
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
                         <UploadCloud className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                        Workbook Photos & Document Upload
+                        Daftar rasmlari va hujjat yuklash
                       </h3>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                        Upload up to 10 workbook photos or a PDF/Word document
+                        10 tagacha daftar rasmi yoki PDF/Word fayl yuklang
                       </p>
                     </div>
                     <span className="text-xs font-mono font-semibold text-zinc-400 dark:text-zinc-500">
-                      {submissionImages.length}/10 Photos
+                      {submissionImages.length}/10 Rasm
                     </span>
                   </div>
 
@@ -1269,10 +1317,10 @@ export default function StudentAssignmentSubmitPage() {
                   >
                     <UploadCloud className="mx-auto h-9 w-9 text-indigo-500 dark:text-indigo-400 mb-2" />
                     <p className="text-sm font-bold text-zinc-800 dark:text-zinc-200">
-                      Drag & drop workbook photos or documents
+                      Daftar rasmlari yoki hujjatlarni bu yerga tashlang
                     </p>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 mb-4">
-                      PNG, JPG, PDF, DOCX · Instant client-side compression · Paste with <kbd className="px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded text-xs font-mono font-bold">Ctrl+V</kbd>
+                      PNG, JPG, PDF, DOCX · Tezkor siqish · Nusxalangan rasmni joylash uchun: <kbd className="px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded text-xs font-mono font-bold">Ctrl+V</kbd>
                     </p>
 
                     {/* Direct Action Buttons: Photo & Document Picker */}
@@ -1283,7 +1331,7 @@ export default function StudentAssignmentSubmitPage() {
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition active:scale-95 cursor-pointer"
                       >
                         <Camera className="w-4 h-4" />
-                        <span>Add Photos (Camera / Gallery)</span>
+                        <span>Rasm qo'shish (Kamera / Galereya)</span>
                       </button>
                       <button
                         type="button"
@@ -1291,7 +1339,7 @@ export default function StudentAssignmentSubmitPage() {
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 shadow-xs transition active:scale-95 cursor-pointer"
                       >
                         <Plus className="w-4 h-4 text-indigo-500" />
-                        <span>Browse Documents</span>
+                        <span>Hujjat tanlash (PDF/DOC)</span>
                       </button>
                     </div>
                   </div>
@@ -1323,7 +1371,7 @@ export default function StudentAssignmentSubmitPage() {
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                           <ImageIcon className="h-4 w-4 text-brand-600 dark:text-brand-400" />
-                          Uploaded Photos ({submissionImages.length}/10)
+                          Yuklangan daftar rasmlari ({submissionImages.length}/10)
                         </span>
                         <div className="flex items-center gap-2">
                           <button
@@ -1332,7 +1380,7 @@ export default function StudentAssignmentSubmitPage() {
                             className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
                           >
                             <Camera className="w-3.5 h-3.5" />
-                            <span>Add More</span>
+                            <span>Yana qo'shish</span>
                           </button>
                           <span className="text-zinc-300 dark:text-zinc-700">|</span>
                           <button
@@ -1340,7 +1388,7 @@ export default function StudentAssignmentSubmitPage() {
                             onClick={() => setSubmissionImages([])}
                             className="text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer"
                           >
-                            Clear all
+                            Barchasini tozalash
                           </button>
                         </div>
                       </div>
@@ -1366,7 +1414,7 @@ export default function StudentAssignmentSubmitPage() {
                             >
                               <Camera className="w-6 h-6 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
                               <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 mt-1">
-                                + Add Photo
+                                + Rasm qo'shish
                               </span>
                             </button>
                           </div>

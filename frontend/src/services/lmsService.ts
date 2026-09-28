@@ -247,7 +247,8 @@ export const submitHomework = (
   doc_file?: File | null,
   storage_url?: string | null,
   file_original_name?: string | null,
-  tab_switch_count?: number
+  tab_switch_count?: number,
+  verification_code?: string | null
 ) => {
   const formData = new FormData();
   formData.append("assignment_id", String(assignment_id));
@@ -260,6 +261,10 @@ export const submitHomework = (
 
   if (tab_switch_count !== undefined && tab_switch_count > 0) {
     formData.append("tab_switch_count", String(tab_switch_count));
+  }
+
+  if (verification_code && verification_code.trim()) {
+    formData.append("verification_code", verification_code.trim().toUpperCase());
   }
 
   if (storage_url) {
@@ -325,6 +330,13 @@ export const evaluateSubmissionSpeakingAI = async (submissionId: string): Promis
 
 export const approveSpeakingGrade = async (submissionId: string): Promise<SubmissionOut> => {
   const r = await api.post<SubmissionOut>(`/submissions/${submissionId}/approve-speaking-grade`);
+  return r.data;
+};
+
+export const verifySubmissionCode = async (submissionId: string, code?: string): Promise<SubmissionOut> => {
+  const r = await api.post<SubmissionOut>(`/submissions/${submissionId}/verify-code`, null, {
+    params: code ? { code } : undefined,
+  });
   return r.data;
 };
 

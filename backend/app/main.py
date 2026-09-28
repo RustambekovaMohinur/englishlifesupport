@@ -276,6 +276,9 @@ async def _run_startup_tasks():
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS audio_transcript TEXT"))
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS speaking_metrics_json TEXT"))
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS ai_speaking_evaluation_json TEXT"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS verification_code VARCHAR(32)"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS verification_code_matched BOOLEAN"))
+                        await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS tampering_detected BOOLEAN NOT NULL DEFAULT FALSE"))
                     else:
                         res = await conn.execute(sa.text("PRAGMA table_info(wordlist_sets)"))
                         cols = [r[1] for r in res.fetchall()]
@@ -316,6 +319,12 @@ async def _run_startup_tasks():
                             await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN speaking_metrics_json TEXT"))
                         if "ai_speaking_evaluation_json" not in sub_cols:
                             await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN ai_speaking_evaluation_json TEXT"))
+                        if "verification_code" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN verification_code VARCHAR(32)"))
+                        if "verification_code_matched" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN verification_code_matched BOOLEAN"))
+                        if "tampering_detected" not in sub_cols:
+                            await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN tampering_detected BOOLEAN NOT NULL DEFAULT 0"))
 
                         res_simg = await conn.execute(sa.text("PRAGMA table_info(submission_images)"))
                         simg_cols = [r[1] for r in res_simg.fetchall()]

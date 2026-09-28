@@ -61,17 +61,17 @@ export default function DuplicateCompareModal({
 
   async function handleMarkCheated() {
     if (!submissionId) return;
-    if (!confirm(`Mark this submission as cheated and deduct ${penaltyStars} stars from the student?`)) {
+    if (!confirm(`Ushbu topshiriqni nusxa deb belgilab, o'quvchidan ${penaltyStars} yulduz ayirmoqchimisiz?`)) {
       return;
     }
     setIsProcessing(true);
     try {
       await markSubmissionCheated(submissionId, penaltyStars, customNote || undefined);
-      toast.success("Submission marked as duplicate copy and rejected!");
+      toast.success("Topshiriq ko'chirilgan deb belgilandi va rad etildi!");
       if (onMarkedCheated) onMarkedCheated();
       onClose();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to mark submission as cheated");
+      toast.error(err?.response?.data?.detail || "Topshiriqni ko'chirilgan deb belgilashda xatolik");
     } finally {
       setIsProcessing(false);
     }
@@ -79,17 +79,17 @@ export default function DuplicateCompareModal({
 
   async function handleDismissFlag() {
     if (!submissionId) return;
-    if (!confirm("Dismiss this duplicate flag as a false positive?")) {
+    if (!confirm("Ushbu ogohlantirishni bekor qilib, topshiriqni haqiqiy deb tasdiqlamoqchimisiz?")) {
       return;
     }
     setIsProcessing(true);
     try {
       await dismissSubmissionFlag(submissionId);
-      toast.success("Duplicate flag dismissed!");
+      toast.success("Shubhali belgisi bekor qilindi!");
       if (onFlagDismissed) onFlagDismissed();
       onClose();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to dismiss duplicate flag");
+      toast.error(err?.response?.data?.detail || "Belgini bekor qilishda xatolik");
     } finally {
       setIsProcessing(false);
     }
@@ -116,7 +116,7 @@ export default function DuplicateCompareModal({
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-white truncate">
-                  Anti-Cheat Visual Inspector
+                  Anti-Cheat: Nusxalanishni tekshirish
                 </h2>
                 {data && (
                   <span
@@ -126,12 +126,12 @@ export default function DuplicateCompareModal({
                         : "bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30"
                     }`}
                   >
-                    <span>{isExact ? "🔴 100% Binary Duplicate" : `🚨 ${simPct}% Visual Match`}</span>
+                    <span>{isExact ? "🔴 100% Bir xil fayl / nusxa" : `🚨 ${simPct}% O'xshashlik aniqlandi`}</span>
                   </span>
                 )}
               </div>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
-                Perceptual image hashing (dHash) & SHA-256 fingerprint cross-check
+                Rasm tahlili (dHash) va SHA-256 raqamli imzo solishtiruvi
               </p>
             </div>
           </div>
@@ -140,7 +140,7 @@ export default function DuplicateCompareModal({
             type="button"
             onClick={onClose}
             className="p-2 rounded-xl text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition shrink-0"
-            title="Close inspector"
+            title="Yopish"
           >
             <X className="w-5 h-5" />
           </button>
@@ -164,10 +164,10 @@ export default function DuplicateCompareModal({
                 <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <p className="font-bold">
-                    {data.flag_reason || `Highly similar (${simPct}%) submission detected.`}
+                    {data.flag_reason || `Yuqori darajada o'xshash (${simPct}%) topshiriq aniqlandi.`}
                   </p>
                   <p className="text-xs text-rose-700/90 dark:text-rose-300/80 leading-relaxed">
-                    Compare both students' submitted homework photos, handwritten work, and timestamps below to verify whether this is an illegitimate duplicate.
+                    Ushbu topshiriq boshqa o'quvchining daftari yoki rasmidan ko'chirilganligini tekshirish uchun quyidagi rasmlar va vaqtlarni solishtiring.
                   </p>
                 </div>
               </div>
@@ -179,7 +179,7 @@ export default function DuplicateCompareModal({
                   <div className="p-3.5 bg-rose-500/10 dark:bg-rose-900/30 border-b border-rose-200 dark:border-rose-800/60 flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400 font-mono">
-                        Suspected Duplicate Copy
+                        Shubhali nusxa (Hozirgi o'quvchi)
                       </span>
                       <h4 className="text-sm font-bold text-zinc-900 dark:text-white truncate">
                         {data.current.student_name}
@@ -194,11 +194,11 @@ export default function DuplicateCompareModal({
                     {/* Images Viewer */}
                     <div>
                       <span className="block text-[11px] font-bold uppercase text-zinc-400 font-mono mb-2">
-                        Submitted Images ({data.current.image_urls.length})
+                        Topshirilgan rasmlar ({data.current.image_urls.length})
                       </span>
                       {data.current.image_urls.length === 0 ? (
                         <div className="p-6 rounded-xl bg-zinc-100/60 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800 text-center text-xs text-zinc-400">
-                          No images attached
+                          Rasm biriktirilmagan
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -210,12 +210,12 @@ export default function DuplicateCompareModal({
                             >
                               <AuthenticatedImage
                                 url={imgUrl}
-                                alt={`Current Student Photo ${i + 1}`}
+                                alt={`Hozirgi o'quvchi rasmi ${i + 1}`}
                                 className="w-full h-full object-cover"
                               />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition flex items-center justify-center text-white text-xs font-semibold gap-1.5">
                                 <ZoomIn className="w-4 h-4" />
-                                <span>Inspect</span>
+                                <span>Kattalashtirish</span>
                               </div>
                             </div>
                           ))}
@@ -227,7 +227,7 @@ export default function DuplicateCompareModal({
                     {data.current.file_url && (
                       <div className="pt-2">
                         <span className="block text-[11px] font-bold uppercase text-zinc-400 font-mono mb-1.5">
-                          Attached File
+                          Biriktirilgan fayl
                         </span>
                         <FileDownloadButton
                           url={data.current.file_url}
@@ -235,7 +235,7 @@ export default function DuplicateCompareModal({
                           className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-brand-600 dark:text-brand-400 hover:bg-zinc-50"
                         >
                           <FileText className="w-4 h-4" />
-                          <span>{data.current.file_original_name || "Download Attached File"}</span>
+                          <span>{data.current.file_original_name || "Faylni yuklab olish"}</span>
                         </FileDownloadButton>
                       </div>
                     )}
@@ -244,7 +244,7 @@ export default function DuplicateCompareModal({
                     {data.current.text_answer && (
                       <div className="pt-2">
                         <span className="block text-[11px] font-bold uppercase text-zinc-400 font-mono mb-1.5">
-                          Written Answer
+                          Yozma matn
                         </span>
                         <div className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap max-h-36 overflow-y-auto font-sans leading-relaxed">
                           {data.current.text_answer}
@@ -259,7 +259,7 @@ export default function DuplicateCompareModal({
                   <div className="p-3.5 bg-emerald-500/10 dark:bg-emerald-900/30 border-b border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-mono">
-                        Original Peer Submission
+                        Asl nusxa (Oldingi o'quvchi)
                       </span>
                       <h4 className="text-sm font-bold text-zinc-900 dark:text-white truncate">
                         {data.original.student_name}
@@ -274,11 +274,11 @@ export default function DuplicateCompareModal({
                     {/* Images Viewer */}
                     <div>
                       <span className="block text-[11px] font-bold uppercase text-zinc-400 font-mono mb-2">
-                        Original Images ({data.original.image_urls.length})
+                        Asl rasmlar ({data.original.image_urls.length})
                       </span>
                       {data.original.image_urls.length === 0 ? (
                         <div className="p-6 rounded-xl bg-zinc-100/60 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800 text-center text-xs text-zinc-400">
-                          No images attached
+                          Rasm biriktirilmagan
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -290,12 +290,12 @@ export default function DuplicateCompareModal({
                             >
                               <AuthenticatedImage
                                 url={imgUrl}
-                                alt={`Original Student Photo ${i + 1}`}
+                                alt={`Asl o'quvchi rasmi ${i + 1}`}
                                 className="w-full h-full object-cover"
                               />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition flex items-center justify-center text-white text-xs font-semibold gap-1.5">
                                 <ZoomIn className="w-4 h-4" />
-                                <span>Inspect</span>
+                                <span>Kattalashtirish</span>
                               </div>
                             </div>
                           ))}
@@ -307,7 +307,7 @@ export default function DuplicateCompareModal({
                     {data.original.file_url && (
                       <div className="pt-2">
                         <span className="block text-[11px] font-bold uppercase text-zinc-400 font-mono mb-1.5">
-                          Attached File
+                          Biriktirilgan fayl
                         </span>
                         <FileDownloadButton
                           url={data.original.file_url}
@@ -315,7 +315,7 @@ export default function DuplicateCompareModal({
                           className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-brand-600 dark:text-brand-400 hover:bg-zinc-50"
                         >
                           <FileText className="w-4 h-4" />
-                          <span>{data.original.file_original_name || "Download Attached File"}</span>
+                          <span>{data.original.file_original_name || "Faylni yuklab olish"}</span>
                         </FileDownloadButton>
                       </div>
                     )}
@@ -324,7 +324,7 @@ export default function DuplicateCompareModal({
                     {data.original.text_answer && (
                       <div className="pt-2">
                         <span className="block text-[11px] font-bold uppercase text-zinc-400 font-mono mb-1.5">
-                          Written Answer
+                          Yozma matn
                         </span>
                         <div className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap max-h-36 overflow-y-auto font-sans leading-relaxed">
                           {data.original.text_answer}
@@ -340,30 +340,30 @@ export default function DuplicateCompareModal({
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
                     <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
-                      Instructor Action & Penalty
+                      O'qituvchi qarori va jarima
                     </h4>
                     <p className="text-[11px] text-zinc-500">
-                      Reject duplicate work with zero score and star deduction, or dismiss flag if confirmed legitimate.
+                      Nusxa deb topilsa 0 ball va yulduzlar ayiriladi, yoki xato deb topilsa ogohlantirish bekor qilinadi.
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-zinc-500 font-medium">Penalty:</span>
+                    <span className="text-xs text-zinc-500 font-medium">Jarima:</span>
                     <select
                       value={penaltyStars}
                       onChange={(e) => setPenaltyStars(Number(e.target.value))}
                       className="px-2.5 py-1 text-xs font-bold font-mono rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800"
                     >
-                      <option value="0">0 ⭐ No penalty</option>
-                      <option value="10">-10 ⭐ Light</option>
-                      <option value="15">-15 ⭐ Standard</option>
-                      <option value="25">-25 ⭐ Severe</option>
+                      <option value="0">0 ⭐ Jarimasiz</option>
+                      <option value="10">-10 ⭐ Yengil jarima</option>
+                      <option value="15">-15 ⭐ Standart jarima</option>
+                      <option value="25">-25 ⭐ Qat'iy jarima</option>
                     </select>
                   </div>
                 </div>
 
                 <input
                   type="text"
-                  placeholder="Optional instructor note / warning for student (e.g. 'Please write your own answers in notebook')"
+                  placeholder="O'quvchi uchun ogohlantirish yoki izoh (masalan: 'Daftarga o'zingiz yozing')..."
                   value={customNote}
                   onChange={(e) => setCustomNote(e.target.value)}
                   className="w-full text-xs px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-hidden focus:ring-2 focus:ring-rose-500/30"
@@ -380,7 +380,7 @@ export default function DuplicateCompareModal({
             onClick={onClose}
             className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition"
           >
-            Close
+            Yopish
           </button>
 
           <div className="flex items-center gap-2 ml-auto">
@@ -391,7 +391,7 @@ export default function DuplicateCompareModal({
               className="px-4 py-2 rounded-xl text-xs font-semibold bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-750 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 transition flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
             >
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>Dismiss Flag (Legitimate)</span>
+              <span>Ogohlantirishni bekor qilish (Toza)</span>
             </button>
 
             <button
@@ -401,7 +401,7 @@ export default function DuplicateCompareModal({
               className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 active:scale-95 text-white shadow-xs transition flex items-center gap-1.5 disabled:opacity-50"
             >
               <ShieldAlert className="w-3.5 h-3.5" />
-              <span>Reject & Mark as Cheated ({penaltyStars > 0 ? `-${penaltyStars} ⭐` : "0 ⭐"})</span>
+              <span>Rad etish & Nusxa deb belgilash ({penaltyStars > 0 ? `-${penaltyStars} ⭐` : "0 ⭐"})</span>
             </button>
           </div>
         </div>

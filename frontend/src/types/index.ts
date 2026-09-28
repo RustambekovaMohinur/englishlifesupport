@@ -562,6 +562,9 @@ export interface SubmissionOut {
   audio_transcript?: string | null;
   speaking_metrics_json?: string | null;
   ai_speaking_evaluation_json?: string | null;
+  verification_code?: string | null;
+  verification_code_matched?: boolean | null;
+  tampering_detected?: boolean;
 }
 
 export interface AISpeakingGrammarCorrection {

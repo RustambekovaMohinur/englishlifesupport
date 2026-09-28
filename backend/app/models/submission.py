@@ -70,6 +70,11 @@ class Submission(UUIDPKMixin, TimestampMixin, Base):
     speaking_metrics_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_speaking_evaluation_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Dynamic Task Verification Token & Anti-Tamper Shield
+    verification_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    verification_code_matched: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    tampering_detected: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.text("false"), nullable=False)
+
     assignment: Mapped["Assignment"] = relationship(back_populates="submissions")
     student: Mapped["StudentProfile"] = relationship(back_populates="submissions")
     duplicate_of: Mapped["Submission | None"] = relationship(

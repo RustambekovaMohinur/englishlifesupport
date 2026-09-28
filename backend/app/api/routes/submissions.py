@@ -214,6 +214,9 @@ def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = 
         audio_transcript=getattr(sub, "audio_transcript", None),
         speaking_metrics_json=getattr(sub, "speaking_metrics_json", None),
         ai_speaking_evaluation_json=getattr(sub, "ai_speaking_evaluation_json", None),
+        verification_code=getattr(sub, "verification_code", None),
+        verification_code_matched=getattr(sub, "verification_code_matched", None),
+        tampering_detected=bool(getattr(sub, "tampering_detected", False)),
     )
 
 
@@ -241,6 +244,7 @@ async def submit_homework(
     file_type: str | None = Form(default=None),
     file_size_bytes: int | None = Form(default=None),
     tab_switch_count: int = Form(default=0),
+    verification_code: str | None = Form(default=None),
     profile: StudentProfile = Depends(get_current_student_profile),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: AsyncSession = Depends(get_db),
@@ -511,6 +515,39 @@ async def submit_homework(
                 submission.flag_reason = None
         except Exception as e:
             logger.warning("Error during duplicate submission cross-check: %s", e)
+
+    # Dynamic Task Verification Token & Anti-Tamper Shield inspection
+    if verification_code and verification_code.strip():
+        clean_vcode = verification_code.strip().upper()
+        submission.verification_code = clean_vcode
+
+        target_img_bytes = None
+        target_mime = "image/jpeg"
+        if primary_file_bytes and file_content_type and file_content_type.startswith("image/"):
+            target_img_bytes = primary_file_bytes
+            target_mime = file_content_type
+        elif resolved_images and len(resolved_images) > 0:
+            target_img_bytes = resolved_images[0][0]
+            target_mime = resolved_images[0][2]
+
+        if target_img_bytes:
+            from app.services.anti_cheat import verify_handwritten_code_and_tampering
+            try:
+                v_res = await verify_handwritten_code_and_tampering(
+                    image_bytes=target_img_bytes,
+                    expected_code=clean_vcode,
+                    mime_type=target_mime,
+                )
+                submission.verification_code_matched = v_res.get("code_matched")
+                submission.tampering_detected = bool(v_res.get("tampering_detected", False))
+                if submission.tampering_detected:
+                    submission.is_suspicious = True
+                    submission.flag_reason = f"🚨 Tahrirlangan (Tampering): {v_res.get('reason')}"
+                elif v_res.get("code_matched") is False and not v_res.get("is_fallback"):
+                    submission.is_suspicious = True
+                    submission.flag_reason = f"⚠️ Tekshiruv kodi mos kelmadi ({clean_vcode}): {v_res.get('reason')}"
+            except Exception as e:
+                logger.warning("Error running verification code inspection: %s", e)
 
     # Gamification calculations
     if is_new_submission:
@@ -1737,6 +1774,77 @@ async def approve_speaking_grade_route(
     await db.commit()
     await db.refresh(sub)
     return _submission_to_out(sub)
+
+
+@router.post(
+    "/{submission_id}/verify-code",
+    response_model=SubmissionOut,
+    dependencies=[Depends(require_teacher)],
+)
+async def verify_submission_code_route(
+    submission_id: uuid.UUID,
+    code: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_teacher),
+):
+    """
+    Teacher on-demand verification code and anti-tamper inspection for notebook photos.
+    """
+    sub = await _get_submission_or_404(submission_id, db)
+    target_code = (code or sub.verification_code or "").strip().upper()
+    if not target_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ushbu topshiriqda tekshiruv kodi ko'rsatilmagan.",
+        )
+
+    img_bytes = None
+    target_mime = "image/jpeg"
+
+    if sub.images and len(sub.images) > 0:
+        first_img = sub.images[0]
+        abs_p = await resolve_submission_file_async(first_img.file_path, db=db, fallback_name=first_img.file_original_name)
+        from pathlib import Path
+        p = Path(abs_p)
+        if p.exists() and p.is_file():
+            img_bytes = p.read_bytes()
+            target_mime = first_img.file_content_type or "image/jpeg"
+
+    if not img_bytes and sub.file_path and (sub.file_content_type or "").startswith("image/"):
+        abs_p = await resolve_submission_file_async(sub.file_path, db=db, fallback_name=sub.file_original_name)
+        from pathlib import Path
+        p = Path(abs_p)
+        if p.exists() and p.is_file():
+            img_bytes = p.read_bytes()
+            target_mime = sub.file_content_type or "image/jpeg"
+
+    if not img_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tekshirish uchun daftarning rasm fayli topilmadi.",
+        )
+
+    from app.services.anti_cheat import verify_handwritten_code_and_tampering
+    v_res = await verify_handwritten_code_and_tampering(
+        image_bytes=img_bytes,
+        expected_code=target_code,
+        mime_type=target_mime,
+    )
+
+    sub.verification_code = target_code
+    sub.verification_code_matched = v_res.get("code_matched")
+    sub.tampering_detected = bool(v_res.get("tampering_detected", False))
+    if sub.tampering_detected:
+        sub.is_suspicious = True
+        sub.flag_reason = f"🚨 Tahrirlangan (Tampering): {v_res.get('reason')}"
+    elif v_res.get("code_matched") is False and not v_res.get("is_fallback"):
+        sub.is_suspicious = True
+        sub.flag_reason = f"⚠️ Tekshiruv kodi mos kelmadi ({target_code}): {v_res.get('reason')}"
+
+    await db.commit()
+    await db.refresh(sub)
+    return _submission_to_out(sub)
+
 
 
 

@@ -50,8 +50,22 @@ const statusStyles: Record<string, string> = {
   pending: "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300",
 };
 
+const statusLabelsUz: Record<string, string> = {
+  submitted: "Topshirildi",
+  late: "Kechikkan",
+  graded: "Baholandi",
+  active: "Faol",
+  inactive: "Nofaol",
+  published: "Chop etilgan",
+  draft: "Qoralama",
+  pending: "Kutilmoqda",
+  archived: "Arxivlangan",
+  completed: "Tugallangan",
+};
+
 export function StatusBadge({ status }: { status: string }) {
-  return <span className={`badge ${statusStyles[status] ?? "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"}`}>{status}</span>;
+  const label = statusLabelsUz[status.toLowerCase()] ?? status;
+  return <span className={`badge ${statusStyles[status.toLowerCase()] ?? "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"}`}>{label}</span>;
 }
 
 export function Spinner({ className = "h-5 w-5" }: { className?: string }) {
@@ -752,17 +766,17 @@ export function VoiceRecorder({
     <div className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-neutral-800">🎙️ Speaking Voice Recording</span>
+          <span className="text-sm font-semibold text-neutral-800">🎙️ Nutq yozib olish (Speaking)</span>
           {recording && (
             <span className="flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-600 animate-pulse">
               <span className="h-2 w-2 rounded-full bg-red-600"></span>
-              REC {formatTimer(recordingTime)}
+              YOZILMOQDA {formatTimer(recordingTime)}
             </span>
           )}
         </div>
         {audioUrl && !recording && (
           <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-            ✓ Audio recorded
+            ✓ Audio yozib olindi
           </span>
         )}
       </div>
@@ -775,7 +789,7 @@ export function VoiceRecorder({
           className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-lg bg-white border border-neutral-300 text-sm font-medium text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 shadow-sm transition-all disabled:opacity-50"
         >
           <span>🎙️</span>
-          <span>Start Recording</span>
+          <span>Ovoz yozishni boshlash</span>
         </button>
       )}
 
@@ -787,7 +801,7 @@ export function VoiceRecorder({
             <span className="h-4 w-1 bg-red-500 rounded-full animate-bounce"></span>
             <span className="h-6 w-1 bg-red-500 rounded-full animate-bounce [animation-delay:-0.2s]"></span>
             <span className="h-3 w-1 bg-red-500 rounded-full animate-bounce [animation-delay:-0.4s]"></span>
-            <span className="ml-2 text-xs font-medium text-red-700">Recording live voice...</span>
+            <span className="ml-2 text-xs font-medium text-red-700">Ovoz yozilmoqda...</span>
           </div>
           <button
             type="button"
@@ -795,7 +809,7 @@ export function VoiceRecorder({
             className="flex items-center gap-1.5 py-2 px-4 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 shadow-sm"
           >
             <span>⏹️</span>
-            <span>Stop</span>
+            <span>To'xtatish</span>
           </button>
         </div>
       )}
@@ -808,7 +822,7 @@ export function VoiceRecorder({
             onClick={resetRecording}
             className="whitespace-nowrap text-xs font-medium text-neutral-500 hover:text-red-600 py-1.5 px-2.5 rounded hover:bg-red-50 transition-colors"
           >
-            🔄 Re-record
+            🔄 Qayta yozish
           </button>
         </div>
       )}

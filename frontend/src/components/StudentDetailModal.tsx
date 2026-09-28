@@ -318,32 +318,56 @@ export default function StudentDetailModal({
               </button>
             )}
             {/* Task Item Badges according to Master Spec */}
+            {subDetail?.verification_code && (
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono shadow-2xs ${
+                  subDetail.tampering_detected
+                    ? "bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30"
+                    : subDetail.verification_code_matched === true
+                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30"
+                    : "bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30"
+                }`}
+                title={
+                  subDetail.tampering_detected
+                    ? "Raqamli yozuv yoki tahrirlash aniqlandi"
+                    : subDetail.verification_code_matched === true
+                    ? "Daftardagi ruchka bilan yozilgan kod tasdiqlandi"
+                    : "Kod mos kelmadi yoki topilmadi"
+                }
+              >
+                {subDetail.tampering_detected
+                  ? `🚨 Tahrirlangan (${subDetail.verification_code})`
+                  : subDetail.verification_code_matched === true
+                  ? `✓ Kod tasdiqlandi (${subDetail.verification_code})`
+                  : `⚠️ Kod mos kelmadi (${subDetail.verification_code})`}
+              </span>
+            )}
             {h.is_exempted ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-mono">
-                🛡️ Exempted
+                🛡️ Ozod qilingan
               </span>
             ) : hasSubmission && isGraded ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
-                ✓ Graded ({h.score <= 10 ? h.score * 10 : h.score}%)
+                ✓ Baholandi ({h.score <= 10 ? h.score * 10 : h.score}%)
               </span>
             ) : hasSubmission && !isGraded ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
-                ✓ Submitted
+                ✓ Topshirildi
               </span>
             ) : h.is_locked ? (
               <span
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-mono"
-                title={h.lock_reason || "Locked by prerequisite"}
+                title={h.lock_reason || "Oldingi vazifa bajarilmaganligi sababli yopiq"}
               >
-                🔒 Locked
+                🔒 Qulflangan
               </span>
             ) : isPastDeadline ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60">
-                ✕ Overdue
+                ✕ Kechikkan
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
-                ⏳ Pending
+                ⏳ Kutilmoqda
               </span>
             )}
 
