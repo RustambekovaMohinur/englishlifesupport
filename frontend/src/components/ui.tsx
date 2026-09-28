@@ -50,21 +50,21 @@ const statusStyles: Record<string, string> = {
   pending: "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300",
 };
 
-const statusLabelsUz: Record<string, string> = {
-  submitted: "Topshirildi",
-  late: "Kechikkan",
-  graded: "Baholandi",
-  active: "Faol",
-  inactive: "Nofaol",
-  published: "Chop etilgan",
-  draft: "Qoralama",
-  pending: "Kutilmoqda",
-  archived: "Arxivlangan",
-  completed: "Tugallangan",
+const statusLabelsEn: Record<string, string> = {
+  submitted: "Submitted",
+  late: "Late",
+  graded: "Graded",
+  active: "Active",
+  inactive: "Inactive",
+  published: "Published",
+  draft: "Draft",
+  pending: "Pending",
+  archived: "Archived",
+  completed: "Completed",
 };
 
 export function StatusBadge({ status }: { status: string }) {
-  const label = statusLabelsUz[status.toLowerCase()] ?? status;
+  const label = statusLabelsEn[status.toLowerCase()] ?? status;
   return <span className={`badge ${statusStyles[status.toLowerCase()] ?? "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"}`}>{label}</span>;
 }
 
@@ -390,7 +390,7 @@ export function ImageLightbox({
       .catch(() => {
         setHasError(true);
         setLoading(false);
-        toast.error("Rasm yuklanmadi");
+        toast.error("Failed to load image");
       });
   };
 
@@ -398,7 +398,7 @@ export function ImageLightbox({
     e.stopPropagation();
     if (currentImage?.url) {
       downloadAuthenticatedFile(currentImage.url, currentImage.name || `scan_${currentIndex + 1}.jpg`)
-        .catch(() => toast.error("Yuklab olishda xatolik yuz berdi"));
+        .catch(() => toast.error("Failed to download file"));
     }
   };
 
@@ -491,7 +491,7 @@ export function ImageLightbox({
           <div className="absolute inset-0 flex items-center justify-center z-10">
             <div className="flex flex-col items-center gap-3 bg-black/60 backdrop-blur-md px-5 py-4 rounded-2xl border border-white/10 text-white">
               <Spinner className="h-8 w-8 text-white" />
-              <span className="text-xs text-white/80 font-medium">Rasm yuklanmoqda...</span>
+              <span className="text-xs text-white/80 font-medium">Loading image...</span>
             </div>
           </div>
         )}
@@ -516,9 +516,9 @@ export function ImageLightbox({
           <div className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-zinc-900/90 border border-zinc-700 text-white max-w-sm text-center">
             <span className="text-3xl">🖼️</span>
             <div className="space-y-1">
-              <p className="font-semibold text-sm">Rasmni to'g'ridan-to'g'ri ko'rsatib bo'lmadi</p>
+              <p className="font-semibold text-sm">Unable to display image preview</p>
               <p className="text-xs text-zinc-400">
-                Internet uzilishi yoki rasm serverda qayta yuklanayotgan bo'lishi mumkin.
+                Network interruption or the file is still being processed.
               </p>
             </div>
             <div className="flex items-center gap-2 pt-2">
@@ -527,14 +527,14 @@ export function ImageLightbox({
                 onClick={handleRetry}
                 className="px-3.5 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs font-medium transition"
               >
-                Qayta urinish
+                Retry
               </button>
               <button
                 type="button"
                 onClick={handleDownload}
                 className="px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium transition"
               >
-                Faylni yuklab olish
+                Download file
               </button>
             </div>
           </div>
@@ -690,7 +690,7 @@ export function VoiceRecorder({
 
   const startRecording = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      toast.error("Brauzeringizda ovoz yozish imkoniyati cheklangan. Audio fayl yuklashingiz mumkin.", {
+      toast.error("Microphone access is not supported by your browser. You can upload an audio file instead.", {
         id: "mic-unsupported",
       });
       return;
@@ -736,7 +736,7 @@ export function VoiceRecorder({
       setAudioUrl(null);
       setAudioBlob(null);
     } catch (err) {
-      toast.error("Mikrofon ruxsati berilmadi. Fayl sifatida .mp3/.m4a yuklashingiz mumkin.", {
+      toast.error("Microphone access denied. You can upload an .mp3/.m4a file instead.", {
         id: "mic-access-error",
       });
     }
@@ -766,17 +766,17 @@ export function VoiceRecorder({
     <div className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-neutral-800">🎙️ Nutq yozib olish (Speaking)</span>
+          <span className="text-sm font-semibold text-neutral-800">🎙️ Speaking Submission (Audio Record)</span>
           {recording && (
             <span className="flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-600 animate-pulse">
               <span className="h-2 w-2 rounded-full bg-red-600"></span>
-              YOZILMOQDA {formatTimer(recordingTime)}
+              RECORDING {formatTimer(recordingTime)}
             </span>
           )}
         </div>
         {audioUrl && !recording && (
           <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-            ✓ Audio yozib olindi
+            ✓ Audio Recorded Successfully
           </span>
         )}
       </div>
@@ -789,7 +789,7 @@ export function VoiceRecorder({
           className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-lg bg-white border border-neutral-300 text-sm font-medium text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 shadow-sm transition-all disabled:opacity-50"
         >
           <span>🎙️</span>
-          <span>Ovoz yozishni boshlash</span>
+          <span>Start Recording</span>
         </button>
       )}
 
@@ -801,7 +801,7 @@ export function VoiceRecorder({
             <span className="h-4 w-1 bg-red-500 rounded-full animate-bounce"></span>
             <span className="h-6 w-1 bg-red-500 rounded-full animate-bounce [animation-delay:-0.2s]"></span>
             <span className="h-3 w-1 bg-red-500 rounded-full animate-bounce [animation-delay:-0.4s]"></span>
-            <span className="ml-2 text-xs font-medium text-red-700">Ovoz yozilmoqda...</span>
+            <span className="ml-2 text-xs font-medium text-red-700">Recording live audio...</span>
           </div>
           <button
             type="button"
@@ -809,7 +809,7 @@ export function VoiceRecorder({
             className="flex items-center gap-1.5 py-2 px-4 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 shadow-sm"
           >
             <span>⏹️</span>
-            <span>To'xtatish</span>
+            <span>Stop</span>
           </button>
         </div>
       )}
@@ -822,7 +822,7 @@ export function VoiceRecorder({
             onClick={resetRecording}
             className="whitespace-nowrap text-xs font-medium text-neutral-500 hover:text-red-600 py-1.5 px-2.5 rounded hover:bg-red-50 transition-colors"
           >
-            🔄 Qayta yozish
+            🔄 Record Again
           </button>
         </div>
       )}

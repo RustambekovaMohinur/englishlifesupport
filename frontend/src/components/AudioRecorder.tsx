@@ -76,7 +76,7 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
 
     // Guard against unsupported environments
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      toast.error("Brauzeringizda ovoz yozish imkoniyati cheklangan. Audio fayl yuklashingiz mumkin.", {
+      toast.error("Audio recording is not supported in this browser. You can upload an audio file instead.", {
         id: 'mic-unsupported'
       });
       setMicUnavailable(true);
@@ -147,7 +147,7 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
     } catch (err: any) {
       console.error("Microphone hardware error:", err);
       // DEDUPLICATED SINGLETON TOAST: Never render multiple alerts
-      toast.error("Mikrofon ruxsati berilmadi. Fayl sifatida .mp3/.m4a yuklashingiz mumkin.", {
+      toast.error("Microphone permission not granted. You can upload an MP3/M4A file instead.", {
         id: 'mic-access-error'
       });
       setMicUnavailable(true);
@@ -188,9 +188,9 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
         <div className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs">
           <AlertCircle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5"/>
           <div className="space-y-1">
-            <p className="font-semibold">Mikrofon apparatiga ulanib bo‘lmadi</p>
+            <p className="font-semibold">Unable to connect to microphone</p>
             <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed">
-              Brauzeringiz sozlamalarida mikrofon ruxsati berilganligini tekshiring yoki ovozingizni diktofon orqali yozib, pastdagi fayl yuklash tugmasi orqali yuboring.
+              Check microphone permissions in your browser settings, or record with a voice recorder app and upload the audio file below.
             </p>
           </div>
         </div>
@@ -210,7 +210,7 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
                 {isRecording ? <Square className="w-6 h-6 fill-current"/> : <Mic className="w-7 h-7"/>}
               </button>
               <span className="text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400">
-                {isRecording ? `Yozilmoqda: ${formatTime(recordingDuration)}` : 'Yozishni boshlash'}
+                {isRecording ? `Recording: ${formatTime(recordingDuration)}` : 'Click to start recording'}
               </span>
             </div>
           ) : (
@@ -234,7 +234,7 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
                     {isPlaying ? <Pause className="w-4 h-4"/> : <Play className="w-4 h-4 fill-current"/>}
                   </button>
                   <span className="text-xs font-mono font-semibold text-zinc-800 dark:text-zinc-200">
-                    Ovozli javob tayyor ({formatTime(recordingDuration)})
+                    Voice recording ready ({formatTime(recordingDuration)})
                   </span>
                 </div>
                 <button
@@ -242,7 +242,7 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
                   onClick={resetRecording}
                   className="flex items-center gap-1 text-xs text-rose-600 dark:text-rose-400 hover:underline px-2 py-1"
                 >
-                  <RotateCcw className="w-3.5 h-3.5"/> Qaytadan yozish
+                  <RotateCcw className="w-3.5 h-3.5"/> Record again
                 </button>
                 <audio
                   ref={audioElementRef}

@@ -300,9 +300,9 @@ function FeedbackReviewCard({
       setReplies((prev) => [...prev, newReply]);
       setReplyText("");
       setShowReplies(true);
-      toast.success("Javobingiz qo'shildi!");
+      toast.success("Reply added!");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Javob yuborishda xatolik");
+      toast.error(err?.response?.data?.detail || "Failed to post reply");
     } finally {
       setIsSubmittingReply(false);
     }
@@ -424,7 +424,7 @@ function FeedbackReviewCard({
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span>
-              {replies.length > 0 ? `${replies.length} ta javob` : "Javob berish"}
+              {replies.length > 0 ? `${replies.length} ${replies.length === 1 ? "reply" : "replies"}` : "Reply"}
             </span>
           </button>
         </div>
@@ -458,18 +458,18 @@ function FeedbackReviewCard({
                         </span>
                         {isTeacher && (
                           <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-600 text-white shadow-xs shrink-0">
-                            Ustoz / O'qituvchi
+                            Teacher / Instructor
                           </span>
                         )}
                         {r.is_mine && !isTeacher && (
                           <span className="text-[9px] font-semibold px-1 rounded bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300">
-                            Siz
+                            You
                           </span>
                         )}
                       </div>
                       {r.created_at && (
                         <span className="text-[10px] text-zinc-400 font-mono shrink-0">
-                          {new Date(r.created_at).toLocaleTimeString("uz-UZ", {
+                          {new Date(r.created_at).toLocaleTimeString("en-US", {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
@@ -491,7 +491,7 @@ function FeedbackReviewCard({
               type="text"
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
-              placeholder="Fikringiz yoki javobingizni yozing..."
+              placeholder="Write your thoughts or reply..."
               className="flex-1 text-xs rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-hidden transition"
               maxLength={1000}
             />
@@ -499,7 +499,7 @@ function FeedbackReviewCard({
               type="submit"
               disabled={isSubmittingReply || !replyText.trim()}
               className="p-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-40 transition shrink-0 active:scale-95"
-              title="Yuborish"
+              title="Send reply"
             >
               {isSubmittingReply ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

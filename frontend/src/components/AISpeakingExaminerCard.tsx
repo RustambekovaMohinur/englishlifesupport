@@ -89,7 +89,7 @@ export function AISpeakingExaminerCard({
     if (!evalData?.transcript) return;
     navigator.clipboard.writeText(evalData.transcript);
     setIsCopied(true);
-    toast.success("Transkript nusxalandi!");
+    toast.success("Transcript copied!");
     setTimeout(() => setIsCopied(false), 2000);
   };
 
@@ -97,12 +97,12 @@ export function AISpeakingExaminerCard({
     setIsEvaluating(true);
     try {
       const updated = await evaluateSubmissionSpeakingAI(submission.id);
-      toast.success("AI Speaking Examiner audio tahlilini yakunladi! 🎙️✨");
+      toast.success("AI Speaking Examiner analysis complete! 🎙️✨");
       if (onSubmissionUpdated) {
         onSubmissionUpdated(updated);
       }
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "AI Speaking tahlilida xatolik yuz berdi");
+      toast.error(err?.response?.data?.detail ?? "Failed to run AI Speaking evaluation");
     } finally {
       setIsEvaluating(false);
     }
@@ -112,7 +112,7 @@ export function AISpeakingExaminerCard({
     setIsApproving(true);
     try {
       const updated = await approveSpeakingGrade(submission.id);
-      toast.success("Speaking bahosi va hisoboti 1-bosishda tasdiqlandi! 🚀⭐");
+      toast.success("Speaking grade and feedback approved! 🚀⭐");
       if (onSubmissionUpdated) {
         onSubmissionUpdated(updated);
       }
@@ -120,7 +120,7 @@ export function AISpeakingExaminerCard({
         onApproveSuccess(updated);
       }
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "Bahoni tasdiqlashda xatolik yuz berdi");
+      toast.error(err?.response?.data?.detail ?? "Failed to approve grade");
     } finally {
       setIsApproving(false);
     }
@@ -131,11 +131,11 @@ export function AISpeakingExaminerCard({
     const scoreVal = Math.max(0, Math.min(10, Math.round(evalData.suggested_score / 10)));
     const feedbackText = `🎙️ [AI Speaking Examiner - Band ${evalData.band} (${evalData.suggested_score}/100, ${evalData.wpm} WPM - ${evalData.fluency_status})]\n${evalData.summary}${
       evalData.pronunciation_and_vocab_tips?.length
-        ? `\n\nTalaffuz va so'z boyligi bo'yicha maslahatlar:\n${evalData.pronunciation_and_vocab_tips.map((t) => `• ${t}`).join("\n")}`
+        ? `\n\nPronunciation & vocabulary recommendations:\n${evalData.pronunciation_and_vocab_tips.map((t) => `• ${t}`).join("\n")}`
         : ""
     }`;
     onPreFillGrade(scoreVal, feedbackText);
-    toast.success("Ball va tavsiyalar forma maydonlariga joylandi!");
+    toast.success("Score and feedback applied to grading form!");
   };
 
   // Helper formatting for duration (mm:ss)
@@ -175,7 +175,7 @@ export function AISpeakingExaminerCard({
               </span>
             </h4>
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
-              Ovozli javob transkripsiyasi, WPM tezligi va IELTS rubrikalari
+              Audio transcription, speech rate (WPM), and IELTS speaking rubrics
             </p>
           </div>
         </div>
@@ -198,10 +198,10 @@ export function AISpeakingExaminerCard({
             <RefreshCw className={`w-3.5 h-3.5 ${isEvaluating ? "animate-spin" : ""}`} />
             <span>
               {isEvaluating
-                ? "Tahlil qilinmoqda..."
+                ? "Analyzing..."
                 : evalData
-                ? "Qayta tahlil"
-                : "🎙️ Tahlilni Boshlash"}
+                ? "Re-analyze"
+                : "🎙️ Run AI Analysis"}
             </span>
           </button>
         </div>
@@ -212,7 +212,7 @@ export function AISpeakingExaminerCard({
         <div className="flex items-center justify-between text-xs font-medium text-zinc-700 dark:text-zinc-300">
           <span className="flex items-center gap-1.5 font-bold">
             <Volume2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <span>O'quvchi audio yozuvi</span>
+            <span>Student Audio Recording</span>
           </span>
           {submission.file_original_name && (
             <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono truncate max-w-[200px]">
@@ -223,7 +223,7 @@ export function AISpeakingExaminerCard({
         {submission.file_url ? (
           <AuthenticatedAudio url={submission.file_url} className="w-full" />
         ) : (
-          <p className="text-xs text-zinc-500 italic">Audio fayl manzili topilmadi.</p>
+          <p className="text-xs text-zinc-500 italic">Audio file URL not found.</p>
         )}
       </div>
 
@@ -233,11 +233,11 @@ export function AISpeakingExaminerCard({
           <div className="p-3.5 rounded-xl bg-indigo-500/10 dark:bg-indigo-950/40 border border-indigo-500/30 flex flex-wrap items-center justify-between gap-3">
             <div>
               <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200 block">
-                ✨ 1-Click Tasdiqlash: {Math.round(evalData.suggested_score / 10)}/10 ball (+
+                ✨ 1-Click Approval: {Math.round(evalData.suggested_score / 10)}/10 pts (+
                 {Math.round(evalData.suggested_score / 10)} ⭐)
               </span>
               <span className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80">
-                Tavsiya etilgan ball, Band {evalData.band} va tahlil hisobotini bir bosishda saqlang.
+                Apply suggested score, Band {evalData.band}, and evaluation report directly in one click.
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -247,7 +247,7 @@ export function AISpeakingExaminerCard({
                   onClick={handlePreFill}
                   className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 transition active:scale-95 shadow-2xs cursor-pointer"
                 >
-                  📝 Formaga joylash
+                  📝 Fill in Form
                 </button>
               )}
               <button
@@ -257,7 +257,7 @@ export function AISpeakingExaminerCard({
                 className="px-4 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition active:scale-95 shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>{isApproving ? "Saqlanmoqda..." : "Approve Speaking Grade (1-Click)"}</span>
+                <span>{isApproving ? "Saving..." : "Approve Speaking Grade (1-Click)"}</span>
               </button>
             </div>
           </div>
@@ -266,7 +266,7 @@ export function AISpeakingExaminerCard({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 space-y-1">
               <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                <Clock className="w-3 h-3 text-indigo-500" /> Davomiylik
+                <Clock className="w-3 h-3 text-indigo-500" /> Duration
               </span>
               <p className="text-sm font-bold font-mono text-zinc-900 dark:text-white">
                 {formatDuration(evalData.duration_seconds)} ({evalData.duration_seconds}s)
@@ -275,16 +275,16 @@ export function AISpeakingExaminerCard({
 
             <div className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 space-y-1">
               <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                <FileText className="w-3 h-3 text-purple-500" /> So'zlar soni
+                <FileText className="w-3 h-3 text-purple-500" /> Word Count
               </span>
               <p className="text-sm font-bold font-mono text-zinc-900 dark:text-white">
-                {evalData.words_count} ta so'z
+                {evalData.words_count} words
               </p>
             </div>
 
             <div className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 space-y-1">
               <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                <Activity className="w-3 h-3 text-emerald-500" /> Tezlik (WPM)
+                <Activity className="w-3 h-3 text-emerald-500" /> Speech Rate (WPM)
               </span>
               <div className="flex items-center gap-1.5">
                 <span className="text-sm font-bold font-mono text-zinc-900 dark:text-white">
@@ -303,7 +303,7 @@ export function AISpeakingExaminerCard({
 
             <div className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 space-y-1">
               <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                <Award className="w-3 h-3 text-amber-500" /> Ravonlik darajasi
+                <Award className="w-3 h-3 text-amber-500" /> Fluency Level
               </span>
               <p className="text-xs font-bold text-zinc-900 dark:text-white truncate" title={evalData.fluency_status}>
                 {evalData.fluency_status}
@@ -322,7 +322,7 @@ export function AISpeakingExaminerCard({
                   : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
               }`}
             >
-              📝 Transkript (STT)
+              📝 Transcript (STT)
             </button>
             <button
               type="button"
@@ -333,7 +333,7 @@ export function AISpeakingExaminerCard({
                   : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
               }`}
             >
-              🔍 Grammatika ({evalData.grammar_corrections?.length || 0})
+              🔍 Grammar ({evalData.grammar_corrections?.length || 0})
             </button>
             <button
               type="button"
@@ -344,7 +344,7 @@ export function AISpeakingExaminerCard({
                   : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
               }`}
             >
-              💡 Talaffuz va Leksika ({evalData.pronunciation_and_vocab_tips?.length || 0})
+              💡 Pronunciation & Lexis ({evalData.pronunciation_and_vocab_tips?.length || 0})
             </button>
           </div>
 
@@ -354,7 +354,7 @@ export function AISpeakingExaminerCard({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Speech-to-Text Transkripsiyasi</span>
+                  <span>Speech-to-Text Transcript</span>
                 </span>
                 <button
                   type="button"
@@ -362,21 +362,21 @@ export function AISpeakingExaminerCard({
                   className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                 >
                   {isCopied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                  <span>{isCopied ? "Nusxalandi" : "Nusxalash"}</span>
+                  <span>{isCopied ? "Copied" : "Copy"}</span>
                 </button>
               </div>
               <div className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-100 dark:border-zinc-800 text-xs sm:text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap select-text font-serif">
                 {evalData.transcript ? (
                   `"${evalData.transcript}"`
                 ) : (
-                  <span className="text-zinc-400 italic">Transkript mavjud emas.</span>
+                  <span className="text-zinc-400 italic">No transcript available.</span>
                 )}
               </div>
               {evalData.summary && (
                 <div className="pt-2 text-[11px] text-zinc-600 dark:text-zinc-400 border-t border-zinc-100 dark:border-zinc-800 flex items-start gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                   <span>
-                    <strong>Ekspert xulosasi:</strong> {evalData.summary}
+                    <strong>Expert Evaluation:</strong> {evalData.summary}
                   </span>
                 </div>
               )}
@@ -388,7 +388,7 @@ export function AISpeakingExaminerCard({
               <div className="px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200/80 dark:border-zinc-800">
                 <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Nutqdagi grammatik xatolar va tuzatishlar</span>
+                  <span>Spoken Grammar Corrections & Feedback</span>
                 </span>
               </div>
               {evalData.grammar_corrections && evalData.grammar_corrections.length > 0 ? (
@@ -414,7 +414,7 @@ export function AISpeakingExaminerCard({
                 </div>
               ) : (
                 <div className="p-4 text-xs text-zinc-500 italic text-center">
-                  Ovozli nutqda qo'pol grammatik xatolar qayd etilmadi. 👍
+                  No major grammatical errors detected in speech. 👍
                 </div>
               )}
             </div>
@@ -425,7 +425,7 @@ export function AISpeakingExaminerCard({
               <div className="px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200/80 dark:border-zinc-800">
                 <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                   <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Talaffuz, intonatsiya va leksika bo'yicha maslahatlar</span>
+                  <span>Pronunciation, intonation, and lexical recommendations</span>
                 </span>
               </div>
               {evalData.pronunciation_and_vocab_tips && evalData.pronunciation_and_vocab_tips.length > 0 ? (
@@ -439,7 +439,7 @@ export function AISpeakingExaminerCard({
                 </div>
               ) : (
                 <div className="p-4 text-xs text-zinc-500 italic text-center">
-                  Talaffuz bo'yicha maxsus eslatmalar mavjud emas.
+                  No specific pronunciation notes provided.
                 </div>
               )}
             </div>
@@ -450,10 +450,10 @@ export function AISpeakingExaminerCard({
         <div className="p-4 rounded-xl bg-white dark:bg-zinc-900 border border-dashed border-indigo-300 dark:border-indigo-800/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="space-y-0.5 text-center sm:text-left">
             <span className="font-bold text-zinc-900 dark:text-white block">
-              Audio hali AI Speaking Examiner tomonidan tahlil qilinmagan
+              Audio has not been evaluated by AI Speaking Examiner yet
             </span>
             <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-              Ovozni avtomatlashtirilgan STT transkripsiya qilish, ravonlik (WPM) va IELTS Speaking rubrikasi bilan baholash uchun boshlang.
+              Start automated speech-to-text transcription, fluency calculation (WPM), and IELTS Speaking rubric evaluation.
             </span>
           </div>
           <button
@@ -463,7 +463,7 @@ export function AISpeakingExaminerCard({
             className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition active:scale-95 shadow-xs flex items-center gap-1.5 shrink-0 disabled:opacity-50 cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>{isEvaluating ? "Tahlil qilinmoqda..." : "AI Tahlilni Boshlash"}</span>
+            <span>{isEvaluating ? "Analyzing..." : "Run AI Analysis"}</span>
           </button>
         </div>
       )}

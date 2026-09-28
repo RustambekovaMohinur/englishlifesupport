@@ -67,20 +67,20 @@ export default function StudentProfilePage() {
     if (!parentLink?.telegram_link) return;
     navigator.clipboard.writeText(parentLink.telegram_link);
     setIsCopied(true);
-    toast.success("Havola nusxalandi!");
+    toast.success("Link copied to clipboard!");
     setTimeout(() => setIsCopied(false), 2500);
   };
 
   const handleUnlinkParent = async () => {
-    if (!window.confirm("Ota-onangiz hisobini Telegram botdan uzmoqchimisiz?")) return;
+    if (!window.confirm("Are you sure you want to disconnect parent Telegram notifications?")) return;
     setIsUnlinking(true);
     try {
       await unlinkParent();
-      toast.success("Ota-ona Telegram boti muvaffaqiyatli uzildi");
+      toast.success("Parent Telegram bot disconnected successfully");
       const updated = await getParentLinkInfo();
       setParentLink(updated);
     } catch {
-      toast.error("Uzishda xatolik yuz berdi");
+      toast.error("Failed to disconnect parent bot");
     } finally {
       setIsUnlinking(false);
     }
@@ -337,21 +337,21 @@ export default function StudentProfilePage() {
               <div className="flex items-center gap-2">
                 <p className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
                   <span>👨‍👩‍👧</span>
-                  <span>Ota-ona bildirishnomalari (Telegram Bot)</span>
+                  <span>Parent Notifications (Telegram Bot)</span>
                 </p>
                 {parentLink?.is_parent_linked ? (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Ulangan</span>
+                    <span>Connected</span>
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
-                    Ulanmagan
+                    Not Connected
                   </span>
                 )}
               </div>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
-                Har bir topshiriq muddati (deadline) tugashi bilan ota-onangizga dars natijalari va yulduzlaringiz haqida avtomatik hisobot boradi.
+                Upon assignment deadlines, automated progress reports and star digests are sent directly to your parents.
               </p>
             </div>
 
@@ -362,7 +362,7 @@ export default function StudentProfilePage() {
                 disabled={isUnlinking}
                 className="self-start sm:self-auto px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 transition active:scale-95 cursor-pointer"
               >
-                {isUnlinking ? "Uzilmoqda..." : "Ajratish (Unlink)"}
+                {isUnlinking ? "Disconnecting..." : "Disconnect (Unlink)"}
               </button>
             )}
           </div>
@@ -372,7 +372,7 @@ export default function StudentProfilePage() {
               <div className="space-y-1 text-xs">
                 <p className="font-semibold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
                   <UserCheck className="w-4 h-4 text-emerald-600" />
-                  <span>Biriktirilgan ota-ona: <strong>{parentLink.parent_name || `@${parentLink.parent_telegram_username}` || "Telegram Foydalanuvchi"}</strong></span>
+                  <span>Connected Parent: <strong>{parentLink.parent_name || `@${parentLink.parent_telegram_username}` || "Telegram User"}</strong></span>
                   {parentLink.parent_telegram_username && (
                     <span className="font-mono text-emerald-700 dark:text-emerald-400 font-normal">
                       (@{parentLink.parent_telegram_username})
@@ -380,8 +380,8 @@ export default function StudentProfilePage() {
                   )}
                 </p>
                 <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                  {parentLink.parent_linked_at ? `Ulanilgan sana: ${new Date(parentLink.parent_linked_at).toLocaleDateString()}` : "Avtomatik hisobotlar yoqilgan"}
-                  {parentLink.last_parent_digest_sent_at && ` · Oxirgi hisobot: ${new Date(parentLink.last_parent_digest_sent_at).toLocaleDateString()}`}
+                  {parentLink.parent_linked_at ? `Connected on: ${new Date(parentLink.parent_linked_at).toLocaleDateString()}` : "Automated digests active"}
+                  {parentLink.last_parent_digest_sent_at && ` · Last report: ${new Date(parentLink.last_parent_digest_sent_at).toLocaleDateString()}`}
                 </p>
               </div>
 
@@ -392,7 +392,7 @@ export default function StudentProfilePage() {
                   className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition flex items-center gap-1.5 cursor-pointer"
                 >
                   {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{isCopied ? "Nusxalandi" : "Ulanish havolasi"}</span>
+                  <span>{isCopied ? "Copied" : "Invite Link"}</span>
                 </button>
               </div>
             </div>
@@ -401,10 +401,10 @@ export default function StudentProfilePage() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="space-y-1">
                   <p className="text-xs font-semibold text-indigo-950 dark:text-indigo-200">
-                    Ota-onangizni bir marta ulab qo'ying:
+                    Connect your parents in one step:
                   </p>
                   <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl">
-                    Ota-onangiz quyidagi havola orqali botga kirib <strong>Start</strong> tugmasini bossa bo'lgani, tizim ularni profilingizga avtomatik biriktiradi.
+                    Your parents simply open the link below and tap <strong>Start</strong> to link their account to your profile.
                   </p>
                 </div>
 
@@ -417,7 +417,7 @@ export default function StudentProfilePage() {
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#2AABEE] hover:bg-[#229ED9] text-white font-semibold text-xs transition active:scale-95 shadow-xs"
                     >
                       <Send className="w-3.5 h-3.5 fill-current" />
-                      <span>Telegram Botga Ulash</span>
+                      <span>Connect Telegram Bot</span>
                       <ExternalLink className="w-3 h-3 opacity-70" />
                     </a>
                   )}
@@ -428,7 +428,7 @@ export default function StudentProfilePage() {
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-semibold text-xs border border-zinc-200 dark:border-zinc-700 transition active:scale-95 shadow-2xs cursor-pointer"
                   >
                     {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{isCopied ? "Nusxalandi!" : "Havolani nusxalash"}</span>
+                    <span>{isCopied ? "Copied!" : "Copy Link"}</span>
                   </button>
 
                   <button
@@ -437,7 +437,7 @@ export default function StudentProfilePage() {
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-semibold text-xs border border-zinc-200 dark:border-zinc-700 transition active:scale-95 shadow-2xs cursor-pointer"
                   >
                     <QrCode className="w-3.5 h-3.5 text-brand-600" />
-                    <span>{showQR ? "QR Kodni yopish" : "QR Kod"}</span>
+                    <span>{showQR ? "Hide QR" : "QR Code"}</span>
                   </button>
                 </div>
               </div>
@@ -454,10 +454,10 @@ export default function StudentProfilePage() {
                   </div>
                   <div className="text-xs text-zinc-600 dark:text-zinc-300 space-y-1 text-center sm:text-left">
                     <p className="font-bold text-zinc-800 dark:text-zinc-100">
-                      Ota-ona telefoni orqali skanerlang
+                      Scan with parent's phone
                     </p>
                     <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                      Ota-onangiz telefon kamerasi orqali ushbu QR kodni ko'rsatib, to'g'ridan-to'g'ri Telegram botga ulanishlari mumkin.
+                      Parents can scan this QR code with their phone camera to open and connect the Telegram bot directly.
                     </p>
                     <p className="font-mono text-[10px] text-zinc-400 break-all pt-1 select-all">
                       {parentLink.telegram_link}

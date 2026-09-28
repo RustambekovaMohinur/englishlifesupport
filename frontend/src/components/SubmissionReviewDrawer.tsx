@@ -48,27 +48,6 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isRetryingAI, setIsRetryingAI] = useState(false);
-  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
-
-  async function handleVerifyCode() {
-    if (!submission) return;
-    setIsVerifyingCode(true);
-    try {
-      const updated = await verifySubmissionCode(submission.id, submission.verification_code || undefined);
-      setSubmission(updated);
-      if (updated.tampering_detected) {
-        toast.error("🚨 Tahrirlangan yoki raqamli yozuv aniqlandi!");
-      } else if (updated.verification_code_matched) {
-        toast.success("✓ Daftardagi qo'lda yozilgan kod muvaffaqiyatli tasdiqlandi!");
-      } else {
-        toast("⚠️ Kod rasmda topilmadi yoki mos kelmadi.", { icon: "⚠️" });
-      }
-    } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Kodni tekshirishda xatolik");
-    } finally {
-      setIsVerifyingCode(false);
-    }
-  }
 
   async function handleTriggerAI() {
     if (!submission) return;
@@ -189,17 +168,17 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
           <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 sticky top-0 z-10">
             <div className="min-w-0 pr-4">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                Vazifani ko'rib chiqish
+                Submission Review
               </span>
               <h2 className="text-lg font-bold text-zinc-900 dark:text-white truncate mt-0.5">
-                {submission ? submission.assignment_title : "Yuklanmoqda..."}
+                {submission ? submission.assignment_title : "Loading..."}
               </h2>
             </div>
             <button
               type="button"
               onClick={onClose}
               className="p-2 min-h-[44px] min-w-[44px] rounded-xl text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition active:scale-95 flex items-center justify-center"
-              aria-label="Yopish"
+              aria-label="Close"
             >
               <X className="w-5 h-5" />
             </button>
@@ -214,7 +193,7 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
               <div className="flex flex-col items-center justify-center h-64 space-y-3">
                 <Spinner className="w-8 h-8 text-indigo-600" />
                 <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  O'quvchi topshirig'i yuklanmoqda...
+                  Loading student submission...
                 </p>
               </div>
             ) : (
@@ -230,7 +209,7 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                         {submission.student_name}
                       </p>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
-                        Topshirildi: {format(new Date(submission.submitted_at), "MMM d, yyyy · HH:mm")}
+                        Submitted: {format(new Date(submission.submitted_at), "MMM d, yyyy · HH:mm")}
                       </p>
                     </div>
                   </div>
@@ -239,63 +218,17 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                   </div>
                 </div>
 
-                {/* Handwritten Proof-of-Work Verification Code Banner */}
-                {submission.verification_code && (
-                  <div className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs ${
-                    submission.tampering_detected
-                      ? "bg-rose-500/10 dark:bg-rose-950/30 border-rose-500/30 text-rose-900 dark:text-rose-200"
-                      : submission.verification_code_matched === true
-                      ? "bg-emerald-500/10 dark:bg-emerald-950/30 border-emerald-500/30 text-emerald-900 dark:text-emerald-200"
-                      : "bg-amber-500/10 dark:bg-amber-950/30 border-amber-500/30 text-amber-900 dark:text-amber-200"
-                  }`}>
-                    <div className="flex items-start sm:items-center gap-2.5">
-                      <span className="text-lg shrink-0">
-                        {submission.tampering_detected ? "🚨" : submission.verification_code_matched === true ? "✅" : "⚠️"}
-                      </span>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold">
-                            {submission.tampering_detected
-                              ? "Tahrirlangan / Raqamli yozuv aniqlandi!"
-                              : submission.verification_code_matched === true
-                              ? "Daftardagi ruchka bilan yozilgan kod tasdiqlandi"
-                              : "Daftarda kod topilmadi yoki mos kelmadi"}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full font-mono text-[11px] font-bold bg-white/80 dark:bg-zinc-800/80 border border-current">
-                            {submission.verification_code}
-                          </span>
-                        </div>
-                        <p className="text-[11px] opacity-80 mt-0.5">
-                          {submission.tampering_detected
-                            ? "Rasm telefonda chizilgan yoki foto-muharrir orqali raqamli o'zgartirilgan deb topildi."
-                            : submission.verification_code_matched === true
-                            ? "O'quvchi topshiriqni haqiqatan bugun daftarga yozib bajarganligi OCR tahlilida tasdiqlandi."
-                            : "Daftar varag'ining yuqorisida sana va ushbu kod ruchka bilan yozilganligini ko'zdan kechiring."}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleVerifyCode}
-                      disabled={isVerifyingCode}
-                      className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 shadow-2xs transition active:scale-95 shrink-0 self-end sm:self-center"
-                    >
-                      {isVerifyingCode ? "Tekshirilmoqda..." : "🔍 Qayta tekshirish"}
-                    </button>
-                  </div>
-                )}
-
                 {/* Submission Integrity Shield Warning Banner */}
                 {submission.tab_switch_count !== undefined && submission.tab_switch_count > 0 && (
                   <div className="p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/30 flex items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
                       <span className="text-base shrink-0">⚠️</span>
                       <p className="font-semibold">
-                        O'quvchi topshiriq yozishda boshqa oynaga {submission.tab_switch_count} marta o'tgan
+                        Academic Honesty: Student switched tabs {submission.tab_switch_count} times while writing
                       </p>
                     </div>
                     <span className="px-2.5 py-0.5 rounded-full font-bold bg-amber-200/80 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-mono text-[11px] shrink-0">
-                      {submission.tab_switch_count}x chiqish
+                      {submission.tab_switch_count}x switches
                     </span>
                   </div>
                 )}
@@ -304,7 +237,7 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                 <div className="space-y-4">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
                     <FileText className="w-4 h-4 text-indigo-500" />
-                    <span>Topshirilgan ishlar</span>
+                    <span>Submitted Attachments & Work</span>
                   </h3>
 
                   {/* Vocabulary / New Words Mastery Task */}
@@ -313,7 +246,7 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
                           <BookOpen className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                          <span>Yangi so'zlar bo'yicha mashq</span>
+                          <span>Vocabulary & New Words Practice</span>
                         </span>
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 border border-purple-300 dark:border-purple-700 font-mono">
                           New Words: {submission.vocab_attempt.percentage}%
@@ -487,11 +420,11 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                   <div className="flex items-center justify-between border-b border-indigo-100 dark:border-indigo-900/40 pb-2.5">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
                       <Award className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                      <span>O'qituvchi bahosi</span>
+                      <span>Teacher Evaluation</span>
                     </h3>
                     {submission.grade && (
                       <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                        Oldin baholangan
+                        Previously Graded
                       </span>
                     )}
                   </div>
@@ -499,7 +432,7 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="label text-xs text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
-                        <span>Ball (0 – 10) *</span>
+                        <span>Score (0 – 10) *</span>
                         <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
                           {score}/10
                         </span>
@@ -517,7 +450,7 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                     </div>
                     <div>
                       <label className="label text-xs text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
-                        <span>Mukofot yulduzlari *</span>
+                        <span>Star Rewards *</span>
                         <span className="font-mono font-bold text-amber-500">
                           +{stars} ⭐
                         </span>
@@ -537,13 +470,13 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
 
                   <div>
                     <label className="label text-xs text-zinc-700 dark:text-zinc-300">
-                      O'qituvchi xulosasi va tavsiyalari
+                      Teacher Feedback & Recommendations
                     </label>
                     <textarea
                       rows={3}
                       value={feedback}
                       onChange={(e) => setFeedback(e.target.value)}
-                      placeholder="Masalan: Ajoyib nutq va ravonlik! O'tgan zamon fe'llariga e'tibor bering."
+                      placeholder="e.g. Great speaking fluency! Pay close attention to past tense verb endings."
                       className="input text-xs resize-none"
                     />
                   </div>
@@ -554,7 +487,7 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                       onClick={onClose}
                       className="btn-secondary text-xs px-4 py-2.5 min-h-[44px] flex items-center justify-center"
                     >
-                      Bekor qilish
+                      Cancel
                     </button>
                     <button
                       type="submit"
@@ -564,12 +497,12 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                       {isSubmitting ? (
                         <>
                           <Spinner className="w-3.5 h-3.5" />
-                          <span>Saqlanmoqda...</span>
+                          <span>Saving...</span>
                         </>
                       ) : (
                         <>
                           <CheckCircle2 className="w-4 h-4" />
-                          <span>Bahoni saqlash</span>
+                          <span>Save Grade</span>
                         </>
                       )}
                     </button>

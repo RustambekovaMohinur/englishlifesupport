@@ -256,20 +256,20 @@ export default function AssignmentsPage() {
       setAssignmentImages((prev) => {
         const remainingSlots = 10 - prev.length;
         if (remainingSlots <= 0) {
-          toast.error("Maksimal 10 ta rasm yuklash mumkin");
+          toast.error("Maximum 10 images can be attached");
           return prev;
         }
         const toAdd = processedPhotos.slice(0, remainingSlots);
         if (processedPhotos.length > remainingSlots) {
-          toast.error(`Faqat ${remainingSlots} ta rasm qo'shildi (maksimal 10 ta)`);
+          toast.error(`Only ${remainingSlots} images were added (max 10)`);
         } else {
-          toast.success(`${toAdd.length} ta rasm tayyorlandi 📸`);
+          toast.success(`${toAdd.length} images prepared 📸`);
         }
         return [...prev, ...toAdd];
       });
     } catch (err) {
       console.error("Image attachment error:", err);
-      toast.error("Rasmlarni biriktirishda xatolik yuz berdi.");
+      toast.error("Failed to attach images.");
     } finally {
       setIsCompressingImages(false);
       // Reset input value so the same file can be re-selected if needed
@@ -826,9 +826,9 @@ export default function AssignmentsPage() {
                 >
                   <span className="text-2xl mb-1">{isCompressingImages ? "⏳" : "📸"}</span>
                   <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                    {isCompressingImages ? "Rasmlar siqilmoqda va tayyorlanmoqda..." : "Click to upload images"}
+                    {isCompressingImages ? "Compressing and preparing images..." : "Click to upload images"}
                   </span>
-                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">JPG, PNG, WEBP, HEIC (avtomatik siqiladi)</span>
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">JPG, PNG, WEBP, HEIC (automatically compressed)</span>
                 </button>
               </div>
             )}

@@ -104,7 +104,7 @@ export default function StudentDashboardPage() {
     setError(null);
     getStudentDashboard()
       .then(setData)
-      .catch(() => setError("Bosh sahifani yuklashda xatolik yuz berdi."))
+      .catch(() => setError("Failed to load dashboard."))
       .finally(() => setIsLoading(false));
 
     getGamificationSummary().then(setGamify).catch(() => null);
