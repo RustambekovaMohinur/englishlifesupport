@@ -42,7 +42,35 @@ from app.schemas.wordlist import WordDetailPreview
 
 logger = logging.getLogger(__name__)
 
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash").strip()
+
+def get_clean_gemini_model(raw_name: str | None = None) -> str:
+    """
+    Cleans model name by stripping redundant 'models/' prefix, quotes, and whitespace.
+    Prevents 404 errors caused by '/models/models/gemini-1.5-flash'.
+    """
+    val = (raw_name or os.environ.get("GEMINI_MODEL") or "gemini-1.5-flash").strip().strip('"\'')
+    while val.startswith("models/") or val.startswith("/models/"):
+        if val.startswith("models/"):
+            val = val[len("models/"):]
+        elif val.startswith("/models/"):
+            val = val[len("/models/"):]
+        val = val.strip()
+    return val or "gemini-1.5-flash"
+
+
+def get_gemini_candidate_models(primary_name: str | None = None) -> list[str]:
+    """
+    Returns ordered candidate model identifiers to try in case of 404 or unsupported endpoints.
+    """
+    primary = get_clean_gemini_model(primary_name)
+    candidates = [primary]
+    for fallback in ["gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"]:
+        if fallback not in candidates:
+            candidates.append(fallback)
+    return candidates
+
+
+GEMINI_MODEL = get_clean_gemini_model()
 
 VALID_POS_SET = {"noun", "verb", "adjective", "adverb", "idiom", "phrasal_verb"}
 
@@ -119,18 +147,29 @@ async def run_prompt(prompt: str) -> dict | None:
         logger.info("GEMINI_API_KEY not configured. Skipping AI call.")
         return None
 
-    endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+    candidate_models = get_gemini_candidate_models()
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2},
     }
+    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(endpoint_url, headers=headers, json=payload)
-        if resp.status_code != 200:
-            logger.warning("Gemini AI service returned non-200 status code: %s", resp.status_code)
-            return None
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = None
+            for model in candidate_models:
+                endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+                resp = await client.post(endpoint_url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    break
+                elif resp.status_code in {400, 404} and ("not found" in resp.text.lower() or "not supported" in resp.text.lower()):
+                    continue
+                else:
+                    break
+
+            if not resp or resp.status_code != 200:
+                logger.warning("Gemini AI service returned non-200 status code: %s", resp.status_code if resp else "None")
+                return None
         data = resp.json()
         candidates = data.get("candidates", [])
         if not candidates:
@@ -208,8 +247,7 @@ async def enrich_vocabulary_list(raw_words: list[str | dict]) -> list[dict] | No
         '["word", "part_of_speech", "phonetic", "definition", "example", "audio_us_url"]'
     )
 
-    # Use secure header authentication so API key is NEVER present in the URL query string
-    endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+    candidate_models = get_gemini_candidate_models()
     headers = {
         "x-goog-api-key": api_key,
         "Content-Type": "application/json",
@@ -227,10 +265,20 @@ async def enrich_vocabulary_list(raw_words: list[str | dict]) -> list[dict] | No
     }
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(endpoint_url, headers=headers, json=payload)
-            if resp.status_code != 200:
-                logger.warning("Gemini AI service returned non-200 status code: %s", resp.status_code)
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = None
+            for model in candidate_models:
+                endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+                resp = await client.post(endpoint_url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    break
+                elif resp.status_code in {400, 404} and ("not found" in resp.text.lower() or "not supported" in resp.text.lower()):
+                    continue
+                else:
+                    break
+
+            if not resp or resp.status_code != 200:
+                logger.warning("Gemini AI service returned non-200 status code: %s", resp.status_code if resp else "None")
                 return None
 
             data = resp.json()
@@ -418,7 +466,7 @@ async def ai_parse_wordlist_multiformat(
             "text": f"{prompt}\n\nINPUT CONTENT TO PARSE:\n\"\"\"\n{extracted_text[:40000]}\n\"\"\""
         })
 
-    endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+    candidate_models = get_gemini_candidate_models()
     headers = {
         "x-goog-api-key": api_key,
         "Content-Type": "application/json",
@@ -431,13 +479,35 @@ async def ai_parse_wordlist_multiformat(
         },
     }
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post(endpoint_url, headers=headers, json=payload)
+    resp = None
+    last_error_detail = ""
 
-    if resp.status_code != 200:
-        err_detail = resp.text[:400]
-        logger.error("Gemini API error (HTTP %d): %s", resp.status_code, err_detail)
-        raise RuntimeError(f"Gemini AI error (HTTP {resp.status_code}): {err_detail}")
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for model in candidate_models:
+            endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            try:
+                resp = await client.post(endpoint_url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    logger.info("Gemini AI wordlist parsing succeeded using model '%s'.", model)
+                    break
+                elif resp.status_code in {400, 404} and ("not found" in resp.text.lower() or "not supported" in resp.text.lower()):
+                    logger.warning("Gemini model '%s' returned HTTP %d (%s); attempting fallback model...", model, resp.status_code, resp.text[:120])
+                    last_error_detail = resp.text[:300]
+                    continue
+                else:
+                    last_error_detail = resp.text[:300]
+                    logger.warning("Gemini request returned HTTP %d for model '%s': %s", resp.status_code, model, last_error_detail)
+                    if resp.status_code in {401, 403, 429}:
+                        break
+            except Exception as req_err:
+                logger.warning("Error posting to Gemini with model '%s': %s", model, req_err)
+                last_error_detail = str(req_err)
+                continue
+
+    if not resp or resp.status_code != 200:
+        err_msg = last_error_detail or (f"HTTP {resp.status_code}" if resp else "No response")
+        logger.error("Gemini API call failed across all candidate models: %s", err_msg)
+        raise RuntimeError(f"Gemini AI error: {err_msg}")
 
     data = resp.json()
     candidates = data.get("candidates", [])
