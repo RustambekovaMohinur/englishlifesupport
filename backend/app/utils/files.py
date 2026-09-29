@@ -729,6 +729,13 @@ async def process_submission_file_concurrent(
                 )
             out_file.write(chunk)
 
+    if total_size == 0:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty (0 KB). Please re-record or choose a valid file.",
+        )
+
     relative_path = str(destination.relative_to(get_upload_root())).replace("\\", "/")
     original_name = Path(file.filename or "upload").name
     data = destination.read_bytes()

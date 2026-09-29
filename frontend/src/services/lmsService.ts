@@ -243,7 +243,7 @@ export const submitHomework = (
   text_answer?: string | null,
   file?: File | null,
   images?: File[],
-  voice_file?: File | null,
+  voice_file?: File | Blob | null,
   doc_file?: File | null,
   storage_url?: string | null,
   file_original_name?: string | null,
@@ -277,11 +277,19 @@ export const submitHomework = (
   }
 
   // Audio: send "audio_file", "voice_file", and "audio"
-  const audioBlobOrFile = voice_file || (file && (file.type.startsWith("audio/") || /\.(mp3|wav|ogg|webm|m4a)$/i.test(file.name)) ? file : null);
-  if (!storage_url && audioBlobOrFile && audioBlobOrFile instanceof File && audioBlobOrFile.size > 0) {
-    formData.append("audio_file", audioBlobOrFile);
-    formData.append("voice_file", audioBlobOrFile);
-    formData.append("audio", audioBlobOrFile);
+  const audioBlobOrFile: File | Blob | null = voice_file || (file && (file.type.startsWith("audio/") || /\.(mp3|wav|ogg|webm|m4a|aac)$/i.test(file.name)) ? file : null);
+  if (!storage_url && audioBlobOrFile && audioBlobOrFile.size > 0) {
+    let audioFileName = (audioBlobOrFile as File).name;
+    if (!audioFileName || audioFileName === "blob") {
+      const isMp4 = audioBlobOrFile.type.includes("mp4") || audioBlobOrFile.type.includes("aac");
+      const isWebm = audioBlobOrFile.type.includes("webm");
+      const isWav = audioBlobOrFile.type.includes("wav");
+      const ext = isMp4 ? "m4a" : isWebm ? "webm" : isWav ? "wav" : "m4a";
+      audioFileName = `voice_recording_${Date.now()}.${ext}`;
+    }
+    formData.append("audio_file", audioBlobOrFile, audioFileName);
+    formData.append("voice_file", audioBlobOrFile, audioFileName);
+    formData.append("audio", audioBlobOrFile, audioFileName);
   }
 
   // Documents: send "document_file" and "doc_file"

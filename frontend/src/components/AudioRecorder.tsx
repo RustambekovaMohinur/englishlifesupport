@@ -23,12 +23,13 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
   const getSupportedMimeType = (): string => {
     if (typeof MediaRecorder === 'undefined') return '';
     const types = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
       'audio/mp4',
       'audio/aac',
+      'audio/webm;codecs=opus',
+      'audio/webm',
       'audio/ogg;codecs=opus',
       'audio/ogg',
+      'audio/wav',
     ];
     for (const t of types) {
       if (MediaRecorder.isTypeSupported(t)) return t;
@@ -93,7 +94,13 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
       });
       streamRef.current = stream;
 
-      const mimeType = getSupportedMimeType();
+      const mimeType = MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : MediaRecorder.isTypeSupported('audio/aac')
+        ? 'audio/aac'
+        : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/wav';
 
       let mediaRecorder: MediaRecorder;
       try {
@@ -121,8 +128,31 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
 
       mediaRecorder.onstop = () => {
         const chosenMime = mimeType || getSupportedMimeType() || 'audio/mp4';
-        const ext = chosenMime.includes('webm') ? 'webm' : chosenMime.includes('ogg') ? 'ogg' : 'm4a';
         const audioBlob = new Blob(audioChunksRef.current, { type: chosenMime });
+
+        if (audioBlob.size === 0) {
+          console.warn("[AudioRecorder] Recorded blob size is 0 bytes");
+          toast.error("Recording was empty. Please check microphone permissions and try again.", {
+            id: 'empty-recording-error',
+          });
+          onAudioRecorded(null);
+          setAudioUrl(null);
+          setIsRecording(false);
+          setRecordingDuration(0);
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+          }
+          return;
+        }
+
+        const ext = chosenMime.includes('mp4') || chosenMime.includes('aac')
+          ? 'm4a'
+          : chosenMime.includes('webm')
+          ? 'webm'
+          : chosenMime.includes('ogg')
+          ? 'ogg'
+          : 'wav';
         const voiceFile = new File([audioBlob], `voice_recording_${Date.now()}.${ext}`, {
           type: chosenMime,
           lastModified: Date.now(),
@@ -157,6 +187,13 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
+      try {
+        if (mediaRecorderRef.current.state === 'recording') {
+          mediaRecorderRef.current.requestData();
+        }
+      } catch {
+        // Safe fallback
+      }
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       if (timerRef.current) {
@@ -258,3 +295,6 @@ export const AudioRecorderWidget: React.FC<AudioRecorderProps> = ({ onAudioRecor
     </div>
   );
 };
+
+export { VoiceRecorder } from './VoiceRecorder';
+export default AudioRecorderWidget;

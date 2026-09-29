@@ -439,13 +439,17 @@ export default function StudentAssignmentSubmitPage() {
     }
 
     if (newAudio) {
-      setVoiceFile(newAudio);
-      toast.success(`Biriktirilgan audio: ${newAudio.name}`);
+      if (newAudio.size === 0) {
+        toast.error("Recording was empty. Please check microphone permissions and try again.");
+      } else {
+        setVoiceFile(newAudio);
+        toast.success(`Attached audio file: ${newAudio.name}`);
+      }
     }
 
     if (newDoc) {
       setDocFile(newDoc);
-      toast.success(`Biriktirilgan hujjat: ${newDoc.name}`);
+      toast.success(`Attached document: ${newDoc.name}`);
     }
 
     if (newImages.length > 0) {
@@ -546,10 +550,15 @@ export default function StudentAssignmentSubmitPage() {
   async function handleSubmitHomework() {
     if (!assignment) return;
 
+    if (voiceFile && voiceFile.size === 0) {
+      toast.error("Recording was empty. Please check microphone permissions and try again.");
+      return;
+    }
+
     const hasAnyContent =
       submissionImages.length > 0 ||
       docFile !== null ||
-      voiceFile !== null ||
+      (voiceFile !== null && voiceFile.size > 0) ||
       externalLink.trim().length > 0 ||
       textAnswer.trim().length > 0;
 
@@ -559,18 +568,18 @@ export default function StudentAssignmentSubmitPage() {
     }
 
     if (isCompressingImages) {
-      toast.loading("Rasmlar siqilmoqda, iltimos kuting...", { id: "compressing-wait" });
+      toast.loading("Compressing images, please wait...", { id: "compressing-wait" });
       return;
     }
 
-    const primaryFile = docFile || voiceFile || null;
+    const primaryFile = docFile || (voiceFile && voiceFile.size > 0 ? voiceFile : null);
 
     if (voiceFile && voiceFile.size > 20 * 1024 * 1024) {
-      toast.error(`Audio fayl hajmi juda katta (maksimal 20 MB).`);
+      toast.error("Audio file size is too large (maximum 20 MB).");
       return;
     }
     if (docFile && docFile.size > 20 * 1024 * 1024) {
-      toast.error(`Hujjat hajmi juda katta (maksimal 20 MB).`);
+      toast.error("Document size is too large (maximum 20 MB).");
       return;
     }
 
@@ -602,14 +611,24 @@ export default function StudentAssignmentSubmitPage() {
       let directStorageUrl: string | null = null;
       let directFileName: string | null = null;
 
-      if (voiceFile) {
+      if (voiceFile && voiceFile.size > 0) {
+        const isMp4 = voiceFile.type.includes("mp4") || voiceFile.type.includes("aac");
+        const isWebm = voiceFile.type.includes("webm");
+        const isWav = voiceFile.type.includes("wav");
+        const isOgg = voiceFile.type.includes("ogg");
+        const ext = isMp4 ? "m4a" : isWebm ? "webm" : isWav ? "wav" : isOgg ? "ogg" : "m4a";
+        const safeName = voiceFile.name && voiceFile.name !== "blob"
+          ? voiceFile.name
+          : `voice_recording_${Date.now()}.${ext}`;
+        const mimeType = voiceFile.type || (isMp4 ? "audio/mp4" : isWebm ? "audio/webm" : isWav ? "audio/wav" : "audio/mp4");
+
         try {
           directStorageUrl = await uploadDirectToB2(
             voiceFile,
-            voiceFile.name || `voice_${Date.now()}.webm`,
-            voiceFile.type || "audio/webm"
+            safeName,
+            mimeType
           );
-          directFileName = voiceFile.name || "voice_recording.webm";
+          directFileName = safeName;
         } catch (uploadErr) {
           console.warn("[B2 DIRECT] Direct B2 upload bypassed; falling back to server multipart:", uploadErr);
           directStorageUrl = null;
@@ -633,7 +652,7 @@ export default function StudentAssignmentSubmitPage() {
         combinedText,
         directStorageUrl ? null : primaryFile,
         finalImages,
-        directStorageUrl ? null : voiceFile,
+        directStorageUrl ? null : (voiceFile && voiceFile.size > 0 ? voiceFile : null),
         directStorageUrl ? null : docFile,
         directStorageUrl,
         directFileName,
@@ -751,7 +770,7 @@ export default function StudentAssignmentSubmitPage() {
   // Count items attached across all tabs
   const attachedCount = {
     files: (docFile ? 1 : 0) + submissionImages.length,
-    voice: voiceFile ? 1 : 0,
+    voice: voiceFile && voiceFile.size > 0 ? 1 : 0,
     link: externalLink.trim() ? 1 : 0,
     text: textAnswer.trim() ? 1 : 0,
   };
@@ -762,7 +781,7 @@ export default function StudentAssignmentSubmitPage() {
   const canSubmit =
     !isTaskLocked &&
     !isGraded &&
-    (submissionImages.length > 0 || docFile !== null || voiceFile !== null || externalLink.trim().length > 0 || textAnswer.trim().length > 0);
+    (submissionImages.length > 0 || docFile !== null || (voiceFile !== null && voiceFile.size > 0) || externalLink.trim().length > 0 || textAnswer.trim().length > 0);
 
   return (
     <div className="min-h-screen flex flex-col overflow-x-hidden bg-[#FBFBFA] dark:bg-[#0B0F19] text-zinc-900 dark:text-zinc-100 pb-20 sm:pb-0">
@@ -1393,9 +1412,14 @@ export default function StudentAssignmentSubmitPage() {
                   {/* Resilient Audio Recorder Component with Stream Cleanup & Toast Deduplication */}
                   <AudioRecorderWidget
                     onAudioRecorded={(file) => {
-                      if (file) {
+                      if (file && file.size > 0) {
                         setVoiceFile(file);
-                        toast.success("Ovozli javob tayyor!", { id: "voice-recorded-success" });
+                        toast.success("Voice recording ready!", { id: "voice-recorded-success" });
+                      } else if (file && file.size === 0) {
+                        setVoiceFile(null);
+                        toast.error("Recording was empty. Please check microphone permissions and try again.", {
+                          id: "empty-recording-error",
+                        });
                       } else {
                         setVoiceFile(null);
                       }
@@ -1424,7 +1448,9 @@ export default function StudentAssignmentSubmitPage() {
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            if (file.size > 10 * 1024 * 1024) {
+                            if (file.size === 0) {
+                              toast.error("Selected audio file is empty (0 KB). Please select a valid file.");
+                            } else if (file.size > 10 * 1024 * 1024) {
                               toast.error("File is too large (maximum 10 MB). Please upload a smaller audio file.");
                             } else {
                               if (file.size > 4.5 * 1024 * 1024) {
@@ -1441,7 +1467,7 @@ export default function StudentAssignmentSubmitPage() {
                   </div>
 
                   {/* Attached Voice Note Chip */}
-                  {voiceFile && (
+                  {voiceFile && voiceFile.size > 0 && (
                     <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200">
                       <div className="flex items-center gap-2.5 truncate">
                         <Mic className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -1592,7 +1618,7 @@ export default function StudentAssignmentSubmitPage() {
                 Ready to submit:
               </span>
 
-              {submissionImages.length === 0 && !docFile && !voiceFile && !externalLink.trim() && !textAnswer.trim() ? (
+              {submissionImages.length === 0 && !docFile && (!voiceFile || voiceFile.size === 0) && !externalLink.trim() && !textAnswer.trim() ? (
                 <span className="text-xs text-zinc-400 italic">
                   No files or responses attached yet. Choose any tab above to begin.
                 </span>
@@ -1608,7 +1634,7 @@ export default function StudentAssignmentSubmitPage() {
                       <FileText className="w-3.5 h-3.5" /> 1 Document
                     </span>
                   )}
-                  {voiceFile && (
+                  {voiceFile && voiceFile.size > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
                       <Mic className="w-3.5 h-3.5" /> 1 Voice Recording
                     </span>
