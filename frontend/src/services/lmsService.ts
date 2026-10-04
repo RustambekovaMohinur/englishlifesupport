@@ -465,13 +465,13 @@ const BASE_RENDER_URL = BACKEND_URL.replace(/\/api\/?$/, "");
 const WORDLISTS_URL = `${BASE_RENDER_URL}/api/wordlists`;
 const WORDLISTS_FALLBACK_URL = `${BASE_RENDER_URL}/wordlists`;
 
-export const aiParseWordlist = async (data: {
+export const aiExtractCompanion = async (data: {
   text?: string;
   file?: File | Blob;
   fileName?: string;
 }) => {
-  const primaryUrl = `${WORDLISTS_URL}/ai-parse`;
-  const fallbackUrl = `${WORDLISTS_FALLBACK_URL}/ai-parse`;
+  const primaryUrl = `${WORDLISTS_URL}/ai-extract-companion`;
+  const fallbackUrl = `${WORDLISTS_FALLBACK_URL}/ai-extract-companion`;
 
   let body: any;
   let headers: Record<string, string> = {};
@@ -493,11 +493,24 @@ export const aiParseWordlist = async (data: {
     return r.data;
   } catch (err: any) {
     if (err?.response?.status === 404) {
-      const r = await api.post<import("@/types").AIWordlistParseItem[]>(fallbackUrl, body, { headers });
-      return r.data;
+      try {
+        const r = await api.post<import("@/types").AIWordlistParseItem[]>(`${WORDLISTS_URL}/generate`, body, { headers });
+        return r.data;
+      } catch {
+        const r = await api.post<import("@/types").AIWordlistParseItem[]>(fallbackUrl, body, { headers });
+        return r.data;
+      }
     }
     throw err;
   }
+};
+
+export const aiParseWordlist = async (data: {
+  text?: string;
+  file?: File | Blob;
+  fileName?: string;
+}) => {
+  return aiExtractCompanion(data);
 };
 
 export const previewBulkWords = async (words: string[]) => {

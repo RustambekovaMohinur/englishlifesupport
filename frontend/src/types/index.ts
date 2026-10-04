@@ -866,6 +866,7 @@ export interface AIWordlistParseItem {
   pos: string;
   definition: string;
   uzbek_translation: string;
+  translation?: string | null;
   example_sentence: string;
   phonetic?: string | null;
   audio_us_url?: string | null;

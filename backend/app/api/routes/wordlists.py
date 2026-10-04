@@ -342,6 +342,10 @@ async def preview_bulk(
     return previews
 
 
+@router.post("/ai-extract-companion", response_model=list[AIWordlistParseItem])
+@router.post("/ai-extract-companion/", response_model=list[AIWordlistParseItem], include_in_schema=False)
+@router.post("/generate", response_model=list[AIWordlistParseItem])
+@router.post("/generate/", response_model=list[AIWordlistParseItem], include_in_schema=False)
 @router.post("/ai-parse", response_model=list[AIWordlistParseItem])
 @router.post("/ai-parse/", response_model=list[AIWordlistParseItem], include_in_schema=False)
 async def ai_parse_wordlist_endpoint(
