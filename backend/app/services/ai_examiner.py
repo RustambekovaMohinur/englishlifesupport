@@ -637,102 +637,6 @@ async def enrich_words_with_gemini(raw_entries: list[str]) -> list[WordDetailPre
         )
     return previews
 
-
-async def ai_parse_wordlist_multiformat(
-    raw_text: str | None = None,
-    file_bytes: bytes | None = None,
-    file_name: str | None = None,
-    mime_type: str | None = None,
-) -> list[dict]:
-    """
-    Parses raw text or uploaded documents (PDF, TXT, CSV) using Gemini 1.5 Flash into
-    structured vocabulary items with collocations, phrasal verbs, idioms, pos,
-    English definitions, Uzbek translations, examples, and phonetic transcriptions.
-    Eliminates dummy regex fallback to ensure 100% data integrity.
-    """
-    extracted_text = (raw_text or "").strip()
-    is_pdf = False
-
-    if file_bytes:
-        f_name_lower = (file_name or "").lower()
-        if f_name_lower.endswith(".pdf") or (mime_type and "pdf" in mime_type.lower()):
-            is_pdf = True
-        elif f_name_lower.endswith((".txt", ".csv")) or (mime_type and "text" in mime_type.lower()):
-            try:
-                decoded = file_bytes.decode("utf-8")
-            except UnicodeDecodeError:
-                decoded = file_bytes.decode("latin-1", errors="replace")
-            extracted_text = (extracted_text + "\n\n" + decoded).strip()
-
-    if not extracted_text and not (is_pdf and file_bytes):
-        raise ValueError("Please provide vocabulary text or upload a valid document (PDF, TXT, CSV).")
-
-    api_key = get_gemini_api_key()
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY is not configured on the server. Please configure GEMINI_API_KEY to enable AI document extraction.")
-
-    prompt = (
-        "You are an expert linguistic extractor. The document or input contains a 4-column vocabulary table with the following structure:\n"
-        "[Word/Phrase | Uzbek Translation | English Definition | Example Sentence]\n\n"
-        "EXTRACTION RULES:\n"
-        "1. Extract EVERY single row accurately without splitting across cells or rows.\n"
-        "2. Multi-word expressions, collocations, phrasal verbs, idioms, and compound terms (e.g. 'eager for', 'stand still', 'protective gear', 'elbow and knee pads', 'take precautions', 'eye-witness', 'capable of') MUST remain as a single term in 'word'.\n"
-        "3. Preserve the exact Uzbek translation for each term in 'uzbek_translation'.\n"
-        "4. Place the English definition in 'definition' and the example sentence in 'example_sentence'. Do NOT truncate or split sentences.\n"
-        "5. If Part of Speech (POS) is not explicitly given, infer it accurately: 'noun', 'verb', 'adjective', 'adverb', 'phrase', 'idiom', or 'phrasal_verb'.\n"
-        "6. Return a STRICT JSON array of objects conforming to the exact schema below without any extra text or markdown formatting:\n"
-        "[\n"
-        "  {\n"
-        '    "word": "Endless",\n'
-        '    "pos": "adjective",\n'
-        '    "uzbek_translation": "cheksiz, nihoyasiz",\n'
-        '    "definition": "Having no end; continuing forever.",\n'
-        '    "example_sentence": "The desert seemed endless.",\n'
-        '    "phonetic": "/ˈend.ləs/"\n'
-        "  },\n"
-        "  {\n"
-        '    "word": "Eager for",\n'
-        '    "pos": "phrase",\n'
-        '    "uzbek_translation": "intiq bo\'lmoq, juda xohlamoq",\n'
-        '    "definition": "Wanting something very much.",\n'
-        '    "example_sentence": "She was eager for the holidays to begin.",\n'
-        '    "phonetic": "/ˈiːɡər fɔːr/"\n'
-        "  }\n"
-        "]"
-    )
-
-    parts: list[dict] = []
-
-    # If it is a PDF document, pass the raw PDF bytes directly to Gemini 1.5 Flash via multimodal inlineData
-    if is_pdf and file_bytes:
-        if len(file_bytes) > 20 * 1024 * 1024:
-            raise ValueError("PDF file exceeds maximum allowed size of 20 MB.")
-        b64_pdf = base64.b64encode(file_bytes).decode("utf-8")
-        parts.append({
-            "inlineData": {
-                "mimeType": "application/pdf",
-                "data": b64_pdf,
-            }
-        })
-        if extracted_text:
-            parts.append({
-                "text": f"{prompt}\n\nAdditional text notes from user:\n\"\"\"\n{extracted_text[:10000]}\n\"\"\""
-            })
-        else:
-            parts.append({"text": prompt})
-    else:
-        parts.append({
-            "text": f"{prompt}\n\nINPUT CONTENT TO PARSE:\n\"\"\"\n{extracted_text[:40000]}\n\"\"\""
-        })
-
-    payload = {
-        "contents": [{"parts": parts}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "temperature": 0.1,
-        },
-    }
-
 def clean_uzbek_text(text: str) -> str:
     """Normalizes Uzbek text, restoring apostrophes for o', g' and cleaning typography."""
     if not text:
@@ -1083,6 +987,29 @@ async def ai_parse_wordlist_multiformat(
 
     if not extracted_text and not (is_pdf and file_bytes):
         raise ValueError("Please provide vocabulary text or upload a valid document (PDF, TXT, CSV).")
+
+    # Step 0: Check if document or text matches Upstream Companion format
+    from app.services.wordlist_generator import is_companion_format, extract_companion_vocabulary, extract_text_from_pdf_bytes
+
+    is_companion = is_companion_format(extracted_text)
+    if not is_companion and is_pdf and file_bytes:
+        pdf_sample = extract_text_from_pdf_bytes(file_bytes)[:8000]
+        if is_companion_format(pdf_sample):
+            is_companion = True
+
+    if is_companion:
+        try:
+            logger.info("Detected Upstream Companion style vocabulary format; running companion extractor.")
+            companion_results = await extract_companion_vocabulary(
+                raw_text=raw_text,
+                file_bytes=file_bytes,
+                file_name=file_name,
+                mime_type=mime_type,
+            )
+            if companion_results:
+                return companion_results
+        except Exception as comp_err:
+            logger.warning("Companion extraction encountered issue (%s); falling back to general parser.", comp_err)
 
     # Attempt 1: Gemini AI with strict 12-second timeout
     try:

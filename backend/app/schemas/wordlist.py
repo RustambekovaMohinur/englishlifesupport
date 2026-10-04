@@ -129,10 +129,11 @@ class SubmitQuizRequest(BaseModel):
 
 class AIWordlistParseItem(BaseModel):
     word: str
-    pos: str
-    definition: str
-    uzbek_translation: str
-    example_sentence: str
+    pos: str = "phrase"
+    definition: str = ""
+    translation: str | None = None
+    uzbek_translation: str = ""
+    example_sentence: str = ""
     phonetic: str | None = None
     audio_us_url: str | None = None
     part_of_speech: str | None = None
