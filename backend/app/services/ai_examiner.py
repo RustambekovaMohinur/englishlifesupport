@@ -44,8 +44,15 @@ from app.schemas.wordlist import WordDetailPreview
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
-SUPPORTED_FALLBACK_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-pro"]
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+SUPPORTED_FALLBACK_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-1.5-flash",
+    "gemini-2.0-flash",
+    "gemini-3.8-flash",
+    "gemini-2.5-pro",
+    "gemini-1.5-pro",
+]
 _DISCOVERED_MODELS_CACHE: list[str] = []
 
 QUOTA_FRIENDLY_ERROR = "AI quota limit reached. Please wait a minute or provide an additional Gemini API key in settings."
@@ -814,6 +821,10 @@ def parse_text_wordlist_locally(raw_text: str) -> list[dict]:
         # Skip headers if present
         if re.search(r"^(word|headword)\b.*(uzbek|translation|definition)", cleaned_line, re.IGNORECASE):
             continue
+        if re.search(r"^(?:lead-in|reading|language focus|listening|speaking|writing|unit\s+\d+|module\s+\d+)\s*(?:\((?:p|pp)\.?\s*\d+(?:-\d+)?\))?", cleaned_line, re.IGNORECASE):
+            continue
+        if re.match(r"^\d+$", cleaned_line):
+            continue
 
         # Strip leading numbers or bullets: '1.', '1)', '-', '•', '*'
         stripped = re.sub(r"^\s*(?:\d+[\.\)]|[-*•\u2022])\s*", "", cleaned_line).strip()
@@ -988,7 +999,8 @@ async def ai_parse_wordlist_multiformat(
     if not extracted_text and not (is_pdf and file_bytes):
         raise ValueError("Please provide vocabulary text or upload a valid document (PDF, TXT, CSV).")
 
-    # Step 0: Check if document or text matches Upstream Companion format
+    # Step 0: For PDF documents and Companion format texts:
+    # Route STRICTLY to Gemini AI multimodal extractor. Never fall back to regex Fast Parser!
     from app.services.wordlist_generator import is_companion_format, extract_companion_vocabulary, extract_text_from_pdf_bytes
 
     is_companion = is_companion_format(extracted_text)
@@ -997,19 +1009,18 @@ async def ai_parse_wordlist_multiformat(
         if is_companion_format(pdf_sample):
             is_companion = True
 
-    if is_companion:
-        try:
-            logger.info("Detected Upstream Companion style vocabulary format; running companion extractor.")
-            companion_results = await extract_companion_vocabulary(
-                raw_text=raw_text,
-                file_bytes=file_bytes,
-                file_name=file_name,
-                mime_type=mime_type,
-            )
-            if companion_results:
-                return companion_results
-        except Exception as comp_err:
-            logger.warning("Companion extraction encountered issue (%s); falling back to general parser.", comp_err)
+    if is_pdf or is_companion:
+        logger.info(
+            "Routing document STRICTLY to Gemini AI companion/multimodal extractor (is_pdf=%s, is_companion=%s).",
+            is_pdf,
+            is_companion,
+        )
+        return await extract_companion_vocabulary(
+            raw_text=raw_text,
+            file_bytes=file_bytes,
+            file_name=file_name,
+            mime_type=mime_type,
+        )
 
     # Attempt 1: Gemini AI with strict 12-second timeout
     try:
@@ -1069,11 +1080,11 @@ async def ai_parse_wordlist_multiformat(
             },
         }
 
-        # Strict 12.0s timeout to prevent request deadlock on client/proxy
+        # Generous 30.0s timeout to allow Gemini AI to thoroughly process input content
         resp, last_error_detail = await execute_gemini_generate_content(
             payload=payload,
             api_key=api_key,
-            timeout=12.0,
+            timeout=30.0,
             max_backoff_retries=1,
             backoff_delays=(1.0,),
         )
@@ -1149,7 +1160,13 @@ async def ai_parse_wordlist_multiformat(
         raise RuntimeError("Gemini AI produced empty items list.")
 
     except Exception as gemini_err:
-        # Fallback 2: High-Precision Local Regex & Table Extraction
+        if is_pdf or is_companion:
+            error_str = str(gemini_err)
+            if "429" in error_str or "quota" in error_str.lower() or "resource_exhausted" in error_str.lower():
+                raise ValueError("Gemini AI quota limit reached (HTTP 429). Please wait a moment or configure an additional GEMINI_API_KEY.")
+            raise ValueError(f"Gemini AI extraction error: {error_str}")
+
+        # Fallback 2: High-Precision Local Regex & Table Extraction (only for simple raw text tables)
         logger.warning(
             "Gemini AI extraction unavailable or timed out (%s); engaging high-precision local fallback parser.",
             gemini_err,
