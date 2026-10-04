@@ -1153,8 +1153,10 @@ async def ai_parse_wordlist_multiformat(
                 "source": "gemini_ai",
             })
 
+        from app.services.wordlist_generator import clean_extracted_items
+        ai_results = clean_extracted_items(ai_results)
         if ai_results:
-            logger.info("Successfully extracted %d vocabulary items via Gemini AI.", len(ai_results))
+            logger.info("Successfully extracted and sanitized %d vocabulary items via Gemini AI.", len(ai_results))
             return ai_results
 
         raise RuntimeError("Gemini AI produced empty items list.")

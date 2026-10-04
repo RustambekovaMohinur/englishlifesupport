@@ -1,13 +1,12 @@
 """
 Precise Vocabulary Companion PDF & Document Extraction Service.
 
-STRICT DATA PURIFICATION PIPELINE:
-- Eliminates all textbook numbers, decimals (e.g. '1.1', '1.7', '1.60'), and stray pagination letters.
-- Discards all textbook headers ('Lead-in', 'Reading', 'UNIT 1', 'Language focus', page numbers).
-- Extracts clean English definition (after '=' and before Polish/foreign text or examples).
-- Provides natural, accurate Uzbek translation for each term.
-- Emits clean POS ('noun', 'verb', 'idiom', 'phrase', 'adjective', 'adverb', 'phrasal_verb').
-- Enforces empty example sentence ("") as strictly demanded.
+ABSOLUTE PURITY EXTRACTOR (STRICTLY HEADWORD & ENGLISH DEFINITION ONLY):
+- Extracts ONLY:
+  1. word: Clean English headword / phrasal verb / idiom (NO numbers, NO phonetics, NO slashes, NO foreign words).
+  2. definition: Clean English definition (NO foreign words, NO "e.g.", NO example sentences).
+- Strictly leaves translation, example_sentence, and other fields EMPTY string ("").
+- Completely filters out all section headers ("Lead-in", "Reading", "UNIT 1", "Language focus", page numbers).
 """
 
 import base64
@@ -27,43 +26,30 @@ from app.services.ai_examiner import (
 
 logger = logging.getLogger(__name__)
 
-COMPANION_PROMPT = """You are an expert bilingual lexicographer and document layout parser.
-Extract vocabulary entries from the provided textbook companion text or PDF document.
-
-Input line example:
-"1.3 foresight /ˈfɔːsaɪt/ (n) = the ability to see what is likely to happen in the future and to take appropriate action / dalekowzroczność
-e.g. They had the foresight to prepare themselves financially.
-Der.: diplomatic"
-
-Desired output JSON structure:
+COMPANION_PROMPT = """You are an expert lexicographer. Your ONLY task is to extract clean vocabulary entries from this textbook companion PDF.
+For each entry, return a JSON array of objects:
 [
   {
-    "word": "foresight",
-    "pos": "noun",
-    "definition": "the ability to see what is likely to happen in the future and to take appropriate action",
-    "translation": "oldindan ko'ra bilish, uzoqni ko'ra olish",
+    "word": "<clean headword in English>",
+    "definition": "<clean English definition>",
+    "pos": "phrase",
+    "translation": "",
     "example_sentence": ""
   }
 ]
 
-STRICT PURIFICATION & EXTRACTION RULES:
-1. "word": Clean headword, phrase, or idiom.
-   - Strip all leading numbers, decimals, and letters (e.g. '1.1 block out a thought ab' -> 'block out a thought').
-   - Strip '/.../' phonetic notations from the word string.
-   - Strip POS tags from the word string (e.g. '(n)', '(v)', '(adj)').
-2. FILTER HEADERS:
-   - If a line or row is a textbook header ('Lead-in', 'Reading', 'UNIT 1', 'Language focus', 'Something to Shout About') or bare page numbers ('5', '6', '7', '8'), DISCARD IT ENTIRELY. Do NOT output headers as words.
-3. "definition": English definition ONLY.
-   - Extract strictly the definition text following '='.
-   - Strip out everything starting from '/' (Polish or other foreign language text) and 'e.g.'.
-   - Strip any leading '='.
-4. "translation": Natural, accurate Uzbek translation of the headword (do NOT output Polish or foreign words from the PDF).
-5. "pos": Clean part of speech strictly one of: "noun", "verb", "adjective", "adverb", "idiom", "phrase", "phrasal_verb".
-6. "example_sentence": Set strictly to empty string "" (all example sentences must be omitted as requested).
+STRICT NEGATIVE RULES:
+1. NEVER output section headers, unit titles, or page numbers (DO NOT output "Lead-in", "Reading", "UNIT 1", "Language focus", "Something to Shout About", or single numbers).
+2. STRIP all index numbers like "1.1", "1.7", "1.18", "1.38", "1.57", "1.60" from the word.
+3. STRIP all phonetic transcriptions enclosed in slashes (e.g. "/.../", "/ bʊst /", "/ lə /").
+4. STRIP all non-English foreign text (e.g. Polish words like "zwiększ", "przygnębi", "dążyć", "do celu").
+5. The DEFINITION must only be the English meaning. Stop before any foreign translation slash "/", before "e.g.", and before "Der.:".
+6. Do NOT extract example sentences. Set example_sentence to "".
+7. Do NOT extract translations. Set translation to "".
 
 Return a STRICT JSON array of objects conforming to the schema above without markdown code fences."""
 
-JUNK_HEADERS = {
+FORBIDDEN_HEADERS = {
     "lead-in",
     "reading",
     "unit 1",
@@ -79,48 +65,8 @@ JUNK_HEADERS = {
     "unit",
     "language focus",
     "something to shout about",
-    "listening",
-    "speaking",
-    "writing",
     "module",
     "vocabulary",
-}
-
-UPSTREAM_COMPANION_UZBEK_MAP: dict[str, str] = {
-    "block out a thought": "fikrni xayoldan chiqarib tashlamoq, o'ylamaslikka harakat qilmoq",
-    "channel one's efforts into sth": "bor kuch-g'ayratini biror narsaga qaratmoq / safarbar qilmoq",
-    "foresight": "oldindan ko'ra bilish, uzoqni ko'ra olish",
-    "diplomacy": "diplomatiya, xushmuomalalik, takt",
-    "persuasion": "ishontirish, ko'ndirish qobiliyati",
-    "team spirit": "jamoaviy ruh, birdamlik",
-    "set a goal": "maqsad qo'ymoq",
-    "pursue a goal": "maqsad sari intilmoq",
-    "gut instinct": "ichki tuyg'u, ko'ngil sezgisi",
-    "push beyond one's limits": "o'z imkoniyatlari chegarasidan oshib o'tmoq",
-    "interpret": "talqin qilmoq, tushuntirmoq, tarjima qilmoq",
-    "javelin": "nayza (sport quroli)",
-    "claw one's way": "mashaqqat bilan yo'l topmoq, tirnashib ko'tarilmoq",
-    "be in contention for sth": "biror narsa uchun kurashmoqda / da'vogarlik qilmoqda bo'lmoq",
-    "potential": "salohiyat, imkoniyat",
-    "low": "kayfiyatsiz, tushkun, kuchsiz",
-    "spur": "rag'bat, turtki, undovchi omil",
-    "prevent sb from doing sth": "kimningdir biror narsa qilishiga to'sqinlik qilmoq",
-    "obstacle": "to'siq, g'ov",
-    "boost": "oshirmoq, kuchaytirmoq, ko'tarmoq",
-    "fraction": "arzimas qism, zarracha",
-    "workload": "ish hajmi, ish yuki",
-    "concentrate on sth": "biror narsaga diqqatni jamlamoq",
-    "lose sight of sth": "ko'zdan qochirmoq, asosiy maqsadni unutmoq",
-    "surpass": "ortda qoldirmoq, ustun kelmoq, oshib tushmoq",
-    "effectively": "samarali ravishda",
-    "distraction": "chalg'ituvchi narsa",
-    "overcome": "yengib o'tmoq, yengmoq",
-    "dedication": "fidoyilik, bag'ishlanish",
-    "persistence": "qat'iyat, sabot, matonat",
-    "breakthrough": "katta yutuq, burilish pallasi",
-    "accomplishment": "muvaffaqiyat, erishilgan natija",
-    "resilience": "bardoshlilik, chidamlilik",
-    "focus on sth": "diqqatni qaratmoq",
 }
 
 
@@ -143,9 +89,10 @@ def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
 
 def clean_companion_headword(raw_headword: str) -> tuple[str, str]:
     """
-    Cleans headwords by stripping index numbers, phonetics, trailing letters, and extracting POS.
+    Cleans headwords by stripping index numbers, phonetics, foreign words, and extracting POS.
     Example: '1.3 foresight /ˈfɔːsaɪt/ (n)' -> ('foresight', 'noun')
-    Example: '1.1 block out a thought' -> ('block out a thought', 'idiom')
+    Example: '1.1 block out a thought ab' -> ('block out a thought', 'idiom')
+    Example: 'low / lə 1.18 lub przygnębi' -> ('low', 'adjective')
     """
     cand = raw_headword.strip()
     cand = re.sub(r"^.*?(?:e\.g\.|Der\.:)", "", cand).strip()
@@ -154,11 +101,16 @@ def clean_companion_headword(raw_headword: str) -> tuple[str, str]:
     if "; " in cand:
         cand = cand.split("; ")[-1].strip()
 
-    # Strip index numbers like '1.3', '1.12', '2.14.', '1.'
-    cand = re.sub(r"^\s*\d+(\.\d+)*\.?\s*", "", cand).strip()
-    # Strip phonetic transcriptions e.g. /ˈfɔːsaɪt/, /.../
-    cand = re.sub(r"/[^/\n\r]+/", "", cand).strip()
+    # 1. Strip leading digits and dots (e.g. '1.1 ', '1.57 ', '6 ')
+    cand = re.sub(r"^\d+(\.\d+)?\s*", "", cand).strip()
+    # 2. Strip phonetics enclosed in slashes or backticks
+    cand = re.sub(r"/[^/]+/", "", cand).strip()
     cand = re.sub(r"[`'\"'][^a-zA-Z\s]+[`'\"']", "", cand).strip()
+    # 3. Strip trailing slashes or symbols and everything after slash
+    cand = re.sub(r"\s*/.*$", "", cand).strip()
+    cand = re.sub(r"[/\\=]+.*$", "", cand).strip()
+    # 4. Remove foreign words attached after numbers (e.g. '1.18 lub przygnębi')
+    cand = re.sub(r"\b\d+(\.\d+)?\b.*$", "", cand).strip()
 
     # Extract POS tag from parentheses e.g. (n), (v), (adj), (adv), (phr v), (idm)
     pos = "phrase"
@@ -179,11 +131,11 @@ def clean_companion_headword(raw_headword: str) -> tuple[str, str]:
             pos = "phrasal_verb"
         cand = re.sub(r"\s*\(" + re.escape(pos_match.group(1)) + r"\)\s*$", "", cand, flags=re.IGNORECASE).strip()
 
-    # Normalize typographical apostrophes and hyphens
+    # Remove trailing pagination artifacts (e.g. ' ab' in 'block out a thought ab')
+    cand = re.sub(r"\s+[a-z]{1,2}$", "", cand, flags=re.IGNORECASE) if len(cand) > 6 else cand
     cand = cand.replace("’", "'").replace("‘", "'").replace("`", "'")
     cand = re.sub(r"^\s*[-*•]\s*", "", cand).strip()
     cand = re.sub(r"^[^\w\s'\"-]+", "", cand).strip()
-    cand = re.sub(r"\s+[a-z]{1,2}$", "", cand, flags=re.IGNORECASE) if len(cand) > 6 else cand
     cand = re.sub(r"\s+", " ", cand).strip()
 
     if pos == "phrase":
@@ -216,9 +168,104 @@ def is_companion_format(text: str) -> bool:
     return sum(companion_indicators) >= 1
 
 
+def clean_extracted_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Step B: Hardcoded Python Post-Processing Sanitizer (Fail-Safe)
+    Ensures 100% purity:
+    - Strips numbers, phonetics, foreign words from headwords
+    - Discards section headers (Lead-in, Reading, UNIT 1, etc.)
+    - Clean English definition only (stops before '/', 'e.g.', 'Der.:')
+    - translation = "", example_sentence = ""
+    """
+    sanitized: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+
+        raw_word = str(item.get("word", "")).strip()
+
+        # 1. Strip leading digits and dots (e.g. "1.1 ", "1.57 ", "6 ")
+        word = re.sub(r"^\d+(\.\d+)?\s*", "", raw_word).strip()
+        # 2. Strip phonetics /.../
+        word = re.sub(r"/[^/]+/", "", word).strip()
+        word = re.sub(r"[`'\"'][^a-zA-Z\s]+[`'\"']", "", word).strip()
+        # 3. Strip trailing slashes or symbols and everything after slash (phonetics/foreign text)
+        word = re.sub(r"\s*/.*$", "", word).strip()
+        word = re.sub(r"[/\\=]+.*$", "", word).strip()
+        # 4. Remove foreign words attached after numbers (e.g. '1.18 lub przygnębi')
+        word = re.sub(r"\b\d+(\.\d+)?\b.*$", "", word).strip()
+        # 5. Remove parenthetical POS markers like (n), (v), (adj), (adv)
+        word = re.sub(
+            r"\s*\((?:n|v|adj|adv|phr\s*v|phrasal\s*verb|idm|idiom|prep|pron|phrase)\.?\)\s*$",
+            "",
+            word,
+            flags=re.IGNORECASE,
+        ).strip()
+        # 6. Remove trailing pagination artifacts (e.g. ' ab' in 'block out a thought ab')
+        word = re.sub(r"\s+[a-z]{1,2}$", "", word, flags=re.IGNORECASE) if len(word) > 6 else word
+        word = word.replace("’", "'").replace("‘", "'").replace("`", "'")
+        word = re.sub(r"^\s*[-*•]\s*", "", word).strip()
+        word = re.sub(r"^[^\w\s'\"-]+", "", word).strip()
+        word = re.sub(r"\s+", " ", word).strip()
+
+        # If word is empty, pure digits, or a known section header, SKIP IT COMPLETELY
+        if not word or word.isdigit() or word.lower() in FORBIDDEN_HEADERS:
+            continue
+        if any(h in word.lower() for h in ["lead-in", "unit ", "reading (", "language focus"]):
+            continue
+        if len(word) < 2:
+            continue
+
+        raw_def = str(item.get("definition", "")).strip()
+        # Clean definition: remove leading '='
+        definition = re.sub(r"^[=\s]+", "", raw_def).strip()
+        # Cut off foreign translation starting at '/'
+        if "/" in definition:
+            definition = definition.split("/")[0].strip()
+        # Cut off examples starting at 'e.g.'
+        if "e.g." in definition:
+            definition = definition.split("e.g.")[0].strip()
+        # Cut off derivatives starting at 'Der.:'
+        if "Der.:" in definition:
+            definition = definition.split("Der.:")[0].strip()
+        definition = re.sub(r"\s+", " ", definition).strip()
+
+        w_key = word.lower()
+        if w_key in seen:
+            continue
+        seen.add(w_key)
+
+        slug = re.sub(r"[^a-zA-Z0-9]+", "_", word.lower()).strip("_")
+        audio_us_url = f"https://ssl.gstatic.com/dictionary/static/sounds/20200429/{slug}--_us_1.mp3"
+
+        raw_pos = str(item.get("pos", "phrase") or "phrase").lower().strip()
+        pos = normalize_pos(raw_pos)
+
+        sanitized.append({
+            "word": word,
+            "definition": definition,
+            "pos": pos,
+            "part_of_speech": pos,
+            "translation": "",
+            "uzbek_translation": "",
+            "custom_translation": "",
+            "example_sentence": "",
+            "example": "",
+            "phonetic": "",
+            "audio_us_url": audio_us_url,
+            "ai_generated": True,
+            "fallback_used": False,
+            "source": "gemini_ai",
+        })
+
+    return sanitized
+
+
 def parse_companion_stream_clean(text: str) -> list[dict[str, Any]]:
     """
-    Structured extraction from textbook companion text.
+    Structured fallback extraction from textbook companion text.
     Accurately isolates headwords before '=' and English definitions between '=' and '/'.
     """
     chunks = text.split("=")
@@ -243,7 +290,7 @@ def parse_companion_stream_clean(text: str) -> list[dict[str, Any]]:
         raw_tail = " ".join(headword_lines)
         word, pos = clean_companion_headword(raw_tail)
 
-        if not word or word.lower() in JUNK_HEADERS or re.match(r"^\d+$", word):
+        if not word or word.lower() in FORBIDDEN_HEADERS or re.match(r"^\d+$", word):
             continue
         if any(h in word.lower() for h in ["lead-in", "reading (", "language focus", "unit "]):
             continue
@@ -262,106 +309,15 @@ def parse_companion_stream_clean(text: str) -> list[dict[str, Any]]:
         definition = re.sub(r"^=\s*", "", definition).strip()
         definition = re.sub(r"\s+", " ", definition).strip()
 
-        translation = UPSTREAM_COMPANION_UZBEK_MAP.get(
-            word.lower(),
-            UPSTREAM_COMPANION_UZBEK_MAP.get(word.lower().replace("one's", "one’s"), ""),
-        )
-
         items.append({
             "word": word,
             "pos": pos,
             "definition": definition,
-            "translation": translation,
+            "translation": "",
+            "example_sentence": "",
         })
 
     return items
-
-
-def purify_wordlist_items(raw_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """
-    DATA PURIFICATION PIPELINE (PYTHON):
-    Enforces absolute stripping of all numbers, textbook headers, Polish/foreign text,
-    and returns strictly sanitized entries matching LMS requirements.
-    """
-    cleaned_list: list[dict[str, Any]] = []
-
-    for item in raw_items:
-        if not isinstance(item, dict):
-            continue
-
-        raw_word = str(item.get("word") or "").strip()
-        word = re.sub(r"^\d+(\.\d+)?\s*", "", raw_word).strip()
-        word = re.sub(r"/.*?/", "", word).strip()
-        word = re.sub(r"[`'\"'][^a-zA-Z\s]+[`'\"']", "", word).strip()
-        word = re.sub(
-            r"\s*\((?:n|v|adj|adv|phr\s*v|phrasal\s*verb|idm|idiom|prep|pron|phrase)\.?\)\s*",
-            "",
-            word,
-            flags=re.IGNORECASE,
-        ).strip()
-        word = re.sub(r"\s+[a-z]{1,2}$", "", word, flags=re.IGNORECASE) if len(word) > 6 else word
-        word = word.replace("’", "'").replace("‘", "'").replace("`", "'")
-        word = re.sub(r"^\s*[-*•]\s*", "", word).strip()
-        word = re.sub(r"^[^\w\s'\"-]+", "", word).strip()
-        word = re.sub(r"\s+", " ", word).strip()
-
-        # Skip if it is a textbook header or empty or purely digits
-        if not word or word.lower() in JUNK_HEADERS or re.match(r"^\d+$", word):
-            continue
-        if any(h in word.lower() for h in ["lead-in", "reading (", "language focus", "unit "]):
-            continue
-        if len(word) < 2:
-            continue
-
-        definition = str(item.get("definition") or "").strip()
-        # Strip foreign slash text and examples if any leaked through
-        definition = re.split(r"\s*/\s*|e\.g\.", definition)[0].strip()
-        definition = re.sub(r"^=\s*", "", definition).strip()
-        definition = re.sub(r"\s+", " ", definition).strip()
-
-        # Clean POS
-        raw_pos = str(item.get("pos") or item.get("part_of_speech") or "").lower().strip()
-        clean_w, inferred_pos = infer_pos_and_clean_word(word)
-        if raw_pos in {"noun", "verb", "adjective", "adverb", "idiom", "phrase", "phrasal_verb"}:
-            pos = raw_pos
-        else:
-            pos = inferred_pos
-
-        # Translation
-        raw_tr = str(
-            item.get("translation")
-            or item.get("uzbek_translation")
-            or item.get("custom_translation")
-            or ""
-        ).strip()
-        translation = clean_uzbek_text(raw_tr)
-        if not translation:
-            translation = UPSTREAM_COMPANION_UZBEK_MAP.get(
-                clean_w.lower(),
-                UPSTREAM_COMPANION_UZBEK_MAP.get(clean_w.lower().replace("one's", "one’s"), ""),
-            )
-
-        slug = re.sub(r"[^a-zA-Z0-9]+", "_", clean_w.lower()).strip("_")
-        audio_us_url = f"https://ssl.gstatic.com/dictionary/static/sounds/20200429/{slug}--_us_1.mp3"
-
-        cleaned_list.append({
-            "word": clean_w,
-            "pos": pos,
-            "part_of_speech": pos,
-            "translation": translation,
-            "uzbek_translation": translation,
-            "custom_translation": translation,
-            "definition": definition,
-            "example_sentence": "",  # keep clean as requested
-            "example": "",
-            "phonetic": "",
-            "audio_us_url": audio_us_url,
-            "ai_generated": True,
-            "fallback_used": False,
-            "source": "gemini_ai",
-        })
-
-    return cleaned_list
 
 
 async def extract_companion_vocabulary(
@@ -371,10 +327,10 @@ async def extract_companion_vocabulary(
     mime_type: str | None = None,
 ) -> list[dict[str, Any]]:
     """
-    PURIFIED VOCABULARY COMPANION EXTRACTION PIPELINE:
-    1. Direct multimodal Gemini AI extraction with high timeout and strict purification prompt.
-    2. Zero-failure fallback parsing with built-in lexical map if API key is not configured or fails.
-    3. Mandatory Data Purification Pipeline applied to eliminate all headers, numbers, and Polish text.
+    ABSOLUTE PURITY COMPANION EXTRACTION PIPELINE:
+    1. Direct Gemini AI extraction with strict negative rules prompt.
+    2. Guaranteed post-processing through clean_extracted_items sanitizer.
+    3. Returns ONLY clean English headword and clean English definition.
     """
     extracted_text = (raw_text or "").strip()
     is_pdf = False
@@ -454,7 +410,7 @@ async def extract_companion_vocabulary(
                         parsed = json.loads(raw_llm_text)
                         items_list = parsed if isinstance(parsed, list) else (parsed.get("words") or parsed.get("items") or [])
                         if items_list:
-                            purified = purify_wordlist_items(items_list)
+                            purified = clean_extracted_items(items_list)
                             if purified:
                                 logger.info("Gemini AI extracted and purified %d vocabulary entries.", len(purified))
                                 return purified
@@ -465,7 +421,7 @@ async def extract_companion_vocabulary(
     if extracted_text:
         raw_companion_items = parse_companion_stream_clean(extracted_text)
         if raw_companion_items:
-            purified = purify_wordlist_items(raw_companion_items)
+            purified = clean_extracted_items(raw_companion_items)
             if purified:
                 logger.info("Structured companion parser purified %d entries.", len(purified))
                 return purified
