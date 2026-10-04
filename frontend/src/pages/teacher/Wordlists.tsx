@@ -139,15 +139,101 @@ export default function TeacherWordlistsPage() {
     return validLines;
   };
 
-  const handleGenerateBulk = async () => {
-    const sanitizedWords = sanitizeVocabularyInput(rawWordsInput);
+const JUNK_KEYWORDS = [
+  "lead-in",
+  "reading",
+  "unit",
+  "language focus",
+  "something to shout about",
+  "module",
+  "vocabulary",
+];
 
-    if (sanitizedWords.length === 0) {
-      toast.error(
-        "No valid vocabulary words found. Please enter words in 'word - translation' format or one word per line."
-      );
+function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
+  return items
+    .map((item) => {
+      let word = (item.word || "").trim();
+      let definition = (item.definition || item.custom_translation || "").trim();
+
+      // 1. Remove leading numbering like "1.1 ", "1.7 ", "1.60 ", "6 "
+      word = word.replace(/^\d+(\.\d+)?\s*/, "");
+
+      // 2. Strip phonetics /.../
+      word = word.replace(/\/.*?\//g, "");
+      word = word.replace(/[`'][^a-zA-Z\s]+[`']/g, "");
+
+      // 3. Strip any Polish or non-English text after slash /
+      if (word.includes("/")) {
+        word = word.split("/")[0].trim();
+      }
+
+      // 4. Strip numbers with foreign words (e.g., "1.38 zwiększ", "1.18 lub przygnębi")
+      word = word.replace(/\b\d+(\.\d+)?\b.*$/, "").trim();
+
+      // 5. Clean up definition: remove leading "="
+      definition = definition.replace(/^[=\s]+/, "").trim();
+
+      // 6. Definition: cut off Polish translation after "/"
+      if (definition.includes("/")) {
+        definition = definition.split("/")[0].trim();
+      }
+
+      // 7. Definition: cut off examples "e.g." and "Der.:"
+      if (definition.includes("e.g.")) {
+        definition = definition.split("e.g.")[0].trim();
+      }
+      if (definition.includes("Der.:")) {
+        definition = definition.split("Der.:")[0].trim();
+      }
+
+      // 8. Strip trailing punctuation
+      word = word.replace(/^[^\w\s'"]+/, "").replace(/[/\\=]+$/, "").trim();
+      definition = definition.replace(/\s+/g, " ").trim();
+
+      const rawPos = (item.part_of_speech || item.pos || "phrase").toLowerCase().trim();
+      const slug = word.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+      const audioUrl =
+        item.audio_us_url ||
+        `https://ssl.gstatic.com/dictionary/static/sounds/20200429/${slug}--_us_1.mp3`;
+
+      return {
+        word: word,
+        definition: definition,
+        part_of_speech: rawPos,
+        pos: rawPos,
+        phonetic: "",
+        uzbek_translation: "",
+        custom_translation: "",
+        example: "",
+        example_sentence: "",
+        audio_us_url: audioUrl,
+        audio_gb_url: null,
+        source: "gemini_ai",
+        ai_generated: true,
+        fallback_used: false,
+      };
+    })
+    .filter((item) => {
+      const lower = item.word.toLowerCase();
+      // Drop if word is empty, pure numbers, or a textbook header
+      if (!item.word || /^\d+$/.test(item.word) || item.word.length < 2) return false;
+      if (JUNK_KEYWORDS.some((k) => lower.includes(k))) return false;
+      return true;
+    });
+}
+
+  const handleGenerateBulk = async () => {
+    const lines = rawWordsInput
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    if (lines.length === 0) {
+      toast.error("Please enter at least one word or collocation.");
       return;
     }
+
+    const sanitizedWords = Array.from(new Set(lines));
 
     if (sanitizedWords.length > 50) {
       toast.error("Maximum 50 words per bulk import batch.");
@@ -157,14 +243,9 @@ export default function TeacherWordlistsPage() {
     setIsGenerating(true);
     try {
       const results = await previewBulkWords(sanitizedWords);
-      const normalizedResults: WordDetailPreview[] = results.map((item) => ({
-        ...item,
-        part_of_speech: normalizePos(item.part_of_speech),
-        example: item.example || "",
-        definition: item.definition || item.custom_translation || "",
-      }));
-      setPreviews(normalizedResults);
-      toast.success(`Successfully analyzed ${results.length} words!`);
+      const sanitized = sanitizeVocabularyList(results);
+      setPreviews(sanitized);
+      toast.success(`Successfully analyzed ${sanitized.length} words!`);
     } catch (err: any) {
       console.warn("[WORDLISTS PREVIEW] Network preview failed:", err);
       const detail = err?.response?.data?.detail;
@@ -231,25 +312,14 @@ export default function TeacherWordlistsPage() {
         return;
       }
 
-      const normalizedResults: WordDetailPreview[] = results.map((item) => ({
-        word: item.word.trim(),
-        part_of_speech: normalizePos(item.pos || item.part_of_speech || "phrase"),
-        pos: normalizePos(item.pos || item.part_of_speech || "phrase"),
-        custom_translation: (item.uzbek_translation || item.translation || item.custom_translation || "").trim(),
-        uzbek_translation: (item.uzbek_translation || item.translation || item.custom_translation || "").trim(),
-        definition: (item.definition || "").trim(),
-        example: (item.example_sentence || item.example || "").trim(),
-        example_sentence: (item.example_sentence || item.example || "").trim(),
-        phonetic: item.phonetic?.trim() || "",
-        audio_us_url: item.audio_us_url || null,
-        audio_gb_url: null,
-        source: "gemini_ai",
-        ai_generated: true,
-        fallback_used: false,
-      }));
+      const sanitizedResults = sanitizeVocabularyList(results);
+      if (sanitizedResults.length === 0) {
+        toast.error("No valid vocabulary entries identified after sanitization.");
+        return;
+      }
 
-      setPreviews(normalizedResults);
-      toast.success(`✨ Successfully extracted ${normalizedResults.length} clean vocabulary items!`);
+      setPreviews(sanitizedResults);
+      toast.success(`✨ Successfully extracted ${sanitizedResults.length} clean vocabulary items!`);
     } catch (err: any) {
       console.error("[AI PARSE ERROR]", err);
       const detail = err?.response?.data?.detail;
