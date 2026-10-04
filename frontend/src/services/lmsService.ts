@@ -470,39 +470,54 @@ export const aiExtractCompanion = async (data: {
   file?: File | Blob;
   fileName?: string;
 }) => {
-  const primaryUrl = `${WORDLISTS_URL}/ai-extract-companion`;
-  const fallbackUrl = `${WORDLISTS_FALLBACK_URL}/ai-extract-companion`;
+  const candidateUrls = [
+    `${WORDLISTS_URL}/ai-extract-companion`,
+    `${WORDLISTS_URL}/generate`,
+    `${WORDLISTS_URL}/ai-parse`,
+    `${WORDLISTS_FALLBACK_URL}/ai-extract-companion`,
+    `${WORDLISTS_FALLBACK_URL}/generate`,
+    `${WORDLISTS_FALLBACK_URL}/ai-parse`,
+  ];
 
-  let body: any;
-  let headers: Record<string, string> = {};
+  let lastError: any = null;
 
-  if (data.file) {
-    const formData = new FormData();
-    formData.append("file", data.file, data.fileName || (data.file as File).name || "vocabulary_document");
-    if (data.text) {
-      formData.append("text", data.text);
-    }
-    body = formData;
-    headers["Content-Type"] = "multipart/form-data";
-  } else {
-    body = { text: data.text || "" };
-  }
+  for (const url of candidateUrls) {
+    let body: any;
+    let headers: Record<string, string> = {};
 
-  try {
-    const r = await api.post<import("@/types").AIWordlistParseItem[]>(primaryUrl, body, { headers });
-    return r.data;
-  } catch (err: any) {
-    if (err?.response?.status === 404) {
-      try {
-        const r = await api.post<import("@/types").AIWordlistParseItem[]>(`${WORDLISTS_URL}/generate`, body, { headers });
-        return r.data;
-      } catch {
-        const r = await api.post<import("@/types").AIWordlistParseItem[]>(fallbackUrl, body, { headers });
-        return r.data;
+    if (data.file) {
+      const formData = new FormData();
+      formData.append(
+        "file",
+        data.file,
+        data.fileName || (data.file as File).name || "vocabulary_document"
+      );
+      if (data.text) {
+        formData.append("text", data.text);
       }
+      body = formData;
+      headers["Content-Type"] = "multipart/form-data";
+    } else {
+      body = { text: data.text || "" };
     }
-    throw err;
+
+    try {
+      const r = await api.post<import("@/types").AIWordlistParseItem[]>(url, body, { headers });
+      return r.data;
+    } catch (err: any) {
+      lastError = err;
+      const status = err?.response?.status;
+      // If 405 (Method Not Allowed) or 404 (Not Found) or 501/502, seamlessly fallback to next candidate
+      if (status === 405 || status === 404 || status === 501 || status === 502) {
+        console.warn(`[WORDLISTS EXTRACTION] Endpoint ${url} returned HTTP ${status}; trying next candidate URL...`);
+        continue;
+      }
+      // For validation errors or rate limits (400, 429), stop and throw immediately
+      throw err;
+    }
   }
+
+  throw lastError || new Error("All vocabulary extraction endpoints failed.");
 };
 
 export const aiParseWordlist = async (data: {
