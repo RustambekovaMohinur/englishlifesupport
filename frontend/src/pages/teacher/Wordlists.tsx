@@ -29,6 +29,11 @@ import {
   uploadDirectToB2,
 } from "@/services/lmsService";
 import { api } from "@/services/api";
+import * as pdfjsLib from "pdfjs-dist";
+
+if (typeof window !== "undefined" && (pdfjsLib as any)?.GlobalWorkerOptions) {
+  (pdfjsLib as any).GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${(pdfjsLib as any).version || "3.11.174"}/pdf.worker.min.js`;
+}
 import {
   Group,
   WordlistSetBrief,
@@ -38,6 +43,156 @@ import {
 import { FlashcardDeck } from "@/components/FlashcardDeck";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { EmptyState, LoadingRows, Modal, useConfirm } from "@/components/ui";
+
+export async function extractLinesFromPdf(file: File): Promise<string[]> {
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(arrayBuffer),
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
+  const doc = await loadingTask.promise;
+  const fullLines: string[] = [];
+
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    const content = await page.getTextContent();
+    let lastY: number | null = null;
+    let currentLine = "";
+
+    for (const rawItem of content.items) {
+      const item = rawItem as any;
+      if (!item.str && item.str !== " ") continue;
+      const y = Math.round(item.transform ? item.transform[5] : 0);
+      if (lastY !== null && Math.abs(y - lastY) > 5) {
+        if (currentLine.trim()) fullLines.push(currentLine.trim());
+        currentLine = "";
+      }
+      currentLine += (currentLine ? " " : "") + item.str;
+      lastY = y;
+    }
+    if (currentLine.trim()) fullLines.push(currentLine.trim());
+  }
+
+  return fullLines;
+}
+
+export function extractCompanionDirectly(input: string | string[]): WordDetailPreview[] {
+  const lines = Array.isArray(input)
+    ? input
+    : input.split(/\r?\n+/).map((l) => l.trim()).filter((l) => l.length > 0);
+
+  const items: WordDetailPreview[] = [];
+  const JUNK = [
+    "lead-in",
+    "reading",
+    "unit",
+    "language focus",
+    "something to shout about",
+    "module",
+    "vocabulary",
+    "self-assessment",
+  ];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.includes("=")) continue;
+
+    // 1. Separate word part and definition part around '='
+    const parts = line.split("=");
+    let rawWordPart = parts[0];
+    let defParts = [parts.slice(1).join("=")];
+
+    // If headword was on the previous line (e.g. line starts with '=')
+    if (
+      !rawWordPart.trim() ||
+      rawWordPart.replace(/^\s*\d+(\.\d+)?\s*/, "").trim().length <= 1
+    ) {
+      if (i > 0) {
+        rawWordPart = lines[i - 1];
+      }
+    }
+
+    // Look ahead for multiline definitions (until next '=' or 'e.g.' or 'Der.:')
+    for (let j = i + 1; j < lines.length; j++) {
+      const nextLine = lines[j];
+      if (nextLine.includes("=")) break;
+      if (nextLine.startsWith("e.g.") || nextLine.startsWith("Der.:")) break;
+      if (nextLine.includes("/")) {
+        const beforeSlash = nextLine.split("/")[0].trim();
+        if (beforeSlash) defParts.push(beforeSlash);
+        break;
+      }
+      defParts.push(nextLine);
+    }
+
+    // Clean Word: remove leading numbers (1.1, 1.2), phonetics, POS
+    let word = rawWordPart.replace(/^\s*\d+(\.\d+)?\s*/, "");
+    if (word.includes("/")) {
+      word = word.split("/")[0];
+    }
+    word = word.replace(/\(.*?\)/g, "").trim();
+    word = word.replace(/[ª±«°º¿¥§©®¼½¾ßµ`~^]/g, "").trim();
+    word = word.replace(/Ô/g, "O").replace(/ô/g, "o");
+    word = word.replace(/^.*?["”]\s*/, "").trim();
+    word = word.replace(/[’‘`]/g, "'");
+    word = word
+      .replace(/^[-*•\s]+/, "")
+      .replace(/^[^\w\s'"]+/, "")
+      .replace(/[/\\=]+$/, "")
+      .trim();
+    word = word.replace(/\s+/g, " ").trim();
+
+    // Clean Definition: take English definition before any slash / or e.g.
+    let def = defParts.join(" ");
+    if (def.includes("e.g.")) {
+      def = def.split("e.g.")[0];
+    }
+    if (def.includes("Der.:")) {
+      def = def.split("Der.:")[0];
+    }
+    if (def.includes("/")) {
+      def = def.split("/")[0];
+    }
+    def = def.replace(/^[=\s]+/, "").trim();
+    def = def.replace(/[ª±«°º¿¥§©®¼½¾ßµ`~^]/g, "").trim();
+    def = def.replace(/Ô/g, "O").replace(/ô/g, "o");
+    def = def.replace(/[’‘`]/g, "'");
+    def = def.replace(/\s+/g, " ").trim();
+
+    const lower = word.toLowerCase();
+    if (
+      word &&
+      def &&
+      word.length > 1 &&
+      !/^\d+$/.test(word) &&
+      !JUNK.some((k) => lower.includes(k))
+    ) {
+      const slug = word.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+      const audioUrl = `https://ssl.gstatic.com/dictionary/static/sounds/20200429/${slug}--_us_1.mp3`;
+
+      items.push({
+        word: word,
+        definition: def,
+        part_of_speech: "phrase",
+        pos: "phrase",
+        phonetic: "",
+        uzbek_translation: "",
+        custom_translation: "",
+        example: "",
+        example_sentence: "",
+        audio_us_url: audioUrl,
+        audio_gb_url: null,
+        source: "client_companion",
+        ai_generated: true,
+        fallback_used: false,
+      });
+    }
+  }
+
+  return items;
+}
 
 export default function TeacherWordlistsPage() {
   const [sets, setSets] = useState<WordlistSetBrief[]>([]);
@@ -304,7 +459,7 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
     }
   };
 
-  const handleFileChange = (file: File | null) => {
+  const handleFileChange = async (file: File | null) => {
     if (!file) {
       setSelectedFile(null);
       return;
@@ -327,6 +482,40 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
       setTitle(cleanTitle);
     }
     toast.success(`Selected "${file.name}" (${(file.size / 1024).toFixed(1)} KB)`);
+
+    // Direct frontend parsing for PDF
+    if (ext === "pdf") {
+      setIsAiParsing(true);
+      const loadingToast = toast.loading(`Parsing "${file.name}" directly in browser...`);
+      try {
+        const lines = await extractLinesFromPdf(file);
+        const companionItems = extractCompanionDirectly(lines);
+        if (companionItems.length > 0) {
+          setPreviews(companionItems);
+          toast.success(`✨ Extracted ${companionItems.length} vocabulary items directly from PDF!`, {
+            id: loadingToast,
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn("[CLIENT DIRECT PDF PARSE FAILED, MANUAL TRIGGER AVAILABLE]", err);
+      } finally {
+        setIsAiParsing(false);
+        toast.dismiss(loadingToast);
+      }
+    } else if (ext === "txt") {
+      try {
+        const text = await file.text();
+        const companionItems = extractCompanionDirectly(text);
+        if (companionItems.length > 0) {
+          setPreviews(companionItems);
+          toast.success(`✨ Extracted ${companionItems.length} vocabulary items directly from TXT!`);
+          return;
+        }
+      } catch (err) {
+        console.warn("[CLIENT DIRECT TXT PARSE FAILED]", err);
+      }
+    }
   };
 
   const handleRemoveFile = () => {
@@ -344,6 +533,39 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
 
     setIsAiParsing(true);
     try {
+      // 1. Direct Client-side PDF Extraction (zero backend dependency)
+      if (selectedFile && selectedFile.name.toLowerCase().endsWith(".pdf")) {
+        const lines = await extractLinesFromPdf(selectedFile);
+        const companionItems = extractCompanionDirectly(lines);
+        if (companionItems.length > 0) {
+          setPreviews(companionItems);
+          toast.success(`✨ Extracted ${companionItems.length} clean vocabulary items directly from PDF!`);
+          return;
+        }
+      }
+
+      // 2. Direct Client-side TXT Extraction
+      if (selectedFile && selectedFile.name.toLowerCase().endsWith(".txt")) {
+        const text = await selectedFile.text();
+        const companionItems = extractCompanionDirectly(text);
+        if (companionItems.length > 0) {
+          setPreviews(companionItems);
+          toast.success(`✨ Extracted ${companionItems.length} clean vocabulary items directly from TXT!`);
+          return;
+        }
+      }
+
+      // 3. Direct Client-side textarea Extraction (if contains '=')
+      if (rawWordsInput.trim() && rawWordsInput.includes("=")) {
+        const companionItems = extractCompanionDirectly(rawWordsInput);
+        if (companionItems.length > 0) {
+          setPreviews(companionItems);
+          toast.success(`✨ Extracted ${companionItems.length} clean vocabulary items directly from text!`);
+          return;
+        }
+      }
+
+      // 4. Fallback to API if not companion structure
       const results = await aiExtractCompanion({
         text: rawWordsInput.trim() || undefined,
         file: selectedFile || undefined,
