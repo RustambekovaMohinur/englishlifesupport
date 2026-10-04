@@ -154,3 +154,25 @@ async def test_mock_link(
         "message": f"Mock parent successfully linked to student {student.full_name}",
         "parent_telegram_chat_id": chat_id,
     }
+
+
+@router.post("/test-simulate-update")
+async def simulate_telegram_update(
+    text: str = "/status",
+    chat_id: int = 12345678,
+    first_name: str = "Test",
+    last_name: str = "Parent",
+    username: str | None = "test_parent",
+    db: AsyncSession = Depends(get_db),
+):
+    """Simulates an incoming Telegram webhook update for testing command handlers."""
+    fake_update = {
+        "update_id": 999999,
+        "message": {
+            "message_id": 1,
+            "from": {"id": chat_id, "first_name": first_name, "last_name": last_name, "username": username},
+            "chat": {"id": chat_id, "type": "private"},
+            "text": text,
+        },
+    }
+    return await handle_telegram_update(fake_update, db)

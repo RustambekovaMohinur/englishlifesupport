@@ -12,15 +12,29 @@ from typing import Any
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.models.assignment import Assignment, AssignmentStatus
 from app.models.student import StudentProfile
+from app.models.submission import Submission, SubmissionStatus
+from app.models.user import User
 from app.utils.datetimes import utcnow
 
 logger = logging.getLogger(__name__)
 
 # Cached bot username
 _CACHED_BOT_USERNAME: str | None = None
+
+# Persistent ReplyKeyboardMarkup for parents
+PARENT_KEYBOARD: dict[str, Any] = {
+    "keyboard": [
+        [{"text": "📊 Farzandim ko'rsatkichlari"}],
+        [{"text": "ℹ️ Yordam"}],
+    ],
+    "resize_keyboard": True,
+    "is_persistent": True,
+}
 
 
 def get_telegram_bot_token() -> str:
@@ -62,6 +76,7 @@ async def send_telegram_message(
     text: str,
     parse_mode: str = "HTML",
     disable_web_page_preview: bool = True,
+    reply_markup: dict[str, Any] | None = None,
 ) -> bool:
     """
     Sends an async message to a specified Telegram chat.
@@ -76,12 +91,14 @@ async def send_telegram_message(
         return False
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {
+    payload: dict[str, Any] = {
         "chat_id": chat_id,
         "text": text,
         "parse_mode": parse_mode,
         "disable_web_page_preview": disable_web_page_preview,
     }
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -109,7 +126,11 @@ def build_parent_deep_link(bot_username: str, student_id: uuid.UUID | str) -> st
 async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
     """
     Processes incoming Telegram Webhook / Update object.
-    Handles /start parent_<student_id>, /status, /unlink, /help.
+    Handles:
+    - /start <token_or_student_id> (Deep linking with confirmation)
+    - /status or "📊 Farzandim ko'rsatkichlari" (Summary of grades, attendance, stars)
+    - /unlink (Detaches parent chat_id)
+    - /help or "ℹ️ Yordam" or plain /start (Instructions + ReplyKeyboardMarkup)
     """
     message = update.get("message")
     if not message:
@@ -127,88 +148,179 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
     last_name = (user_info.get("last_name") or "").strip()
     parent_name = f"{first_name} {last_name}".strip() or first_name or (f"@{username}" if username else "Hurmatli ota-ona")
 
-    # 1. Handle /start parent_<student_id>
-    if text.startswith("/start parent_"):
-        raw_id = text.replace("/start parent_", "").strip()
-        try:
-            student_uuid = uuid.UUID(raw_id)
-        except Exception:
+    # 1. Handle /start <token_or_student_id> (Deep Linking)
+    if text.startswith("/start"):
+        parts = text.split(maxsplit=1)
+        if len(parts) > 1 and parts[1].strip():
+            raw_token = parts[1].strip()
+            # Clean token: remove "parent_" or "parent-" prefix if present
+            clean_token = raw_token
+            if clean_token.lower().startswith("parent_"):
+                clean_token = clean_token[7:].strip()
+            elif clean_token.lower().startswith("parent-"):
+                clean_token = clean_token[7:].strip()
+
+            student: StudentProfile | None = None
+            # A. Try parsing as UUID
+            try:
+                student_uuid = uuid.UUID(clean_token)
+                res = await db.execute(
+                    select(StudentProfile)
+                    .options(selectinload(StudentProfile.group))
+                    .where(StudentProfile.id == student_uuid)
+                )
+                student = res.scalar_one_or_none()
+            except ValueError:
+                pass
+
+            # B. Try matching phone or username if UUID didn't match
+            if not student:
+                res = await db.execute(
+                    select(StudentProfile)
+                    .options(selectinload(StudentProfile.group))
+                    .join(User, StudentProfile.user_id == User.id)
+                    .where(
+                        (StudentProfile.phone == clean_token)
+                        | (StudentProfile.phone == f"+{clean_token}")
+                        | (User.username == clean_token)
+                    )
+                )
+                student = res.scalar_one_or_none()
+
+            if not student:
+                await send_telegram_message(
+                    chat_id=chat_id,
+                    text=(
+                        "⚠️ <b>Talaba topilmadi</b>\n\n"
+                        "Ushbu havola bo'yicha talaba tizimdan topilmadi. Iltimos, o'quv markazidan "
+                        "yoki farzandingiz profilidagi 'Telegram Botga Ulash' havolasini qaytadan oling."
+                    ),
+                    reply_markup=PARENT_KEYBOARD,
+                )
+                return {"ok": True}
+
+            # Match and bind the parent's chat_id to the student in the database
+            student.parent_telegram_chat_id = str(chat_id)
+            student.parent_telegram_username = username
+            student.parent_name = parent_name
+            student.parent_linked_at = utcnow()
+            await db.commit()
+
+            group_name = student.group.name if student.group else "Biriktirilmagan"
+            confirmation_msg = (
+                f"Farzandingiz <b>{student.full_name}</b> muvaffaqiyatli biriktirildi! "
+                "Endi davomat va baholar sizga avtomatik yuboriladi.\n\n"
+                f"• Guruh: <b>{group_name}</b>\n"
+                f"• To'plangan Yulduzlar: ⭐ <b>{student.total_stars}</b> | ⚡ <b>{student.total_lightning}</b>\n\n"
+                "Quyidagi <b>📊 Farzandim ko'rsatkichlari</b> tugmasi orqali istalgan paytda "
+                "baholar va topshiriqlarni tekshirishingiz mumkin."
+            )
             await send_telegram_message(
                 chat_id=chat_id,
-                text=(
-                    "⚠️ <b>Noto'g'ri havola</b>\n\n"
-                    "Talaba identifikatori noto'g'ri ko'rinadi. Iltimos, o'quv markazidan yoki "
-                    "farzandingiz profilidan to'g'ri havolani oling."
-                ),
+                text=confirmation_msg,
+                reply_markup=PARENT_KEYBOARD,
             )
-            return {"ok": True}
+            return {"ok": True, "action": "parent_linked", "student_id": str(student.id)}
 
-        # Look up student profile
+    # 2. Handle /status or button "📊 Farzandim ko'rsatkichlari"
+    is_status_cmd = (
+        text == "/status"
+        or text == "📊 Farzandim ko'rsatkichlari"
+        or "farzandim" in text.lower()
+        or "ko'rsatkich" in text.lower()
+    )
+    if is_status_cmd:
         res = await db.execute(
-            select(StudentProfile).where(StudentProfile.id == student_uuid)
-        )
-        student = res.scalar_one_or_none()
-        if not student:
-            await send_telegram_message(
-                chat_id=chat_id,
-                text=(
-                    "⚠️ <b>Talaba topilmadi</b>\n\n"
-                    "Ushbu havola bo'yicha talaba tizimdan topilmadi. Iltimos, o'qituvchingiz "
-                    "yoki farzandingizdan qaytadan havola oling."
-                ),
-            )
-            return {"ok": True}
-
-        # Link parent
-        student.parent_telegram_chat_id = str(chat_id)
-        student.parent_telegram_username = username
-        student.parent_name = parent_name
-        student.parent_linked_at = utcnow()
-        await db.commit()
-
-        welcome_text = (
-            f"Assalomu alaykum, <b>{parent_name}</b>! 🎉\n\n"
-            f"Siz muvaffaqiyatli tarzda <b>{student.full_name}</b>ning dars hisobotlariga ulandingiz.\n\n"
-            "📌 <b>Nimalar yuboriladi?</b>\n"
-            "• Har bir topshiriq muddati (deadline) tugashi bilan dars hisoboti\n"
-            "• Bajarilgan va qolib ketgan vazifalar ro'yxati\n"
-            "• Yangi yodlangan so'zlar (Vocabulary) natijasi\n"
-            f"• To'plangan Yulduzlar: ⭐ <b>{student.total_stars}</b> | ⚡ <b>{student.total_lightning}</b>\n\n"
-            "Farzandingizning bilim olishini birgalikda qo'llab-quvvatlayotganingiz uchun tashakkur! 🚀"
-        )
-        await send_telegram_message(chat_id=chat_id, text=welcome_text)
-        return {"ok": True, "action": "parent_linked", "student_id": str(student.id)}
-
-    # 2. Handle /status
-    if text == "/status":
-        res = await db.execute(
-            select(StudentProfile).where(StudentProfile.parent_telegram_chat_id == str(chat_id))
+            select(StudentProfile)
+            .options(selectinload(StudentProfile.group))
+            .where(StudentProfile.parent_telegram_chat_id == str(chat_id))
         )
         linked_students = res.scalars().all()
         if not linked_students:
             await send_telegram_message(
                 chat_id=chat_id,
                 text=(
-                    "ℹ️ <b>Siz hali birorta talabaga ulanmagansiz.</b>\n\n"
-                    "Farzandingiz profilidagi 'Telegram Botga Ulash' havolasi orqali kirishingiz mumkin."
+                    "ℹ️ <b>Siz hali birorta ham talabaga ulanmagansiz.</b>\n\n"
+                    "Farzandingiz profilidagi 'Telegram Botga Ulash' havolasi orqali kirishingiz "
+                    "yoki o'qituvchi taqdim etgan havolani ochishingiz mumkin."
                 ),
+                reply_markup=PARENT_KEYBOARD,
             )
             return {"ok": True}
 
-        lines = ["📊 <b>Sizga biriktirilgan talabalar holati:</b>\n"]
         for s in linked_students:
-            lines.append(
-                f"👤 <b>{s.full_name}</b>\n"
-                f"• ⭐ Yulduzlar: <b>{s.total_stars}</b>\n"
-                f"• ⚡ Faollik (Lightning): <b>{s.total_lightning}</b>\n"
-                f"• 🕒 Ulanilgan sana: {s.parent_linked_at.strftime('%Y-%m-%d %H:%M') if s.parent_linked_at else 'Noma`lum'}\n"
+            group_str = f"{s.group.name} ({s.group.english_level})" if s.group else "Guruh belgilanmagan"
+            lines = [
+                f"📊 <b>{s.full_name} — O'qish ko'rsatkichlari</b>",
+                f"👥 Guruh: <b>{group_str}</b>",
+                f"⭐ To'plangan yulduzlar: <b>{s.total_stars}</b> | ⚡ Faollik: <b>{s.total_lightning}</b>\n",
+            ]
+
+            # Query recent 5 submissions with assignment and grade
+            sub_stmt = (
+                select(Submission)
+                .options(
+                    selectinload(Submission.assignment),
+                    selectinload(Submission.grade),
+                )
+                .where(Submission.student_id == s.id)
+                .order_by(Submission.submitted_at.desc())
+                .limit(5)
             )
-        lines.append("Har bir topshiriq muddati tugaganda batafsil hisobot shu yerga yuboriladi.")
-        await send_telegram_message(chat_id=chat_id, text="\n".join(lines))
+            sub_res = await db.execute(sub_stmt)
+            recent_subs = sub_res.scalars().all()
+
+            if recent_subs:
+                lines.append("📝 <b>So'nggi vazifalar va baholar:</b>")
+                for sub in recent_subs:
+                    as_title = sub.assignment.title if sub.assignment else "Vazifa"
+                    sub_time = sub.submitted_at.strftime("%d.%m.%Y")
+                    if sub.grade:
+                        grade_icon = "🌟" if sub.grade.score >= 8 else "✅"
+                        lines.append(f"• {as_title}: {grade_icon} <b>{sub.grade.score}/10</b> ({sub_time})")
+                        if sub.grade.feedback and len(sub.grade.feedback) < 80:
+                            lines.append(f"   <i>Izoh: {sub.grade.feedback}</i>")
+                    elif sub.status == SubmissionStatus.LATE:
+                        lines.append(f"• {as_title}: ⚠️ <b>Kechikib topshirilgan</b> ({sub_time})")
+                    else:
+                        lines.append(f"• {as_title}: ⏳ <b>Topshirildi (Tekshirilmoqda)</b> ({sub_time})")
+            else:
+                lines.append("📝 Hozircha topshirilgan vazifalar mavjud emas.")
+
+            # Check missed assignments
+            if s.group_id:
+                missed_stmt = (
+                    select(Assignment)
+                    .where(
+                        Assignment.group_id == s.group_id,
+                        Assignment.status == AssignmentStatus.PUBLISHED,
+                        Assignment.deadline < utcnow(),
+                        ~Assignment.id.in_(
+                            select(Submission.assignment_id).where(Submission.student_id == s.id)
+                        ),
+                    )
+                    .order_by(Assignment.deadline.desc())
+                    .limit(3)
+                )
+                missed_res = await db.execute(missed_stmt)
+                missed_assignments = missed_res.scalars().all()
+                if missed_assignments:
+                    lines.append("\n⚠️ <b>Topshirilmagan vazifalar (Davomat/Qarzdorlik):</b>")
+                    for ma in missed_assignments:
+                        d_str = ma.deadline.strftime("%d.%m.%Y")
+                        lines.append(f"• ❌ {ma.title} (Muddati: {d_str})")
+
+            lines.append("\nℹ️ <i>Har bir yangi dars topshirig'i baholanganda, natija sizga avtomatik yuboriladi.</i>")
+            await send_telegram_message(
+                chat_id=chat_id,
+                text="\n".join(lines),
+                reply_markup=PARENT_KEYBOARD,
+            )
+
         return {"ok": True, "action": "status_sent"}
 
     # 3. Handle /unlink
-    if text == "/unlink":
+    if text == "/unlink" or "uzish" in text.lower():
         res = await db.execute(
             select(StudentProfile).where(StudentProfile.parent_telegram_chat_id == str(chat_id))
         )
@@ -217,12 +329,15 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             await send_telegram_message(
                 chat_id=chat_id,
                 text="Siz birorta ham talabaga ulanmagansiz.",
+                reply_markup=PARENT_KEYBOARD,
             )
             return {"ok": True}
 
         for s in linked_students:
             s.parent_telegram_chat_id = None
             s.parent_telegram_username = None
+            s.parent_name = None
+            s.parent_linked_at = None
         await db.commit()
 
         await send_telegram_message(
@@ -232,22 +347,23 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                 "Siz talaba hisobotlaridan muvaffaqiyatli uzildingiz. Xohlagan vaqtingizda "
                 "qaytadan ulanishingiz mumkin."
             ),
+            reply_markup=PARENT_KEYBOARD,
         )
         return {"ok": True, "action": "unlinked"}
 
-    # 4. Default /start or /help
+    # 4. Default /start, /help, or "ℹ️ Yordam"
     bot_name = await get_bot_username()
     help_text = (
         f"Assalomu alaykum, <b>{parent_name}</b>!\n\n"
         f"Bu <b>English Life LMS</b> ota-onalar xabarnoma boti (@{bot_name}).\n\n"
         "Farzandingiz dars natijalarini kuzatish uchun platformadagi QR kodni skanerlang yoki "
-        "maxsus ulanish havolasini bosing.\n\n"
-        "📌 <b>Buyruqlar:</b>\n"
-        "• /status - Biriktirilgan farzandingiz ko'rsatkichlari\n"
-        "• /unlink - Bildirishnomalardan chiqish\n"
-        "• /help - Yordam"
+        "ulanish havolasini oching.\n\n"
+        "📌 <b>Mavjud buyruqlar:</b>\n"
+        "• 📊 Farzandim ko'rsatkichlari — Joriy baholar va qoldirilgan vazifalar\n"
+        "• /unlink — Bildirishnomalardan chiqish\n"
+        "• ℹ️ Yordam — Botdan foydalanish yo'riqnomasi"
     )
-    await send_telegram_message(chat_id=chat_id, text=help_text)
+    await send_telegram_message(chat_id=chat_id, text=help_text, reply_markup=PARENT_KEYBOARD)
     return {"ok": True}
 
 
