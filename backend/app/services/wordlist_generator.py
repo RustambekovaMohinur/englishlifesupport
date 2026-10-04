@@ -101,6 +101,11 @@ def clean_companion_headword(raw_headword: str) -> tuple[str, str]:
     if "; " in cand:
         cand = cand.split("; ")[-1].strip()
 
+    # Normalize font artifacts like Ô to O and strip leaked quotes from example lines
+    cand = cand.replace("Ô", "O").replace("ô", "o")
+    cand = re.sub(r"^.*?[\"”]\s*", "", cand).strip()
+    cand = re.sub(r"[ª±«°º¿¥§©®¼½¾ßµ`~^]", "", cand).strip()
+
     # 1. Strip leading digits and dots (e.g. '1.1 ', '1.57 ', '6 ')
     cand = re.sub(r"^\d+(\.\d+)?\s*", "", cand).strip()
     # 2. Strip phonetics enclosed in slashes or backticks
@@ -185,6 +190,9 @@ def clean_extracted_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
 
         raw_word = str(item.get("word", "")).strip()
+        raw_word = raw_word.replace("Ô", "O").replace("ô", "o")
+        raw_word = re.sub(r"^.*?[\"”]\s*", "", raw_word).strip()
+        raw_word = re.sub(r"[ª±«°º¿¥§©®¼½¾ßµ`~^]", "", raw_word).strip()
 
         # 1. Strip leading digits and dots (e.g. "1.1 ", "1.57 ", "6 ")
         word = re.sub(r"^\d+(\.\d+)?\s*", "", raw_word).strip()
@@ -219,6 +227,8 @@ def clean_extracted_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
 
         raw_def = str(item.get("definition", "")).strip()
+        raw_def = raw_def.replace("Ô", "O").replace("ô", "o")
+        raw_def = re.sub(r"[ª±«°º¿¥§©®¼½¾ßµ`~^]", "", raw_def).strip()
         # Clean definition: remove leading '='
         definition = re.sub(r"^[=\s]+", "", raw_def).strip()
         # Cut off foreign translation starting at '/'

@@ -147,38 +147,73 @@ const JUNK_KEYWORDS = [
   "something to shout about",
   "module",
   "vocabulary",
+  "self-assessment",
 ];
+
+const GARBLED_CHARS_REGEX = /[ª±«°º¿¥§©®¼½¾ßµ`~^]/g;
 
 function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
   return items
     .map((item) => {
-      let word = (item.word || "").trim();
-      let definition = (item.definition || item.custom_translation || "").trim();
+      let rawWord = (item.word || "").trim();
+      let rawDef = (item.definition || item.custom_translation || "").trim();
 
-      // 1. Remove leading numbering like "1.1 ", "1.7 ", "1.60 ", "6 "
-      word = word.replace(/^\d+(\.\d+)?\s*/, "");
+      // Case: If the entire line was packed into word, split by '='
+      if (rawWord.includes("=") && !rawDef) {
+        const parts = rawWord.split("=");
+        rawWord = parts[0].trim();
+        rawDef = parts.slice(1).join("=").trim();
+      }
 
-      // 2. Strip phonetics /.../
-      word = word.replace(/\/.*?\//g, "");
-      word = word.replace(/[`'][^a-zA-Z\s]+[`']/g, "");
-
-      // 3. Strip any Polish or non-English text after slash /
+      // 1. Headword cleanup
+      let word = rawWord;
+      if (word.includes("=")) {
+        word = word.split("=")[0].trim();
+      }
       if (word.includes("/")) {
         word = word.split("/")[0].trim();
       }
 
-      // 4. Strip numbers with foreign words (e.g., "1.38 zwiększ", "1.18 lub przygnębi")
+      // Normalize font artifacts and quotes
+      word = word.replace(/Ô/g, "O").replace(/ô/g, "o");
+      word = word.replace(/^.*?["”]\s*/, "");
+      word = word.replace(GARBLED_CHARS_REGEX, "");
+
+      // Remove leading numbering like "1.1 ", "1.7 ", "1.60 ", "6 "
+      word = word.replace(/^\d+(\.\d+)?\s*/, "");
+
+      // Remove trailing numbering + foreign words (e.g. "1.38 zwiększ", "1.18 lub przygnębi")
       word = word.replace(/\b\d+(\.\d+)?\b.*$/, "").trim();
 
-      // 5. Clean up definition: remove leading "="
-      definition = definition.replace(/^[=\s]+/, "").trim();
+      // Remove parenthetical POS markers like (n), (v), (adj), (adv), (phr v), (idm)
+      word = word
+        .replace(
+          /\s*\((?:n|v|adj|adv|phr\s*v|phrasal\s*verb|idm|idiom|prep|pron|phrase|c|u)\.?\)\s*$/i,
+          ""
+        )
+        .trim();
 
-      // 6. Definition: cut off Polish translation after "/"
-      if (definition.includes("/")) {
-        definition = definition.split("/")[0].trim();
+      // Normalize quotes and strip punctuation
+      word = word.replace(/[’‘`]/g, "'");
+      word = word
+        .replace(/^[-*•\s]+/, "")
+        .replace(/^[^\w\s'"]+/, "")
+        .replace(/[/\\=]+$/, "")
+        .trim();
+      word = word.replace(/\s+/g, " ");
+
+      // 2. Definition cleanup
+      let definition = rawDef;
+      if (definition.includes("=")) {
+        const afterEq = definition.indexOf("=");
+        definition = definition.substring(afterEq + 1).trim();
       }
 
-      // 7. Definition: cut off examples "e.g." and "Der.:"
+      definition = definition.replace(/^[=\s]+/, "").trim();
+      definition = definition.replace(/Ô/g, "O").replace(/ô/g, "o");
+      definition = definition.replace(GARBLED_CHARS_REGEX, "");
+
+      // Cut off examples and derivatives
       if (definition.includes("e.g.")) {
         definition = definition.split("e.g.")[0].trim();
       }
@@ -186,8 +221,16 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
         definition = definition.split("Der.:")[0].trim();
       }
 
-      // 8. Strip trailing punctuation
-      word = word.replace(/^[^\w\s'"]+/, "").replace(/[/\\=]+$/, "").trim();
+      // Cut off Polish/foreign translations after slash
+      if (/\s+\/\s+/.test(definition)) {
+        definition = definition.split(/\s+\/\s+/)[0].trim();
+      } else if (definition.includes("/")) {
+        const slashIdx = definition.indexOf("/");
+        if (slashIdx > 3) {
+          definition = definition.substring(0, slashIdx).trim();
+        }
+      }
+
       definition = definition.replace(/\s+/g, " ").trim();
 
       const rawPos = (item.part_of_speech || item.pos || "phrase").toLowerCase().trim();
@@ -215,7 +258,7 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
     })
     .filter((item) => {
       const lower = item.word.toLowerCase();
-      // Drop if word is empty, pure numbers, or a textbook header
+      // Drop if word is empty, pure numbers, or shorter than 2 chars
       if (!item.word || /^\d+$/.test(item.word) || item.word.length < 2) return false;
       if (JUNK_KEYWORDS.some((k) => lower.includes(k))) return false;
       return true;

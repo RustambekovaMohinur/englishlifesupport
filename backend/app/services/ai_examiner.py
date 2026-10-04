@@ -942,22 +942,25 @@ def parse_wordlist_locally(
             is_pdf = True
 
     if is_pdf and file_bytes:
+        from app.services.wordlist_generator import (
+            is_companion_format,
+            parse_companion_stream_clean,
+            clean_extracted_items,
+            extract_text_from_pdf_bytes,
+        )
+
+        pdf_text = extract_text_from_pdf_bytes(file_bytes)
+        if is_companion_format(pdf_text) or "=" in pdf_text:
+            items = parse_companion_stream_clean(pdf_text)
+            if items:
+                return clean_extracted_items(items)
+
         pdf_rows = parse_pdf_table_locally(file_bytes)
         if pdf_rows:
             return pdf_rows
 
-        # If table extraction didn't find rows, fallback to extracting text from PDF and parsing lines
-        try:
-            import pypdf
-            reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-            extracted_pages = []
-            for p in reader.pages:
-                extracted_pages.append(p.extract_text() or "")
-            text_from_pdf = "\n".join(extracted_pages)
-            if text_from_pdf.strip():
-                return parse_text_wordlist_locally(text_from_pdf)
-        except Exception:
-            pass
+        if pdf_text.strip():
+            return parse_text_wordlist_locally(pdf_text)
 
     full_text = (raw_text or "").strip()
     if file_bytes and not is_pdf:
@@ -966,6 +969,12 @@ def parse_wordlist_locally(
         except UnicodeDecodeError:
             decoded = file_bytes.decode("latin-1", errors="replace")
         full_text = (full_text + "\n" + decoded).strip()
+
+    from app.services.wordlist_generator import is_companion_format, parse_companion_stream_clean, clean_extracted_items
+    if is_companion_format(full_text) or "=" in full_text:
+        items = parse_companion_stream_clean(full_text)
+        if items:
+            return clean_extracted_items(items)
 
     return parse_text_wordlist_locally(full_text)
 
