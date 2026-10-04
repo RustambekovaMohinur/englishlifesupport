@@ -17,9 +17,12 @@ from app.models.user import User
 from app.schemas.student import ParentLinkInfo
 from app.services.telegram_bot import (
     build_parent_deep_link,
+    delete_telegram_webhook,
     get_bot_username,
     get_telegram_bot_token,
+    get_telegram_webhook_info,
     handle_telegram_update,
+    set_telegram_webhook,
 )
 from app.utils.datetimes import utcnow
 
@@ -49,14 +52,40 @@ async def telegram_webhook(
         return {"ok": True, "error_handled": str(ex)}
 
 
+@router.get("/webhook-info")
+async def get_webhook_info():
+    """Returns Telegram's registered webhook info."""
+    return await get_telegram_webhook_info()
+
+
+@router.get("/set-webhook")
+@router.post("/set-webhook")
+async def register_webhook_endpoint(url: str | None = None):
+    """
+    Registers or resets the Telegram Bot webhook.
+    Can be called via browser GET or API POST.
+    Defaults to https://englishlifesupport-kot4.onrender.com/api/telegram/webhook.
+    """
+    return await set_telegram_webhook(url=url)
+
+
+@router.get("/delete-webhook")
+@router.post("/delete-webhook")
+async def delete_webhook_endpoint(drop_pending_updates: bool = False):
+    """Deletes the current Telegram webhook."""
+    return await delete_telegram_webhook(drop_pending_updates=drop_pending_updates)
+
+
 @router.get("/bot-info")
 async def get_bot_info():
-    """Returns the bot username and configuration status."""
+    """Returns the bot username, configuration status, and webhook status."""
     token = get_telegram_bot_token()
     bot_user = await get_bot_username()
+    webhook_info = await get_telegram_webhook_info() if token else None
     return {
         "bot_username": bot_user,
         "is_configured": bool(token),
+        "webhook_info": webhook_info,
     }
 
 

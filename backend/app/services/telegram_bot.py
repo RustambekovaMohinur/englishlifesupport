@@ -249,3 +249,76 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
     )
     await send_telegram_message(chat_id=chat_id, text=help_text)
     return {"ok": True}
+
+
+async def set_telegram_webhook(url: str | None = None) -> dict[str, Any]:
+    """
+    Sets the Telegram Bot webhook to the given URL, or automatically resolves
+    it from RENDER_EXTERNAL_URL / TELEGRAM_WEBHOOK_URL / default Render domain.
+    """
+    token = get_telegram_bot_token()
+    if not token:
+        logger.warning("Cannot set Telegram webhook: TELEGRAM_BOT_TOKEN is not configured.")
+        return {"ok": False, "error": "TELEGRAM_BOT_TOKEN is not configured."}
+
+    target_url = url
+    if not target_url:
+        base_url = (
+            os.getenv("RENDER_EXTERNAL_URL")
+            or settings.TELEGRAM_WEBHOOK_URL
+            or "https://englishlifesupport-kot4.onrender.com"
+        ).strip().rstrip("/")
+        target_url = f"{base_url}/api/telegram/webhook"
+
+    api_url = f"https://api.telegram.org/bot{token}/setWebhook"
+    payload = {
+        "url": target_url,
+        "drop_pending_updates": False,
+        "allowed_updates": ["message", "callback_query"],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(api_url, json=payload)
+            data = resp.json()
+            logger.info("Telegram setWebhook response for %s: %s", target_url, data)
+            return {
+                "ok": resp.status_code == 200 and data.get("ok", False),
+                "webhook_url": target_url,
+                "telegram_response": data,
+            }
+    except Exception as ex:
+        logger.exception("Failed to call setWebhook for %s: %s", target_url, ex)
+        return {"ok": False, "webhook_url": target_url, "error": str(ex)}
+
+
+async def get_telegram_webhook_info() -> dict[str, Any]:
+    """Queries Telegram getWebhookInfo to inspect current webhook status."""
+    token = get_telegram_bot_token()
+    if not token:
+        return {"ok": False, "error": "TELEGRAM_BOT_TOKEN is not configured."}
+
+    api_url = f"https://api.telegram.org/bot{token}/getWebhookInfo"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(api_url)
+            return resp.json()
+    except Exception as ex:
+        logger.exception("Failed to query getWebhookInfo: %s", ex)
+        return {"ok": False, "error": str(ex)}
+
+
+async def delete_telegram_webhook(drop_pending_updates: bool = False) -> dict[str, Any]:
+    """Deletes the current Telegram webhook (useful if switching to polling)."""
+    token = get_telegram_bot_token()
+    if not token:
+        return {"ok": False, "error": "TELEGRAM_BOT_TOKEN is not configured."}
+
+    api_url = f"https://api.telegram.org/bot{token}/deleteWebhook"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(api_url, json={"drop_pending_updates": drop_pending_updates})
+            return resp.json()
+    except Exception as ex:
+        logger.exception("Failed to delete webhook: %s", ex)
+        return {"ok": False, "error": str(ex)}

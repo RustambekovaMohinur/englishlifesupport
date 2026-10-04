@@ -388,6 +388,14 @@ async def _run_startup_tasks():
     except Exception as exc:
         logger.exception("Error during bootstrap_teacher_account execution: %s", exc)
 
+    # 4. Auto-register Telegram Bot webhook on server startup (guarded by timeout)
+    try:
+        from app.services.telegram_bot import set_telegram_webhook
+        res = await asyncio.wait_for(set_telegram_webhook(), timeout=8.0)
+        logger.info("Telegram webhook auto-registration result: %s", res)
+    except Exception as exc:
+        logger.warning("Telegram webhook auto-registration note: %s", exc)
+
 
 @app.on_event("startup")
 async def startup_event():
