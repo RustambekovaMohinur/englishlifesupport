@@ -90,33 +90,34 @@ async def health_check():
 
 
 @app.on_event("startup")
-async def bootstrap_teacher_account():
-    """
-    Ensures exactly one teacher account exists on first run, using the
-    credentials from environment variables. This is the ONLY way a teacher
-    account is created - there is no public "register as teacher" endpoint.
-    Safe to run on every startup: it's a no-op once a teacher exists.
-    """
-    async with AsyncSessionLocal() as db:
-        existing = await db.execute(select(User).where(User.role == UserRole.TEACHER))
-        if existing.scalar_one_or_none() is not None:
-            return
+async def startup_tasks() -> None:
+    """Initialize the app and start the Telegram bot without failing the API startup."""
+    try:
+        async with AsyncSessionLocal() as db:
+            existing = await db.execute(select(User).where(User.role == UserRole.TEACHER))
+            if existing.scalar_one_or_none() is None:
+                teacher_user = User(
+                    email=settings.BOOTSTRAP_TEACHER_EMAIL,
+                    password_hash=hash_password(settings.BOOTSTRAP_TEACHER_PASSWORD),
+                    role=UserRole.TEACHER,
+                )
+                db.add(teacher_user)
+                await db.flush()
+                db.add(TeacherProfile(user_id=teacher_user.id, full_name=settings.BOOTSTRAP_TEACHER_NAME))
+                await db.commit()
+                logger.info("Bootstrapped initial teacher account: %s", settings.BOOTSTRAP_TEACHER_EMAIL)
+    except Exception:
+        logger.exception("Teacher bootstrap failed during FastAPI startup.")
 
-        teacher_user = User(
-            email=settings.BOOTSTRAP_TEACHER_EMAIL,
-            password_hash=hash_password(settings.BOOTSTRAP_TEACHER_PASSWORD),
-            role=UserRole.TEACHER,
-        )
-        db.add(teacher_user)
-        await db.flush()
-
-        db.add(TeacherProfile(user_id=teacher_user.id, full_name=settings.BOOTSTRAP_TEACHER_NAME))
-        await db.commit()
-        logger.info("Bootstrapped initial teacher account: %s", settings.BOOTSTRAP_TEACHER_EMAIL)
-
-    await start_bot()
+    try:
+        await start_bot()
+    except Exception:
+        logger.exception("Telegram bot startup failed; continuing without Telegram integration.")
 
 
 @app.on_event("shutdown")
 async def shutdown_bot() -> None:
-    await stop_bot()
+    try:
+        await stop_bot()
+    except Exception:
+        logger.exception("Telegram bot shutdown raised an exception.")
