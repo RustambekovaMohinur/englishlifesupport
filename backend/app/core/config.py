@@ -33,6 +33,7 @@ class Settings(BaseSettings):
 
     # App
     ENVIRONMENT: str = "development"
+    FRONTEND_URL: str = "https://englishlifesupport.vercel.app"
 
     # Telegram bot (optional; if unset, bot automation is skipped gracefully)
     TELEGRAM_BOT_TOKEN: str | None = None
