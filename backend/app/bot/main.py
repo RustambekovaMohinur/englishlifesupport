@@ -168,14 +168,30 @@ async def start_bot() -> None:
     if telegram_app is not None:
         return
 
+    use_polling = bool(getattr(settings, "TELEGRAM_USE_POLLING", False))
+    telemetry = "polling" if use_polling else "webhook-safe idle"
+
     telegram_app = ApplicationBuilder().token(token).build()
     telegram_app.add_handler(CommandHandler("start", start_command))
     telegram_app.add_handler(CallbackQueryHandler(handle_callback))
 
     await telegram_app.initialize()
-    await telegram_app.start()
-    await telegram_app.updater.start_polling(drop_pending_updates=True)
-    logger.info("Telegram bot started successfully.")
+
+    if use_polling:
+        await telegram_app.start()
+        if getattr(telegram_app, "updater", None) is not None:
+            telegram_app.updater.start_polling(drop_pending_updates=True)
+        logger.info("Telegram bot started in polling mode.")
+    else:
+        webhook_url = (getattr(settings, "TELEGRAM_WEBHOOK_URL", None) or "").strip()
+        if webhook_url:
+            await telegram_app.bot.set_webhook(url=webhook_url)
+            await telegram_app.start()
+            logger.info("Telegram bot started in webhook mode with configured URL.")
+        else:
+            logger.info("Telegram bot initialized without polling or webhook; waiting for explicit webhook setup.")
+
+    logger.info("Telegram bot lifecycle ready (%s).", telemetry)
 
 
 async def stop_bot() -> None:
@@ -184,7 +200,21 @@ async def stop_bot() -> None:
     if telegram_app is None:
         return
 
-    await telegram_app.stop()
-    await telegram_app.shutdown()
+    try:
+        if getattr(telegram_app, "updater", None) is not None and getattr(telegram_app.updater, "running", False):
+            telegram_app.updater.stop()
+    except Exception:
+        logger.exception("Telegram updater stop raised an exception.")
+
+    try:
+        await telegram_app.stop()
+    except Exception:
+        logger.exception("Telegram application stop raised an exception.")
+
+    try:
+        await telegram_app.shutdown()
+    except Exception:
+        logger.exception("Telegram application shutdown raised an exception.")
+
     telegram_app = None
-    logger.info("Telegram bot stopped.")
+    logger.info("Telegram bot stopped cleanly.")

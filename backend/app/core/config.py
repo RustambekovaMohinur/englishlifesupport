@@ -37,6 +37,8 @@ class Settings(BaseSettings):
 
     # Telegram bot (optional; if unset, bot automation is skipped gracefully)
     TELEGRAM_BOT_TOKEN: str | None = None
+    TELEGRAM_USE_POLLING: bool = False
+    TELEGRAM_WEBHOOK_URL: str | None = None
 
     # Bootstrap teacher account (created on first startup if no teacher exists)
     BOOTSTRAP_TEACHER_EMAIL: str = "teacher@englishlife.uz"
