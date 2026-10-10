@@ -8,6 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
 
 from app.api.routes import assignments, auth, dashboard, groups, students, submissions
+from app.bot.main import start_bot, stop_bot
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.security import hash_password
@@ -112,3 +113,10 @@ async def bootstrap_teacher_account():
         db.add(TeacherProfile(user_id=teacher_user.id, full_name=settings.BOOTSTRAP_TEACHER_NAME))
         await db.commit()
         logger.info("Bootstrapped initial teacher account: %s", settings.BOOTSTRAP_TEACHER_EMAIL)
+
+    await start_bot()
+
+
+@app.on_event("shutdown")
+async def shutdown_bot() -> None:
+    await stop_bot()
