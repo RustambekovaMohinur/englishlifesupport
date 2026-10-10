@@ -28,6 +28,26 @@ except ImportError:  # pragma: no cover - dependency is optional until installed
 telegram_app: Application | None = None
 
 
+def get_active_app() -> Application | None:
+    return telegram_app
+
+
+def process_update_payload(payload: dict[str, Any]) -> bool:
+    if telegram_app is None:
+        return False
+    try:
+        from telegram import Update
+
+        update = Update.de_json(payload, telegram_app.bot)
+        if update is None:
+            return False
+        telegram_app.process_update(update)
+        return True
+    except Exception:
+        logger.exception("Failed to process Telegram webhook payload.")
+        return False
+
+
 def _format_deadline(deadline: Any) -> str:
     if deadline is None:
         return "Muddat belgilanmagan"
@@ -169,7 +189,7 @@ async def start_bot() -> None:
         return
 
     use_polling = bool(getattr(settings, "TELEGRAM_USE_POLLING", False))
-    telemetry = "polling" if use_polling else "webhook-safe idle"
+    telemetry = "polling" if use_polling else "webhook"
 
     telegram_app = ApplicationBuilder().token(token).build()
     telegram_app.add_handler(CommandHandler("start", start_command))
@@ -184,12 +204,12 @@ async def start_bot() -> None:
         logger.info("Telegram bot started in polling mode.")
     else:
         webhook_url = (getattr(settings, "TELEGRAM_WEBHOOK_URL", None) or "").strip()
-        if webhook_url:
-            await telegram_app.bot.set_webhook(url=webhook_url)
-            await telegram_app.start()
-            logger.info("Telegram bot started in webhook mode with configured URL.")
-        else:
-            logger.info("Telegram bot initialized without polling or webhook; waiting for explicit webhook setup.")
+        if not webhook_url:
+            logger.warning("No Telegram webhook URL configured; falling back to polling disabled state.")
+            return
+        await telegram_app.bot.set_webhook(url=webhook_url)
+        await telegram_app.start()
+        logger.info("Telegram webhook registered successfully: %s", webhook_url)
 
     logger.info("Telegram bot lifecycle ready (%s).", telemetry)
 

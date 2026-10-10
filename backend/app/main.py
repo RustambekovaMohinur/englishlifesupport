@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
 
 from app.api.routes import assignments, auth, dashboard, groups, students, submissions
-from app.bot.main import start_bot, stop_bot
+from app.bot.main import get_active_app, process_update_payload, start_bot, stop_bot
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.security import hash_password
@@ -87,6 +87,19 @@ app.include_router(dashboard.router)
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
+
+
+@app.post("/api/telegram/webhook")
+async def telegram_webhook(request: Request):
+    payload = await request.json()
+    if not payload:
+        return JSONResponse({"ok": False}, status_code=400)
+
+    if get_active_app() is None:
+        return JSONResponse({"ok": False, "detail": "Telegram bot is not active"}, status_code=503)
+
+    ok = process_update_payload(payload)
+    return JSONResponse({"ok": ok})
 
 
 @app.on_event("startup")
