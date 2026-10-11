@@ -198,11 +198,7 @@ export const getPresignedUploadUrl = async (
   fileName: string,
   fileType: string = "application/octet-stream"
 ): Promise<PresignedUploadResult> => {
-  const BACKEND_BASE = (
-    import.meta.env.VITE_API_URL ||
-    import.meta.env.VITE_API_BASE_URL ||
-    "https://englishlifesupport-kot4.onrender.com"
-  ).toString().trim().replace(/\/api\/?$/, "");
+  const BACKEND_BASE = "https://englishlifesupport-kot4.onrender.com";
 
   const url = `${BACKEND_BASE}/api/storage/presigned-upload-url`;
   const fallbackUrl = `${BACKEND_BASE}/storage/presigned-upload-url`;
@@ -455,11 +451,7 @@ export const addFeedbackReply = (feedbackId: string, message: string) =>
   api.post<FeedbackReplyItem>(`/feedback/${feedbackId}/replies`, { message }).then((r) => r.data);
 
 // --- Wordlists & Flashcards ---
-const BACKEND_URL = (
-  import.meta.env.VITE_API_URL ||
-  import.meta.env.VITE_API_BASE_URL ||
-  "https://englishlifesupport-kot4.onrender.com"
-).toString().trim();
+const BACKEND_URL = "https://englishlifesupport-kot4.onrender.com";
 
 const BASE_RENDER_URL = BACKEND_URL.replace(/\/api\/?$/, "");
 const WORDLISTS_URL = `${BASE_RENDER_URL}/api/wordlists`;
