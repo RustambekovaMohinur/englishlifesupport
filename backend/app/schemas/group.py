@@ -14,12 +14,7 @@ class GroupCreate(BaseModel):
     schedule: str | None = Field(default=None, max_length=255)
     telegram_group_chat_id: str | None = Field(default=None, max_length=32)
 
-    @field_validator("default_homework_time")
-    @classmethod
-    def validate_time(cls, v: str | None) -> str | None:
-        if v is not None and not TIME_REGEX.match(v):
-            raise ValueError("Invalid time format. Must be HH:MM (00:00 to 23:59)")
-        return v
+    
 
 
 class GroupUpdate(BaseModel):

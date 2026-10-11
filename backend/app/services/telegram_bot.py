@@ -298,7 +298,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             | (StudentProfile.phone == f"@{username}" if username else False)
         )
     )
-    student_record = res_student.scalar_one_or_none()
+    student_record = res_student.scalars().first()
 
     # 3) Check if user is linked as Teacher (via teacher profile phone or matching username/chat_id)
     teacher_record: TeacherProfile | None = None
@@ -311,7 +311,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             | (TeacherProfile.phone == f"@{username}" if username else False)
         )
     )
-    teacher_record = res_teacher.scalar_one_or_none()
+    teacher_record = res_teacher.scalars().first()
 
     # Determine user role
     user_role: str = "unregistered"

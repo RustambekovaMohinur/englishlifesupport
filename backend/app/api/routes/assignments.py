@@ -14,7 +14,7 @@ from app.db.session import get_db
 from app.services.telegram_bot import notify_student_assignment, notify_parent_assignment, notify_group_assignment
 from app.models.group import Group
 from app.models.student import StudentProfile
-from app.models.assignment import Assignment
+from app.models.assignment import Assignment, AssignmentComment
 from app.models.teacher import TeacherProfile
 from app.models.submission import Submission, SubmissionStatus
 from app.models.user import User, UserRole
@@ -59,7 +59,7 @@ async def _get_assignment_with_relations(db: AsyncSession, assignment_id: uuid.U
         )
         .where(Assignment.id == assignment_id)
     )
-    return (await db.execute(query)).scalar_one_or_none()
+    return (await db.execute(query)).scalars().first()
 
 
 def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, vocab_words: list[VocabularyWord] | None = None) -> AssignmentOut:
