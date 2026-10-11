@@ -828,7 +828,7 @@ async def get_wordlist_set(
                     part_of_speech=item.part_of_speech,
                     phonetic=item.phonetic,
                     definition=clean_def or None,
-                    uzbek_translation=uz_val or None,
+                    uzbek_translation=None,
                     example=item.example,
                     audio_us_url=item.audio_us_url,
                     audio_gb_url=item.audio_gb_url,

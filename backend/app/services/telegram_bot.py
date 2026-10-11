@@ -160,11 +160,17 @@ async def notify_parent_assignment(chat_id: int | str, student_name: str, assign
     return await send_telegram_message(chat_id=chat_id, text=text)
 
 async def notify_group_assignment(chat_id: int | str, assignment_title: str, due_date: datetime, is_update: bool = False) -> bool:
-    """Broadcast assignment notification to a group chat."""
-    action = "Yangilangan" if is_update else "Yangi"
-    emoji = "📢"
-    text = f"{emoji} {action} topshiriq 📚 guruhga:\n<b>{assignment_title}</b>\n⏰ Muddati: {due_date.strftime('%d.%m.%Y')}"
-    return await send_telegram_message(chat_id=chat_id, text=text)
+    """Send group notification for a new assignment only, with exact required format and no keyboard."""
+    if is_update:
+        return False
+    text = (
+        "📌 Yangi vazifa joylandi!\n\n"
+        f"📚 Vazifa: {assignment_title}\n"
+        f"📅 Oxirgi muddat: {due_date.strftime('%d.%m.%Y')}\n\n"
+        "🔗 Vazifani bajarish uchun platformaga o'ting:\n"
+        "https://englishlifesupport.vercel.app"
+    )
+    return await send_telegram_message(chat_id=chat_id, text=text, reply_markup=REMOVE_KEYBOARD)
 
 
 async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
