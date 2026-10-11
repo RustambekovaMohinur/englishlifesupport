@@ -126,73 +126,81 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
 @router.options("/login", include_in_schema=False)
 @router.options("/login/", include_in_schema=False)
 async def login_options():
-    return Response(status_code=204)
+    return Response(status_code=200)
 
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("60/minute")
 async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
-    raw_input = (body.username or body.email or "").strip()
-    login_input = raw_input.lower()
-    
-    # Strip @ if someone pasted @username
-    clean_identifier = login_input.lstrip("@")
-    clean_username_only = clean_identifier.split("@")[0] if "@" in clean_identifier else clean_identifier
+    try:
+        raw_input = (body.username or body.email or "").strip()
+        login_input = raw_input.lower()
 
-    # Candidate identifiers to match against username or email
-    identifiers = {login_input, clean_identifier, clean_username_only}
-    # Common student typo fallback: e.g. fayowka <-> fayowkaa
-    if clean_username_only == "fayowka":
-        identifiers.add("fayowkaa")
-        identifiers.add("fayowkaa@englishlife.local")
-    elif clean_username_only == "fayowkaa":
-        identifiers.add("fayowka")
-        identifiers.add("fayowka@englishlife.local")
+        # Strip @ if someone pasted @username
+        clean_identifier = login_input.lstrip("@")
+        clean_username_only = clean_identifier.split("@")[0] if "@" in clean_identifier else clean_identifier
 
-    conditions = []
-    for ident in identifiers:
-        conditions.append(func.lower(User.username) == ident)
-        conditions.append(func.lower(User.email) == ident)
+        # Candidate identifiers to match against username or email
+        identifiers = {login_input, clean_identifier, clean_username_only}
+        # Common student typo fallback: e.g. fayowka <-> fayowkaa
+        if clean_username_only == "fayowka":
+            identifiers.add("fayowkaa")
+            identifiers.add("fayowkaa@englishlife.local")
+        elif clean_username_only == "fayowkaa":
+            identifiers.add("fayowka")
+            identifiers.add("fayowka@englishlife.local")
 
-    result = await db.execute(
-        select(User).where(or_(*conditions)).order_by(User.is_active.desc(), User.created_at.asc())
-    )
-    users = result.scalars().all()
+        conditions = []
+        for ident in identifiers:
+            conditions.append(func.lower(User.username) == ident)
+            conditions.append(func.lower(User.email) == ident)
 
-    # Find the approved/active user first if multiple matches exist
-    user = None
-    if users:
-        # Prioritize approved active user
-        for u in users:
-            if u.approval_status == ApprovalStatus.APPROVED and u.is_active:
-                user = u
-                break
-        if not user:
-            user = users[0]
+        result = await db.execute(
+            select(User).where(or_(*conditions)).order_by(User.is_active.desc(), User.created_at.asc())
+        )
+        users = result.scalars().all()
 
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
+        # Find the approved/active user first if multiple matches exist
+        user = None
+        if users:
+            # Prioritize approved active user
+            for u in users:
+                if u.approval_status == ApprovalStatus.APPROVED and u.is_active:
+                    user = u
+                    break
+            if not user:
+                user = users[0]
 
-    is_valid = await asyncio.to_thread(verify_password, body.password, user.password_hash)
-    if not is_valid:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
-    if user.approval_status != ApprovalStatus.APPROVED:
-        if user.approval_status == ApprovalStatus.PENDING:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={"code": "ACCOUNT_PENDING_APPROVAL", "message": "Your account is waiting for teacher approval."},
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={"code": "ACCOUNT_REJECTED", "message": "Your account has been rejected."},
-            )
+        is_valid = await asyncio.to_thread(verify_password, body.password, user.password_hash)
+        if not is_valid:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
-    if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
+        if user.approval_status != ApprovalStatus.APPROVED:
+            if user.approval_status == ApprovalStatus.PENDING:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"code": "ACCOUNT_PENDING_APPROVAL", "message": "Your account is waiting for teacher approval."},
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"code": "ACCOUNT_REJECTED", "message": "Your account has been rejected."},
+                )
 
-    return await _issue_tokens(db, user, request.headers.get("user-agent"))
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
+
+        return await _issue_tokens(db, user, request.headers.get("user-agent"))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Login failed: {str(exc)}",
+        )
 
 
 @router.post("/refresh", response_model=AccessTokenResponse)

@@ -34,13 +34,14 @@ app = FastAPI(
     redoc_url=None,
 )
 
-@app.middleware("http")
-async def options_middleware(request: Request, call_next):
-    if request.method == "OPTIONS":
-        return Response(status_code=200, headers=get_cors_headers(request))
-    return await call_next(request)
-
-app.state.limiter = limiter
+# 1. Register CORSMiddleware FIRST before any routes, custom middleware or exception handlers
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def get_cors_headers(request: Request) -> dict[str, str]:
@@ -63,6 +64,28 @@ def get_cors_headers(request: Request) -> dict[str, str]:
     return headers
 
 
+# 2. Global catch-all OPTIONS handler returning 200 OK
+@app.options("/{full_path:path}", include_in_schema=False)
+async def global_options_handler(request: Request, full_path: str):
+    """Immediate CORS preflight responder returning 200 OK to guarantee zero preflight hangs or 503s."""
+    origin = request.headers.get("origin") or "*"
+    headers = {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD",
+        "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "*"),
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Max-Age": "86400",
+    }
+    return Response(status_code=200, headers=headers)
+
+
+@app.middleware("http")
+async def options_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return Response(status_code=200, headers=get_cors_headers(request))
+    return await call_next(request)
+
+
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
@@ -74,7 +97,6 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    # Friendly, structured validation errors without leaking internals.
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"detail": "Validation error", "errors": exc.errors()},
@@ -109,13 +131,11 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    # Never leak stack traces to the client, especially in production.
     logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
     headers = get_cors_headers(request)
     if settings.ENVIRONMENT == "production":
         return JSONResponse(status_code=500, content={"detail": f"Internal server error: {type(exc).__name__}"}, headers=headers)
     return JSONResponse(status_code=500, content={"detail": f"Internal server error: {exc}"}, headers=headers)
-
 
 
 @app.middleware("http")
@@ -131,27 +151,7 @@ async def security_headers_middleware(request: Request, call_next):
     return response
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-@app.options("/{rest_of_path:path}", include_in_schema=False)
-async def preflight_handler(request: Request, rest_of_path: str):
-    """Immediate CORS preflight responder to guarantee zero preflight hangs."""
-    origin = request.headers.get("origin") or "*"
-    headers = {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD",
-        "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "*"),
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "3600",
-    }
-    return Response(status_code=204, headers=headers)
+app.state.limiter = limiter
 
 
 app.include_router(auth.router)

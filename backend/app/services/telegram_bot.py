@@ -36,6 +36,17 @@ PARENT_KEYBOARD: dict[str, Any] = {
     "is_persistent": True,
 }
 
+HELP_ONLY_KEYBOARD: dict[str, Any] = {
+    "keyboard": [
+        [{"text": "ℹ️ Yordam"}],
+    ],
+    "resize_keyboard": True,
+}
+
+REMOVE_KEYBOARD: dict[str, Any] = {
+    "remove_keyboard": True,
+}
+
 
 def get_telegram_bot_token() -> str:
     """Returns the Telegram Bot Token configured in settings or environment."""
@@ -148,6 +159,11 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
     last_name = (user_info.get("last_name") or "").strip()
     parent_name = f"{first_name} {last_name}".strip() or first_name or (f"@{username}" if username else "Hurmatli ota-ona")
 
+    chat_type = chat.get("type", "private")
+    # In group chats, ignore interactive parent menus or commands to avoid spamming
+    if chat_type != "private":
+        return {"ok": True, "note": "Group chat message ignored for interactive commands"}
+
     # 1. Handle /start <token_or_student_id> (Deep Linking)
     if text.startswith("/start"):
         parts = text.split(maxsplit=1)
@@ -195,7 +211,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                         "Ushbu havola bo'yicha talaba tizimdan topilmadi. Iltimos, o'quv markazidan "
                         "yoki farzandingiz profilidagi 'Telegram Botga Ulash' havolasini qaytadan oling."
                     ),
-                    reply_markup=PARENT_KEYBOARD,
+                    reply_markup=REMOVE_KEYBOARD,
                 )
                 return {"ok": True}
 
@@ -222,6 +238,15 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             )
             return {"ok": True, "action": "parent_linked", "student_id": str(student.id)}
 
+    # Check whether the current user is linked to any student profile
+    res_linked = await db.execute(
+        select(StudentProfile)
+        .options(selectinload(StudentProfile.group))
+        .where(StudentProfile.parent_telegram_chat_id == str(chat_id))
+    )
+    linked_students = res_linked.scalars().all()
+    user_is_linked = len(linked_students) > 0
+
     # 2. Handle /status or button "📊 Farzandim ko'rsatkichlari"
     is_status_cmd = (
         text == "/status"
@@ -230,13 +255,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
         or "ko'rsatkich" in text.lower()
     )
     if is_status_cmd:
-        res = await db.execute(
-            select(StudentProfile)
-            .options(selectinload(StudentProfile.group))
-            .where(StudentProfile.parent_telegram_chat_id == str(chat_id))
-        )
-        linked_students = res.scalars().all()
-        if not linked_students:
+        if not user_is_linked:
             await send_telegram_message(
                 chat_id=chat_id,
                 text=(
@@ -244,7 +263,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                     "Farzandingiz profilidagi 'Telegram Botga Ulash' havolasi orqali kirishingiz "
                     "yoki o'qituvchi taqdim etgan havolani ochishingiz mumkin."
                 ),
-                reply_markup=PARENT_KEYBOARD,
+                reply_markup=REMOVE_KEYBOARD,
             )
             return {"ok": True}
 
@@ -321,15 +340,11 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
 
     # 3. Handle /unlink
     if text == "/unlink" or "uzish" in text.lower():
-        res = await db.execute(
-            select(StudentProfile).where(StudentProfile.parent_telegram_chat_id == str(chat_id))
-        )
-        linked_students = res.scalars().all()
-        if not linked_students:
+        if not user_is_linked:
             await send_telegram_message(
                 chat_id=chat_id,
                 text="Siz birorta ham talabaga ulanmagansiz.",
-                reply_markup=PARENT_KEYBOARD,
+                reply_markup=REMOVE_KEYBOARD,
             )
             return {"ok": True}
 
@@ -347,7 +362,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                 "Siz talaba hisobotlaridan muvaffaqiyatli uzildingiz. Xohlagan vaqtingizda "
                 "qaytadan ulanishingiz mumkin."
             ),
-            reply_markup=PARENT_KEYBOARD,
+            reply_markup=REMOVE_KEYBOARD,
         )
         return {"ok": True, "action": "unlinked"}
 
@@ -363,7 +378,9 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
         "• /unlink — Bildirishnomalardan chiqish\n"
         "• ℹ️ Yordam — Botdan foydalanish yo'riqnomasi"
     )
-    await send_telegram_message(chat_id=chat_id, text=help_text, reply_markup=PARENT_KEYBOARD)
+    # If user is linked, keep the parent keyboard. If not linked, clean keyboard or provide only help.
+    active_keyboard = PARENT_KEYBOARD if user_is_linked else REMOVE_KEYBOARD
+    await send_telegram_message(chat_id=chat_id, text=help_text, reply_markup=active_keyboard)
     return {"ok": True}
 
 
