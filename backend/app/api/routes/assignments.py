@@ -14,6 +14,7 @@ from app.db.session import get_db
 from app.services.telegram_bot import notify_student_assignment, notify_parent_assignment, notify_group_assignment
 from app.models.group import Group
 from app.models.student import StudentProfile
+from app.models.assignment import Assignment
 from app.models.teacher import TeacherProfile
 from app.models.submission import Submission, SubmissionStatus
 from app.models.user import User, UserRole
