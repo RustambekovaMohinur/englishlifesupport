@@ -30,10 +30,15 @@ logger = logging.getLogger("english_life")
 app = FastAPI(
     title="English Life LMS API",
     version="1.0.0",
-    # Hide interactive docs in production to reduce attack surface.
     docs_url="/api/docs" if settings.ENVIRONMENT != "production" else None,
     redoc_url=None,
 )
+
+@app.middleware("http")
+async def options_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return Response(status_code=200, headers=get_cors_headers(request))
+    return await call_next(request)
 
 app.state.limiter = limiter
 
@@ -126,24 +131,12 @@ async def security_headers_middleware(request: Request, call_next):
     return response
 
 
-origins = list({
-    "https://englishlifesupport.vercel.app",
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:3000",
-    *settings.cors_origins_list,
-})
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600,
 )
 
 
