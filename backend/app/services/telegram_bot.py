@@ -144,6 +144,28 @@ def build_parent_deep_link(bot_username: str, student_id: uuid.UUID | str) -> st
     clean_bot = bot_username.replace("@", "").strip()
     return f"https://t.me/{clean_bot}?start=parent_{student_id}"
 
+# Notification helper functions for assignment events
+async def notify_student_assignment(chat_id: int | str, assignment_title: str, due_date: datetime, is_update: bool = False) -> bool:
+    """Send a Telegram message to a student about a new or updated assignment."""
+    action = "Yangilangan" if is_update else "Yangi"
+    emoji = "✏️" if not is_update else "🔄"
+    text = f"{emoji} {action} topshiriq 📚:\n<b>{assignment_title}</b>\n⏰ Muddati: {due_date.strftime('%d.%m.%Y')}"
+    return await send_telegram_message(chat_id=chat_id, text=text)
+
+async def notify_parent_assignment(chat_id: int | str, student_name: str, assignment_title: str, due_date: datetime, is_update: bool = False) -> bool:
+    """Notify a parent about a student's assignment."""
+    action = "Yangilangan" if is_update else "Yangi"
+    emoji = "✏️" if not is_update else "🔄"
+    text = f"{emoji} {action} topshiriq 📚 oʻquvchiga {student_name}:\n<b>{assignment_title}</b>\n⏰ Muddati: {due_date.strftime('%d.%m.%Y')}"
+    return await send_telegram_message(chat_id=chat_id, text=text)
+
+async def notify_group_assignment(chat_id: int | str, assignment_title: str, due_date: datetime, is_update: bool = False) -> bool:
+    """Broadcast assignment notification to a group chat."""
+    action = "Yangilangan" if is_update else "Yangi"
+    emoji = "📢"
+    text = f"{emoji} {action} topshiriq 📚 guruhga:\n<b>{assignment_title}</b>\n⏰ Muddati: {due_date.strftime('%d.%m.%Y')}"
+    return await send_telegram_message(chat_id=chat_id, text=text)
+
 
 async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
     """
