@@ -1,12 +1,7 @@
-﻿{
+{
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "functions": {
-    "api/**/*.py": {
-      "maxDuration": 60,
-      "memory": 1024
-    },
-    "backend/**/*.py": {
-      "maxDuration": 60,
-      "memory": 1024
-    }
+    "api/**/*.py": { "maxDuration": 60, "memory": 1024 },
+    "backend/**/*.py": { "maxDuration": 60, "memory": 1024 }
   }
 }
