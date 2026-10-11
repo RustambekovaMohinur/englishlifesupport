@@ -29,12 +29,23 @@ console.log("BASE_URL:", API_BASE_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: { "Content-Type": "application/json" },
+  headers: { "Content-Type": "application/json", ...(tokenStorage.getAccess() ? { Authorization: `Bearer ${tokenStorage.getAccess()}` } : {}) },
   timeout: 30000,
 });
 
 api.interceptors.request.use((config) => {
-  // Avoid duplicate /api/api when baseURL already ends with /api
+  // Ensure token is attached for all non-public routes
+  const isPublicAuthRoute = config.url && (
+    config.url.endsWith("/auth/login") ||
+    config.url.endsWith("/auth/register") ||
+    config.url.endsWith("/auth/groups/public")
+  );
+  const token = !isPublicAuthRoute ? tokenStorage.getAccess() : null;
+  if (token) {
+    if (!config.headers) config.headers = {} as any;
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  // Existing duplicate /api handling
   if (config.url && config.baseURL?.endsWith("/api")) {
     if (config.url.startsWith("/api/")) {
       config.url = config.url.slice(4);
@@ -42,18 +53,7 @@ api.interceptors.request.use((config) => {
       config.url = "";
     }
   }
-
-  const isPublicAuthRoute = config.url && (
-    config.url.endsWith("/auth/login") ||
-    config.url.endsWith("/auth/register") ||
-    config.url.endsWith("/auth/groups/public")
-  );
-  const token = !isPublicAuthRoute ? tokenStorage.getAccess() : null;
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  // Default JSON Content-Type (and a manual multipart type without a boundary)
-  // prevent the browser from sending a valid FormData body.
+  // Existing Content-Type handling unchanged
   if (typeof FormData !== "undefined" && config.data instanceof FormData && config.headers) {
     if (typeof config.headers.delete === "function") {
       config.headers.delete("Content-Type");
