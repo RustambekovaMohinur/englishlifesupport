@@ -105,7 +105,7 @@ async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
         default_homework_time=group.default_homework_time or "20:00",
         current_cycle=getattr(group, "current_cycle", 1) or 1,
         is_active=group.is_active,
-        telegram_group_chat_id=group.telegram_group_chat_id,
+        telegram_group_chat_id=getattr(group, "telegram_group_chat_id", None),
         student_count=counts_map.get(group.id, 0),
         created_at=group.created_at,
     )
