@@ -1,3 +1,4 @@
+// Groups.tsx - cleaned version
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -229,7 +230,7 @@ export default function GroupsPage() {
                   {groupDetail.students.map((st) => (
                     <tr key={st.student_id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors">
                       <td className="px-4 py-3 sticky left-0 bg-white dark:bg-[#161B22] z-10 font-medium text-zinc-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 cursor-pointer"
-                          onClick={() => viewStudentHistory(st.student_id)}>
+                        onClick={() => viewStudentHistory(st.student_id)}>
                         <div className="flex items-center gap-1.5">
                           <span className="underline decoration-dotted">{st.full_name}</span>
                           <span className="text-xs text-zinc-400 dark:text-zinc-500 font-normal">(@{st.username})</span>
@@ -262,7 +263,6 @@ export default function GroupsPage() {
                         const pct = item ? item.completion_percentage : 0;
                         const isComplete = pct >= 100;
                         const isZero = pct === 0;
-
                         return (
                           <td key={a.id} className="px-3 py-3 text-center">
                             <span
@@ -488,7 +488,7 @@ function GroupModal({
           </p>
         </div>
         <div>
-            <div>
+          <div>
             <label className="label">TELEGRAM CHAT ID</label>
             <input
               className="input"
@@ -496,111 +496,9 @@ function GroupModal({
               onChange={e => setTelegramGroupChatId(e.target.value)}
               placeholder="e.g. -1001234567890"
             />
-            <p className="mt-1 text-xs text-neutral-400">
-              Enter the Telegram group chat ID where assignment notifications will be sent.
-            </p>
-            <p className="mt-1 text-xs text-neutral-400">
-              (Get this by adding your bot to the Telegram group as an admin)
-            </p>
+            <p className="mt-1 text-xs text-neutral-400">Enter the Telegram group chat ID where assignment notifications will be sent.</p>
+            <p className="mt-1 text-xs text-neutral-400">(Get this by adding your bot to the Telegram group as an admin)</p>
           </div>
-           <label className="label">TELEGRAM CHAT ID</label>
-           <input
-             className="input"
-             value={telegramGroupChatId}
-             onChange={e => setTelegramGroupChatId(e.target.value)}
-             placeholder="e.g. -1001234567890"
-           />
-           <p className="mt-1 text-xs text-neutral-400">
-             Enter the Telegram group chat ID where assignment notifications will be sent.
-           </p>
-           <p className="mt-1 text-xs text-neutral-400">
-             (Get this by adding your bot to the Telegram group as an admin)
-           </p>
-         </div>
-           <label className="label">TELEGRAM CHAT ID</label>
-           <input
-             className="input"
-             value={telegramGroupChatId}
-             onChange={e => setTelegramGroupChatId(e.target.value)}
-             placeholder="e.g. -1001234567890"
-           />
-           <p className="mt-1 text-xs text-neutral-400">
-             Enter the Telegram group chat ID where assignment notifications will be sent.
-           </p>
-         </div>
-            <label className="label">TELEGRAM CHAT ID</label>
-            <input
-              className="input"
-              value={telegramGroupChatId}
-              onChange={e => setTelegramGroupChatId(e.target.value)}
-              placeholder="e.g. -1001234567890"
-            />
-            <p className="mt-1 text-xs text-neutral-400">
-              Enter the Telegram group chat ID where assignment notifications will be sent.
-            </p>
-          </div>
-            <label className="label">TELEGRAM CHAT ID</label>
-            <input
-              className="input"
-              value={telegramGroupChatId}
-              onChange={e => setTelegramGroupChatId(e.target.value)}
-              placeholder="e.g. -1001234567890"
-            />
-            <p className="mt-1 text-xs text-neutral-400">
-              Enter the Telegram group chat ID where assignment notifications will be sent.
-            </p>
-          </div>
-  <label className="label">TELEGRAM CHAT ID</label>
-  <input
-    className="input"
-    value={telegramGroupChatId}
-    onChange={e => setTelegramGroupChatId(e.target.value)}
-    placeholder="e.g. -1001234567890"
-  />
-  <p className="mt-1 text-xs text-neutral-400">
-    Enter the Telegram group chat ID where assignment notifications will be sent.
-  </p>
-</div>
-            <label className="label">TELEGRAM CHAT ID</label>
-            <input
-              className="input"
-              value={telegramGroupChatId}
-              onChange={e => setTelegramGroupChatId(e.target.value)}
-              placeholder="e.g. -1001234567890"
-            />
-            <p className="mt-1 text-xs text-neutral-400">
-              Enter the Telegram group chat ID where assignment notifications will be sent.
-            </p>
-          </div>
-  <label className="label">TELEGRAM CHAT ID</label>
-  <input
-    className="input"
-    value={telegramGroupChatId}
-    onChange={e => setTelegramGroupChatId(e.target.value)}
-    placeholder="e.g. -1001234567890"
-  />
-  <p className="mt-1 text-xs text-neutral-400">
-    Enter the Telegram group chat ID where assignment notifications will be sent.
-  </p>
-</div>
-           <input
-             className="input"
-             value={telegramGroupChatId}
-             onChange={e => setTelegramGroupChatId(e.target.value)}
-             placeholder="e.g. -1001234567890"
-           />
-           <p className="mt-1 text-xs text-neutral-400">
-             Enter the Telegram group chat ID where assignment notifications will be sent.
-           </p>
-          
-
-
-            onChange={e => setTelegramGroupChatId(e.target.value)}
-            placeholder="e.g. -1001234567890"
-          />
-          <p className="mt-1 text-xs text-neutral-400">
-            (Get this by adding your bot to the Telegram group as an admin)
-          </p>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-secondary" onClick={onClose}>
