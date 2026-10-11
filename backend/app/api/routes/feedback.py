@@ -22,6 +22,8 @@ from app.schemas.feedback import (
 )
 from app.services.gamification_service import award_xp
 
+import logging
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
 
@@ -127,76 +129,73 @@ async def submit_platform_feedback(
     }
 
 
-@router.get("/summary", response_model=PlatformFeedbackSummary)
-async def get_platform_feedback_summary(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Return community rating summary and user's review status using pure joined queries.
-    Immune to greenlet_spawn / lazy-loading IO.
-    """
-    stmt = (
-        select(
-            PlatformFeedback.id,
-            PlatformFeedback.user_id,
-            PlatformFeedback.rating,
-            PlatformFeedback.what_works_well,
-            PlatformFeedback.what_to_improve,
-            PlatformFeedback.category,
-            PlatformFeedback.message,
-            PlatformFeedback.created_at,
-            User.username,
-            User.role,
-            StudentProfile.full_name.label("student_name"),
-        )
-        .join(User, PlatformFeedback.user_id == User.id, isouter=True)
-        .join(StudentProfile, User.id == StudentProfile.user_id, isouter=True)
-        .order_by(PlatformFeedback.created_at.desc())
-    )
-    rows = (await db.execute(stmt)).all()
-
-    if not rows:
-        return PlatformFeedbackSummary(
-            average_rating=5.0,
-            total_reviews=0,
-            rating_distribution={"1": 0, "2": 0, "3": 0, "4": 0, "5": 0},
-            user_has_reviewed=False,
-            user_review=None,
-        )
-
-    total = len(rows)
-    avg = sum(r.rating for r in rows) / total
-    counts = Counter(str(r.rating) for r in rows)
-    distribution = {str(star): counts.get(str(star), 0) for star in range(1, 6)}
-
-    # Check for current user's review
-    user_review = None
-    for r in rows:
-        if r.user_id == current_user.id:
-            role_val = r.role.value if hasattr(r.role, "value") else str(r.role or "student")
-            name_val = r.student_name or r.username or "Anonymous"
-            user_review = PlatformFeedbackOut(
-                id=r.id,
-                user_id=r.user_id,
-                user_full_name=name_val,
-                user_role=role_val,
-                rating=r.rating,
-                what_works_well=r.what_works_well,
-                what_to_improve=r.what_to_improve,
-                category=r.category,
-                message=r.message,
-                created_at=r.created_at,
+    try:
+        stmt = (
+            select(
+                PlatformFeedback.id,
+                PlatformFeedback.user_id,
+                PlatformFeedback.rating,
+                PlatformFeedback.what_works_well,
+                PlatformFeedback.what_to_improve,
+                PlatformFeedback.category,
+                PlatformFeedback.message,
+                PlatformFeedback.created_at,
+                User.username,
+                User.role,
+                StudentProfile.full_name.label("student_name"),
             )
-            break
+            .join(User, PlatformFeedback.user_id == User.id, isouter=True)
+            .join(StudentProfile, User.id == StudentProfile.user_id, isouter=True)
+            .order_by(PlatformFeedback.created_at.desc())
+        )
+        rows = (await db.execute(stmt)).all()
 
-    return PlatformFeedbackSummary(
-        average_rating=round(avg, 1),
-        total_reviews=total,
-        rating_distribution=distribution,
-        user_has_reviewed=user_review is not None,
-        user_review=user_review,
-    )
+        if not rows:
+            return PlatformFeedbackSummary(
+                average_rating=5.0,
+                total_reviews=0,
+                rating_distribution={"1": 0, "2": 0, "3": 0, "4": 0, "5": 0},
+                user_has_reviewed=False,
+                user_review=None,
+            )
+
+        total = len(rows)
+        avg = sum(r.rating for r in rows) / total
+        counts = Counter(str(r.rating) for r in rows)
+        distribution = {str(star): counts.get(str(star), 0) for star in range(1, 6)}
+
+        # Check for current user's review
+        user_review = None
+        for r in rows:
+            if r.user_id == current_user.id:
+                role_val = r.role.value if hasattr(r.role, "value") else str(r.role or "student")
+                name_val = r.student_name or r.username or "Anonymous"
+                user_review = PlatformFeedbackOut(
+                    id=r.id,
+                    user_id=r.user_id,
+                    user_full_name=name_val,
+                    user_role=role_val,
+                    rating=r.rating,
+                    what_works_well=r.what_works_well,
+                    what_to_improve=r.what_to_improve,
+                    category=r.category,
+                    message=r.message,
+                    created_at=r.created_at,
+                )
+                break
+
+        return PlatformFeedbackSummary(
+            average_rating=round(avg, 1),
+            total_reviews=total,
+            rating_distribution=distribution,
+            user_has_reviewed=user_review is not None,
+            user_review=user_review,
+        )
+    except Exception as e:
+        logger.exception("Error in get_platform_feedback_summary")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("", response_model=list[PlatformFeedbackOut], dependencies=[Depends(require_teacher)])

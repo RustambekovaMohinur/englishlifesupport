@@ -105,7 +105,7 @@ async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
         default_homework_time=group.default_homework_time or "20:00",
         current_cycle=getattr(group, "current_cycle", 1) or 1,
         is_active=group.is_active,
-        telegram_group_chat_id=getattr(group, "telegram_group_chat_id", None),
+        # telegram_group_chat_id removed – column does not exist
         student_count=counts_map.get(group.id, 0),
         created_at=group.created_at,
     )
@@ -207,8 +207,7 @@ async def update_group(
         group.default_homework_time = body.default_homework_time
     if body.is_active is not None:
         group.is_active = body.is_active
-    if getattr(body, "telegram_group_chat_id", None) is not None:
-        group.telegram_group_chat_id = body.telegram_group_chat_id
+    # telegram_group_chat_id update removed – column does not exist
     await db.commit()
     await db.refresh(group)
     return await _to_group_out(db, group)
