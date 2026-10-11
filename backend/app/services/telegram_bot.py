@@ -18,7 +18,8 @@ from app.core.config import settings
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.student import StudentProfile
 from app.models.submission import Submission, SubmissionStatus
-from app.models.user import User
+from app.models.teacher import TeacherProfile
+from app.models.user import User, UserRole
 from app.utils.datetimes import utcnow
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,16 @@ _CACHED_BOT_USERNAME: str | None = None
 PARENT_KEYBOARD: dict[str, Any] = {
     "keyboard": [
         [{"text": "📊 Farzandim ko'rsatkichlari"}],
+        [{"text": "ℹ️ Yordam"}],
+    ],
+    "resize_keyboard": True,
+    "is_persistent": True,
+}
+
+# Persistent ReplyKeyboardMarkup for students
+STUDENT_KEYBOARD: dict[str, Any] = {
+    "keyboard": [
+        [{"text": "📊 Ko'rsatkichlarim"}],
         [{"text": "ℹ️ Yordam"}],
     ],
     "resize_keyboard": True,
@@ -238,149 +249,260 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             )
             return {"ok": True, "action": "parent_linked", "student_id": str(student.id)}
 
-    # Check whether the current user is linked to any student profile
-    res_linked = await db.execute(
+    # Check role and linked identity in database
+    # 1) Check if user is linked as Parent
+    res_parent = await db.execute(
         select(StudentProfile)
         .options(selectinload(StudentProfile.group))
         .where(StudentProfile.parent_telegram_chat_id == str(chat_id))
     )
-    linked_students = res_linked.scalars().all()
-    user_is_linked = len(linked_students) > 0
+    linked_students = res_parent.scalars().all()
 
-    # 2. Handle /status or button "📊 Farzandim ko'rsatkichlari"
+    # 2) Check if user is linked as Student (via student profile phone or matching username/chat_id)
+    student_record: StudentProfile | None = None
+    res_student = await db.execute(
+        select(StudentProfile)
+        .options(selectinload(StudentProfile.group))
+        .where(
+            (StudentProfile.phone == str(chat_id))
+            | (StudentProfile.phone == f"+{chat_id}")
+            | (StudentProfile.phone == (username or "___none___"))
+            | (StudentProfile.phone == f"@{username}" if username else False)
+        )
+    )
+    student_record = res_student.scalar_one_or_none()
+
+    # 3) Check if user is linked as Teacher (via teacher profile phone or matching username/chat_id)
+    teacher_record: TeacherProfile | None = None
+    res_teacher = await db.execute(
+        select(TeacherProfile)
+        .where(
+            (TeacherProfile.phone == str(chat_id))
+            | (TeacherProfile.phone == f"+{chat_id}")
+            | (TeacherProfile.phone == (username or "___none___"))
+            | (TeacherProfile.phone == f"@{username}" if username else False)
+        )
+    )
+    teacher_record = res_teacher.scalar_one_or_none()
+
+    # Determine user role
+    user_role: str = "unregistered"
+    display_name: str = parent_name
+    if linked_students:
+        user_role = "parent"
+    elif student_record:
+        user_role = "student"
+        display_name = student_record.full_name or parent_name
+    elif teacher_record:
+        user_role = "teacher"
+        display_name = teacher_record.full_name or parent_name
+
+    user_is_linked = user_role in ("parent", "student", "teacher")
+
+    # 2. Handle /status or button "📊 Farzandim ko'rsatkichlari" / "📊 Ko'rsatkichlarim"
     is_status_cmd = (
         text == "/status"
         or text == "📊 Farzandim ko'rsatkichlari"
+        or text == "📊 Ko'rsatkichlarim"
         or "farzandim" in text.lower()
         or "ko'rsatkich" in text.lower()
     )
     if is_status_cmd:
-        if not user_is_linked:
-            await send_telegram_message(
-                chat_id=chat_id,
-                text=(
-                    "ℹ️ <b>Siz hali birorta ham talabaga ulanmagansiz.</b>\n\n"
-                    "Farzandingiz profilidagi 'Telegram Botga Ulash' havolasi orqali kirishingiz "
-                    "yoki o'qituvchi taqdim etgan havolani ochishingiz mumkin."
-                ),
-                reply_markup=REMOVE_KEYBOARD,
-            )
-            return {"ok": True}
-
-        for s in linked_students:
-            group_str = f"{s.group.name} ({s.group.english_level})" if s.group else "Guruh belgilanmagan"
+        if user_role == "student" and student_record:
+            # Student's own report
+            group_str = f"{student_record.group.name} ({student_record.group.english_level})" if student_record.group else "Guruh belgilanmagan"
             lines = [
-                f"📊 <b>{s.full_name} — O'qish ko'rsatkichlari</b>",
+                f"📊 <b>{student_record.full_name} — Shaxsiy ko'rsatkichlar</b>",
                 f"👥 Guruh: <b>{group_str}</b>",
-                f"⭐ To'plangan yulduzlar: <b>{s.total_stars}</b> | ⚡ Faollik: <b>{s.total_lightning}</b>\n",
+                f"⭐ To'plangan yulduzlar: <b>{student_record.total_stars}</b> | ⚡ Faollik: <b>{student_record.total_lightning}</b>\n",
             ]
-
-            # Query recent 5 submissions with assignment and grade
             sub_stmt = (
                 select(Submission)
                 .options(
                     selectinload(Submission.assignment),
                     selectinload(Submission.grade),
                 )
-                .where(Submission.student_id == s.id)
+                .where(Submission.student_id == student_record.id)
                 .order_by(Submission.submitted_at.desc())
                 .limit(5)
             )
             sub_res = await db.execute(sub_stmt)
             recent_subs = sub_res.scalars().all()
-
             if recent_subs:
-                lines.append("📝 <b>So'nggi vazifalar va baholar:</b>")
+                lines.append("📝 <b>So'nggi vazifalaringiz:</b>")
                 for sub in recent_subs:
                     as_title = sub.assignment.title if sub.assignment else "Vazifa"
                     sub_time = sub.submitted_at.strftime("%d.%m.%Y")
                     if sub.grade:
-                        grade_icon = "🌟" if sub.grade.score >= 8 else "✅"
-                        lines.append(f"• {as_title}: {grade_icon} <b>{sub.grade.score}/10</b> ({sub_time})")
-                        if sub.grade.feedback and len(sub.grade.feedback) < 80:
-                            lines.append(f"   <i>Izoh: {sub.grade.feedback}</i>")
-                    elif sub.status == SubmissionStatus.LATE:
-                        lines.append(f"• {as_title}: ⚠️ <b>Kechikib topshirilgan</b> ({sub_time})")
+                        lines.append(f"• {as_title}: ✅ <b>{sub.grade.score}/10</b> ({sub_time})")
                     else:
-                        lines.append(f"• {as_title}: ⏳ <b>Topshirildi (Tekshirilmoqda)</b> ({sub_time})")
+                        lines.append(f"• {as_title}: ⏳ <b>Tekshirilmoqda</b> ({sub_time})")
             else:
                 lines.append("📝 Hozircha topshirilgan vazifalar mavjud emas.")
 
-            # Check missed assignments
-            if s.group_id:
-                missed_stmt = (
-                    select(Assignment)
-                    .where(
-                        Assignment.group_id == s.group_id,
-                        Assignment.status == AssignmentStatus.PUBLISHED,
-                        Assignment.deadline < utcnow(),
-                        ~Assignment.id.in_(
-                            select(Submission.assignment_id).where(Submission.student_id == s.id)
-                        ),
-                    )
-                    .order_by(Assignment.deadline.desc())
-                    .limit(3)
-                )
-                missed_res = await db.execute(missed_stmt)
-                missed_assignments = missed_res.scalars().all()
-                if missed_assignments:
-                    lines.append("\n⚠️ <b>Topshirilmagan vazifalar (Davomat/Qarzdorlik):</b>")
-                    for ma in missed_assignments:
-                        d_str = ma.deadline.strftime("%d.%m.%Y")
-                        lines.append(f"• ❌ {ma.title} (Muddati: {d_str})")
-
-            lines.append("\nℹ️ <i>Har bir yangi dars topshirig'i baholanganda, natija sizga avtomatik yuboriladi.</i>")
             await send_telegram_message(
                 chat_id=chat_id,
                 text="\n".join(lines),
-                reply_markup=PARENT_KEYBOARD,
+                reply_markup=STUDENT_KEYBOARD,
             )
+            return {"ok": True, "action": "student_status_sent"}
 
-        return {"ok": True, "action": "status_sent"}
+        if user_role == "parent" and linked_students:
+            for s in linked_students:
+                group_str = f"{s.group.name} ({s.group.english_level})" if s.group else "Guruh belgilanmagan"
+                lines = [
+                    f"📊 <b>{s.full_name} — O'qish ko'rsatkichlari</b>",
+                    f"👥 Guruh: <b>{group_str}</b>",
+                    f"⭐ To'plangan yulduzlar: <b>{s.total_stars}</b> | ⚡ Faollik: <b>{s.total_lightning}</b>\n",
+                ]
+
+                # Query recent 5 submissions with assignment and grade
+                sub_stmt = (
+                    select(Submission)
+                    .options(
+                        selectinload(Submission.assignment),
+                        selectinload(Submission.grade),
+                    )
+                    .where(Submission.student_id == s.id)
+                    .order_by(Submission.submitted_at.desc())
+                    .limit(5)
+                )
+                sub_res = await db.execute(sub_stmt)
+                recent_subs = sub_res.scalars().all()
+
+                if recent_subs:
+                    lines.append("📝 <b>So'nggi vazifalar va baholar:</b>")
+                    for sub in recent_subs:
+                        as_title = sub.assignment.title if sub.assignment else "Vazifa"
+                        sub_time = sub.submitted_at.strftime("%d.%m.%Y")
+                        if sub.grade:
+                            grade_icon = "🌟" if sub.grade.score >= 8 else "✅"
+                            lines.append(f"• {as_title}: {grade_icon} <b>{sub.grade.score}/10</b> ({sub_time})")
+                            if sub.grade.feedback and len(sub.grade.feedback) < 80:
+                                lines.append(f"   <i>Izoh: {sub.grade.feedback}</i>")
+                        elif sub.status == SubmissionStatus.LATE:
+                            lines.append(f"• {as_title}: ⚠️ <b>Kechikib topshirilgan</b> ({sub_time})")
+                        else:
+                            lines.append(f"• {as_title}: ⏳ <b>Topshirildi (Tekshirilmoqda)</b> ({sub_time})")
+                else:
+                    lines.append("📝 Hozircha topshirilgan vazifalar mavjud emas.")
+
+                # Check missed assignments
+                if s.group_id:
+                    missed_stmt = (
+                        select(Assignment)
+                        .where(
+                            Assignment.group_id == s.group_id,
+                            Assignment.status == AssignmentStatus.PUBLISHED,
+                            Assignment.deadline < utcnow(),
+                            ~Assignment.id.in_(
+                                select(Submission.assignment_id).where(Submission.student_id == s.id)
+                            ),
+                        )
+                        .order_by(Assignment.deadline.desc())
+                        .limit(3)
+                    )
+                    missed_res = await db.execute(missed_stmt)
+                    missed_assignments = missed_res.scalars().all()
+                    if missed_assignments:
+                        lines.append("\n⚠️ <b>Topshirilmagan vazifalar (Davomat/Qarzdorlik):</b>")
+                        for ma in missed_assignments:
+                            d_str = ma.deadline.strftime("%d.%m.%Y")
+                            lines.append(f"• ❌ {ma.title} (Muddati: {d_str})")
+
+                lines.append("\nℹ️ <i>Har bir yangi dars topshirig'i baholanganda, natija sizga avtomatik yuboriladi.</i>")
+                await send_telegram_message(
+                    chat_id=chat_id,
+                    text="\n".join(lines),
+                    reply_markup=PARENT_KEYBOARD,
+                )
+            return {"ok": True, "action": "parent_status_sent"}
+
+        await send_telegram_message(
+            chat_id=chat_id,
+            text=(
+                "ℹ️ <b>Siz hali birorta ham akkauntga ulanmagansiz.</b>\n\n"
+                "Platformadagi profilingiz orqali Telegram botga ulanish havolasini oching."
+            ),
+            reply_markup=REMOVE_KEYBOARD,
+        )
+        return {"ok": True}
 
     # 3. Handle /unlink
     if text == "/unlink" or "uzish" in text.lower():
         if not user_is_linked:
             await send_telegram_message(
                 chat_id=chat_id,
-                text="Siz birorta ham talabaga ulanmagansiz.",
+                text="Siz birorta ham talabaga yoki profilga ulanmagansiz.",
                 reply_markup=REMOVE_KEYBOARD,
             )
             return {"ok": True}
 
-        for s in linked_students:
-            s.parent_telegram_chat_id = None
-            s.parent_telegram_username = None
-            s.parent_name = None
-            s.parent_linked_at = None
-        await db.commit()
+        if linked_students:
+            for s in linked_students:
+                s.parent_telegram_chat_id = None
+                s.parent_telegram_username = None
+                s.parent_name = None
+                s.parent_linked_at = None
+            await db.commit()
+
+        if student_record and (student_record.phone == str(chat_id) or student_record.phone == f"+{chat_id}"):
+            student_record.phone = None
+            await db.commit()
+
+        if teacher_record and (teacher_record.phone == str(chat_id) or teacher_record.phone == f"+{chat_id}"):
+            teacher_record.phone = None
+            await db.commit()
 
         await send_telegram_message(
             chat_id=chat_id,
             text=(
                 "✅ <b>Bildirishnomalar to'xtatildi.</b>\n\n"
-                "Siz talaba hisobotlaridan muvaffaqiyatli uzildingiz. Xohlagan vaqtingizda "
+                "Siz hisobotlardan muvaffaqiyatli uzildingiz. Xohlagan vaqtingizda "
                 "qaytadan ulanishingiz mumkin."
             ),
             reply_markup=REMOVE_KEYBOARD,
         )
         return {"ok": True, "action": "unlinked"}
 
-    # 4. Default /start, /help, or "ℹ️ Yordam"
+    # 4. Default /start, /help, or "ℹ️ Yordam" (Role-based dynamic welcome message)
     bot_name = await get_bot_username()
-    help_text = (
-        f"Assalomu alaykum, <b>{parent_name}</b>!\n\n"
-        f"Bu <b>English Life LMS</b> ota-onalar xabarnoma boti (@{bot_name}).\n\n"
-        "Farzandingiz dars natijalarini kuzatish uchun platformadagi QR kodni skanerlang yoki "
-        "ulanish havolasini oching.\n\n"
-        "📌 <b>Mavjud buyruqlar:</b>\n"
-        "• 📊 Farzandim ko'rsatkichlari — Joriy baholar va qoldirilgan vazifalar\n"
-        "• /unlink — Bildirishnomalardan chiqish\n"
-        "• ℹ️ Yordam — Botdan foydalanish yo'riqnomasi"
-    )
-    # If user is linked, keep the parent keyboard. If not linked, clean keyboard or provide only help.
-    active_keyboard = PARENT_KEYBOARD if user_is_linked else REMOVE_KEYBOARD
-    await send_telegram_message(chat_id=chat_id, text=help_text, reply_markup=active_keyboard)
+
+    if user_role == "student":
+        welcome_text = (
+            f"Assalomu alaykum, {display_name}! 👋\n\n"
+            "Bu English Life LMS o'quvchi yordamchi boti.\n\n"
+            "📌 <b>Sizning imkoniyatlaringiz:</b>\n"
+            "• 📊 Shaxsiy baholar va oylik ko'rsatkichlarni kuzatish\n"
+            "• 🔔 Uy vazifalari va dars jadvali haqida bildirishnomalar\n"
+            "• ⚙️ /unlink — Akkauntni uzish\n"
+            "• ℹ️ Yordam — Botdan foydalanish yo'riqnomasi"
+        )
+        keyboard = STUDENT_KEYBOARD
+    elif user_role == "parent":
+        welcome_text = (
+            f"Assalomu alaykum, {display_name}! 👋\n\n"
+            "Bu English Life LMS ota-onalar xabarnoma boti.\n\n"
+            "📌 <b>Imkoniyatlar:</b>\n"
+            "• 📊 Farzandingiz dars natijalari va davomatini kuzatish\n"
+            "• 🔔 Vazifalar bajarilishi bo'yicha tezkor xabarlar\n"
+            "• ⚙️ /unlink — Akkauntni uzish\n"
+            "• ℹ️ Yordam"
+        )
+        keyboard = PARENT_KEYBOARD
+    else:
+        # Teacher or Unregistered / Not linked yet
+        welcome_text = (
+            "Assalomu alaykum! 👋\n\n"
+            f"Bu English Life LMS rasmiy yordamchi boti (@{bot_name}).\n\n"
+            "🔗 Iltimos, platformadagi profilingizni Telegram bilan ulash uchun shaxsiy kabinetingizdagi QR-kodni skanerlang.\n\n"
+            "📌 <b>Buyruqlar:</b>\n"
+            "• /unlink — Akkauntni uzish\n"
+            "• ℹ️ Yordam"
+        )
+        keyboard = REMOVE_KEYBOARD
+
+    await send_telegram_message(chat_id=chat_id, text=welcome_text, reply_markup=keyboard)
     return {"ok": True}
 
 
