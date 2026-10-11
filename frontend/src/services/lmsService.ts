@@ -201,7 +201,7 @@ export const getPresignedUploadUrl = async (
   const BACKEND_BASE = (
     import.meta.env.VITE_API_URL ||
     import.meta.env.VITE_API_BASE_URL ||
-    "https://englishlifesupport.onrender.com"
+    "https://englishlifesupport-kot4.onrender.com"
   ).toString().trim().replace(/\/api\/?$/, "");
 
   const url = `${BACKEND_BASE}/api/storage/presigned-upload-url`;
@@ -458,7 +458,7 @@ export const addFeedbackReply = (feedbackId: string, message: string) =>
 const BACKEND_URL = (
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_API_BASE_URL ||
-  "https://englishlifesupport.onrender.com"
+  "https://englishlifesupport-kot4.onrender.com"
 ).toString().trim();
 
 const BASE_RENDER_URL = BACKEND_URL.replace(/\/api\/?$/, "");

@@ -728,7 +728,7 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
         total_words: payload.items.length,
       };
 
-      const BACKEND_URL = import.meta.env.VITE_API_URL || "https://englishlifesupport.onrender.com";
+      const BACKEND_URL = import.meta.env.VITE_API_URL || "https://englishlifesupport-kot4.onrender.com";
       const targetUrl = `${BACKEND_URL.replace(/\/api\/?$/, "")}/api/wordlists`;
 
       try {
