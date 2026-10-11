@@ -34,14 +34,7 @@ app = FastAPI(
     redoc_url=None,
 )
 
-# 1. Register CORSMiddleware FIRST before any routes, custom middleware or exception handlers
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+from starlette.middleware.base import BaseHTTPMiddleware
 
 
 def get_cors_headers(request: Request) -> dict[str, str]:
@@ -64,7 +57,23 @@ def get_cors_headers(request: Request) -> dict[str, str]:
     return headers
 
 
-# 2. Global catch-all OPTIONS handler returning 200 OK
+# Catch-all OPTIONS middleware class: directly short-circuits any preflight request with 200 OK
+class PreflightOptionsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.method == "OPTIONS":
+            origin = request.headers.get("origin") or "*"
+            headers = {
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD",
+                "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "*"),
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Max-Age": "86400",
+            }
+            return Response(status_code=200, headers=headers)
+        return await call_next(request)
+
+
+# Global catch-all OPTIONS router handler returning 200 OK
 @app.options("/{full_path:path}", include_in_schema=False)
 async def global_options_handler(request: Request, full_path: str):
     """Immediate CORS preflight responder returning 200 OK to guarantee zero preflight hangs or 503s."""
@@ -77,13 +86,6 @@ async def global_options_handler(request: Request, full_path: str):
         "Access-Control-Max-Age": "86400",
     }
     return Response(status_code=200, headers=headers)
-
-
-@app.middleware("http")
-async def options_middleware(request: Request, call_next):
-    if request.method == "OPTIONS":
-        return Response(status_code=200, headers=get_cors_headers(request))
-    return await call_next(request)
 
 
 @app.exception_handler(RateLimitExceeded)
@@ -151,10 +153,24 @@ async def security_headers_middleware(request: Request, call_next):
     return response
 
 
+# Add preflight short-circuit middleware
+app.add_middleware(PreflightOptionsMiddleware)
+
+# Add CORSMiddleware LAST so it wraps outermost and executes FIRST on incoming requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
 app.state.limiter = limiter
 
 
 app.include_router(auth.router)
+app.include_router(auth.router, prefix="/api/v1", include_in_schema=False)
 app.include_router(students.router)
 app.include_router(students.teacher_students_router)
 app.include_router(teachers.router)
