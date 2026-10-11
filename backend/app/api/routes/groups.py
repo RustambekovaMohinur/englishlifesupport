@@ -105,6 +105,7 @@ async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
         default_homework_time=group.default_homework_time or "20:00",
         current_cycle=getattr(group, "current_cycle", 1) or 1,
         is_active=group.is_active,
+        telegram_group_chat_id=group.telegram_group_chat_id,
         student_count=counts_map.get(group.id, 0),
         created_at=group.created_at,
     )
@@ -175,6 +176,41 @@ async def get_group(group_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     group = (await db.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+    return await _to_group_out(db, group)
+
+@router.patch("/{group_id}", response_model=GroupOut)
+async def update_group(
+    group_id: uuid.UUID,
+    body: GroupUpdate,
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    """Partially update a group, including telegram_group_chat_id."""
+    group = (await db.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+    if group is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+    # Permission check
+    is_owner = (
+        group.created_by == current_user.id
+        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+    )
+    if not is_owner:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
+    # Apply updates
+    if body.name is not None:
+        group.name = body.name
+    if body.english_level is not None:
+        group.english_level = body.english_level
+    if body.schedule is not None:
+        group.schedule = body.schedule
+    if body.default_homework_time is not None:
+        group.default_homework_time = body.default_homework_time
+    if body.is_active is not None:
+        group.is_active = body.is_active
+    if getattr(body, "telegram_group_chat_id", None) is not None:
+        group.telegram_group_chat_id = body.telegram_group_chat_id
+    await db.commit()
+    await db.refresh(group)
     return await _to_group_out(db, group)
 
 

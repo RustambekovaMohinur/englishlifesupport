@@ -413,6 +413,7 @@ function GroupModal({
   const [level, setLevel] = useState(LEVELS[0]);
   const [schedule, setSchedule] = useState("");
   const [defaultHomeworkTime, setDefaultHomeworkTime] = useState("20:00");
+  const [telegramGroupChatId, setTelegramGroupChatId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -420,6 +421,7 @@ function GroupModal({
     setLevel(group?.english_level ?? LEVELS[0]);
     setSchedule(group?.schedule ?? "");
     setDefaultHomeworkTime(group?.default_homework_time ?? "20:00");
+    setTelegramGroupChatId(group?.telegram_group_chat_id ?? "");
   }, [group, open]);
 
   async function handleSubmit(e: FormEvent) {
@@ -428,6 +430,7 @@ function GroupModal({
     try {
       if (group) {
         await updateGroup(group.id, {
+          telegram_group_chat_id: telegramGroupChatId,
           name,
           english_level: level,
           schedule,
@@ -438,6 +441,7 @@ function GroupModal({
           name,
           english_level: level,
           schedule,
+          telegram_group_chat_id: telegramGroupChatId,
           default_homework_time: defaultHomeworkTime || "20:00",
         });
       }
@@ -481,6 +485,18 @@ function GroupModal({
           />
           <p className="mt-1 text-xs text-neutral-400">
             Auto-fills due time when creating assignments for this group (e.g. 20:00).
+          </p>
+        </div>
+        <div>
+          <label className="label">Telegram Group Chat ID</label>
+          <input
+            className="input"
+            value={telegramGroupChatId}
+            onChange={e => setTelegramGroupChatId(e.target.value)}
+            placeholder="e.g. -1001234567890"
+          />
+          <p className="mt-1 text-xs text-neutral-400">
+            (Get this by adding your bot to the Telegram group as an admin)
           </p>
         </div>
         <div className="flex justify-end gap-2 pt-2">

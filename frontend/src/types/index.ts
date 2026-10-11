@@ -24,6 +24,7 @@ export interface Group {
   english_level: string;
   schedule: string | null;
   default_homework_time?: string | null;
+  telegram_group_chat_id?: string | null;
   is_active: boolean;
   student_count: number;
   created_at: string;

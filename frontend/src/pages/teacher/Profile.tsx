@@ -261,6 +261,22 @@ export default function TeacherProfilePage() {
             </button>
           </div>
         </div>
+        <div className="mt-6 rounded-xl border border-neutral-800 bg-neutral-900/60 p-6">
+          <h3 className="text-lg font-semibold text-white">My Telegram Notifications</h3>
+          <p className="mt-1 text-sm text-neutral-400">
+            Connect your Telegram account to receive instant alerts for assignments, submissions, and group updates.
+          </p>
+          <div className="mt-4">
+            <a
+              href={`https://t.me/YOUR_BOT_USERNAME?start=link_teacher_${profile?.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500"
+            >
+              Link Telegram Account
+            </a>
+          </div>
+        </div>
 
         {/* Bio Section */}
         <div className="rounded-xl bg-zinc-50/80 dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800/80 p-4">

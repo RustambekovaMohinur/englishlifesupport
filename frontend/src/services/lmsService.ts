@@ -105,9 +105,9 @@ export const getGroupDetail = (group_id: string) =>
   cachedGet<GroupDetailOut>(`/groups/${group_id}/detail`);
 export const getMyCohortMatrix = () =>
   cachedGet<GroupDetailOut>("/groups/my/matrix");
-export const createGroup = (body: { name: string; english_level: string; schedule?: string; default_homework_time?: string }) =>
+export const createGroup = (body: { name: string; english_level: string; schedule?: string; default_homework_time?: string; telegram_group_chat_id?: string }) =>
   api.post<Group>("/groups", body).then((r) => r.data);
-export const updateGroup = (id: string, body: Partial<{ name: string; english_level: string; schedule: string; default_homework_time?: string; is_active: boolean }>) =>
+export const updateGroup = (id: string, body: Partial<{ name: string; english_level: string; schedule: string; default_homework_time?: string; is_active: boolean; telegram_group_chat_id?: string }>) =>
   api.patch<Group>(`/groups/${id}`, body).then((r) => r.data);
 export const deleteGroup = (id: string) => api.delete(`/groups/${id}`);
 export interface PublishCyclePayload {

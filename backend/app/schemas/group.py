@@ -12,7 +12,7 @@ class GroupCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     english_level: EnglishLevel
     schedule: str | None = Field(default=None, max_length=255)
-    default_homework_time: str | None = Field(default="20:00", max_length=10)
+    telegram_group_chat_id: str | None = Field(default=None, max_length=32)
 
     @field_validator("default_homework_time")
     @classmethod
@@ -28,6 +28,7 @@ class GroupUpdate(BaseModel):
     schedule: str | None = Field(default=None, max_length=255)
     default_homework_time: str | None = Field(default=None, max_length=10)
     is_active: bool | None = None
+    telegram_group_chat_id: str | None = Field(default=None, max_length=32)
 
     @field_validator("default_homework_time")
     @classmethod
@@ -45,6 +46,7 @@ class GroupOut(BaseModel):
     default_homework_time: str | None = "20:00"
     current_cycle: int = 1
     is_active: bool
+    telegram_group_chat_id: str | None = None
     student_count: int = 0
     created_at: datetime
 
