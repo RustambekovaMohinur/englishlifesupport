@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.models.vocabulary import VocabularyAssignment
 from app.models.assignment import Assignment
 from app.api.deps import get_current_user
+from app.db.session import get_db
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
