@@ -20,6 +20,9 @@ from app.models.student import StudentProfile
 from app.models.submission import Submission, SubmissionStatus
 from app.models.teacher import TeacherProfile
 from app.models.user import User, UserRole
+from app.models.group import Group
+import sqlalchemy as sa
+from app.models.grade import Grade
 from app.utils.datetimes import utcnow
 
 logger = logging.getLogger(__name__)
@@ -182,6 +185,23 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
     - /unlink (Detaches parent chat_id)
     - /help or "ℹ️ Yordam" or plain /start (Instructions + ReplyKeyboardMarkup)
     """
+# 0. Handle my_chat_member updates for bot being added/promoted in a group
+    my_chat_member = update.get("my_chat_member")
+    if my_chat_member:
+        chat = my_chat_member.get("chat", {})
+        chat_id = chat.get("id")
+        chat_title = chat.get("title") or chat.get("username")
+        new_status = my_chat_member.get("new_chat_member", {}).get("status")
+        if new_status in ("member", "administrator") and chat_title:
+            # Find Group by matching name
+            group_res = await db.execute(select(Group).where(Group.name == chat_title))
+            group_obj = group_res.scalar_one_or_none()
+            if group_obj:
+                group_obj.telegram_group_chat_id = chat_id
+                await db.commit()
+                logger.info("Bound Telegram group chat ID %s to Group %s via my_chat_member", chat_id, group_obj.name)
+        return {"ok": True, "note": "my_chat_member processed"}
+
     message = update.get("message")
     if not message:
         return {"ok": True, "note": "No message in update"}
@@ -197,6 +217,23 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
     first_name = (user_info.get("first_name") or "").strip()
     last_name = (user_info.get("last_name") or "").strip()
     parent_name = f"{first_name} {last_name}".strip() or first_name or (f"@{username}" if username else "Hurmatli ota-ona")
+
+    # 1. /bind_group command to manually bind a group by name
+    if text.startswith("/bind_group"):
+        parts = text.split(maxsplit=1)
+        if len(parts) > 1:
+            group_name = parts[1].strip()
+            group_res = await db.execute(select(Group).where(Group.name == group_name))
+            group_obj = group_res.scalar_one_or_none()
+            if group_obj:
+                group_obj.telegram_group_chat_id = chat_id
+                await db.commit()
+                await send_telegram_message(chat_id=chat_id, text=f"✅ Group '{group_name}' bound to this chat.", reply_markup=REMOVE_KEYBOARD)
+                return {"ok": True}
+            else:
+                await send_telegram_message(chat_id=chat_id, text=f"❌ Group '{group_name}' not found.", reply_markup=REMOVE_KEYBOARD)
+                return {"ok": True}
+        # fall through if no group name provided
 
     chat_type = chat.get("type", "private")
     # In group chats, ignore interactive parent menus or commands to avoid spamming
@@ -339,10 +376,14 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
         if user_role == "student" and student_record:
             # Student's own report
             group_str = f"{student_record.group.name} ({student_record.group.english_level})" if student_record.group else "Guruh belgilanmagan"
+            # Compute aggregated stars for the student
+            stars_stmt = select(sa.func.coalesce(sa.func.sum(Grade.stars), 0)).select_from(Grade).join(Submission).where(Submission.student_id == student_record.id)
+            stars_res = await db.execute(stars_stmt)
+            aggregated_stars = stars_res.scalar_one()
             lines = [
                 f"📊 <b>{student_record.full_name} — Shaxsiy ko'rsatkichlar</b>",
                 f"👥 Guruh: <b>{group_str}</b>",
-                f"⭐ To'plangan yulduzlar: <b>{student_record.total_stars}</b> | ⚡ Faollik: <b>{student_record.total_lightning}</b>\n",
+                f"⭐ To'plangan yulduzlar: <b>{aggregated_stars}</b> | ⚡ Faollik: <b>{student_record.total_lightning}</b>\n",
             ]
             sub_stmt = (
                 select(Submission)
@@ -378,11 +419,15 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
         if user_role == "parent" and linked_students:
             for s in linked_students:
                 group_str = f"{s.group.name} ({s.group.english_level})" if s.group else "Guruh belgilanmagan"
-                lines = [
-                    f"📊 <b>{s.full_name} — O'qish ko'rsatkichlari</b>",
-                    f"👥 Guruh: <b>{group_str}</b>",
-                    f"⭐ To'plangan yulduzlar: <b>{s.total_stars}</b> | ⚡ Faollik: <b>{s.total_lightning}</b>\n",
-                ]
+            # Compute aggregated stars for the student
+            stars_stmt = select(sa.func.coalesce(sa.func.sum(Grade.stars), 0)).select_from(Grade).join(Submission).where(Submission.student_id == s.id)
+            stars_res = await db.execute(stars_stmt)
+            aggregated_stars = stars_res.scalar_one()
+            lines = [
+                f"📊 <b>{s.full_name} — O'qish ko'rsatkichlari</b>",
+                f"👥 Guruh: <b>{group_str}</b>",
+                f"⭐ To'plangan yulduzlar: <b>{aggregated_stars}</b> | ⚡ Faollik: <b>{s.total_lightning}</b>\n",
+            ]
 
                 # Query recent 5 submissions with assignment and grade
                 sub_stmt = (

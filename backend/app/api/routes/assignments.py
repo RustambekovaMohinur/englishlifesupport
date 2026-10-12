@@ -365,10 +365,10 @@ async def create_assignment(
                     due_date=reloaded.deadline,
                     is_update=False,
                 )
-        # Group chat notification if group has telegram_group_id
-        if getattr(reloaded.group, "telegram_group_id", None):
+        # Group chat notification if group has telegram_group_chat_id
+        if getattr(reloaded.group, "telegram_group_chat_id", None):
             await notify_group_assignment(
-                group_chat_id=reloaded.group.telegram_group_id,
+                group_chat_id=reloaded.group.telegram_group_chat_id,
                 assignment_title=reloaded.title,
                 due_date=reloaded.deadline,
                 is_update=False,

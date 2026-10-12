@@ -31,10 +31,8 @@ class Group(UUIDPKMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     default_homework_time: Mapped[str | None] = mapped_column(String(10), nullable=True, default="20:00")
-    # telegram_group_chat_id column removed; kept for backward compatibility
-    @property
-    def telegram_group_chat_id(self) -> str | None:
-        return None
+    # Telegram group chat ID for bound group notifications
+    telegram_group_chat_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     current_cycle: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     students: Mapped[list["StudentProfile"]] = relationship(back_populates="group")
