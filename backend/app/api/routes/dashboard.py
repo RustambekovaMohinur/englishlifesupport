@@ -1,4 +1,8 @@
-from datetime import datetime, timedelta, timezone
+import logging
+import traceback
+from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
@@ -31,92 +35,96 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/teacher", response_model=TeacherDashboard, dependencies=[Depends(require_teacher)])
 async def teacher_dashboard(db: AsyncSession = Depends(get_db)):
-    # 1. Consolidated count metrics + locked students in a single query
-    q_metrics = """
-    WITH 
-    scalars AS (
-        SELECT 
-            (SELECT count(*) FROM student_profiles) as total_students,
-            (SELECT count(*) FROM student_profiles sp JOIN users u ON sp.user_id = u.id WHERE u.is_active = true) as active_students,
-            (SELECT count(*) FROM groups WHERE is_active = true) as total_groups,
-            (SELECT count(*) FROM assignments) as total_assignments,
-            (SELECT count(*) FROM submissions WHERE status != 'graded') as pending_submissions,
-            (SELECT count(*) FROM submissions) as total_submissions,
-            (SELECT count(*) FROM assignments WHERE status = 'published') as published_assignments,
-            (SELECT count(DISTINCT student_id) FROM submissions WHERE status = 'late') as late_students,
-            (SELECT count(*) FROM wordlist_sets) as total_wordlists
-    ),
-    prereqs AS (
-        SELECT id, group_id, prerequisite_id
-        FROM assignments
-        WHERE prerequisite_id IS NOT NULL AND status = 'published'
-    ),
-    locked_candidates AS (
-        SELECT sp.id as student_id
-        FROM student_profiles sp
-        JOIN prereqs p ON sp.group_id = p.group_id
-        LEFT JOIN submissions s ON s.student_id = sp.id AND s.assignment_id = p.prerequisite_id
-        LEFT JOIN task_lock_overrides o ON o.student_id = sp.id AND o.assignment_id = p.id AND o.is_unlocked = true
-        WHERE s.id IS NULL AND o.id IS NULL
-        GROUP BY sp.id
-    )
-    SELECT 
-        s.*,
-        (SELECT count(*) FROM locked_candidates) as locked_students
-    FROM scalars s;
-    """
-    from sqlalchemy import text
-    scalar_row = (await db.execute(text(q_metrics))).one()
-    (
-        total_students,
-        active_students,
-        total_groups,
-        total_assignments,
-        pending_submissions,
-        total_submissions,
-        published_assignments,
-        late_students,
-        total_wordlists,
-        locked_students_count,
-    ) = scalar_row
-    inactive_students = total_students - active_students
-
-    potential_total = total_students * published_assignments
-    completion_rate = int(round((total_submissions / potential_total) * 100)) if potential_total > 0 else 100
-
-    # 3. Recent 10 submissions feed
-    recent = (
-        await db.execute(
-            select(Submission)
-            .options(selectinload(Submission.assignment), selectinload(Submission.student))
-            .order_by(Submission.submitted_at.desc())
-            .limit(10)
+    try:
+        # 1. Consolidated count metrics + locked students in a single query
+        q_metrics = """
+        WITH 
+        scalars AS (
+            SELECT 
+                (SELECT count(*) FROM student_profiles) as total_students,
+                (SELECT count(*) FROM student_profiles sp JOIN users u ON sp.user_id = u.id WHERE u.is_active = true) as active_students,
+                (SELECT count(*) FROM groups WHERE is_active = true) as total_groups,
+                (SELECT count(*) FROM assignments) as total_assignments,
+                (SELECT count(*) FROM submissions WHERE status != 'graded') as pending_submissions,
+                (SELECT count(*) FROM submissions) as total_submissions,
+                (SELECT count(*) FROM assignments WHERE status = 'published') as published_assignments,
+                (SELECT count(DISTINCT student_id) FROM submissions WHERE status = 'late') as late_students,
+                (SELECT count(*) FROM wordlist_sets) as total_wordlists
+        ),
+        prereqs AS (
+            SELECT id, group_id, prerequisite_id
+            FROM assignments
+            WHERE prerequisite_id IS NOT NULL AND status = 'published'
+        ),
+        locked_candidates AS (
+            SELECT sp.id as student_id
+            FROM student_profiles sp
+            JOIN prereqs p ON sp.group_id = p.group_id
+            LEFT JOIN submissions s ON s.student_id = sp.id AND s.assignment_id = p.prerequisite_id
+            LEFT JOIN task_lock_overrides o ON o.student_id = sp.id AND o.assignment_id = p.id AND o.is_unlocked = true
+            WHERE s.id IS NULL AND o.id IS NULL
+            GROUP BY sp.id
         )
-    ).scalars().all()
+        SELECT 
+            s.*,
+            (SELECT count(*) FROM locked_candidates) as locked_students
+        FROM scalars s;
+        """
+        from sqlalchemy import text
+        scalar_row = (await db.execute(text(q_metrics))).one()
+        (
+            total_students,
+            active_students,
+            total_groups,
+            total_assignments,
+            pending_submissions,
+            total_submissions,
+            published_assignments,
+            late_students,
+            total_wordlists,
+            locked_students_count,
+        ) = scalar_row
+        inactive_students = total_students - active_students
 
-    return TeacherDashboard(
-        total_students=total_students,
-        active_students=active_students,
-        total_groups=total_groups,
-        total_assignments=total_assignments,
-        pending_submissions=pending_submissions,
-        completion_rate=completion_rate,
-        late_students=late_students,
-        locked_students=locked_students_count,
-        inactive_students=inactive_students,
-        total_wordlists=total_wordlists,
-        recent_submissions=[
-            RecentSubmissionItem(
-                id=s.id,
-                student_name=s.student.full_name,
-                student_avatar=s.student.avatar_url if s.student else None,
-                assignment_title=s.assignment.title,
-                submitted_at=s.submitted_at,
-                status=s.status.value,
+        potential_total = total_students * published_assignments
+        completion_rate = int(round((total_submissions / potential_total) * 100)) if potential_total > 0 else 100
+
+        # 3. Recent 10 submissions feed
+        recent = (
+            await db.execute(
+                select(Submission)
+                .options(selectinload(Submission.assignment), selectinload(Submission.student))
+                .order_by(Submission.submitted_at.desc())
+                .limit(10)
             )
-            for s in recent
-        ],
-    )
+        ).scalars().all()
+
+        return TeacherDashboard(
+            total_students=total_students,
+            active_students=active_students,
+            total_groups=total_groups,
+            total_assignments=total_assignments,
+            pending_submissions=pending_submissions,
+            completion_rate=completion_rate,
+            late_students=late_students,
+            locked_students=locked_students_count,
+            inactive_students=inactive_students,
+            total_wordlists=total_wordlists,
+            recent_submissions=[
+                RecentSubmissionItem(
+                    id=s.id,
+                    student_name=s.student.full_name,
+                    student_avatar=s.student.avatar_url if s.student else None,
+                    assignment_title=s.assignment.title,
+                    submitted_at=s.submitted_at,
+                    status=s.status.value,
+                )
+                for s in recent
+            ],
+        )
+    except Exception as exc:
+        logger.exception("Error preparing teacher dashboard: %s", exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/student", response_model=StudentDashboard)
