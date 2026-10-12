@@ -65,6 +65,6 @@ export async function logout() {
 }
 
 export async function fetchCurrentUser(): Promise<CurrentUser> {
-  const { data } = await api.get("/api/v1/auth/me");
+  const { data } = await api.get("https://englishlifesupport-p993.onrender.com/api/v1/auth/me");
   return data;
 }
