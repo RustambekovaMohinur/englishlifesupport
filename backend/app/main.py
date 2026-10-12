@@ -14,7 +14,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+
+from app.models.vocabulary import VocabularyAssignment
+from app.models.assignment import Assignment
 
 from app.api.routes import vocab_recovery
 app.include_router(vocab_recovery.router, prefix="/api/v1", tags=["admin"])
@@ -34,6 +39,39 @@ app = FastAPI(
     docs_url="/api/docs" if settings.ENVIRONMENT != "production" else None,
     redoc_url=None,
 )
+
+# ---------- Automated Vocabulary Recovery on Startup ----------
+async def _recover_orphan_vocab() -> None:
+    """Fix VocabularyAssignment rows missing a group_id using their linked Assignment.
+    Runs once at container startup when the production ASYNC_DATABASE_URL is set.
+    """
+    # Create async engine using production URL (fallback to SQLite for local testing)
+    db_url = settings.ASYNC_DATABASE_URL or "sqlite+aiosqlite:///./test.db"
+    engine = create_async_engine(db_url, echo=False)
+    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session() as session:
+        stmt = select(VocabularyAssignment).where(VocabularyAssignment.group_id == None, VocabularyAssignment.assignment_id != None)
+        result = await session.execute(stmt)
+        vocab_assignments = result.scalars().all()
+        updated = 0
+        for va in vocab_assignments:
+            assignment = await session.get(Assignment, va.assignment_id)
+            if assignment and assignment.group_id:
+                await session.execute(
+                    update(VocabularyAssignment)
+                    .where(VocabularyAssignment.id == va.id)
+                    .values(group_id=assignment.group_id)
+                )
+                updated += 1
+        if updated:
+            await session.commit()
+        logger.info(f"[startup] Recovered {updated} orphan VocabularyAssignment records")
+
+@app.on_event("startup")
+async def startup_recovery() -> None:
+    await _recover_orphan_vocab()
+
+# End of automated recovery hook
 
 from starlette.middleware.base import BaseHTTPMiddleware
 
