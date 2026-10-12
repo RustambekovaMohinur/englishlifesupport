@@ -33,7 +33,7 @@ from app.schemas.auth import (
     TokenResponse,
 )
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 async def _issue_tokens(db: AsyncSession, user: User, user_agent: str | None) -> TokenResponse:
