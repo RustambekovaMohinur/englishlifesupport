@@ -18,16 +18,11 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-<<<<<<< HEAD
 from app.models.vocabulary import VocabularyAssignment
 from app.models.assignment import Assignment
 
-from app.api.routes import vocab_recovery
-app.include_router(vocab_recovery.router, prefix="/api/v1", tags=["admin"])
-=======
 from app.api.routes import assignments, auth, dashboard, feedback, gamification, groups, profile, storage, students, submissions, teachers, telegram, wordlists
 from app.api.routes.vocab_recovery import router as vocab_recovery_router
->>>>>>> clean-prod-main
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.security import hash_password
@@ -45,7 +40,7 @@ app = FastAPI(
     docs_url="/api/docs" if settings.ENVIRONMENT != "production" else None,
     redoc_url=None,
 )
-app.include_router(vocab_recovery_router, prefix="/api/v1", tags=["admin"])
+# vocab_recovery router moved later
 
 # ---------- Automated Vocabulary Recovery on Startup ----------
 async def _recover_orphan_vocab() -> None:
@@ -218,6 +213,7 @@ app.add_middleware(
 app.state.limiter = limiter
 
 
+app.include_router(vocab_recovery_router, prefix="/api/v1", tags=["admin"])
 app.include_router(auth.router, prefix="/api/v1", include_in_schema=False)
 app.include_router(students.router)
 app.include_router(students.teacher_students_router)
