@@ -161,7 +161,7 @@ app.add_middleware(PreflightOptionsMiddleware)
 # Add CORSMiddleware LAST so it wraps outermost and executes FIRST on incoming requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://englishlifesupport.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
