@@ -9,7 +9,7 @@ export interface GroupPublic {
 }
 
 export async function login(username: string, password: string) {
-  const { data } = await api.post("/api/v1/auth/login", { username, password });
+  const { data } = await api.post("https://englishlifesupport-p993.onrender.com/api/v1/auth/login", { username, password });
   tokenStorage.setTokens(data.access_token, data.refresh_token);
   return data;
 }
