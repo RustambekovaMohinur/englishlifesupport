@@ -32,6 +32,7 @@ from app.models.user import User, UserRole
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("english_life")
+# Build timestamp: 2026-10-12T13:38:00
 
 app = FastAPI(
     title="English Life LMS API",
@@ -45,27 +46,30 @@ async def _recover_orphan_vocab() -> None:
     """Fix VocabularyAssignment rows missing a group_id using their linked Assignment.
     Runs once at container startup when the production ASYNC_DATABASE_URL is set.
     """
-    # Create async engine using production URL (fallback to SQLite for local testing)
-    db_url = settings.ASYNC_DATABASE_URL or "sqlite+aiosqlite:///./test.db"
-    engine = create_async_engine(db_url, echo=False)
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with async_session() as session:
-        stmt = select(VocabularyAssignment).where(VocabularyAssignment.group_id == None, VocabularyAssignment.assignment_id != None)
-        result = await session.execute(stmt)
-        vocab_assignments = result.scalars().all()
-        updated = 0
-        for va in vocab_assignments:
-            assignment = await session.get(Assignment, va.assignment_id)
-            if assignment and assignment.group_id:
-                await session.execute(
-                    update(VocabularyAssignment)
-                    .where(VocabularyAssignment.id == va.id)
-                    .values(group_id=assignment.group_id)
-                )
-                updated += 1
-        if updated:
-            await session.commit()
-        logger.info(f"[startup] Recovered {updated} orphan VocabularyAssignment records")
+    try:
+        # Create async engine using production URL (fallback to SQLite for local testing)
+        db_url = settings.ASYNC_DATABASE_URL or "sqlite+aiosqlite:///./test.db"
+        engine = create_async_engine(db_url, echo=False)
+        async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with async_session() as session:
+            stmt = select(VocabularyAssignment).where(VocabularyAssignment.group_id == None, VocabularyAssignment.assignment_id != None)
+            result = await session.execute(stmt)
+            vocab_assignments = result.scalars().all()
+            updated = 0
+            for va in vocab_assignments:
+                assignment = await session.get(Assignment, va.assignment_id)
+                if assignment and assignment.group_id:
+                    await session.execute(
+                        update(VocabularyAssignment)
+                        .where(VocabularyAssignment.id == va.id)
+                        .values(group_id=assignment.group_id)
+                    )
+                    updated += 1
+            if updated:
+                await session.commit()
+            logger.info(f"[startup] Recovered {updated} orphan VocabularyAssignment records")
+    except Exception as e:
+        logger.error(f"Startup vocab recovery skipped: {e}")
 
 @app.on_event("startup")
 async def startup_recovery() -> None:

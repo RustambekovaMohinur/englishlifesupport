@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 from app.core.config import settings
 from app.models.vocabulary import VocabularyAssignment
 from app.models.assignment import Assignment
-from app.dependencies import get_current_user, get_db
+from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
