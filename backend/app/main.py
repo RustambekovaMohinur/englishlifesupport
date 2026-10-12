@@ -16,7 +16,8 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
 
-from app.api.routes import assignments, auth, dashboard, feedback, gamification, groups, profile, storage, students, submissions, teachers, telegram, wordlists, vocab_recovery
+from app.api.routes import assignments, auth, dashboard, feedback, gamification, groups, profile, storage, students, submissions, teachers, telegram, wordlists
+from app.api.routes.vocab_recovery import router as vocab_recovery_router
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.security import hash_password
@@ -33,7 +34,7 @@ app = FastAPI(
     docs_url="/api/docs" if settings.ENVIRONMENT != "production" else None,
     redoc_url=None,
 )
-app.include_router(vocab_recovery.router, prefix="/api/v1", tags=["admin"])
+app.include_router(vocab_recovery_router, prefix="/api/v1", tags=["admin"])
 
 from starlette.middleware.base import BaseHTTPMiddleware
 
