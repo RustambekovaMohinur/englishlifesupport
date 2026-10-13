@@ -429,17 +429,17 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                 f"⭐ To'plangan yulduzlar: <b>{aggregated_stars}</b> | ⚡ Faollik: <b>{s.total_lightning}</b>\n",
             ]
 
-                # Query recent 5 submissions with assignment and grade
-                sub_stmt = (
-                    select(Submission)
-                    .options(
-                        selectinload(Submission.assignment),
-                        selectinload(Submission.grade),
-                    )
-                    .where(Submission.student_id == s.id)
-                    .order_by(Submission.submitted_at.desc())
-                    .limit(5)
+            # Query recent 5 submissions with assignment and grade
+            sub_stmt = (
+                select(Submission)
+                .options(
+                    selectinload(Submission.assignment),
+                    selectinload(Submission.grade),
                 )
+                .where(Submission.student_id == s.id)
+                .order_by(Submission.submitted_at.desc())
+                .limit(5)
+            )
                 sub_res = await db.execute(sub_stmt)
                 recent_subs = sub_res.scalars().all()
 
