@@ -73,6 +73,10 @@ export const handleStudentApproval = (student_id: string, action: "approve" | "r
 export const getStudent = (id: string) => cachedGet<StudentOut>(`/students/${id}`);
 export const getStudentHistory = (student_id: string) =>
   cachedGet<StudentHistoryOut>(`/students/${student_id}/history`);
+export const getMyParentReport = () =>
+  api.get<StudentHistoryOut>("/students/me/parent-report").then((r) => r.data);
+export const getStudentParentReport = (student_id: string) =>
+  cachedGet<StudentHistoryOut>(`/students/${student_id}/parent-report`);
 export const getPeerProfile = (student_id: string) =>
   cachedGet<PeerProfileOut>(`/students/${student_id}/peer-profile`);
 export const getMyStudentProfile = () => cachedGet<StudentOut>("/students/me");

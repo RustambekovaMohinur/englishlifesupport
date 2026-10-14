@@ -33,6 +33,7 @@ const StudentResultsPage = lazy(() => import("@/pages/student/Results"));
 const StudentProgressPage = lazy(() => import("@/pages/student/Progress"));
 const StudentProfilePage = lazy(() => import("@/pages/student/Profile"));
 const StudentPastDeadlinesPage = lazy(() => import("@/pages/student/PastDeadlines"));
+const ParentPortalPage = lazy(() => import("@/pages/student/ParentPortal"));
 
 function RootRedirect() {
   const { user, isLoading } = useAuth();
@@ -77,6 +78,7 @@ export default function App() {
               <Route path="leaderboard" element={<StudentDashboardPage />} />
               <Route path="progress" element={<StudentProgressPage />} />
               <Route path="profile" element={<StudentProfilePage />} />
+              <Route path="parent-portal" element={<ParentPortalPage />} />
             </Route>
           </Route>
 

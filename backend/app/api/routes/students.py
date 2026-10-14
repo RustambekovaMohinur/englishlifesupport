@@ -698,10 +698,10 @@ async def get_student(
 @router.get("/{student_id}/history", response_model=StudentHistoryOut)
 async def get_student_history(
     student_id: uuid.UUID,
-    current_user: User = Depends(require_teacher),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Teacher views student's complete historical learning & task record.
+    """View student's complete historical learning & task record (Parent / Teacher / Student view).
     Preserves all historical assignments, submissions, grades, and completion percentages.
     """
     result = await db.execute(
@@ -713,7 +713,10 @@ async def get_student_history(
     if profile is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
 
-    if profile.group and profile.group.created_by and profile.group.created_by != current_user.id:
+    if current_user.role == UserRole.STUDENT:
+        if profile.user_id != current_user.id and profile.id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only view your own learning record")
+    elif profile.group and profile.group.created_by and profile.group.created_by != current_user.id:
         if not (profile.group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this student")
 
@@ -1039,12 +1042,39 @@ async def get_student_history(
         mastered_vocabulary_words=mastered_vocab_words,
         mastered_vocabulary_sets=mastered_vocab_sets,
         parent_telegram_chat_id=profile.parent_telegram_chat_id,
+        parent_telegram_id=profile.parent_telegram_chat_id,
         parent_telegram_username=profile.parent_telegram_username,
         parent_name=profile.parent_name,
         parent_linked_at=profile.parent_linked_at,
         last_parent_digest_sent_at=profile.last_parent_digest_sent_at,
         is_parent_linked=bool(profile.parent_telegram_chat_id),
     )
+
+
+@router.get("/me/parent-report", response_model=StudentHistoryOut)
+async def get_my_parent_report(
+    profile: StudentProfile = Depends(get_current_student_profile),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Dedicated Parent Portal endpoint for currently logged in student.
+    Returns comprehensive metrics for parents: grades, assignments, vocabulary, streak, and Telegram link.
+    """
+    return await get_student_history(student_id=profile.id, current_user=current_user, db=db)
+
+
+@router.get("/{student_id}/parent-report", response_model=StudentHistoryOut)
+async def get_student_parent_report(
+    student_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Dedicated Parent Portal endpoint for a student by ID.
+    Accessible to teachers and the student themselves.
+    """
+    return await get_student_history(student_id=student_id, current_user=current_user, db=db)
 
 
 @router.get("/{student_id}/peer-profile", response_model=PeerProfileOut)

@@ -1076,6 +1076,21 @@ async def edit_assignment_in_place(
     group_name = reloaded.group.name if reloaded.group else (
         (await db.execute(select(Group.name).where(Group.id == assignment.group_id))).scalar_one_or_none() or ""
     )
+
+    target_group_chat_id = getattr(reloaded.group, "telegram_group_chat_id", None)
+    if target_group_chat_id and reloaded.status == AssignmentStatus.PUBLISHED:
+        import asyncio
+        from app.services.telegram_bot import notify_group_assignment
+        asyncio.create_task(
+            notify_group_assignment(
+                chat_id=target_group_chat_id,
+                assignment_title=reloaded.title,
+                due_date=reloaded.deadline,
+                assignment_id=str(reloaded.id),
+                is_update=True,
+            )
+        )
+
     return _assignment_to_out(reloaded, group_name, sub_count, vocab_words)
 
 
@@ -1141,6 +1156,21 @@ async def update_assignment(
     group_name = reloaded.group.name if reloaded.group else (
         (await db.execute(select(Group.name).where(Group.id == assignment.group_id))).scalar_one_or_none() or ""
     )
+
+    target_group_chat_id = getattr(reloaded.group, "telegram_group_chat_id", None)
+    if target_group_chat_id and reloaded.status == AssignmentStatus.PUBLISHED:
+        import asyncio
+        from app.services.telegram_bot import notify_group_assignment
+        asyncio.create_task(
+            notify_group_assignment(
+                chat_id=target_group_chat_id,
+                assignment_title=reloaded.title,
+                due_date=reloaded.deadline,
+                assignment_id=str(reloaded.id),
+                is_update=True,
+            )
+        )
+
     return _assignment_to_out(reloaded, group_name, sub_count, vocab_words)
 
 

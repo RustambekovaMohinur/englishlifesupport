@@ -30,6 +30,7 @@ class StudentOut(BaseModel):
     group: StudentGroupBrief | None = None
     created_at: datetime
     parent_telegram_chat_id: str | None = None
+    parent_telegram_id: str | None = None
     parent_telegram_username: str | None = None
     parent_name: str | None = None
     parent_linked_at: datetime | None = None
@@ -66,6 +67,7 @@ class StudentListItem(BaseModel):
     cycle_total_tasks: int = 0
     group: StudentGroupBrief | None = None
     parent_telegram_chat_id: str | None = None
+    parent_telegram_id: str | None = None
     parent_telegram_username: str | None = None
     parent_name: str | None = None
     parent_linked_at: datetime | None = None
@@ -235,6 +237,7 @@ class StudentHistoryOut(BaseModel):
     mastered_vocabulary_words: int = 0
     mastered_vocabulary_sets: int = 0
     parent_telegram_chat_id: str | None = None
+    parent_telegram_id: str | None = None
     parent_telegram_username: str | None = None
     parent_name: str | None = None
     parent_linked_at: datetime | None = None
@@ -247,6 +250,8 @@ class ParentLinkInfo(BaseModel):
     bot_username: str
     telegram_link: str
     is_parent_linked: bool = False
+    parent_telegram_chat_id: str | None = None
+    parent_telegram_id: str | None = None
     parent_telegram_username: str | None = None
     parent_name: str | None = None
     parent_linked_at: datetime | None = None

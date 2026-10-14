@@ -3,7 +3,7 @@ import uuid
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
 from app.db.base_class import Base, TimestampMixin, UUIDPKMixin
 
@@ -26,6 +26,7 @@ class StudentProfile(UUIDPKMixin, TimestampMixin, Base):
 
     # Parent notification bot fields
     parent_telegram_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    parent_telegram_id = synonym("parent_telegram_chat_id")
     parent_telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     parent_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     parent_linked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

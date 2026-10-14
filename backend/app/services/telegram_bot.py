@@ -197,9 +197,7 @@ async def notify_group_assignment(
     group_chat_id: int | str | None = None,
     is_update: bool = False,
 ) -> bool:
-    """Send group notification for a new assignment with styled direct link button."""
-    if is_update:
-        return False
+    """Send group notification for a new or updated assignment with styled direct link button."""
     target_chat = chat_id if chat_id is not None else group_chat_id
     if not target_chat:
         logger.debug("notify_group_assignment called without valid chat_id")
@@ -208,12 +206,13 @@ async def notify_group_assignment(
     deadline_str = "Belgilanmagan"
     if due_date:
         try:
-            deadline_str = due_date.strftime("%d.%m.%Y")
+            deadline_str = due_date.strftime("%d.%m.%Y, %H:%M") if hasattr(due_date, "strftime") else str(due_date)
         except Exception:
             deadline_str = str(due_date)
 
+    header = "🔄 <b>Vazifa yangilandi!</b>" if is_update else "📌 <b>Yangi vazifa joylandi!</b>"
     text = (
-        "📌 <b>Yangi vazifa joylandi!</b>\n\n"
+        f"{header}\n\n"
         f"📚 <b>Vazifa:</b> {assignment_title}\n"
         f"📅 <b>Oxirgi muddat:</b> {deadline_str}\n\n"
         "🔗 Vazifani bajarish uchun platformaga o'ting:"
@@ -242,16 +241,18 @@ async def notify_group_wordlist(
     total_words: int = 0,
     set_id: uuid.UUID | str | None = None,
     group_chat_id: int | str | None = None,
+    is_update: bool = False,
 ) -> bool:
-    """Send group notification for a newly published wordlist/vocabulary set with styled direct link button."""
+    """Send group notification for a newly published or updated wordlist/vocabulary set with styled direct link button."""
     target_chat = chat_id if chat_id is not None else group_chat_id
     if not target_chat:
         logger.debug("notify_group_wordlist called without valid chat_id")
         return False
 
-    count_str = f"{total_words} ta" if total_words > 0 else "Yangi to'plam"
+    header = "🔄 <b>Lug'at (Wordlist) yangilandi!</b>" if is_update else "📖 <b>Yangi lug'at (Wordlist) joylandi!</b>"
+    count_str = f"{total_words} ta" if total_words > 0 else "To'plam"
     text = (
-        "📖 <b>Yangi lug'at (Wordlist) joylandi!</b>\n\n"
+        f"{header}\n\n"
         f"📚 <b>Lug'at:</b> {wordlist_title}\n"
         f"📝 <b>So'zlar soni:</b> {count_str}\n\n"
         "🔗 Lug'atni yodlash va test topshirish uchun platformaga o'ting:"
@@ -269,6 +270,47 @@ async def notify_group_wordlist(
     }
     return await send_telegram_message(
         chat_id=target_chat,
+        text=text,
+        reply_markup=reply_markup,
+    )
+
+
+async def notify_parent_submission_graded(
+    chat_id: int | str | None = None,
+    student_name: str = "",
+    assignment_title: str = "",
+    score: float | int = 0,
+    stars: int = 0,
+    feedback: str | None = None,
+) -> bool:
+    """Notify parent via Telegram when teacher grades their child's submission."""
+    if not chat_id:
+        return False
+
+    stars_str = f" · ⭐ +{stars} yulduz" if stars > 0 else ""
+    feedback_line = f"\n💬 <b>O'qituvchi izohi:</b> <i>{feedback}</i>\n" if feedback else ""
+
+    text = (
+        "📊 <b>Vazifa tekshirildi va baholandi!</b>\n\n"
+        f"Hurmatli ota-ona,\n"
+        f"Farzandingiz <b>{student_name}</b>ning \"<b>{assignment_title}</b>\" vazifasi o'qituvchi tomonidan tekshirildi:\n\n"
+        f"• <b>Baho:</b> <b>{score}/10</b>{stars_str}\n"
+        f"{feedback_line}\n"
+        "🔗 Farzandingiz ko'rsatkichlarini kuzatish uchun platformaga o'ting:"
+    )
+    url = "https://englishlifesupport.vercel.app/student/parent-portal"
+    reply_markup = {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "Farzandim ko'rsatkichlari 🚀",
+                    "url": url,
+                }
+            ]
+        ]
+    }
+    return await send_telegram_message(
+        chat_id=chat_id,
         text=text,
         reply_markup=reply_markup,
     )

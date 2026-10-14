@@ -1014,6 +1014,22 @@ async def grade_submission(
 
     await db.commit()
     await db.refresh(grade)
+
+    # Dispatch progress notification to linked parent via Telegram
+    if student.parent_telegram_chat_id:
+        import asyncio
+        from app.services.telegram_bot import notify_parent_submission_graded
+        asyncio.create_task(
+            notify_parent_submission_graded(
+                chat_id=student.parent_telegram_chat_id,
+                student_name=student.full_name,
+                assignment_title=assignment_title,
+                score=grade.score,
+                stars=grade.stars,
+                feedback=grade.feedback,
+            )
+        )
+
     return GradeOut(id=grade.id, score=grade.score, feedback=grade.feedback, stars=grade.stars, graded_at=grade.graded_at)
 
 
@@ -1543,6 +1559,22 @@ async def approve_ai_grade(
 
     await db.commit()
     await db.refresh(sub)
+
+    # Dispatch progress notification to linked parent via Telegram
+    if student.parent_telegram_chat_id:
+        import asyncio
+        from app.services.telegram_bot import notify_parent_submission_graded
+        asyncio.create_task(
+            notify_parent_submission_graded(
+                chat_id=student.parent_telegram_chat_id,
+                student_name=student.full_name,
+                assignment_title=assignment_title,
+                score=score_10,
+                stars=stars,
+                feedback="AI baholashi o'qituvchi tomonidan tasdiqlandi",
+            )
+        )
+
     return _submission_to_out(sub)
 
 
@@ -1773,6 +1805,22 @@ async def approve_speaking_grade_route(
 
     await db.commit()
     await db.refresh(sub)
+
+    # Dispatch progress notification to linked parent via Telegram
+    if student.parent_telegram_chat_id:
+        import asyncio
+        from app.services.telegram_bot import notify_parent_submission_graded
+        asyncio.create_task(
+            notify_parent_submission_graded(
+                chat_id=student.parent_telegram_chat_id,
+                student_name=student.full_name,
+                assignment_title=assignment_title,
+                score=score_10,
+                stars=stars,
+                feedback="Speaking topshirig'i o'qituvchi tomonidan baholandi",
+            )
+        )
+
     return _submission_to_out(sub)
 
 

@@ -328,6 +328,7 @@ async def _run_startup_tasks():
                         await conn.execute(sa.text("ALTER TABLE submission_images ADD COLUMN IF NOT EXISTS image_hash VARCHAR(64)"))
                         await conn.execute(sa.text("ALTER TABLE submission_images ADD COLUMN IF NOT EXISTS file_sha256 VARCHAR(64)"))
                         await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS parent_telegram_chat_id VARCHAR(64)"))
+                        await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS parent_telegram_id VARCHAR(64)"))
                         await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS parent_telegram_username VARCHAR(255)"))
                         await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS parent_name VARCHAR(255)"))
                         await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS parent_linked_at TIMESTAMP WITH TIME ZONE"))
@@ -410,6 +411,8 @@ async def _run_startup_tasks():
                             await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN parent_linked_at TIMESTAMP"))
                         if "last_parent_digest_sent_at" not in sp_cols:
                             await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN last_parent_digest_sent_at TIMESTAMP"))
+                        if "parent_telegram_id" not in sp_cols:
+                            await conn.execute(sa.text("ALTER TABLE student_profiles ADD COLUMN parent_telegram_id VARCHAR(64)"))
 
                         res_as = await conn.execute(sa.text("PRAGMA table_info(assignments)"))
                         as_cols = [r[1] for r in res_as.fetchall()]
