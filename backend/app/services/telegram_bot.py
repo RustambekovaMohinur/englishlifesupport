@@ -419,27 +419,27 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
         if user_role == "parent" and linked_students:
             for s in linked_students:
                 group_str = f"{s.group.name} ({s.group.english_level})" if s.group else "Guruh belgilanmagan"
-            # Compute aggregated stars for the student
-            stars_stmt = select(sa.func.coalesce(sa.func.sum(Grade.stars), 0)).select_from(Grade).join(Submission).where(Submission.student_id == s.id)
-            stars_res = await db.execute(stars_stmt)
-            aggregated_stars = stars_res.scalar_one()
-            lines = [
-                f"📊 <b>{s.full_name} — O'qish ko'rsatkichlari</b>",
-                f"👥 Guruh: <b>{group_str}</b>",
-                f"⭐ To'plangan yulduzlar: <b>{aggregated_stars}</b> | ⚡ Faollik: <b>{s.total_lightning}</b>\n",
-            ]
+                # Compute aggregated stars for the student
+                stars_stmt = select(sa.func.coalesce(sa.func.sum(Grade.stars), 0)).select_from(Grade).join(Submission).where(Submission.student_id == s.id)
+                stars_res = await db.execute(stars_stmt)
+                aggregated_stars = stars_res.scalar_one()
+                lines = [
+                    f"📊 <b>{s.full_name} — O'qish ko'rsatkichlari</b>",
+                    f"👥 Guruh: <b>{group_str}</b>",
+                    f"⭐ To'plangan yulduzlar: <b>{aggregated_stars}</b> | ⚡ Faollik: <b>{s.total_lightning}</b>\n",
+                ]
 
-            # Query recent 5 submissions with assignment and grade
-            sub_stmt = (
-                select(Submission)
-                .options(
-                    selectinload(Submission.assignment),
-                    selectinload(Submission.grade),
+                # Query recent 5 submissions with assignment and grade
+                sub_stmt = (
+                    select(Submission)
+                    .options(
+                        selectinload(Submission.assignment),
+                        selectinload(Submission.grade),
+                    )
+                    .where(Submission.student_id == s.id)
+                    .order_by(Submission.submitted_at.desc())
+                    .limit(5)
                 )
-                .where(Submission.student_id == s.id)
-                .order_by(Submission.submitted_at.desc())
-                .limit(5)
-            )
                 sub_res = await db.execute(sub_stmt)
                 recent_subs = sub_res.scalars().all()
 
