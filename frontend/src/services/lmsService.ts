@@ -521,65 +521,29 @@ export const createWordlistSet = async (data: {
     order_index?: number;
   }>;
 }) => {
-  const primaryUrl = WORDLISTS_URL;
-  const fallbackUrl = WORDLISTS_FALLBACK_URL;
-  try {
-    const r = await api.post<import("@/types").WordlistSetDetail>(primaryUrl, data);
-    return r.data;
-  } catch (err: any) {
-    if (err?.response?.status === 404) {
-      const r = await api.post<import("@/types").WordlistSetDetail>(fallbackUrl, data);
-      return r.data;
-    }
-    throw err;
-  }
+  const r = await api.post<import("@/types").WordlistSetDetail>(WORDLISTS_URL, data);
+  return r.data;
 };
 
 export const listWordlistSets = async (params?: { group_id?: string }) => {
   const key = apiCache.makeKey(WORDLISTS_URL, params);
   return apiCache.fetch(key, async () => {
-    try {
-      const r = await api.get<import("@/types").WordlistSetBrief[]>(WORDLISTS_URL, { params });
-      return r.data;
-    } catch (err: any) {
-      if (err?.response?.status === 404) {
-        const r = await api.get<import("@/types").WordlistSetBrief[]>(WORDLISTS_FALLBACK_URL, { params });
-        return r.data;
-      }
-      throw err;
-    }
+    const r = await api.get<import("@/types").WordlistSetBrief[]>(WORDLISTS_URL, { params });
+    return r.data;
   }, { ttlMs: 120_000 });
 };
 
 export const getWordlistSet = async (setId: string) => {
   const key = `${WORDLISTS_URL}/${setId}`;
   return apiCache.fetch(key, async () => {
-    try {
-      const r = await api.get<import("@/types").WordlistSetDetail>(`${WORDLISTS_URL}/${setId}`);
-      return r.data;
-    } catch (err: any) {
-      if (err?.response?.status === 404) {
-        const r = await api.get<import("@/types").WordlistSetDetail>(`${WORDLISTS_FALLBACK_URL}/${setId}`);
-        return r.data;
-      }
-      throw err;
-    }
+    const r = await api.get<import("@/types").WordlistSetDetail>(`${WORDLISTS_URL}/${setId}`);
+    return r.data;
   }, { ttlMs: 180_000 });
 };
 
 export const deleteWordlistSet = async (setId: string) => {
-  const primaryUrl = `${WORDLISTS_URL}/${setId}`;
-  const fallbackUrl = `${WORDLISTS_FALLBACK_URL}/${setId}`;
-  try {
-    const r = await api.delete(primaryUrl);
-    return r.data;
-  } catch (err: any) {
-    if (err?.response?.status === 404) {
-      const r = await api.delete(fallbackUrl);
-      return r.data;
-    }
-    throw err;
-  }
+  const r = await api.delete(`${WORDLISTS_URL}/${setId}`);
+  return r.data;
 };
 
 export const submitWordlistQuiz = async (
@@ -594,18 +558,8 @@ export const submitWordlistQuiz = async (
     incorrect_word_ids?: string[];
   }
 ) => {
-  const primaryUrl = `${WORDLISTS_URL}/${setId}/submit-quiz`;
-  const fallbackUrl = `${WORDLISTS_FALLBACK_URL}/${setId}/submit-quiz`;
-  try {
-    const r = await api.post<import("@/types").QuizAttempt>(primaryUrl, data);
-    return r.data;
-  } catch (err: any) {
-    if (err?.response?.status === 404) {
-      const r = await api.post<import("@/types").QuizAttempt>(fallbackUrl, data);
-      return r.data;
-    }
-    throw err;
-  }
+  const r = await api.post<import("@/types").QuizAttempt>(`${WORDLISTS_URL}/${setId}/submit-quiz`, data);
+  return r.data;
 };
 
 // ==========================================
@@ -613,17 +567,17 @@ export const submitWordlistQuiz = async (
 // ==========================================
 
 export const getParentLinkInfo = async (): Promise<ParentLinkInfo> => {
-  const res = await api.get<ParentLinkInfo>("/api/telegram/parent-link-info");
+  const res = await api.get<ParentLinkInfo>("/telegram/parent-link-info");
   return res.data;
 };
 
 export const unlinkParent = async (): Promise<{ success: boolean; message: string }> => {
-  const res = await api.post<{ success: boolean; message: string }>("/api/telegram/unlink-parent");
+  const res = await api.post<{ success: boolean; message: string }>("/telegram/unlink-parent");
   return res.data;
 };
 
 export const sendParentDigest = async (studentId: string): Promise<SendParentDigestResponse> => {
-  const res = await api.post<SendParentDigestResponse>(`/api/students/${studentId}/send-parent-digest`);
+  const res = await api.post<SendParentDigestResponse>(`/students/${studentId}/send-parent-digest`);
   return res.data;
 };
 
@@ -633,7 +587,7 @@ export const testMockLinkParent = async (
   parentName = "Ota-ona (Test)"
 ): Promise<{ success: boolean; message: string }> => {
   const res = await api.post<{ success: boolean; message: string }>(
-    `/api/telegram/test-mock-link?student_id=${studentId}&chat_id=${chatId}&parent_name=${encodeURIComponent(parentName)}`
+    `/telegram/test-mock-link?student_id=${studentId}&chat_id=${chatId}&parent_name=${encodeURIComponent(parentName)}`
   );
   return res.data;
 };

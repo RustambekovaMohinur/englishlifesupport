@@ -45,9 +45,13 @@ api.interceptors.request.use((config) => {
     if (!config.headers) config.headers = {} as any;
     config.headers.Authorization = `Bearer ${token}`;
   }
-  // Existing duplicate /api handling
-  if (config.url && config.baseURL?.endsWith("/api")) {
-    if (config.url.startsWith("/api/")) {
+  // Normalize URL to prevent duplicate /api/v1 or /api prefixes with baseURL
+  if (config.url) {
+    if (config.url.startsWith("/api/v1/")) {
+      config.url = config.url.slice(7);
+    } else if (config.url === "/api/v1") {
+      config.url = "";
+    } else if (config.url.startsWith("/api/")) {
       config.url = config.url.slice(4);
     } else if (config.url === "/api") {
       config.url = "";

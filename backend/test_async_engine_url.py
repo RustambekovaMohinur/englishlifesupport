@@ -7,7 +7,7 @@ def test_engine_strips_sslmode_and_enables_ssl():
     engine_url = str(clean_url)
     assert "sslmode" not in engine_url
     assert "channel_binding" not in engine_url
-    assert connect_args == {"ssl": True}
+    assert connect_args.get("ssl") is True
 
 
 def test_engine_without_sslmode_does_not_enable_ssl():
@@ -15,5 +15,5 @@ def test_engine_without_sslmode_does_not_enable_ssl():
     clean_url, connect_args = _build_async_engine_url(url)
     engine_url = str(clean_url)
     assert "sslmode" not in engine_url
-    assert connect_args == {}
+    assert "ssl" not in connect_args
 

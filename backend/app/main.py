@@ -197,6 +197,19 @@ async def security_headers_middleware(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def api_v1_compatibility_middleware(request: Request, call_next):
+    path = request.url.path
+    if (
+        path.startswith("/api/")
+        and not path.startswith("/api/v1/")
+        and not path.startswith("/api/docs")
+        and not path.startswith("/api/health")
+    ):
+        request.scope["path"] = "/api/v1" + path[4:]
+    return await call_next(request)
+
+
 # Add preflight short-circuit middleware
 app.add_middleware(PreflightOptionsMiddleware)
 

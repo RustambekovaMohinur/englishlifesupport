@@ -591,18 +591,22 @@ async def set_telegram_webhook(url: str | None = None) -> dict[str, Any]:
 
     target_url = url
     if not target_url:
-        base_url = (
-            os.getenv("RENDER_EXTERNAL_URL")
-            or settings.TELEGRAM_WEBHOOK_URL
-            or "https://englishlifesupport-s3dp.onrender.com"
-        ).strip().rstrip("/")
-        target_url = f"{base_url}/api/v1/telegram/webhook"
+        webhook_cfg = (settings.TELEGRAM_WEBHOOK_URL or "").strip()
+        if webhook_cfg and "/telegram/webhook" in webhook_cfg:
+            target_url = webhook_cfg
+        else:
+            base_url = (
+                webhook_cfg
+                or os.getenv("RENDER_EXTERNAL_URL")
+                or "https://englishlifesupport-s3dp.onrender.com"
+            ).strip().rstrip("/")
+            target_url = f"{base_url}/api/v1/telegram/webhook"
 
     api_url = f"https://api.telegram.org/bot{token}/setWebhook"
     payload = {
         "url": target_url,
         "drop_pending_updates": False,
-        "allowed_updates": ["message", "callback_query"],
+        "allowed_updates": ["message", "callback_query", "my_chat_member", "chat_member"],
     }
 
     try:

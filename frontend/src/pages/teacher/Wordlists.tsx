@@ -728,19 +728,7 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
         total_words: payload.items.length,
       };
 
-      const BACKEND_URL = "https://englishlifesupport-kot4.onrender.com";
-      const targetUrl = `${BACKEND_URL}/api/wordlists`;
-
-      try {
-        await api.post(targetUrl, savePayload);
-      } catch (postErr: any) {
-        if (postErr?.response?.status === 404) {
-          const fallbackUrl = `${BACKEND_URL.replace(/\/api\/?$/, "")}/wordlists`;
-          await api.post(fallbackUrl, savePayload);
-        } else {
-          await createWordlistSet(savePayload);
-        }
-      }
+      await createWordlistSet(savePayload);
 
       toast.success("Vocabulary set created successfully!");
       // Reset form
