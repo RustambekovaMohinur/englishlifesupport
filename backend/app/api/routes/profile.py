@@ -28,9 +28,9 @@ from app.utils.files import (
     save_avatar_file,
 )
 
-router = APIRouter(prefix="/api/profile", tags=["profile"])
-users_avatar_router = APIRouter(prefix="/api/users", tags=["users"])
-v1_profile_router = APIRouter(prefix="/api/v1/profile", tags=["profile"])
+router = APIRouter(prefix="/profile", tags=["profile"])
+users_avatar_router = APIRouter(prefix="/users", tags=["users"])
+v1_profile_router = APIRouter(prefix="/profile", tags=["profile"])
 
 
 def _split_full_name(full_name: str) -> tuple[str, str]:

@@ -26,7 +26,7 @@ from app.services.telegram_bot import (
 )
 from app.utils.datetimes import utcnow
 
-router = APIRouter(prefix="/api/telegram", tags=["telegram"])
+router = APIRouter(prefix="/telegram", tags=["telegram"])
 logger = logging.getLogger(__name__)
 
 
@@ -64,7 +64,7 @@ async def register_webhook_endpoint(url: str | None = None):
     """
     Registers or resets the Telegram Bot webhook.
     Can be called via browser GET or API POST.
-    Defaults to https://englishlifesupport-kot4.onrender.com/api/telegram/webhook.
+    Defaults to https://englishlifesupport-s3dp.onrender.com/api/v1/telegram/webhook.
     """
     return await set_telegram_webhook(url=url)
 

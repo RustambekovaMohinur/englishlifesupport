@@ -198,25 +198,11 @@ export const getPresignedUploadUrl = async (
   fileName: string,
   fileType: string = "application/octet-stream"
 ): Promise<PresignedUploadResult> => {
-  const BACKEND_BASE = "https://englishlifesupport-kot4.onrender.com";
-
-  const url = `${BACKEND_BASE}/api/storage/presigned-upload-url`;
-  const fallbackUrl = `${BACKEND_BASE}/storage/presigned-upload-url`;
-
-  try {
-    const r = await api.get<PresignedUploadResult>(url, {
-      params: { file_name: fileName, file_type: fileType },
-    });
-    return r.data;
-  } catch (err: any) {
-    if (err?.response?.status === 404) {
-      const r = await api.get<PresignedUploadResult>(fallbackUrl, {
-        params: { file_name: fileName, file_type: fileType },
-      });
-      return r.data;
-    }
-    throw err;
-  }
+  // Use relative path – axios baseURL is already /api/v1
+  const r = await api.get<PresignedUploadResult>("/storage/presigned-upload-url", {
+    params: { file_name: fileName, file_type: fileType },
+  });
+  return r.data;
 };
 
 export const uploadDirectToB2 = async (
@@ -451,11 +437,8 @@ export const addFeedbackReply = (feedbackId: string, message: string) =>
   api.post<FeedbackReplyItem>(`/feedback/${feedbackId}/replies`, { message }).then((r) => r.data);
 
 // --- Wordlists & Flashcards ---
-const BACKEND_URL = "https://englishlifesupport-kot4.onrender.com";
-
-const BASE_RENDER_URL = BACKEND_URL.replace(/\/api\/?$/, "");
-const WORDLISTS_URL = `${BASE_RENDER_URL}/api/wordlists`;
-const WORDLISTS_FALLBACK_URL = `${BASE_RENDER_URL}/wordlists`;
+// Wordlist API paths – relative to axios baseURL (/api/v1)
+const WORDLISTS_URL = "/wordlists";
 
 export const aiExtractCompanion = async (data: {
   text?: string;
@@ -466,9 +449,6 @@ export const aiExtractCompanion = async (data: {
     `${WORDLISTS_URL}/ai-extract-companion`,
     `${WORDLISTS_URL}/generate`,
     `${WORDLISTS_URL}/ai-parse`,
-    `${WORDLISTS_FALLBACK_URL}/ai-extract-companion`,
-    `${WORDLISTS_FALLBACK_URL}/generate`,
-    `${WORDLISTS_FALLBACK_URL}/ai-parse`,
   ];
 
   let lastError: any = null;
@@ -521,18 +501,8 @@ export const aiParseWordlist = async (data: {
 };
 
 export const previewBulkWords = async (words: string[]) => {
-  const primaryUrl = `${WORDLISTS_URL}/preview-bulk`;
-  const fallbackUrl = `${WORDLISTS_FALLBACK_URL}/preview-bulk`;
-  try {
-    const r = await api.post<import("@/types").WordDetailPreview[]>(primaryUrl, { words });
-    return r.data;
-  } catch (err: any) {
-    if (err?.response?.status === 404) {
-      const r = await api.post<import("@/types").WordDetailPreview[]>(fallbackUrl, { words });
-      return r.data;
-    }
-    throw err;
-  }
+  const r = await api.post<import("@/types").WordDetailPreview[]>(`${WORDLISTS_URL}/preview-bulk`, { words });
+  return r.data;
 };
 
 export const createWordlistSet = async (data: {

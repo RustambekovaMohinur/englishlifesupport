@@ -30,7 +30,7 @@ from app.models.gamification import FreePass, StudentStreak, StudentXP, TaskLock
 from app.services.gamification_service import calculate_level, get_or_create_monthly_free_pass
 from app.utils.datetimes import as_utc, utcnow
 
-router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 @router.get("/teacher", response_model=TeacherDashboard, dependencies=[Depends(require_teacher)])

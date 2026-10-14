@@ -41,8 +41,8 @@ from app.utils.files import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/assignments", tags=["assignments"])
-teacher_assignments_router = APIRouter(prefix="/api/teacher/assignments", tags=["assignments"])
+router = APIRouter(prefix="/assignments", tags=["assignments"])
+teacher_assignments_router = APIRouter(prefix="/teacher/assignments", tags=["assignments"])
 
 
 async def _get_assignment_with_relations(db: AsyncSession, assignment_id: uuid.UUID) -> Assignment | None:

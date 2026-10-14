@@ -43,8 +43,8 @@ from pydantic import BaseModel, Field
 from app.core.security import hash_password
 from app.models.refresh_token import RefreshToken
 
-router = APIRouter(prefix="/api/students", tags=["students"])
-teacher_students_router = APIRouter(prefix="/api/teacher/students", tags=["students"])
+router = APIRouter(prefix="/students", tags=["students"])
+teacher_students_router = APIRouter(prefix="/teacher/students", tags=["students"])
 logger = logging.getLogger(__name__)
 
 

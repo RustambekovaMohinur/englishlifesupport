@@ -594,9 +594,9 @@ async def set_telegram_webhook(url: str | None = None) -> dict[str, Any]:
         base_url = (
             os.getenv("RENDER_EXTERNAL_URL")
             or settings.TELEGRAM_WEBHOOK_URL
-            or "https://englishlifesupport-kot4.onrender.com"
+            or "https://englishlifesupport-s3dp.onrender.com"
         ).strip().rstrip("/")
-        target_url = f"{base_url}/api/telegram/webhook"
+        target_url = f"{base_url}/api/v1/telegram/webhook"
 
     api_url = f"https://api.telegram.org/bot{token}/setWebhook"
     payload = {

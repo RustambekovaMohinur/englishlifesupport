@@ -54,7 +54,7 @@ from app.services.gamification_service import (
 )
 from app.utils.datetimes import as_utc, utcnow
 
-router = APIRouter(prefix="/api/gamification", tags=["gamification"])
+router = APIRouter(prefix="/gamification", tags=["gamification"])
 
 
 @router.get("/summary", response_model=StudentGamificationSummary)

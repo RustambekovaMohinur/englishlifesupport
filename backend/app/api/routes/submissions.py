@@ -64,7 +64,7 @@ from app.utils.files import (
     save_submission_file,
 )
 
-router = APIRouter(prefix="/api/submissions", tags=["submissions"])
+router = APIRouter(prefix="/submissions", tags=["submissions"])
 
 
 async def _authorize_submission_access(submission: Submission, current_user: User, db: AsyncSession) -> None:

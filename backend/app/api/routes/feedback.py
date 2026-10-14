@@ -24,7 +24,7 @@ from app.services.gamification_service import award_xp
 
 import logging
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/feedback", tags=["feedback"])
+router = APIRouter(prefix="/feedback", tags=["feedback"])
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

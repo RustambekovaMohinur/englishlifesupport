@@ -16,7 +16,7 @@ from app.schemas.teacher import PasswordChangeRequest, TeacherProfileOut, Teache
 from app.utils.password_policy import validate_password_policy
 from app.api.routes.auth import _issue_tokens
 
-router = APIRouter(prefix="/api/teachers", tags=["teachers"], dependencies=[Depends(require_teacher)])
+router = APIRouter(prefix="/teachers", tags=["teachers"], dependencies=[Depends(require_teacher)])
 
 
 @router.get("/me", response_model=TeacherProfileOut)

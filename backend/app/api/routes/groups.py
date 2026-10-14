@@ -30,7 +30,7 @@ from app.utils.datetimes import as_utc, utcnow
 
 from collections import defaultdict
 
-router = APIRouter(prefix="/api/groups", tags=["groups"])
+router = APIRouter(prefix="/groups", tags=["groups"])
 
 
 async def get_active_student_counts(db: AsyncSession, group_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:

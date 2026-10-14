@@ -9,7 +9,8 @@ export interface GroupPublic {
 }
 
 export async function login(username: string, password: string) {
-  const { data } = await api.post("https://englishlifesupport-p993.onrender.com/api/v1/auth/login", { username, password });
+  // Use relative path – axios baseURL is already /api/v1
+  const { data } = await api.post("/auth/login", { username, password });
   tokenStorage.setTokens(data.access_token, data.refresh_token);
   return data;
 }
@@ -43,7 +44,8 @@ export async function register(
     };
   }
 
-  const { data } = await api.post("/api/v1/auth/register", payload);
+  // Use relative path – axios baseURL is already /api/v1
+  const { data } = await api.post("/auth/register", payload);
   if (data.access_token) {
     tokenStorage.setTokens(data.access_token, data.refresh_token);
   }
@@ -51,20 +53,22 @@ export async function register(
 }
 
 export async function fetchPublicGroups(): Promise<GroupPublic[]> {
-  const { data } = await api.get("/api/v1/auth/groups/public");
+  // Use relative path – axios baseURL is already /api/v1
+  const { data } = await api.get("/auth/groups/public");
   return data;
 }
 
 export async function logout() {
   const refreshToken = tokenStorage.getRefresh();
   try {
-    if (refreshToken) await api.post("/api/v1/auth/logout", { refresh_token: refreshToken });
+    if (refreshToken) await api.post("/auth/logout", { refresh_token: refreshToken });
   } finally {
     tokenStorage.clear();
   }
 }
 
 export async function fetchCurrentUser(): Promise<CurrentUser> {
-  const { data } = await api.get("https://englishlifesupport-p993.onrender.com/api/v1/auth/me");
+  // Use relative path – axios baseURL is already /api/v1
+  const { data } = await api.get("/auth/me");
   return data;
 }
