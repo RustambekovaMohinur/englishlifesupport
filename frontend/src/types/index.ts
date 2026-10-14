@@ -853,6 +853,7 @@ export interface WordDetailPreview {
   part_of_speech: string;
   phonetic: string;
   definition: string;
+  english_definition?: string;
   example: string;
   example_sentence?: string;
   audio_us_url?: string | null;
@@ -866,6 +867,7 @@ export interface AIWordlistParseItem {
   word: string;
   pos: string;
   definition: string;
+  english_definition?: string;
   uzbek_translation: string;
   translation?: string | null;
   example_sentence: string;

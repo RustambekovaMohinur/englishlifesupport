@@ -107,10 +107,14 @@ BulkPreviewRequest = PreviewBulkRequest
 class WordDetailPreview(BaseModel):
     word: str
     custom_translation: str = ""
+    uzbek_translation: str = ""
     part_of_speech: str = ""
+    pos: str = ""
     phonetic: str = ""
     definition: str = ""
+    english_definition: str = ""
     example: str = ""
+    example_sentence: str = ""
     audio_us_url: str | None = None
     audio_gb_url: str | None = None
     source: str = "dictionary"
@@ -131,6 +135,7 @@ class AIWordlistParseItem(BaseModel):
     word: str
     pos: str = "phrase"
     definition: str = ""
+    english_definition: str = ""
     translation: str | None = None
     uzbek_translation: str = ""
     example_sentence: str = ""

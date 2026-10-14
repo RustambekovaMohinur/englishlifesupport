@@ -26,26 +26,31 @@ from app.services.ai_examiner import (
 
 logger = logging.getLogger(__name__)
 
-COMPANION_PROMPT = """You are an expert lexicographer. Your ONLY task is to extract clean vocabulary entries from this textbook companion PDF.
-For each entry, return a JSON array of objects:
+COMPANION_PROMPT = """You are an expert Cambridge/IELTS English examiner and bilingual lexicographer.
+Extract vocabulary entries from this document and enrich each term.
+Return a STRICT JSON array of objects with the exact fields:
+["word", "pos", "uzbek_translation", "english_definition", "example_sentence"]
+
+SCHEMA TEMPLATE:
 [
   {
-    "word": "<clean headword in English>",
-    "definition": "<clean English definition>",
-    "pos": "phrase",
-    "translation": "",
-    "example_sentence": ""
+    "word": "<clean headword or collocation in English>",
+    "pos": "<noun | verb | adjective | adverb | idiom | phrasal_verb>",
+    "uzbek_translation": "<natural Uzbek translation>",
+    "english_definition": "<clear simple English definition>",
+    "example_sentence": "<realistic Cambridge context example sentence>"
   }
 ]
 
-STRICT NEGATIVE RULES:
-1. NEVER output section headers, unit titles, or page numbers (DO NOT output "Lead-in", "Reading", "UNIT 1", "Language focus", "Something to Shout About", or single numbers).
-2. STRIP all index numbers like "1.1", "1.7", "1.18", "1.38", "1.57", "1.60" from the word.
-3. STRIP all phonetic transcriptions enclosed in slashes (e.g. "/.../", "/ bʊst /", "/ lə /").
-4. STRIP all non-English foreign text (e.g. Polish words like "zwiększ", "przygnębi", "dążyć", "do celu").
-5. The DEFINITION must only be the English meaning. Stop before any foreign translation slash "/", before "e.g.", and before "Der.:".
-6. Do NOT extract example sentences. Set example_sentence to "".
-7. Do NOT extract translations. Set translation to "".
+INSTRUCTIONS & RULES:
+1. NEVER output section headers, unit titles, or page numbers (DO NOT output "Lead-in", "Reading", "UNIT 1", "Language focus", or single numbers).
+2. STRIP all index numbers like "1.1", "1.7", "1.18", "1.38", "1.57", "1.60" from the headword.
+3. STRIP all phonetic transcriptions enclosed in slashes (e.g. "/.../", "/ bʊst /").
+4. STRIP all foreign annotations from the headword.
+5. 'pos': Strictly one of: 'noun', 'verb', 'adjective', 'adverb', 'idiom', 'phrasal_verb'. For single words like 'bloom', select 'noun', 'verb', 'adjective', or 'adverb', NEVER 'idiom'.
+6. 'uzbek_translation': Accurate natural Uzbek translation.
+7. 'english_definition': A clear, simple English definition/explanation in plain English.
+8. 'example_sentence': A realistic, contextual Cambridge-standard example sentence.
 
 Return a STRICT JSON array of objects conforming to the schema above without markdown code fences."""
 
@@ -250,20 +255,26 @@ def clean_extracted_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         slug = re.sub(r"[^a-zA-Z0-9]+", "_", word.lower()).strip("_")
         audio_us_url = f"https://ssl.gstatic.com/dictionary/static/sounds/20200429/{slug}--_us_1.mp3"
 
-        raw_pos = str(item.get("pos", "phrase") or "phrase").lower().strip()
-        pos = normalize_pos(raw_pos)
+        raw_pos = item.get("pos") or item.get("part_of_speech")
+        pos = normalize_pos(raw_pos, word)
+
+        uz_trans = clean_uzbek_text(item.get("uzbek_translation") or item.get("translation") or item.get("custom_translation") or "")
+        eng_def = str(item.get("english_definition") or item.get("definition") or definition).strip()
+        ex_sent = str(item.get("example_sentence") or item.get("example") or "").strip()
+        phon = str(item.get("phonetic") or "").strip()
 
         sanitized.append({
             "word": word,
-            "definition": definition,
             "pos": pos,
             "part_of_speech": pos,
-            "translation": "",
-            "uzbek_translation": "",
-            "custom_translation": "",
-            "example_sentence": "",
-            "example": "",
-            "phonetic": "",
+            "english_definition": eng_def,
+            "definition": eng_def,
+            "uzbek_translation": uz_trans,
+            "custom_translation": uz_trans,
+            "translation": uz_trans,
+            "example_sentence": ex_sent,
+            "example": ex_sent,
+            "phonetic": phon,
             "audio_us_url": audio_us_url,
             "ai_generated": True,
             "fallback_used": False,

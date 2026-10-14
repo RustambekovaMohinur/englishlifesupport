@@ -49,7 +49,7 @@ POS_MAP = {
     "adjective": "adjective",
     "adverb": "adverb",
     "idiom": "idiom",
-    "phrase": "idiom",
+    "phrase": "phrase",
     "phrasal_verb": "phrasal_verb",
     "phrasal verb": "phrasal_verb",
     "n": "noun",
@@ -62,30 +62,66 @@ POS_MAP = {
     "interj": "noun",
 }
 
+COMMON_SINGLE_VERBS = {
+    "bloom", "blossom", "flourish", "thrive", "spark", "foster", "boost", "trigger",
+    "enhance", "yield", "depict", "convey", "exhibit", "undergo", "witness", "arise",
+    "stem", "dwell", "strive", "glean", "soar", "plummet", "run", "jump", "walk",
+    "speak", "write", "read", "learn", "study", "make", "take", "give", "build",
+    "create", "achieve", "obtain", "acquire", "pursue", "require", "develop",
+    "produce", "expand", "decrease", "increase", "improve", "transform", "maintain",
+}
+
 
 def canonical_pos(raw_pos: str | None, word: str = "") -> str:
-    """Normalize POS strictly to one of ['noun', 'verb', 'adjective', 'adverb', 'idiom', 'phrasal_verb']."""
+    """Normalize POS strictly to one of ['noun', 'verb', 'adjective', 'adverb', 'idiom', 'phrasal_verb'].
+    Ensures single words like 'bloom' correctly map to 'verb' or 'noun', never 'idiom'.
+    """
+    w = word.lower().strip()
+    is_multi_word = " " in w or "-" in w
+
     if raw_pos:
         cleaned = raw_pos.lower().strip().replace("-", "_")
-        if cleaned in POS_MAP:
-            return POS_MAP[cleaned]
-        if "adj" in cleaned:
-            return "adjective"
-        if "verb" in cleaned and "phras" in cleaned:
-            return "phrasal_verb"
-        if "verb" in cleaned:
+        if cleaned in ("verb", "v"):
             return "verb"
-        if "adv" in cleaned:
+        if cleaned in ("noun", "n"):
+            return "noun"
+        if cleaned in ("adjective", "adj"):
+            return "adjective"
+        if cleaned in ("adverb", "adv"):
             return "adverb"
-        if "idiom" in cleaned or "phrase" in cleaned:
-            return "idiom"
-    w = word.lower().strip()
-    if w in {"big", "small", "beautiful", "huge", "tiny", "fast", "slow", "happy", "sad", "good", "bad", "reluctant", "subtle", "ambiguous", "sustainable"} or w.endswith(("able", "ible", "ous", "ful", "ive", "less", "ic", "al", "ish")):
-        return "adjective"
-    if w.endswith("ly"):
-        return "adverb"
-    if w.endswith(("ize", "ise", "ify", "ate")):
+        if cleaned in ("phrasal_verb", "phrasal verb"):
+            return "phrasal_verb" if is_multi_word else "verb"
+        if cleaned in ("idiom", "phrase"):
+            if is_multi_word:
+                return "idiom"
+            # Single word: do NOT return idiom! Fall through to single-word detection
+        elif cleaned in POS_MAP:
+            mapped = POS_MAP[cleaned]
+            if mapped in ("idiom", "phrase", "phrasal_verb"):
+                if is_multi_word:
+                    return "idiom" if mapped in ("idiom", "phrase") else "phrasal_verb"
+            else:
+                return mapped
+        elif "verb" in cleaned and "phras" in cleaned:
+            return "phrasal_verb" if is_multi_word else "verb"
+        elif "verb" in cleaned:
+            return "verb"
+        elif "adj" in cleaned:
+            return "adjective"
+        elif "adv" in cleaned:
+            return "adverb"
+        elif "idiom" in cleaned or "phrase" in cleaned:
+            if is_multi_word:
+                return "idiom"
+
+    # Single-word inference
+    if w in COMMON_SINGLE_VERBS or w.startswith("to ") or w.endswith(("ize", "ise", "ify", "ate")):
         return "verb"
+    if w in {"big", "small", "beautiful", "huge", "tiny", "fast", "slow", "happy", "sad", "good", "bad", "reluctant", "subtle", "ambiguous", "sustainable"} or any(w.endswith(sfx) for sfx in ("able", "ible", "ous", "ful", "ive", "less", "ic", "al", "ish", "ant", "ent")):
+        return "adjective"
+    if w.endswith("ly") and len(w) > 3:
+        return "adverb"
+
     return "noun"
 
 
@@ -308,11 +344,15 @@ async def preview_bulk(
             ai_results = [
                 WordDetailPreview(
                     word=item["word"],
-                    custom_translation=item.get("definition", ""),
-                    part_of_speech=item.get("part_of_speech", "noun"),
+                    custom_translation=item.get("uzbek_translation") or item.get("custom_translation") or item.get("translation") or item.get("definition", ""),
+                    uzbek_translation=item.get("uzbek_translation") or item.get("custom_translation") or item.get("translation") or item.get("definition", ""),
+                    part_of_speech=canonical_pos(item.get("part_of_speech") or item.get("pos"), item["word"]),
+                    pos=canonical_pos(item.get("part_of_speech") or item.get("pos"), item["word"]),
                     phonetic=item.get("phonetic", ""),
-                    definition=item.get("definition", ""),
-                    example=item.get("example", ""),
+                    definition=item.get("english_definition") or item.get("definition", ""),
+                    english_definition=item.get("english_definition") or item.get("definition", ""),
+                    example=item.get("example_sentence") or item.get("example", ""),
+                    example_sentence=item.get("example_sentence") or item.get("example", ""),
                     audio_us_url=item.get("audio_us_url") or None,
                     audio_gb_url=None,
                     source="gemini_ai",
@@ -334,10 +374,29 @@ async def preview_bulk(
     previews: list[WordDetailPreview] = []
     for l, res in zip(lines, results):
         if isinstance(res, WordDetailPreview):
+            w = res.word
+            c_pos = canonical_pos(res.part_of_speech or res.pos, w)
+            res.part_of_speech = c_pos
+            res.pos = c_pos
+            if not res.uzbek_translation:
+                res.uzbek_translation = res.custom_translation
+            if not res.english_definition:
+                res.english_definition = res.definition
+            if not res.example_sentence:
+                res.example_sentence = res.example
             previews.append(res)
         else:
             w, t = parse_bilingual_line(l)
-            previews.append(WordDetailPreview(word=w, definition=t, custom_translation=t))
+            c_pos = canonical_pos(None, w)
+            previews.append(WordDetailPreview(
+                word=w,
+                pos=c_pos,
+                part_of_speech=c_pos,
+                definition=t,
+                english_definition=t,
+                custom_translation=t,
+                uzbek_translation=t
+            ))
 
     return previews
 

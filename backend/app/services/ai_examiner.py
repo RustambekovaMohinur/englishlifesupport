@@ -404,31 +404,70 @@ POS_MAP = {
     "adv": "adverb",
     "adverb": "adverb",
     "idiom": "idiom",
-    "phrase": "idiom",
+    "phrase": "phrase",
     "phrasal_verb": "phrasal_verb",
     "phrasal verb": "phrasal_verb",
 }
 
+COMMON_SINGLE_VERBS = {
+    "bloom", "blossom", "flourish", "thrive", "spark", "foster", "boost", "trigger",
+    "enhance", "yield", "depict", "convey", "exhibit", "undergo", "witness", "arise",
+    "stem", "dwell", "strive", "glean", "soar", "plummet", "run", "jump", "walk",
+    "speak", "write", "read", "learn", "study", "make", "take", "give", "build",
+    "create", "achieve", "obtain", "acquire", "pursue", "require", "develop",
+    "produce", "expand", "decrease", "increase", "improve", "transform", "maintain",
+}
 
-def normalize_pos(raw_pos: str | None) -> str:
-    """Normalize POS strictly to one of ['noun', 'verb', 'adjective', 'adverb', 'idiom', 'phrasal_verb']."""
-    if not raw_pos:
-        return "noun"
-    cleaned = raw_pos.lower().strip().replace("-", "_")
-    if cleaned in POS_MAP:
-        return POS_MAP[cleaned]
-    if cleaned in VALID_POS_SET:
-        return cleaned
-    if "verb" in cleaned and "phras" in cleaned:
-        return "phrasal_verb"
-    if "verb" in cleaned:
+
+def normalize_pos(raw_pos: str | None, word: str = "") -> str:
+    """Normalize POS strictly to one of ['noun', 'verb', 'adjective', 'adverb', 'idiom', 'phrasal_verb'].
+    Ensures single words like 'bloom' correctly map to 'verb' or 'noun', never 'idiom'.
+    """
+    w = word.lower().strip()
+    is_multi_word = " " in w or "-" in w
+
+    if raw_pos:
+        cleaned = raw_pos.lower().strip().replace("-", "_")
+        if cleaned in ("verb", "v"):
+            return "verb"
+        if cleaned in ("noun", "n"):
+            return "noun"
+        if cleaned in ("adjective", "adj"):
+            return "adjective"
+        if cleaned in ("adverb", "adv"):
+            return "adverb"
+        if cleaned in ("phrasal_verb", "phrasal verb"):
+            return "phrasal_verb" if is_multi_word else "verb"
+        if cleaned in ("idiom", "phrase"):
+            if is_multi_word:
+                return "idiom"
+            # Single word: do NOT return idiom! Fall through to single word check
+        elif cleaned in POS_MAP:
+            mapped = POS_MAP[cleaned]
+            if mapped in ("idiom", "phrase", "phrasal_verb"):
+                if is_multi_word:
+                    return "idiom" if mapped in ("idiom", "phrase") else "phrasal_verb"
+            else:
+                return mapped
+        elif "verb" in cleaned and "phras" in cleaned:
+            return "phrasal_verb" if is_multi_word else "verb"
+        elif "verb" in cleaned:
+            return "verb"
+        elif "adj" in cleaned:
+            return "adjective"
+        elif "adv" in cleaned:
+            return "adverb"
+        elif "idiom" in cleaned or "phrase" in cleaned:
+            if is_multi_word:
+                return "idiom"
+
+    if w in COMMON_SINGLE_VERBS or w.startswith("to ") or w.endswith(("ize", "ise", "ify", "ate")):
         return "verb"
-    if "adj" in cleaned:
+    if w in {"big", "small", "beautiful", "huge", "tiny", "fast", "slow", "happy", "sad", "good", "bad", "reluctant", "subtle", "ambiguous", "sustainable"} or any(w.endswith(sfx) for sfx in ("able", "ible", "ous", "ful", "ive", "less", "ic", "al", "ish", "ant", "ent")):
         return "adjective"
-    if "adv" in cleaned:
+    if w.endswith("ly") and len(w) > 3:
         return "adverb"
-    if "idiom" in cleaned or "phrase" in cleaned:
-        return "idiom"
+
     return "noun"
 
 
@@ -509,8 +548,9 @@ async def enrich_vocabulary_list(raw_words: list[str | dict]) -> list[dict] | No
         return []
 
     role_instruction = (
-        "You are an expert Cambridge/IELTS English examiner. "
-        "Analyze English words and return strict, clean JSON only."
+        "You are an expert Cambridge/IELTS English examiner and bilingual lexicographer. "
+        "Analyze English words and return a STRICT JSON array of objects with the exact fields: "
+        '["word", "pos", "uzbek_translation", "english_definition", "example_sentence"].'
     )
 
     prompt = (
@@ -518,15 +558,14 @@ async def enrich_vocabulary_list(raw_words: list[str | dict]) -> list[dict] | No
         "Input words to analyze:\n"
         + "\n".join(f"{i+1}. {entry}" for i, entry in enumerate(entries))
         + "\n\n"
-        "Instructions:\n"
-        "1. word: Clean English term.\n"
-        "2. part_of_speech: Must be strictly one of: 'noun', 'verb', 'adjective', 'adverb', 'idiom', 'phrasal_verb'.\n"
-        "3. phonetic: Accurate IPA transcription (e.g. /kənˈsɜːv/).\n"
-        "4. definition: Natural Uzbek translation. If input contains teacher's custom translation, preserve it.\n"
-        "5. example: Natural B2/C1 Cambridge context sentence.\n"
-        "6. audio_us_url: Pronunciation audio link (https://ssl.gstatic.com/dictionary/static/sounds/20200429/{word}--_us_1.mp3) or empty string.\n\n"
-        "Return a STRICT JSON array of objects with keys: "
-        '["word", "part_of_speech", "phonetic", "definition", "example", "audio_us_url"]'
+        "INSTRUCTIONS FOR EACH FIELD:\n"
+        "1. 'word': Clean English term, phrase, or collocation.\n"
+        "2. 'pos': Part of Speech. Strictly one of: 'noun', 'verb', 'adjective', 'adverb', 'idiom', 'phrasal_verb'. For single words, accurately choose 'noun', 'verb', 'adjective', or 'adverb' (e.g. 'bloom' -> 'verb' or 'noun', NEVER 'idiom'). Only multi-word expressions can be 'idiom' or 'phrasal_verb'.\n"
+        "3. 'uzbek_translation': Accurate natural Uzbek translation (e.g. for 'eager for' -> 'intiq bo\\'lmoq, orziqib kutmoq', for 'bloom' -> 'gullamoq, yashnamoq'). If input contains teacher's custom translation, preserve it.\n"
+        "4. 'english_definition': A clear, simple English definition/explanation in plain English (e.g. 'To produce flowers or to develop and flourish successfully').\n"
+        "5. 'example_sentence': A realistic, natural Cambridge/IELTS contextual example sentence demonstrating the word in use (e.g. 'The roses began to bloom in the warm spring sunshine.').\n\n"
+        "Return a STRICT JSON array of objects conforming to the exact schema with keys: "
+        '["word", "pos", "uzbek_translation", "english_definition", "example_sentence"]'
     )
 
     payload = {
@@ -587,21 +626,30 @@ async def enrich_vocabulary_list(raw_words: list[str | dict]) -> list[dict] | No
             if not w:
                 continue
 
-            pos = normalize_pos(item.get("part_of_speech"))
+            raw_pos = item.get("pos") or item.get("part_of_speech")
+            pos = normalize_pos(raw_pos, w)
             phon = (item.get("phonetic") or "").strip()
-            definition = (item.get("definition") or item.get("translation") or "").strip()
-            example = (item.get("example") or "").strip()
+            eng_def = (item.get("english_definition") or item.get("definition") or "").strip()
+            uz_trans = clean_uzbek_text(item.get("uzbek_translation") or item.get("translation") or item.get("custom_translation") or "")
+            ex_sent = (item.get("example_sentence") or item.get("example") or "").strip()
+            slug = re.sub(r"[^a-zA-Z0-9]+", "_", w.lower()).strip("_")
             audio_us = (
                 item.get("audio_us_url")
-                or f"https://ssl.gstatic.com/dictionary/static/sounds/20200429/{w.lower().replace(' ', '_')}--_us_1.mp3"
+                or f"https://ssl.gstatic.com/dictionary/static/sounds/20200429/{slug}--_us_1.mp3"
             )
 
             results.append({
                 "word": w,
+                "pos": pos,
                 "part_of_speech": pos,
                 "phonetic": phon,
-                "definition": definition,
-                "example": example,
+                "english_definition": eng_def,
+                "definition": eng_def,
+                "uzbek_translation": uz_trans,
+                "custom_translation": uz_trans,
+                "translation": uz_trans,
+                "example_sentence": ex_sent,
+                "example": ex_sent,
                 "audio_us_url": audio_us,
                 "ai_generated": True,
                 "source": "gemini_ai",
@@ -658,7 +706,9 @@ def clean_uzbek_text(text: str) -> str:
 
 
 def infer_pos_and_clean_word(word: str) -> tuple[str, str]:
-    """Infers POS tag and cleans up any embedded POS markers like '(v)' or '(n)'."""
+    """Infers POS tag and cleans up any embedded POS markers like '(v)' or '(n)'.
+    Single words like 'bloom' are never classified as 'phrase' or 'idiom'.
+    """
     w = word.strip()
     match = re.search(
         r"\s*\((v|verb|n|noun|adj|adjective|adv|adverb|phrase|idiom|phrasal[ _]verb)\)\s*$",
@@ -676,7 +726,13 @@ def infer_pos_and_clean_word(word: str) -> tuple[str, str]:
             "phrase": "phrase", "idiom": "idiom",
             "phrasal_verb": "phrasal_verb", "phrasal verb": "phrasal_verb",
         }
-        return clean_w, pos_map.get(tag, "phrase")
+        inferred = pos_map.get(tag, "phrase")
+        if " " not in clean_w and inferred in ("phrase", "idiom", "phrasal_verb"):
+            c_low = clean_w.lower()
+            if c_low in COMMON_SINGLE_VERBS or c_low.endswith(("ize", "ise", "ify", "ate")):
+                return clean_w, "verb"
+            return clean_w, "noun"
+        return clean_w, inferred
 
     if w.lower().startswith("to ") and len(w.split()) == 2:
         return w, "verb"
@@ -685,10 +741,14 @@ def infer_pos_and_clean_word(word: str) -> tuple[str, str]:
         return w, "phrase"
 
     w_low = w.lower()
-    if any(w_low.endswith(sfx) for sfx in ["less", "ful", "able", "ible", "ous", "ive", "ic"]):
+    if w_low in COMMON_SINGLE_VERBS:
+        return w, "verb"
+    if any(w_low.endswith(sfx) for sfx in ["less", "ful", "able", "ible", "ous", "ive", "ic", "al", "ish", "ant", "ent"]):
         return w, "adjective"
-    if w_low.endswith("ly") and len(w_low) > 4:
+    if w_low.endswith("ly") and len(w_low) > 3:
         return w, "adverb"
+    if w_low.endswith(("ize", "ise", "ify", "ate")):
+        return w, "verb"
 
     return w, "noun"
 
@@ -1038,23 +1098,30 @@ async def ai_parse_wordlist_multiformat(
             raise RuntimeError("GEMINI_API_KEY is not configured on the server.")
 
         prompt = (
-            "You are an expert linguistic extractor. The document or input contains a 4-column vocabulary table with the following structure:\n"
-            "[Word/Phrase | Uzbek Translation | English Definition | Example Sentence]\n\n"
-            "EXTRACTION RULES:\n"
-            "1. Extract EVERY single row accurately without splitting across cells or rows.\n"
-            "2. Multi-word expressions, collocations, phrasal verbs, idioms, and compound terms (e.g. 'eager for', 'stand still', 'protective gear', 'elbow and knee pads', 'take precautions', 'eye-witness', 'capable of') MUST remain as a single term in 'word'.\n"
-            "3. Preserve the exact Uzbek translation for each term in 'uzbek_translation'.\n"
-            "4. Place the English definition in 'definition' and the example sentence in 'example_sentence'. Do NOT truncate or split sentences.\n"
-            "5. If Part of Speech (POS) is not explicitly given, infer it accurately: 'noun', 'verb', 'adjective', 'adverb', 'phrase', 'idiom', or 'phrasal_verb'.\n"
-            "6. Return a STRICT JSON array of objects conforming to the exact schema below without any extra text or markdown formatting:\n"
+            "You are an expert Cambridge/IELTS English examiner and bilingual lexicographer.\n"
+            "Analyze the vocabulary content and return a STRICT JSON array of objects with the exact fields: "
+            '["word", "pos", "uzbek_translation", "english_definition", "example_sentence"].\n\n'
+            "FIELD REQUIREMENTS:\n"
+            "1. 'word': The clean English word, phrase, collocation, or phrasal verb. Multi-word expressions, collocations, phrasal verbs, idioms, and compound terms (e.g. 'eager for', 'stand still', 'protective gear', 'take precautions') must remain intact as a single item.\n"
+            "2. 'pos': Part of Speech. Strictly one of: 'noun', 'verb', 'adjective', 'adverb', 'idiom', 'phrasal_verb'. For single words, accurately choose 'noun', 'verb', 'adjective', or 'adverb' (e.g. 'bloom' -> 'verb' or 'noun', NEVER 'idiom'). Only multi-word expressions can be 'idiom' or 'phrasal_verb'.\n"
+            "3. 'uzbek_translation': Accurate natural Uzbek translation (e.g. for 'eager for' -> 'intiq bo\\'lmoq, orziqib kutmoq', for 'bloom' -> 'gullamoq, yashnamoq'). If input contains teacher's custom translation, preserve it.\n"
+            "4. 'english_definition': A clear, simple English definition/explanation in plain English (e.g. 'To produce flowers or to develop and flourish successfully').\n"
+            "5. 'example_sentence': A realistic, contextual Cambridge/IELTS example sentence demonstrating the word in use (e.g. 'The roses began to bloom in early summer.').\n\n"
+            "Return a STRICT JSON array of objects conforming to the exact schema below without any extra text or markdown code fences:\n"
             "[\n"
             "  {\n"
-            '    "word": "Endless",\n'
-            '    "pos": "adjective",\n'
-            '    "uzbek_translation": "cheksiz, nihoyasiz",\n'
-            '    "definition": "Having no end; continuing forever.",\n'
-            '    "example_sentence": "The desert seemed endless.",\n'
-            '    "phonetic": "/ˈend.ləs/"\n'
+            '    "word": "eager for",\n'
+            '    "pos": "idiom",\n'
+            '    "uzbek_translation": "intiq bo\'lmoq, orziqib kutmoq",\n'
+            '    "english_definition": "Very excited and interested in receiving or experiencing something.",\n'
+            '    "example_sentence": "The students were eager for the final examination results."\n'
+            "  },\n"
+            "  {\n"
+            '    "word": "bloom",\n'
+            '    "pos": "verb",\n'
+            '    "uzbek_translation": "gullamoq, yashnamoq",\n'
+            '    "english_definition": "To produce flowers or to flourish and develop successfully.",\n'
+            '    "example_sentence": "The roses began to bloom in early summer."\n'
             "  }\n"
             "]"
         )
@@ -1127,18 +1194,15 @@ async def ai_parse_wordlist_multiformat(
             w = (item.get("word") or "").strip()
             if not w:
                 continue
-            raw_pos = str(item.get("pos") or item.get("part_of_speech") or "phrase").lower().strip()
-            if raw_pos not in {"noun", "verb", "adjective", "adverb", "phrase", "idiom", "phrasal_verb"}:
-                raw_pos = normalize_pos(raw_pos)
 
-            definition = (item.get("definition") or "").strip()
+            clean_w, inferred_pos = infer_pos_and_clean_word(w)
+            raw_pos = item.get("pos") or item.get("part_of_speech") or inferred_pos
+            pos = normalize_pos(raw_pos, clean_w)
+
+            eng_def = (item.get("english_definition") or item.get("definition") or "").strip()
             uz_trans = clean_uzbek_text(item.get("uzbek_translation") or item.get("translation") or item.get("custom_translation") or "")
             ex_sent = (item.get("example_sentence") or item.get("example") or "").strip()
             phon = (item.get("phonetic") or "").strip()
-
-            clean_w, pos = infer_pos_and_clean_word(w)
-            if raw_pos in {"noun", "verb", "adjective", "adverb", "phrase", "idiom", "phrasal_verb"}:
-                pos = raw_pos
 
             slug = re.sub(r"[^a-zA-Z0-9]+", "_", clean_w.lower()).strip("_")
             audio_url = (
@@ -1150,9 +1214,11 @@ async def ai_parse_wordlist_multiformat(
                 "word": clean_w,
                 "pos": pos,
                 "part_of_speech": pos,
-                "definition": definition,
+                "english_definition": eng_def,
+                "definition": eng_def,
                 "uzbek_translation": uz_trans,
                 "custom_translation": uz_trans,
+                "translation": uz_trans,
                 "example_sentence": ex_sent,
                 "example": ex_sent,
                 "phonetic": phon,

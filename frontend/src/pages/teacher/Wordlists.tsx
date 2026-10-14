@@ -78,6 +78,44 @@ export async function extractLinesFromPdf(file: File): Promise<string[]> {
   return fullLines;
 }
 
+export function normalizePos(pos?: string | null, word?: string): string {
+  const w = (word || "").trim().toLowerCase();
+  const isSingleWord = w.length > 0 && !w.includes(" ") && !w.includes("-");
+
+  const p = (pos || "").toLowerCase().trim().replace("-", "_");
+  if (p === "adj" || p === "adjective") return "adjective";
+  if (p === "v" || p === "verb") return "verb";
+  if (p === "n" || p === "noun") return "noun";
+  if (p === "adv" || p === "adverb") return "adverb";
+  if (p === "phrasal_verb" || p === "phrasal verb") {
+    return isSingleWord ? "verb" : "phrasal_verb";
+  }
+  if (p === "idiom" || p === "phrase") {
+    if (isSingleWord) {
+      if (/^(bloom|blossom|grow|thrive|flourish|run|jump|speak|write|read|learn|study|make|take|give|build|create|boost|spark|foster|yield|soar|plummet)$/.test(w)) {
+        return "verb";
+      }
+      if (/(ize|ise|ify|ate|ed|ing)$/.test(w)) return "verb";
+      if (/(less|ful|able|ible|ous|ive|ic|al|ish|ant|ent)$/.test(w)) return "adjective";
+      if (/ly$/.test(w) && w.length > 3) return "adverb";
+      return "noun";
+    }
+    return "idiom";
+  }
+
+  if (isSingleWord) {
+    if (/^(bloom|blossom|grow|thrive|flourish|run|jump|speak|write|read|learn|study|make|take|give|build|create|boost|spark|foster|yield|soar|plummet)$/.test(w)) {
+      return "verb";
+    }
+    if (/(ize|ise|ify|ate|ed|ing)$/.test(w)) return "verb";
+    if (/(less|ful|able|ible|ous|ive|ic|al|ish|ant|ent)$/.test(w)) return "adjective";
+    if (/ly$/.test(w) && w.length > 3) return "adverb";
+    return "noun";
+  }
+
+  return "noun";
+}
+
 export function extractCompanionDirectly(input: string | string[]): WordDetailPreview[] {
   const lines = Array.isArray(input)
     ? input
@@ -172,11 +210,13 @@ export function extractCompanionDirectly(input: string | string[]): WordDetailPr
       const slug = word.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
       const audioUrl = `https://ssl.gstatic.com/dictionary/static/sounds/20200429/${slug}--_us_1.mp3`;
 
+      const itemPos = normalizePos(undefined, word);
       items.push({
         word: word,
         definition: def,
-        part_of_speech: "phrase",
-        pos: "phrase",
+        english_definition: def,
+        part_of_speech: itemPos,
+        pos: itemPos,
         phonetic: "",
         uzbek_translation: "",
         custom_translation: "",
@@ -388,7 +428,11 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
 
       definition = definition.replace(/\s+/g, " ").trim();
 
-      const rawPos = (item.part_of_speech || item.pos || "phrase").toLowerCase().trim();
+      const uzTrans = (item.uzbek_translation || item.custom_translation || (item as any).translation || "").trim();
+      const engDef = (item.english_definition || item.definition || definition || "").trim();
+      const exSent = (item.example_sentence || item.example || "").trim();
+      const rawPos = item.part_of_speech || item.pos;
+      const finalPos = normalizePos(rawPos, word);
       const slug = word.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
       const audioUrl =
         item.audio_us_url ||
@@ -396,17 +440,18 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
 
       return {
         word: word,
-        definition: definition,
-        part_of_speech: rawPos,
-        pos: rawPos,
-        phonetic: "",
-        uzbek_translation: "",
-        custom_translation: "",
-        example: "",
-        example_sentence: "",
+        definition: engDef,
+        english_definition: engDef,
+        part_of_speech: finalPos,
+        pos: finalPos,
+        phonetic: item.phonetic || "",
+        uzbek_translation: uzTrans,
+        custom_translation: uzTrans,
+        example: exSent,
+        example_sentence: exSent,
         audio_us_url: audioUrl,
         audio_gb_url: null,
-        source: "gemini_ai",
+        source: item.source || "gemini_ai",
         ai_generated: true,
         fallback_used: false,
       };
@@ -635,6 +680,10 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
         copy[index].example = val;
       } else if (field === "example") {
         copy[index].example_sentence = val;
+      } else if (field === "definition") {
+        copy[index].english_definition = val;
+      } else if (field === "english_definition") {
+        copy[index].definition = val;
       }
       return copy;
     });
@@ -642,18 +691,6 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
 
   const handleRemovePreview = (index: number) => {
     setPreviews((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const normalizePos = (pos?: string | null): string => {
-    if (!pos) return "noun";
-    const p = pos.toLowerCase().trim().replace("-", "_");
-    if (p === "adj" || p === "adjective") return "adjective";
-    if (p === "v" || p === "verb") return "verb";
-    if (p === "n" || p === "noun") return "noun";
-    if (p === "adv" || p === "adverb") return "adverb";
-    if (p === "idiom" || p === "phrase") return "idiom";
-    if (p === "phrasal_verb" || p === "phrasal verb") return "phrasal_verb";
-    return "noun";
   };
 
   const handlePlayPreviewAudio = (item: WordDetailPreview) => {
@@ -689,15 +726,16 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
         group_id: selectedGroupId || null,
         items: previews.map((item, idx) => {
           const uzTrans = (item.uzbek_translation || item.custom_translation || "").trim();
-          const engDef = (item.definition || "").trim();
+          const engDef = (item.english_definition || item.definition || "").trim();
+          const exSent = (item.example_sentence || item.example || "").trim();
 
           return {
             word: item.word.trim(),
-            part_of_speech: item.part_of_speech ? normalizePos(item.part_of_speech) : "noun",
+            part_of_speech: normalizePos(item.part_of_speech || item.pos, item.word),
             phonetic: item.phonetic?.trim() || null,
             definition: engDef || null,
             uzbek_translation: uzTrans || null,
-            example: (item.example_sentence || item.example)?.trim() || null,
+            example: exSent || null,
             audio_us_url: item.audio_us_url?.trim() || null,
             audio_gb_url: item.audio_gb_url?.trim() || null,
             order_index: idx,
@@ -1199,7 +1237,7 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
                           {/* 2. POS */}
                           <td className="py-2.5 px-3 align-top">
                             <select
-                              value={normalizePos(item.part_of_speech || item.pos)}
+                              value={normalizePos(item.part_of_speech || item.pos, item.word)}
                               onChange={(e) => handleUpdatePreview(idx, "part_of_speech", e.target.value)}
                               className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2 py-1.5 border border-zinc-200 dark:border-zinc-700 text-xs text-center font-medium focus:border-brand-500 outline-none"
                             >
@@ -1233,7 +1271,7 @@ function sanitizeVocabularyList(items: any[]): WordDetailPreview[] {
                           <td className="py-2.5 px-3 align-top">
                             <textarea
                               rows={2}
-                              value={item.definition || ""}
+                              value={item.english_definition || item.definition || ""}
                               onChange={(e) => handleUpdatePreview(idx, "definition", e.target.value)}
                               placeholder="English definition..."
                               className="w-full bg-zinc-50 dark:bg-zinc-800/60 rounded px-2.5 py-1.5 border border-zinc-200 dark:border-zinc-700 text-xs resize-y focus:border-brand-500 outline-none"
