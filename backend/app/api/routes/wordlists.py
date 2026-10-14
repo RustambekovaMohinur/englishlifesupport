@@ -522,11 +522,24 @@ async def create_wordlist_set(
         await db.commit()
 
         group_name = "All Cohorts (Global)"
+        group_tg_chat_id = None
         if new_set.group_id:
-            grp_res = await db.execute(select(Group.name).where(Group.id == new_set.group_id))
+            grp_res = await db.execute(select(Group).where(Group.id == new_set.group_id))
             grp_val = grp_res.scalar_one_or_none()
             if grp_val:
-                group_name = grp_val
+                group_name = grp_val.name
+                group_tg_chat_id = grp_val.telegram_group_chat_id
+
+        if group_tg_chat_id:
+            from app.services.telegram_bot import notify_group_wordlist
+            asyncio.create_task(
+                notify_group_wordlist(
+                    chat_id=group_tg_chat_id,
+                    wordlist_title=new_set.title,
+                    total_words=new_set.total_words,
+                    set_id=str(new_set.id),
+                )
+            )
 
         items_out = [
             WordlistItemOut(
@@ -623,11 +636,24 @@ async def create_wordlist_set(
     await db.commit()
 
     group_name = "All Cohorts (Global)"
+    group_tg_chat_id = None
     if new_set.group_id:
-        grp_res = await db.execute(select(Group.name).where(Group.id == new_set.group_id))
+        grp_res = await db.execute(select(Group).where(Group.id == new_set.group_id))
         grp_val = grp_res.scalar_one_or_none()
         if grp_val:
-            group_name = grp_val
+            group_name = grp_val.name
+            group_tg_chat_id = grp_val.telegram_group_chat_id
+
+    if group_tg_chat_id:
+        from app.services.telegram_bot import notify_group_wordlist
+        asyncio.create_task(
+            notify_group_wordlist(
+                chat_id=group_tg_chat_id,
+                wordlist_title=new_set.title,
+                total_words=new_set.total_words,
+                set_id=str(new_set.id),
+            )
+        )
 
     items_out = [
         WordlistItemOut(

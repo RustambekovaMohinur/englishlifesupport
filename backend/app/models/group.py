@@ -32,7 +32,7 @@ class Group(UUIDPKMixin, TimestampMixin, Base):
     )
     default_homework_time: Mapped[str | None] = mapped_column(String(10), nullable=True, default="20:00")
     # Telegram group chat ID for bound group notifications
-    telegram_group_chat_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    telegram_group_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     current_cycle: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     students: Mapped[list["StudentProfile"]] = relationship(back_populates="group")

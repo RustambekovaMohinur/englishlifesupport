@@ -343,6 +343,7 @@ async def _run_startup_tasks():
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS verification_code VARCHAR(32)"))
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS verification_code_matched BOOLEAN"))
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS tampering_detected BOOLEAN NOT NULL DEFAULT FALSE"))
+                        await conn.execute(sa.text("ALTER TABLE groups ADD COLUMN IF NOT EXISTS telegram_group_chat_id VARCHAR(64)"))
                     else:
                         res = await conn.execute(sa.text("PRAGMA table_info(wordlist_sets)"))
                         cols = [r[1] for r in res.fetchall()]
@@ -414,6 +415,11 @@ async def _run_startup_tasks():
                         as_cols = [r[1] for r in res_as.fetchall()]
                         if "parent_digest_sent" not in as_cols:
                             await conn.execute(sa.text("ALTER TABLE assignments ADD COLUMN parent_digest_sent BOOLEAN NOT NULL DEFAULT 0"))
+
+                        res_grp = await conn.execute(sa.text("PRAGMA table_info(groups)"))
+                        grp_cols = [r[1] for r in res_grp.fetchall()]
+                        if "telegram_group_chat_id" not in grp_cols:
+                            await conn.execute(sa.text("ALTER TABLE groups ADD COLUMN telegram_group_chat_id VARCHAR(64)"))
                 except Exception as ex:
                     logger.debug("Column check note: %s", ex)
 

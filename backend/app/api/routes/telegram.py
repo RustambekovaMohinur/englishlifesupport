@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_student_profile, get_current_user
 from app.db.session import get_db
+from app.models.group import Group
 from app.models.student import StudentProfile
 from app.models.user import User
 from app.schemas.student import ParentLinkInfo
@@ -22,6 +23,7 @@ from app.services.telegram_bot import (
     get_telegram_bot_token,
     get_telegram_webhook_info,
     handle_telegram_update,
+    send_telegram_message_detailed,
     set_telegram_webhook,
 )
 from app.utils.datetimes import utcnow
@@ -176,3 +178,65 @@ async def simulate_telegram_update(
         },
     }
     return await handle_telegram_update(fake_update, db)
+
+
+@router.get("/test-notification/{group_id}")
+@router.post("/test-notification/{group_id}")
+async def test_group_notification(
+    group_id: uuid.UUID,
+    custom_message: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Test endpoint to instantly verify Telegram group messaging for a specific group.
+    Sends a test broadcast with an inline button and returns Telegram API diagnostics.
+    """
+    grp_res = await db.execute(select(Group).where(Group.id == group_id))
+    group = grp_res.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=404, detail="Guruh topilmadi (Group not found)")
+
+    if not group.telegram_group_chat_id:
+        return {
+            "success": False,
+            "group_id": str(group.id),
+            "group_name": group.name,
+            "telegram_group_chat_id": None,
+            "detail": (
+                "Ushbu guruhga Telegram chat ID bog'lanmagan. "
+                "Iltimos, botni guruhga qo'shing va unga admin huquqini bering, "
+                f"yoki guruhda '/bind_group {group.name}' buyrug'ini yuboring."
+            ),
+        }
+
+    chat_id = group.telegram_group_chat_id
+    message_text = custom_message or (
+        f"🧪 <b>Test Bildirishnomasi</b> 🚀\n\n"
+        f"Bu <b>{group.name}</b> guruhi uchun English Life LMS tizimidan yuborilgan sinov xabari.\n\n"
+        f"✅ Bot muvaffaqiyatli ulangan va guruh xabarnomalari to'g'ri ishlamoqda!"
+    )
+    reply_markup = {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "Saytga o'tish 🚀",
+                    "url": "https://englishlifesupport.vercel.app",
+                }
+            ]
+        ]
+    }
+
+    success, detail = await send_telegram_message_detailed(
+        chat_id=chat_id,
+        text=message_text,
+        reply_markup=reply_markup,
+    )
+
+    return {
+        "success": success,
+        "group_id": str(group.id),
+        "group_name": group.name,
+        "telegram_group_chat_id": chat_id,
+        "detail": detail,
+    }
+

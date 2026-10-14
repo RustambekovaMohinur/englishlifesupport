@@ -96,6 +96,55 @@ async def get_bot_username() -> str:
     return _CACHED_BOT_USERNAME
 
 
+async def send_telegram_message_detailed(
+    chat_id: str | int,
+    text: str,
+    parse_mode: str = "HTML",
+    disable_web_page_preview: bool = True,
+    reply_markup: dict[str, Any] | None = None,
+) -> tuple[bool, str]:
+    """
+    Sends an async message to a specified Telegram chat and returns (success: bool, detail: str).
+    Logs explicit Telegram API error descriptions on failure (e.g. ChatNotFound, BotKicked).
+    """
+    token = get_telegram_bot_token()
+    if not token:
+        msg = f"TELEGRAM_BOT_TOKEN is not configured. Telegram message skipped for chat_id={chat_id}"
+        logger.warning(msg)
+        return False, msg
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload: dict[str, Any] = {
+        "chat_id": str(chat_id),
+        "text": text,
+        "parse_mode": parse_mode,
+        "disable_web_page_preview": disable_web_page_preview,
+    }
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, json=payload)
+            data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+            if resp.status_code == 200 and data.get("ok"):
+                return True, "Message sent successfully"
+            else:
+                err_desc = data.get("description", resp.text)
+                err_code = data.get("error_code", resp.status_code)
+                err_msg = f"Telegram API error ({err_code}): {err_desc}"
+                logger.warning(
+                    "Telegram error sending to chat_id=%s: %s",
+                    chat_id,
+                    err_msg,
+                )
+                return False, err_msg
+    except Exception as ex:
+        err_msg = f"Telegram dispatch exception: {ex}"
+        logger.exception("Failed to send Telegram message to chat_id=%s: %s", chat_id, ex)
+        return False, err_msg
+
+
 async def send_telegram_message(
     chat_id: str | int,
     text: str,
@@ -107,39 +156,14 @@ async def send_telegram_message(
     Sends an async message to a specified Telegram chat.
     Returns True on success, False on failure.
     """
-    token = get_telegram_bot_token()
-    if not token:
-        logger.warning(
-            "TELEGRAM_BOT_TOKEN is not configured. Telegram message skipped for chat_id=%s",
-            chat_id,
-        )
-        return False
-
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload: dict[str, Any] = {
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": parse_mode,
-        "disable_web_page_preview": disable_web_page_preview,
-    }
-    if reply_markup is not None:
-        payload["reply_markup"] = reply_markup
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url, json=payload)
-            if resp.status_code == 200:
-                return True
-            else:
-                logger.error(
-                    "Telegram API error (%s): %s",
-                    resp.status_code,
-                    resp.text,
-                )
-                return False
-    except Exception as ex:
-        logger.exception("Failed to send Telegram message to chat_id=%s: %s", chat_id, ex)
-        return False
+    success, _ = await send_telegram_message_detailed(
+        chat_id=chat_id,
+        text=text,
+        parse_mode=parse_mode,
+        disable_web_page_preview=disable_web_page_preview,
+        reply_markup=reply_markup,
+    )
+    return success
 
 
 def build_parent_deep_link(bot_username: str, student_id: uuid.UUID | str) -> str:
@@ -147,13 +171,15 @@ def build_parent_deep_link(bot_username: str, student_id: uuid.UUID | str) -> st
     clean_bot = bot_username.replace("@", "").strip()
     return f"https://t.me/{clean_bot}?start=parent_{student_id}"
 
-# Notification helper functions for assignment events
+
+# Notification helper functions for assignment and wordlist events
 async def notify_student_assignment(chat_id: int | str, assignment_title: str, due_date: datetime, is_update: bool = False) -> bool:
     """Send a Telegram message to a student about a new or updated assignment."""
     action = "Yangilangan" if is_update else "Yangi"
     emoji = "✏️" if not is_update else "🔄"
     text = f"{emoji} {action} topshiriq 📚:\n<b>{assignment_title}</b>\n⏰ Muddati: {due_date.strftime('%d.%m.%Y')}"
     return await send_telegram_message(chat_id=chat_id, text=text)
+
 
 async def notify_parent_assignment(chat_id: int | str, student_name: str, assignment_title: str, due_date: datetime, is_update: bool = False) -> bool:
     """Notify a parent about a student's assignment."""
@@ -162,18 +188,90 @@ async def notify_parent_assignment(chat_id: int | str, student_name: str, assign
     text = f"{emoji} {action} topshiriq 📚 oʻquvchiga {student_name}:\n<b>{assignment_title}</b>\n⏰ Muddati: {due_date.strftime('%d.%m.%Y')}"
     return await send_telegram_message(chat_id=chat_id, text=text)
 
-async def notify_group_assignment(chat_id: int | str, assignment_title: str, due_date: datetime, is_update: bool = False) -> bool:
-    """Send group notification for a new assignment only, with exact required format and no keyboard."""
+
+async def notify_group_assignment(
+    chat_id: int | str | None = None,
+    assignment_title: str = "",
+    due_date: datetime | Any = None,
+    assignment_id: uuid.UUID | str | None = None,
+    group_chat_id: int | str | None = None,
+    is_update: bool = False,
+) -> bool:
+    """Send group notification for a new assignment with styled direct link button."""
     if is_update:
         return False
+    target_chat = chat_id if chat_id is not None else group_chat_id
+    if not target_chat:
+        logger.debug("notify_group_assignment called without valid chat_id")
+        return False
+
+    deadline_str = "Belgilanmagan"
+    if due_date:
+        try:
+            deadline_str = due_date.strftime("%d.%m.%Y")
+        except Exception:
+            deadline_str = str(due_date)
+
     text = (
-        "📌 Yangi vazifa joylandi!\n\n"
-        f"📚 Vazifa: {assignment_title}\n"
-        f"📅 Oxirgi muddat: {due_date.strftime('%d.%m.%Y')}\n\n"
-        "🔗 Vazifani bajarish uchun platformaga o'ting:\n"
-        "https://englishlifesupport.vercel.app"
+        "📌 <b>Yangi vazifa joylandi!</b>\n\n"
+        f"📚 <b>Vazifa:</b> {assignment_title}\n"
+        f"📅 <b>Oxirgi muddat:</b> {deadline_str}\n\n"
+        "🔗 Vazifani bajarish uchun platformaga o'ting:"
     )
-    return await send_telegram_message(chat_id=chat_id, text=text, reply_markup=REMOVE_KEYBOARD)
+    url = "https://englishlifesupport.vercel.app/student/assignments"
+    reply_markup = {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "Saytga o'tish 🚀",
+                    "url": url,
+                }
+            ]
+        ]
+    }
+    return await send_telegram_message(
+        chat_id=target_chat,
+        text=text,
+        reply_markup=reply_markup,
+    )
+
+
+async def notify_group_wordlist(
+    chat_id: int | str | None = None,
+    wordlist_title: str = "",
+    total_words: int = 0,
+    set_id: uuid.UUID | str | None = None,
+    group_chat_id: int | str | None = None,
+) -> bool:
+    """Send group notification for a newly published wordlist/vocabulary set with styled direct link button."""
+    target_chat = chat_id if chat_id is not None else group_chat_id
+    if not target_chat:
+        logger.debug("notify_group_wordlist called without valid chat_id")
+        return False
+
+    count_str = f"{total_words} ta" if total_words > 0 else "Yangi to'plam"
+    text = (
+        "📖 <b>Yangi lug'at (Wordlist) joylandi!</b>\n\n"
+        f"📚 <b>Lug'at:</b> {wordlist_title}\n"
+        f"📝 <b>So'zlar soni:</b> {count_str}\n\n"
+        "🔗 Lug'atni yodlash va test topshirish uchun platformaga o'ting:"
+    )
+    url = "https://englishlifesupport.vercel.app/student/wordlists"
+    reply_markup = {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "Saytga o'tish 🚀",
+                    "url": url,
+                }
+            ]
+        ]
+    }
+    return await send_telegram_message(
+        chat_id=target_chat,
+        text=text,
+        reply_markup=reply_markup,
+    )
 
 
 async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
@@ -197,7 +295,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             group_res = await db.execute(select(Group).where(Group.name == chat_title))
             group_obj = group_res.scalar_one_or_none()
             if group_obj:
-                group_obj.telegram_group_chat_id = chat_id
+                group_obj.telegram_group_chat_id = str(chat_id)
                 await db.commit()
                 logger.info("Bound Telegram group chat ID %s to Group %s via my_chat_member", chat_id, group_obj.name)
         return {"ok": True, "note": "my_chat_member processed"}
@@ -218,22 +316,45 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
     last_name = (user_info.get("last_name") or "").strip()
     parent_name = f"{first_name} {last_name}".strip() or first_name or (f"@{username}" if username else "Hurmatli ota-ona")
 
-    # 1. /bind_group command to manually bind a group by name
+    # 1. /bind_group command to manually bind a group by name or UUID
     if text.startswith("/bind_group"):
         parts = text.split(maxsplit=1)
         if len(parts) > 1:
-            group_name = parts[1].strip()
-            group_res = await db.execute(select(Group).where(Group.name == group_name))
-            group_obj = group_res.scalar_one_or_none()
+            group_identifier = parts[1].strip()
+            group_obj = None
+            try:
+                g_uuid = uuid.UUID(group_identifier)
+                group_res = await db.execute(select(Group).where(Group.id == g_uuid))
+                group_obj = group_res.scalar_one_or_none()
+            except ValueError:
+                pass
+            if not group_obj:
+                group_res = await db.execute(select(Group).where(Group.name == group_identifier))
+                group_obj = group_res.scalar_one_or_none()
+
             if group_obj:
-                group_obj.telegram_group_chat_id = chat_id
+                group_obj.telegram_group_chat_id = str(chat_id)
                 await db.commit()
-                await send_telegram_message(chat_id=chat_id, text=f"✅ Group '{group_name}' bound to this chat.", reply_markup=REMOVE_KEYBOARD)
+                await send_telegram_message(
+                    chat_id=chat_id,
+                    text=f"✅ Guruh '<b>{group_obj.name}</b>' muvaffaqiyatli bog'landi!\nChat ID: <code>{chat_id}</code>",
+                    reply_markup=REMOVE_KEYBOARD,
+                )
                 return {"ok": True}
             else:
-                await send_telegram_message(chat_id=chat_id, text=f"❌ Group '{group_name}' not found.", reply_markup=REMOVE_KEYBOARD)
+                await send_telegram_message(
+                    chat_id=chat_id,
+                    text=f"❌ Guruh topilmadi: '<b>{group_identifier}</b>'.",
+                    reply_markup=REMOVE_KEYBOARD,
+                )
                 return {"ok": True}
-        # fall through if no group name provided
+        else:
+            await send_telegram_message(
+                chat_id=chat_id,
+                text="ℹ️ Guruh nomini yoki ID sini kiriting:\nMasalan: <code>/bind_group GuruhNomi</code>",
+                reply_markup=REMOVE_KEYBOARD,
+            )
+            return {"ok": True}
 
     chat_type = chat.get("type", "private")
     # In group chats, ignore interactive parent menus or commands to avoid spamming

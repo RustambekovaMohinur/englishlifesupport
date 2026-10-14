@@ -331,48 +331,64 @@ async def create_assignment(
 
     # ---- Notification ----
     # Send async Telegram notifications without blocking the API response
+    # Pre-extract all required data in current active session to avoid closed DB session in background task
+    target_group_chat_id = (
+        getattr(reloaded.group, "telegram_group_chat_id", None)
+        or getattr(group, "telegram_group_chat_id", None)
+    )
+    assign_title = reloaded.title
+    assign_deadline = reloaded.deadline
+    assign_id = str(reloaded.id)
+    group_id_val = reloaded.group_id
+
+    # Fetch parents of students in the group who have linked Telegram
+    stu_res = await db.execute(
+        select(StudentProfile)
+        .where(
+            StudentProfile.group_id == group_id_val,
+            StudentProfile.parent_telegram_chat_id.isnot(None),
+        )
+    )
+    students = stu_res.scalars().all()
+    parent_notifications = [
+        (s.parent_telegram_chat_id, s.full_name)
+        for s in students
+        if s.parent_telegram_chat_id
+    ]
+
     import asyncio
     from app.services.telegram_bot import (
-        notify_student_assignment,
         notify_parent_assignment,
         notify_group_assignment,
     )
+
     async def _notify_creation():
-        # Fetch students in the group with linked Telegram chat IDs
-        stu_res = await db.execute(
-            select(StudentProfile)
-            .where(
-                StudentProfile.group_id == reloaded.group_id,
-                StudentProfile.telegram_chat_id != None,
-            )
-        )
-        students = stu_res.scalars().all()
-        for stu in students:
-            # Student notification
-            if stu.telegram_chat_id:
-                await notify_student_assignment(
-                    chat_id=stu.telegram_chat_id,
-                    assignment_title=reloaded.title,
-                    due_date=reloaded.deadline,
+        # 1. Group chat notification
+        if target_group_chat_id:
+            try:
+                await notify_group_assignment(
+                    chat_id=target_group_chat_id,
+                    assignment_title=assign_title,
+                    due_date=assign_deadline,
+                    assignment_id=assign_id,
                     is_update=False,
                 )
-            # Parent notification
-            if stu.parent_telegram_chat_id:
+            except Exception as ex:
+                logger.warning("Failed to dispatch group assignment notification: %s", ex)
+
+        # 2. Parent notifications
+        for p_chat_id, stu_name in parent_notifications:
+            try:
                 await notify_parent_assignment(
-                    chat_id=stu.parent_telegram_chat_id,
-                    student_name=stu.full_name,
-                    assignment_title=reloaded.title,
-                    due_date=reloaded.deadline,
+                    chat_id=p_chat_id,
+                    student_name=stu_name,
+                    assignment_title=assign_title,
+                    due_date=assign_deadline,
                     is_update=False,
                 )
-        # Group chat notification if group has telegram_group_chat_id
-        if getattr(reloaded.group, "telegram_group_chat_id", None):
-            await notify_group_assignment(
-                group_chat_id=reloaded.group.telegram_group_chat_id,
-                assignment_title=reloaded.title,
-                due_date=reloaded.deadline,
-                is_update=False,
-            )
+            except Exception as ex:
+                logger.warning("Failed to notify parent %s: %s", p_chat_id, ex)
+
     asyncio.create_task(_notify_creation())
     return _assignment_to_out(reloaded, group_name, 0, vocab_words)
 
