@@ -35,8 +35,8 @@ export default function ParentPortalPage() {
   if (!data) return null;
 
   const completionRate =
-    data.total_assignments > 0
-      ? Math.round((data.completed_assignments / data.total_assignments) * 100)
+    (data.total_assignments ?? 0) > 0
+      ? Math.round(((data.completed_assignments ?? 0) / (data.total_assignments ?? 1)) * 100)
       : 0;
 
   const isParentLinked = !!(data.parent_telegram_id || data.parent_telegram_chat_id);
