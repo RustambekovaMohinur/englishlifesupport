@@ -237,21 +237,16 @@ async def notify_parent_assignment(
     """
     Notify parent bot account with personalized update mentioning child's name.
     Strictly restricted to private parent direct messages (PM, positive chat IDs).
-    If a 64-bit group ID (starts with '-') is passed, automatically routes as a group notification.
+    Strictly ignores group chat IDs (IDs starting with '-') to prevent parent templates from leaking into groups.
     """
     if not chat_id:
         return False
 
     clean_chat_id = str(chat_id).strip().strip("'\"")
-    # If target is a group chat ID (starts with -), do NOT send parent template; route as group notification
+    # Strictly ignore group chat IDs (starts with -)
     if clean_chat_id.startswith("-"):
-        return await notify_group_assignment(
-            chat_id=clean_chat_id,
-            assignment_title=assignment_title,
-            due_date=due_date,
-            is_update=is_update,
-            group_name=group_name,
-        )
+        logger.debug("notify_parent_assignment strictly ignoring group chat ID: %s", clean_chat_id)
+        return False
 
     deadline_str = ""
     if due_date:
@@ -292,20 +287,44 @@ async def notify_group_assignment(
     group_chat_id: int | str | None = None,
     is_update: bool = False,
     group_name: str | None = None,
+    assignment_titles: list[str] | None = None,
 ) -> bool:
-    """Send clean group notification when a teacher posts an assignment."""
+    """
+    Send clean consolidated group notification when a teacher posts/edits assignments.
+    Strictly targets group.telegram_chat_id / telegram_group_chat_id (starts with '-').
+    """
     target_chat = chat_id if chat_id is not None else group_chat_id
     if not target_chat:
         logger.debug("notify_group_assignment called without valid chat_id")
         return False
 
+    clean_target = str(target_chat).strip().strip("'\"")
     grp_display = group_name or "Asosiy guruh"
-    header = "🔄 <b>Topshiriq yangilandi!</b>" if is_update else "📌 <b>Yangi topshiriq!</b>"
+
+    deadline_str = ""
+    if due_date:
+        try:
+            deadline_str = due_date.strftime("%d.%m.%Y, %H:%M") if hasattr(due_date, "strftime") else str(due_date)
+        except Exception:
+            deadline_str = str(due_date)
+    else:
+        deadline_str = "Belgilanmagan"
+
+    # Handle single or multiple assignment titles for consolidated debounced notification
+    titles_list = assignment_titles or ([assignment_title] if assignment_title else [])
+    if len(titles_list) > 1:
+        titles_formatted = "\n" + "\n".join(f"• <b>{t}</b>" for t in titles_list)
+    elif titles_list:
+        titles_formatted = f"<b>{titles_list[0]}</b>"
+    else:
+        titles_formatted = "Topshiriq"
+
     text = (
-        f"{header}\n"
-        f"Sinf/Guruh: <b>{grp_display}</b>\n"
-        f"Mavzu: <b>{assignment_title}</b>\n\n"
-        "Kiring va bajaring! 🚀"
+        "📌 <b>Yangi topshiriqlar joylandi!</b>\n"
+        f"📚 Guruh: <b>{grp_display}</b>\n"
+        f"📝 Vazifalar: {titles_formatted}\n"
+        f"⏳ Muddat: <b>{deadline_str}</b>\n\n"
+        "👉 Saytga kirib topshiriqlarni bajaring!"
     )
     url = "https://englishlifesupport.vercel.app/student/assignments"
     reply_markup = {
@@ -319,7 +338,7 @@ async def notify_group_assignment(
         ]
     }
     return await send_telegram_message(
-        chat_id=target_chat,
+        chat_id=clean_target,
         text=text,
         reply_markup=reply_markup,
     )

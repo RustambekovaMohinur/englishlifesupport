@@ -53,6 +53,80 @@ def _clean_telegram_chat_id(chat_id: Any) -> str:
     return str(chat_id).strip().strip("'\"")
 
 
+
+_pending_group_notifications: dict[str, dict[str, Any]] = {}
+_group_debounce_lock = asyncio.Lock()
+
+
+async def queue_debounced_group_notification(
+    group_chat_id: str,
+    group_name: str,
+    assignment_id: str,
+    assignment_title: str,
+    deadline: Any,
+    is_update: bool = False,
+    debounce_seconds: float = 2.0,
+) -> None:
+    """
+    Consolidates assignment notifications for the same group published or edited at once.
+    Debounces by `debounce_seconds` (2.0s) to merge rapid batch operations into exactly 1 consolidated message.
+    """
+    cleaned_chat_id = _clean_telegram_chat_id(group_chat_id)
+    if not cleaned_chat_id or not cleaned_chat_id.startswith("-"):
+        return
+
+    async with _group_debounce_lock:
+        if cleaned_chat_id not in _pending_group_notifications:
+            _pending_group_notifications[cleaned_chat_id] = {
+                "group_name": group_name,
+                "assignments": {},
+                "is_update": is_update,
+                "deadline": deadline,
+                "task": None,
+            }
+
+        entry = _pending_group_notifications[cleaned_chat_id]
+        if group_name:
+            entry["group_name"] = group_name
+        entry["assignments"][str(assignment_id)] = assignment_title
+        if deadline:
+            entry["deadline"] = deadline
+        if is_update:
+            entry["is_update"] = True
+
+        prev_task = entry.get("task")
+        if prev_task and not prev_task.done():
+            prev_task.cancel()
+
+        async def _dispatch_delayed():
+            try:
+                await asyncio.sleep(debounce_seconds)
+                async with _group_debounce_lock:
+                    pending = _pending_group_notifications.pop(cleaned_chat_id, None)
+                if not pending:
+                    return
+
+                titles = list(pending["assignments"].values())
+                if not titles:
+                    return
+
+                from app.services.telegram_bot import notify_group_assignment
+                await notify_group_assignment(
+                    chat_id=cleaned_chat_id,
+                    assignment_titles=titles,
+                    assignment_title=titles[0] if len(titles) == 1 else "",
+                    due_date=pending.get("deadline"),
+                    is_update=pending.get("is_update", False),
+                    group_name=pending.get("group_name"),
+                )
+            except asyncio.CancelledError:
+                pass
+            except Exception as exc:
+                logger.warning("Error dispatching debounced group notification: %s", exc)
+
+        entry["task"] = asyncio.create_task(_dispatch_delayed())
+
+
 async def _get_assignment_with_relations(db: AsyncSession, assignment_id: uuid.UUID) -> Assignment | None:
     """
     Eagerly loads an Assignment and all linked relationships via selectinload.
@@ -371,20 +445,20 @@ async def create_assignment(
     )
 
     async def _notify_creation():
-        # 1. Group chat notification
+        # 1. Debounced Group chat notification
         cleaned_group_chat_id = _clean_telegram_chat_id(target_group_chat_id)
-        if cleaned_group_chat_id:
+        if cleaned_group_chat_id and cleaned_group_chat_id.startswith("-"):
             try:
-                await notify_group_assignment(
-                    chat_id=cleaned_group_chat_id,
-                    assignment_title=assign_title,
-                    due_date=assign_deadline,
-                    assignment_id=assign_id,
-                    is_update=False,
+                await queue_debounced_group_notification(
+                    group_chat_id=cleaned_group_chat_id,
                     group_name=group_name,
+                    assignment_id=assign_id,
+                    assignment_title=assign_title,
+                    deadline=assign_deadline,
+                    is_update=False,
                 )
             except Exception as ex:
-                logger.warning("Failed to dispatch group assignment notification: %s", ex)
+                logger.warning("Failed to queue group assignment notification: %s", ex)
 
         # 2. Parent notifications (strictly for private PMs, never to group chat IDs)
         seen_parent_chats = set()
@@ -1100,17 +1174,15 @@ async def edit_assignment_in_place(
 
     target_group_chat_id = getattr(reloaded.group, "telegram_group_chat_id", None)
     cleaned_group_chat_id = _clean_telegram_chat_id(target_group_chat_id)
-    if cleaned_group_chat_id and reloaded.status == AssignmentStatus.PUBLISHED:
-        import asyncio
-        from app.services.telegram_bot import notify_group_assignment
+    if cleaned_group_chat_id and cleaned_group_chat_id.startswith("-") and reloaded.status == AssignmentStatus.PUBLISHED:
         asyncio.create_task(
-            notify_group_assignment(
-                chat_id=cleaned_group_chat_id,
-                assignment_title=reloaded.title,
-                due_date=reloaded.deadline,
-                assignment_id=str(reloaded.id),
-                is_update=True,
+            queue_debounced_group_notification(
+                group_chat_id=cleaned_group_chat_id,
                 group_name=group_name,
+                assignment_id=str(reloaded.id),
+                assignment_title=reloaded.title,
+                deadline=reloaded.deadline,
+                is_update=True,
             )
         )
 
@@ -1182,17 +1254,15 @@ async def update_assignment(
 
     target_group_chat_id = getattr(reloaded.group, "telegram_group_chat_id", None)
     cleaned_group_chat_id = _clean_telegram_chat_id(target_group_chat_id)
-    if cleaned_group_chat_id and reloaded.status == AssignmentStatus.PUBLISHED:
-        import asyncio
-        from app.services.telegram_bot import notify_group_assignment
+    if cleaned_group_chat_id and cleaned_group_chat_id.startswith("-") and reloaded.status == AssignmentStatus.PUBLISHED:
         asyncio.create_task(
-            notify_group_assignment(
-                chat_id=cleaned_group_chat_id,
-                assignment_title=reloaded.title,
-                due_date=reloaded.deadline,
-                assignment_id=str(reloaded.id),
-                is_update=True,
+            queue_debounced_group_notification(
+                group_chat_id=cleaned_group_chat_id,
                 group_name=group_name,
+                assignment_id=str(reloaded.id),
+                assignment_title=reloaded.title,
+                deadline=reloaded.deadline,
+                is_update=True,
             )
         )
 
