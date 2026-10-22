@@ -22,9 +22,8 @@ def upgrade() -> None:
     except Exception:
         pass
 
-    with op.batch_alter_table("student_profiles", schema=None) as batch_op:
-        batch_op.add_column(sa.Column("weekly_badge", sa.String(length=16), nullable=True))
-        batch_op.add_column(sa.Column("badge_expires_at", sa.DateTime(timezone=True), nullable=True))
+    op.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS weekly_badge VARCHAR(128)")
+    op.execute("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS badge_expires_at TIMESTAMP WITH TIME ZONE")
 
 def downgrade() -> None:
     """Remove the added columns."""

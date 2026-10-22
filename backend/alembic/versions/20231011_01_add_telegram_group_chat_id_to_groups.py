@@ -16,10 +16,7 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
-    op.add_column(
-        "groups",
-        sa.Column("telegram_group_chat_id", sa.String(length=32), nullable=True),
-    )
+    op.execute("ALTER TABLE groups ADD COLUMN IF NOT EXISTS telegram_group_chat_id VARCHAR(32)")
 
 def downgrade():
     op.drop_column("groups", "telegram_group_chat_id")
