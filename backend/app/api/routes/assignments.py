@@ -386,11 +386,18 @@ async def create_assignment(
             except Exception as ex:
                 logger.warning("Failed to dispatch group assignment notification: %s", ex)
 
-        # 2. Parent notifications
+        # 2. Parent notifications (strictly for private PMs, never to group chat IDs)
+        seen_parent_chats = set()
         for p_chat_id, stu_name in parent_notifications:
             cleaned_p_chat_id = _clean_telegram_chat_id(p_chat_id)
             if not cleaned_p_chat_id:
                 continue
+            # If the ID is a group ID (starts with '-') or equals the class group chat ID, skip parent message template
+            if cleaned_p_chat_id.startswith("-") or (cleaned_group_chat_id and cleaned_p_chat_id == cleaned_group_chat_id):
+                continue
+            if cleaned_p_chat_id in seen_parent_chats:
+                continue
+            seen_parent_chats.add(cleaned_p_chat_id)
             try:
                 await notify_parent_assignment(
                     chat_id=cleaned_p_chat_id,
@@ -398,6 +405,7 @@ async def create_assignment(
                     assignment_title=assign_title,
                     due_date=assign_deadline,
                     is_update=False,
+                    group_name=group_name,
                 )
             except Exception as ex:
                 logger.warning("Failed to notify parent %s: %s", p_chat_id, ex)

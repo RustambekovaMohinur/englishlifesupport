@@ -232,10 +232,26 @@ async def notify_parent_assignment(
     assignment_title: str,
     due_date: datetime | Any = None,
     is_update: bool = False,
+    group_name: str | None = None,
 ) -> bool:
-    """Notify parent bot account with personalized update mentioning child's name."""
+    """
+    Notify parent bot account with personalized update mentioning child's name.
+    Strictly restricted to private parent direct messages (PM, positive chat IDs).
+    If a 64-bit group ID (starts with '-') is passed, automatically routes as a group notification.
+    """
     if not chat_id:
         return False
+
+    clean_chat_id = str(chat_id).strip().strip("'\"")
+    # If target is a group chat ID (starts with -), do NOT send parent template; route as group notification
+    if clean_chat_id.startswith("-"):
+        return await notify_group_assignment(
+            chat_id=clean_chat_id,
+            assignment_title=assignment_title,
+            due_date=due_date,
+            is_update=is_update,
+            group_name=group_name,
+        )
 
     deadline_str = ""
     if due_date:
@@ -262,7 +278,7 @@ async def notify_parent_assignment(
         ]
     }
     return await send_telegram_message(
-        chat_id=chat_id,
+        chat_id=clean_chat_id,
         text=text,
         reply_markup=reply_markup,
     )
@@ -357,8 +373,13 @@ async def notify_parent_submission_graded(
     stars: int = 0,
     feedback: str | None = None,
 ) -> bool:
-    """Notify parent via Telegram when teacher grades their child's submission."""
+    """Notify parent via Telegram when teacher grades their child's submission. Only sends to private chat IDs."""
     if not chat_id:
+        return False
+
+    clean_chat_id = str(chat_id).strip().strip("'\"")
+    if clean_chat_id.startswith("-"):
+        logger.debug("Skipping notify_parent_submission_graded because chat_id is a group ID: %s", clean_chat_id)
         return False
 
     stars_str = f" · ⭐ +{stars} yulduz" if stars > 0 else ""
