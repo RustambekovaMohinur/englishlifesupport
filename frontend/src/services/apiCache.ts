@@ -80,7 +80,7 @@ class ApiMemoryCache {
   public async fetch<T>(
     key: string,
     fetcher: () => Promise<T>,
-    options?: { ttlMs?: number; forceRefresh?: boolean }
+    options?: { ttlMs?: number; forceRefresh?: boolean; cachePredicate?: (data: T) => boolean }
   ): Promise<T> {
     const ttl = options?.ttlMs ?? 120_000;
 
@@ -98,7 +98,9 @@ class ApiMemoryCache {
 
     const promise = fetcher()
       .then((data) => {
-        this.set(key, data, ttl);
+        if (!options?.cachePredicate || options.cachePredicate(data)) {
+          this.set(key, data, ttl);
+        }
         this.inflight.delete(key);
         return data;
       })

@@ -245,19 +245,26 @@ async def student_dashboard(
             cycle_assign_ids = {a.id for a in non_exempt_cycle_assignments}
 
             # Active, non-archived submissions for non-exempt current cycle tasks
-            cycle_assign_map = {a.id: a for a in non_exempt_cycle_assignments}
-            active_cycle_subs = [
-                s for s in submissions
+            submitted_cycle_assign_ids = {
+                s.assignment_id for s in submissions
                 if s.assignment_id in cycle_assign_ids
-                and (getattr(s, "cycle_number", 1) or 1) == current_cycle
                 and not getattr(s, "is_archived", False)
-                and (
-                    not getattr(cycle_assign_map.get(s.assignment_id), "updated_at", None)
-                    or as_utc(s.submitted_at) >= as_utc(cycle_assign_map[s.assignment_id].updated_at)
-                )
-            ]
-            completed_assignments = len(active_cycle_subs)
-            submitted_cycle_ids = {s.assignment_id for s in submissions if not getattr(s, "is_archived", False)} | exempted_ids
+            }
+            completed_assignments = len(submitted_cycle_assign_ids)
+            submitted_cycle_ids = submitted_cycle_assign_ids | exempted_ids
+
+        # Fallback if student has no group or cohort has no assignments
+        if total_assignments == 0:
+            all_published_res = await db.execute(
+                select(Assignment.id).where(Assignment.status == AssignmentStatus.PUBLISHED)
+            )
+            pub_ids = set(all_published_res.scalars().all())
+            if pub_ids:
+                total_assignments = len(pub_ids)
+                completed_assignments = len({s.assignment_id for s in submissions if s.assignment_id in pub_ids and not getattr(s, "is_archived", False)})
+            else:
+                completed_assignments = len({s.assignment_id for s in submissions if not getattr(s, "is_archived", False)})
+                total_assignments = max(completed_assignments, 0)
 
             upcoming_assignments = (
                 await db.execute(
@@ -341,6 +348,27 @@ async def student_dashboard(
         except Exception:
             pass
 
+        weekly_badge = None
+        if profile.group_id:
+            try:
+                from app.models.gamification import StudentXP
+                from datetime import timedelta
+                week_start = (utcnow() - timedelta(days=utcnow().weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+                top_xp_res = await db.execute(
+                    select(StudentXP.student_id, func.sum(StudentXP.amount).label("sum_xp"))
+                    .join(StudentProfile, StudentProfile.id == StudentXP.student_id)
+                    .where(StudentProfile.group_id == profile.group_id, StudentXP.created_at >= week_start)
+                    .group_by(StudentXP.student_id)
+                    .order_by(func.sum(StudentXP.amount).desc())
+                    .limit(3)
+                )
+                top_xp_students = [r[0] for r in top_xp_res.all()]
+                if profile.id in top_xp_students:
+                    r_idx = top_xp_students.index(profile.id) + 1
+                    weekly_badge = "gold" if r_idx == 1 else ("silver" if r_idx == 2 else "bronze")
+            except Exception:
+                pass
+
         return StudentDashboard(
             full_name=profile.full_name or "Student",
             group_name=group_name or "No Group",
@@ -357,6 +385,7 @@ async def student_dashboard(
             completed_assignments=completed_assignments,
             upcoming_deadlines=upcoming,
             recent_grades=recent_grades,
+            weekly_badge=weekly_badge,
         )
     except Exception as exc:
         logger.exception("Error preparing student dashboard: %s", exc)

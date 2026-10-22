@@ -13,7 +13,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { WordlistItem, QuizAttempt, parseWordMeanings } from "@/types";
-import { submitWordlistQuiz } from "@/services/lmsService";
+import { submitWordlistQuiz, submitWeekendArena } from "@/services/lmsService";
 import toast from "react-hot-toast";
 
 interface VocabularyQuizProps {
@@ -261,6 +261,31 @@ export function VocabularyQuiz({ setId, title, items, onFinish, onExit }: Vocabu
 
     setIsSubmitting(true);
     try {
+      if (setId === "weekend-arena") {
+        const resp = await submitWeekendArena({
+          total_questions: questions.length,
+          correct_answers: correctCount,
+          time_spent_seconds: timeSpent,
+        });
+        toast.success(resp.message || "Weekend Arena natijangiz saqlandi!");
+        const arenaAttempt: QuizAttempt = {
+          id: `arena-${Date.now()}`,
+          student_id: "",
+          mode: "weekend_arena",
+          total_questions: questions.length,
+          correct_answers: correctCount,
+          score_percentage: resp.score_percentage,
+          time_spent_seconds: timeSpent,
+          is_mastered: resp.score_percentage >= 80,
+          terminated_early: false,
+          anti_cheat_triggered: false,
+          created_at: new Date().toISOString(),
+        };
+        setLastAttempt(arenaAttempt);
+        if (onFinish) onFinish(arenaAttempt);
+        return;
+      }
+
       const attempt = await submitWordlistQuiz(setId, {
         mode,
         total_questions: questions.length,

@@ -152,3 +152,57 @@ class AIWordlistParseRequest(BaseModel):
     text: str | None = None
     raw_text: str | None = None
 
+
+class WeekendArenaQuestion(BaseModel):
+    id: str
+    word: str
+    part_of_speech: str | None = None
+    prompt: str
+    prompt_uzbek: str | None = None
+    prompt_definition: str | None = None
+    prompt_type: str = "en"
+    correct_answer: str
+    options: list[str] = Field(default_factory=list)
+    audio_us_url: str | None = None
+
+
+class WeekendArenaLeaderboardEntry(BaseModel):
+    rank: int
+    student_id: uuid.UUID
+    student_name: str
+    avatar_url: str | None = None
+    score_percentage: int
+    correct_answers: int
+    total_questions: int
+    time_spent_seconds: int
+    badge: str | None = None  # "gold" | "silver" | "bronze"
+    created_at: datetime
+
+
+class WeekendArenaOut(BaseModel):
+    week_key: str
+    is_weekend: bool
+    total_questions: int
+    time_limit_seconds: int
+    questions: list[WeekendArenaQuestion] = Field(default_factory=list)
+    items: list[WordlistItemOut] = Field(default_factory=list)
+    top_performers: list[WeekendArenaLeaderboardEntry] = Field(default_factory=list)
+    user_attempt: QuizAttemptOut | None = None
+
+
+class WeekendArenaSubmitRequest(BaseModel):
+    total_questions: int
+    correct_answers: int
+    time_spent_seconds: int
+
+
+class WeekendArenaSubmitResponse(BaseModel):
+    success: bool
+    score_percentage: int
+    xp_awarded: int
+    stars_awarded: int
+    badge_awarded: str | None = None
+    rank: int | None = None
+    message: str
+
+

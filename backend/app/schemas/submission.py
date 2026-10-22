@@ -56,6 +56,8 @@ class SubmissionImageOut(BaseModel):
     file_size: int
     order_index: int = 0
     created_at: datetime
+    url: str | None = None
+    file_url: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -99,6 +101,7 @@ class SubmissionOut(BaseModel):
     file_url: str | None
     file_original_name: str | None
     images: list[SubmissionImageOut] = []
+    attachments: list[SubmissionImageOut] = []
     status: str
     is_late: bool = False
     is_relevant: bool = True

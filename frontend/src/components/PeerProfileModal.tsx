@@ -88,6 +88,21 @@ export function PeerProfileModal({ studentId, isOpen, onClose }: PeerProfileModa
                       {profile.level}
                     </span>
                   )}
+                  {profile.weekly_badge === "gold" && (
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                      🥇 1st Place Weekly
+                    </span>
+                  )}
+                  {profile.weekly_badge === "silver" && (
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-600">
+                      🥈 2nd Place Weekly
+                    </span>
+                  )}
+                  {profile.weekly_badge === "bronze" && (
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-900/10 dark:bg-amber-900/40 text-amber-900 dark:text-amber-400 border border-amber-800/30">
+                      🥉 3rd Place Weekly
+                    </span>
+                  )}
                 </div>
 
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">

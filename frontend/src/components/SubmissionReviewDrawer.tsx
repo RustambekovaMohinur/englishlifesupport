@@ -353,7 +353,7 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                             className="aspect-square rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:opacity-90 hover:scale-[1.02] transition shadow-2xs group relative bg-black/5"
                           >
                             <AuthenticatedImage
-                              url={`/api/submissions/${submission.id}/images/${img.id}`}
+                              url={img.url || img.file_url || `/api/submissions/${submission.id}/images/${img.id}`}
                               alt={`Notebook scan ${idx + 1}`}
                               className="w-full h-full object-cover"
                             />
@@ -517,7 +517,7 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
             <ImageLightbox
               isOpen={lightboxIndex !== null}
               images={submission.images.map((img, idx) => ({
-                url: `/api/submissions/${submission.id}/images/${img.id}`,
+                url: img.url || img.file_url || `/api/submissions/${submission.id}/images/${img.id}`,
                 name: `Scan ${idx + 1}`,
               }))}
               initialIndex={lightboxIndex}

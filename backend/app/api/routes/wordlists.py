@@ -1,22 +1,25 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
+import random
 import uuid
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 import json
 from pathlib import Path
 
+from typing import Any
 from app.api.deps import get_current_user, require_teacher, require_student
 from app.db.session import get_db
 from app.models.group import Group
 from app.models.student import StudentProfile
 from app.models.user import User, UserRole
-from app.models.wordlist import WordlistItem, WordlistSet, WordlistQuizAttempt
+from app.models.wordlist import WordlistSet, WordlistItem, WordlistQuizAttempt
+from app.utils.datetimes import utcnow
 from app.schemas.wordlist import (
     AIWordlistParseItem,
     AIWordlistParseRequest,
@@ -24,6 +27,11 @@ from app.schemas.wordlist import (
     PreviewBulkRequest,
     QuizAttemptOut,
     SubmitQuizRequest,
+    WeekendArenaQuestion,
+    WeekendArenaLeaderboardEntry,
+    WeekendArenaOut,
+    WeekendArenaSubmitRequest,
+    WeekendArenaSubmitResponse,
     WordDetailPreview,
     WordlistItemOut,
     WordlistSetBriefOut,
@@ -70,6 +78,13 @@ COMMON_SINGLE_VERBS = {
     "create", "achieve", "obtain", "acquire", "pursue", "require", "develop",
     "produce", "expand", "decrease", "increase", "improve", "transform", "maintain",
 }
+
+
+def _clean_telegram_chat_id(chat_id: Any) -> str:
+    """Safely normalizes and casts 64-bit group / channel IDs (e.g., -100...) to string."""
+    if chat_id is None:
+        return ""
+    return str(chat_id).strip().strip("'\"")
 
 
 def canonical_pos(raw_pos: str | None, word: str = "") -> str:
@@ -500,83 +515,33 @@ async def create_wordlist_set(
     if current_user.role != UserRole.TEACHER and not getattr(current_user, "is_superuser", False):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only teachers can create wordlists")
 
+    # Guard against empty wordlist sets
+    if not data.items or len(data.items) == 0 or not any(it.word and it.word.strip() for it in data.items):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Wordlist set cannot be empty. At least one word item is required.",
+        )
+
     set_id = uuid.uuid4()
     now_dt = utcnow()
     now_iso = now_dt.isoformat()
     group_slug = str(data.group_id) if data.group_id else "global"
 
-    # Direct B2 Storage URL optimization: bypass backend memory completely
-    if data.storage_url:
-        b2_key = data.storage_url.strip()
-        total_count = data.total_words if (data.total_words is not None and data.total_words > 0) else len(data.items)
-        new_set = WordlistSet(
-            id=set_id,
-            title=data.title.strip(),
-            group_id=data.group_id,
-            created_by=current_user.id,
-            created_at=now_dt,
-            b2_file_url=b2_key,
-            total_words=total_count,
-        )
-        db.add(new_set)
-        await db.commit()
-
-        group_name = "All Cohorts (Global)"
-        group_tg_chat_id = None
-        if new_set.group_id:
-            grp_res = await db.execute(select(Group).where(Group.id == new_set.group_id))
-            grp_val = grp_res.scalar_one_or_none()
-            if grp_val:
-                group_name = grp_val.name
-                group_tg_chat_id = grp_val.telegram_group_chat_id
-
-        if group_tg_chat_id:
-            from app.services.telegram_bot import notify_group_wordlist
-            asyncio.create_task(
-                notify_group_wordlist(
-                    chat_id=group_tg_chat_id,
-                    wordlist_title=new_set.title,
-                    total_words=new_set.total_words,
-                    set_id=str(new_set.id),
-                )
-            )
-
-        items_out = [
-            WordlistItemOut(
-                id=uuid.uuid4(),
-                set_id=set_id,
-                word=it.word,
-                part_of_speech=it.part_of_speech,
-                phonetic=it.phonetic,
-                definition=it.definition,
-                uzbek_translation=it.uzbek_translation,
-                example=it.example,
-                audio_us_url=it.audio_us_url,
-                audio_gb_url=it.audio_gb_url,
-                order_index=it.order_index,
-                created_at=now_dt,
-            )
-            for it in data.items
-        ]
-        return WordlistSetDetailOut(
-            id=new_set.id,
-            title=new_set.title,
-            group_id=new_set.group_id,
-            group_name=group_name,
-            total_words=new_set.total_words,
-            b2_file_url=new_set.b2_file_url,
-            created_by=new_set.created_by,
-            created_at=new_set.created_at,
-            items=items_out,
-        )
-
-    b2_key = f"wordlists/{group_slug}/{set_id}.json"
+    b2_key = (data.storage_url.strip() if data.storage_url else f"wordlists/{group_slug}/{set_id}.json")
 
     formatted_items = []
     for idx, item_data in enumerate(data.items):
         item_id = str(uuid.uuid4())
+        raw_w = item_data.word.strip()
         raw_uz = (item_data.uzbek_translation or "").strip()
         raw_def = (item_data.definition or "").strip()
+
+        # If word itself contains separator (e.g. "conserve - asramoq, tejamoq" or "drama = sahna asari")
+        if not raw_uz:
+            parsed_w, parsed_uz = parse_bilingual_line(raw_w)
+            if parsed_uz:
+                raw_w = parsed_w
+                raw_uz = parsed_uz
 
         # Clean separation for legacy concatenated strings
         if not raw_uz and " — " in raw_def:
@@ -591,7 +556,7 @@ async def create_wordlist_set(
         formatted_items.append({
             "id": item_id,
             "set_id": str(set_id),
-            "word": item_data.word.strip(),
+            "word": raw_w,
             "part_of_speech": item_data.part_of_speech.strip() if item_data.part_of_speech else None,
             "phonetic": item_data.phonetic.strip() if item_data.phonetic else None,
             "definition": raw_def or None,
@@ -620,9 +585,10 @@ async def create_wordlist_set(
         try:
             await storage.upload_file(b2_key, payload_bytes, content_type="application/json")
         except Exception as e:
-            logger.warning("B2 upload failed for key '%s': %s. Relying on local fallback.", b2_key, e)
+            logger.warning("B2 upload failed for key '%s': %s. Relying on local and DB fallback.", b2_key, e)
 
-    # Insert single row into wordlist_sets with zero items table bloat
+    # Insert WordlistSet in Postgres
+    total_count = len(formatted_items) if formatted_items else (data.total_words or 0)
     new_set = WordlistSet(
         id=set_id,
         title=data.title.strip(),
@@ -630,9 +596,31 @@ async def create_wordlist_set(
         created_by=current_user.id,
         created_at=now_dt,
         b2_file_url=b2_key,
-        total_words=len(formatted_items),
+        total_words=total_count,
     )
     db.add(new_set)
+
+    # Insert items directly into PostgreSQL WordlistItem table to guarantee persistent storage
+    for it in formatted_items:
+        clean_uz = it.get("uzbek_translation")
+        clean_def = it.get("definition")
+        db_def = f"{clean_uz} — {clean_def}" if (clean_uz and clean_def) else (clean_def or clean_uz)
+        w_item = WordlistItem(
+            id=uuid.UUID(it["id"]),
+            set_id=set_id,
+            word=it["word"],
+            part_of_speech=it.get("part_of_speech"),
+            phonetic=it.get("phonetic"),
+            definition=db_def,
+            example=it.get("example"),
+            audio_us_url=it.get("audio_us_url"),
+            audio_gb_url=it.get("audio_gb_url"),
+            order_index=it.get("order_index", 0),
+        )
+        new_set.items.append(w_item)
+        db.add(w_item)
+
+    await db.flush()
     await db.commit()
 
     group_name = "All Cohorts (Global)"
@@ -645,15 +633,17 @@ async def create_wordlist_set(
             group_tg_chat_id = grp_val.telegram_group_chat_id
 
     if group_tg_chat_id:
-        from app.services.telegram_bot import notify_group_wordlist
-        asyncio.create_task(
-            notify_group_wordlist(
-                chat_id=group_tg_chat_id,
-                wordlist_title=new_set.title,
-                total_words=new_set.total_words,
-                set_id=str(new_set.id),
+        cleaned_tg_id = _clean_telegram_chat_id(group_tg_chat_id)
+        if cleaned_tg_id:
+            from app.services.telegram_bot import notify_group_wordlist
+            asyncio.create_task(
+                notify_group_wordlist(
+                    chat_id=cleaned_tg_id,
+                    wordlist_title=new_set.title,
+                    total_words=new_set.total_words,
+                    set_id=str(new_set.id),
+                )
             )
-        )
 
     items_out = [
         WordlistItemOut(
@@ -707,17 +697,8 @@ async def list_wordlist_sets(
         st_profile = st_res.scalar_one_or_none()
 
     query = (
-        select(
-            WordlistSet,
-            Group.name.label("group_name"),
-            func.coalesce(
-                func.nullif(WordlistSet.total_words, 0),
-                func.count(WordlistItem.id),
-            ).label("word_count"),
-        )
-        .outerjoin(Group, WordlistSet.group_id == Group.id)
-        .outerjoin(WordlistItem, WordlistSet.id == WordlistItem.set_id)
-        .group_by(WordlistSet.id, Group.name)
+        select(WordlistSet)
+        .options(joinedload(WordlistSet.items), joinedload(WordlistSet.group))
         .order_by(WordlistSet.created_at.desc())
     )
 
@@ -733,7 +714,7 @@ async def list_wordlist_sets(
         query = query.where(WordlistSet.group_id == group_id)
 
     res = await db.execute(query)
-    rows = res.all()
+    wordlist_sets = res.unique().scalars().all()
 
     # If student, fetch their best score and mastery status per set
     student_stats_map = {}
@@ -758,15 +739,16 @@ async def list_wordlist_sets(
             }
 
     output: list[WordlistSetBriefOut] = []
-    for w_set, g_name, w_count in rows:
+    for w_set in wordlist_sets:
         st_data = student_stats_map.get(w_set.id, {})
-        calculated_count = int(w_count or w_set.total_words or 0)
+        g_name = w_set.group.name if w_set.group else ("All Cohorts (Global)" if not w_set.group_id else "Unassigned")
+        calculated_count = len(w_set.items) if w_set.items else (w_set.total_words or 0)
         output.append(
             WordlistSetBriefOut(
                 id=w_set.id,
                 title=w_set.title,
                 group_id=w_set.group_id,
-                group_name=g_name or ("All Cohorts (Global)" if not w_set.group_id else "Unassigned"),
+                group_name=g_name,
                 created_by=w_set.created_by,
                 created_at=w_set.created_at,
                 word_count=calculated_count,
@@ -782,6 +764,395 @@ async def list_wordlist_sets(
     return output
 
 
+@router.get("/weekend-arena", response_model=WeekendArenaOut)
+@router.get("/weekend-arena/", response_model=WeekendArenaOut, include_in_schema=False)
+async def get_weekend_arena(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Automatic Weekend Arena Quiz:
+    Pools vocabulary items published during the current week into a 15-question arena quiz.
+    Available Saturday & Sunday with competitive speed & accuracy scoring.
+    Computes top 3 weekly performers and awards 🥇 Gold, 🥈 Silver, and 🥉 Bronze badges.
+    """
+    now = utcnow()
+    week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    week_key = f"{now.year}-W{now.isocalendar()[1]:02d}"
+    is_weekend = now.weekday() in (5, 6)
+
+    st_profile = None
+    if current_user.role == UserRole.STUDENT:
+        st_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
+        st_profile = st_res.scalar_one_or_none()
+
+    group_id = st_profile.group_id if st_profile else None
+
+    # Fetch sets published in current week for this group or global
+    q_week_sets = (
+        select(WordlistSet)
+        .options(selectinload(WordlistSet.items))
+        .where(
+            (WordlistSet.group_id == group_id) | (WordlistSet.group_id.is_(None)),
+            WordlistSet.created_at >= week_start,
+        )
+        .order_by(WordlistSet.created_at.desc())
+    )
+    sets_res = await db.execute(q_week_sets)
+    week_sets = sets_res.scalars().all()
+
+    # If this week has fewer than 15 words or no sets, fetch most recent sets so arena is always playable
+    if not week_sets or sum(len(s.items) for s in week_sets) < 15:
+        q_recent = (
+            select(WordlistSet)
+            .options(selectinload(WordlistSet.items))
+            .where((WordlistSet.group_id == group_id) | (WordlistSet.group_id.is_(None)))
+            .order_by(WordlistSet.created_at.desc())
+            .limit(5)
+        )
+        recent_res = await db.execute(q_recent)
+        week_sets = recent_res.scalars().all()
+
+    # Collect unique items
+    pooled_dict = {}
+    for s in week_sets:
+        s_items = s.items
+        if not s_items:
+            g_slug = str(s.group_id) if s.group_id else "global"
+            loc = Path("uploads") / "wordlists" / g_slug / f"{s.id}.json"
+            if loc.exists():
+                try:
+                    data = json.loads(loc.read_text(encoding="utf-8"))
+                    for it in data:
+                        w = it.get("word") or it.get("term")
+                        if w and w.lower() not in pooled_dict:
+                            pooled_dict[w.lower()] = it
+                except Exception:
+                    pass
+        else:
+            for it in s_items:
+                if it.word and it.word.lower() not in pooled_dict:
+                    raw_def = it.definition or ""
+                    uz_val = None
+                    clean_def = raw_def
+                    if " — " in raw_def:
+                        parts = raw_def.split(" — ", 1)
+                        uz_val = parts[0].strip()
+                        clean_def = parts[1].strip()
+                    elif " - " in raw_def and len(raw_def.split(" - ")) == 2:
+                        parts = raw_def.split(" - ", 1)
+                        uz_val = parts[0].strip()
+                        clean_def = parts[1].strip()
+                    pooled_dict[it.word.lower()] = {
+                        "id": str(it.id),
+                        "set_id": str(s.id),
+                        "word": it.word,
+                        "part_of_speech": it.part_of_speech,
+                        "phonetic": it.phonetic,
+                        "definition": clean_def,
+                        "uzbek_translation": uz_val,
+                        "example": it.example,
+                        "audio_us_url": it.audio_us_url,
+                        "audio_gb_url": it.audio_gb_url,
+                        "created_at": it.created_at,
+                    }
+
+    all_pooled = list(pooled_dict.values())
+
+    # Deterministic sampling based on week and group
+    seed_str = f"{week_key}_{group_id or 'global'}"
+    rng = random.Random(seed_str)
+
+    if len(all_pooled) > 15:
+        selected_items = rng.sample(all_pooled, 15)
+    else:
+        selected_items = all_pooled[:]
+        rng.shuffle(selected_items)
+
+    questions = []
+    all_words = [it.get("word") for it in all_pooled if it.get("word")]
+    all_translations = [
+        (it.get("uzbek_translation") or it.get("definition") or it.get("word"))
+        for it in all_pooled
+        if (it.get("uzbek_translation") or it.get("definition") or it.get("word"))
+    ]
+
+    for idx, it in enumerate(selected_items):
+        word = str(it.get("word", "")).strip()
+        uz = str(it.get("uzbek_translation") or "").strip()
+        eng_def = str(it.get("definition") or "").strip()
+        pos = it.get("part_of_speech")
+        audio = it.get("audio_us_url")
+
+        if idx % 2 == 0 and (uz or eng_def):
+            prompt = word
+            prompt_type = "en"
+            correct_ans = uz or eng_def
+            distractors = [t for t in all_translations if t != correct_ans]
+            rng.shuffle(distractors)
+            opts = [correct_ans] + distractors[:3]
+            rng.shuffle(opts)
+        else:
+            prompt = uz or eng_def or word
+            prompt_type = "uz"
+            correct_ans = word
+            distractors = [w for w in all_words if w != correct_ans]
+            rng.shuffle(distractors)
+            opts = [correct_ans] + distractors[:3]
+            rng.shuffle(opts)
+
+        questions.append(
+            WeekendArenaQuestion(
+                id=f"q_{idx+1}",
+                word=word,
+                part_of_speech=pos,
+                prompt=prompt,
+                prompt_uzbek=uz or None,
+                prompt_definition=eng_def or None,
+                prompt_type=prompt_type,
+                correct_answer=correct_ans,
+                options=opts,
+                audio_us_url=audio,
+            )
+        )
+
+    items_out = [
+        WordlistItemOut(
+            id=uuid.UUID(str(it["id"])) if it.get("id") else uuid.uuid4(),
+            set_id=uuid.UUID(str(it.get("set_id"))) if it.get("set_id") else uuid.uuid4(),
+            word=str(it.get("word", "")),
+            part_of_speech=it.get("part_of_speech"),
+            phonetic=it.get("phonetic"),
+            definition=it.get("definition"),
+            uzbek_translation=it.get("uzbek_translation"),
+            example=it.get("example"),
+            audio_us_url=it.get("audio_us_url"),
+            audio_gb_url=it.get("audio_gb_url"),
+            order_index=idx,
+            created_at=now,
+        )
+        for idx, it in enumerate(selected_items)
+    ]
+
+    # Query this week's Weekend Arena attempts for top performers
+    top_attempts_q = (
+        select(WordlistQuizAttempt)
+        .options(selectinload(WordlistQuizAttempt.student))
+        .where(
+            WordlistQuizAttempt.mode == "weekend_arena",
+            WordlistQuizAttempt.created_at >= week_start,
+        )
+        .order_by(
+            WordlistQuizAttempt.score_percentage.desc(),
+            WordlistQuizAttempt.time_spent_seconds.asc(),
+        )
+    )
+    top_res = await db.execute(top_attempts_q)
+    raw_attempts = top_res.scalars().all()
+
+    seen_students = set()
+    deduped_attempts = []
+    user_attempt_val = None
+    for a in raw_attempts:
+        if st_profile and a.student_id == st_profile.id and user_attempt_val is None:
+            user_attempt_val = QuizAttemptOut(
+                id=a.id,
+                student_id=a.student_id,
+                student_name=st_profile.full_name,
+                mode=a.mode,
+                total_questions=a.total_questions,
+                correct_answers=a.correct_answers,
+                score_percentage=a.score_percentage,
+                time_spent_seconds=a.time_spent_seconds,
+                is_mastered=a.is_mastered,
+                terminated_early=a.terminated_early,
+                anti_cheat_triggered=a.anti_cheat_triggered,
+                created_at=a.created_at,
+            )
+        if a.student_id not in seen_students:
+            seen_students.add(a.student_id)
+            deduped_attempts.append(a)
+
+    top_performers = []
+    badges = ["gold", "silver", "bronze"]
+    profiles_to_update = False
+    for idx, att in enumerate(deduped_attempts[:3]):
+        st_name = att.student.full_name if att.student else "Student"
+        av_url = att.student.avatar_url if att.student else None
+        b_name = badges[idx]
+        if att.student:
+            if att.student.weekly_badge != b_name:
+                att.student.weekly_badge = b_name
+                att.student.badge_expires_at = now + timedelta(days=7)
+                db.add(att.student)
+                profiles_to_update = True
+        top_performers.append(
+            WeekendArenaLeaderboardEntry(
+                rank=idx + 1,
+                student_id=att.student_id,
+                student_name=st_name,
+                avatar_url=av_url,
+                score_percentage=att.score_percentage,
+                correct_answers=att.correct_answers,
+                total_questions=att.total_questions,
+                time_spent_seconds=att.time_spent_seconds,
+                badge=b_name,
+                created_at=att.created_at,
+            )
+        )
+
+    if profiles_to_update:
+        await db.commit()
+
+    return WeekendArenaOut(
+        week_key=week_key,
+        is_weekend=is_weekend,
+        total_questions=len(questions),
+        time_limit_seconds=180,
+        questions=questions,
+        items=items_out,
+        top_performers=top_performers,
+        user_attempt=user_attempt_val,
+    )
+
+
+@router.post("/weekend-arena/submit", response_model=WeekendArenaSubmitResponse)
+@router.post("/weekend-arena/submit/", response_model=WeekendArenaSubmitResponse, include_in_schema=False)
+async def submit_weekend_arena(
+    data: WeekendArenaSubmitRequest,
+    current_user: User = Depends(require_student),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Submits a completed Weekend Arena Quiz:
+    Records score and speed, awards XP and Stars, and computes podium badge placement.
+    """
+    st_res = await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))
+    profile = st_res.scalar_one_or_none()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Student profile not found")
+
+    total_q = max(1, data.total_questions)
+    correct_a = min(total_q, max(0, data.correct_answers))
+    score_pct = int(round((correct_a / total_q) * 100))
+    time_spent = max(1, data.time_spent_seconds)
+
+    now = utcnow()
+    week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    week_key = f"{now.year}-W{now.isocalendar()[1]:02d}"
+
+    set_res = await db.execute(
+        select(WordlistSet.id)
+        .where((WordlistSet.group_id == profile.group_id) | (WordlistSet.group_id.is_(None)))
+        .order_by(WordlistSet.created_at.desc())
+        .limit(1)
+    )
+    fallback_set_id = set_res.scalar_one_or_none()
+    if not fallback_set_id:
+        fallback_set_id = uuid.uuid4()
+        dummy_set = WordlistSet(
+            id=fallback_set_id,
+            title="Weekend Arena",
+            group_id=profile.group_id,
+            created_by=current_user.id,
+            created_at=now,
+            total_words=total_q,
+        )
+        db.add(dummy_set)
+        await db.flush()
+
+    attempt = WordlistQuizAttempt(
+        id=uuid.uuid4(),
+        set_id=fallback_set_id,
+        student_id=profile.id,
+        mode="weekend_arena",
+        total_questions=total_q,
+        correct_answers=correct_a,
+        score_percentage=score_pct,
+        time_spent_seconds=time_spent,
+        is_mastered=(score_pct >= 80),
+        terminated_early=False,
+        anti_cheat_triggered=False,
+    )
+    db.add(attempt)
+
+    from app.services.gamification import award_xp, award_stars
+    from app.models.gamification import StarTransactionReason
+
+    xp_awarded = 25
+    await award_xp(
+        db,
+        student_id=profile.id,
+        amount=xp_awarded,
+        activity_type="weekend_arena",
+        reference_id=f"arena_{week_key}_{profile.id}",
+        description=f"Weekend Arena Quiz ({score_pct}%, {time_spent}s)",
+    )
+
+    stars_awarded = 0
+    if score_pct >= 80:
+        stars_awarded = 15
+        await award_stars(
+            db,
+            student_id=profile.id,
+            amount=stars_awarded,
+            reason=StarTransactionReason.VOCABULARY_ACHIEVEMENT,
+            reference_id=f"arena_stars_{week_key}_{profile.id}",
+            description=f"Weekend Arena High Score ({score_pct}%)",
+        )
+
+    await db.commit()
+
+    top_attempts_q = (
+        select(WordlistQuizAttempt)
+        .where(
+            WordlistQuizAttempt.mode == "weekend_arena",
+            WordlistQuizAttempt.created_at >= week_start,
+        )
+        .order_by(
+            WordlistQuizAttempt.score_percentage.desc(),
+            WordlistQuizAttempt.time_spent_seconds.asc(),
+        )
+    )
+    top_res = await db.execute(top_attempts_q)
+    all_atts = top_res.scalars().all()
+
+    seen_students = []
+    for a in all_atts:
+        if a.student_id not in seen_students:
+            seen_students.append(a.student_id)
+
+    rank = seen_students.index(profile.id) + 1 if profile.id in seen_students else None
+    badge = None
+    msg = f"Natijangiz saqlandi: {score_pct}% ({correct_a}/{total_q}) vaqti: {time_spent} soniya."
+    if rank == 1:
+        badge = "gold"
+        msg = f"🥇 1-o'rin! Siz bu haftalik Weekend Arena yetakchisisiz! (+{xp_awarded} XP, +{stars_awarded} ⭐)"
+    elif rank == 2:
+        badge = "silver"
+        msg = f"🥈 2-o'rin! Weekend Arena ajoyib natija! (+{xp_awarded} XP, +{stars_awarded} ⭐)"
+    elif rank == 3:
+        badge = "bronze"
+        msg = f"🥉 3-o'rin! Siz shohsupadasiz! (+{xp_awarded} XP, +{stars_awarded} ⭐)"
+
+    # Persist badge and its expiry on the student's profile
+    if badge:
+        profile.weekly_badge = badge
+        profile.badge_expires_at = utcnow() + timedelta(days=7)
+        db.add(profile)
+        await db.commit()
+
+    return WeekendArenaSubmitResponse(
+        success=True,
+        score_percentage=score_pct,
+        xp_awarded=xp_awarded,
+        stars_awarded=stars_awarded,
+        badge_awarded=badge,
+        rank=rank,
+        message=msg,
+    )
+
+
 @router.get("/{set_id}", response_model=WordlistSetDetailOut)
 @router.get("/{set_id}/", response_model=WordlistSetDetailOut, include_in_schema=False)
 async def get_wordlist_set(
@@ -795,104 +1166,18 @@ async def get_wordlist_set(
     """
     res = await db.execute(
         select(WordlistSet)
-        .options(selectinload(WordlistSet.items), selectinload(WordlistSet.group))
+        .options(joinedload(WordlistSet.items), joinedload(WordlistSet.group))
         .where(WordlistSet.id == set_id)
     )
-    w_set = res.scalar_one_or_none()
+    w_set = res.unique().scalar_one_or_none()
     if not w_set:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wordlist set not found")
 
     items_out: list[WordlistItemOut] = []
-    raw_bytes: bytes | None = None
 
-    # 1. Try Backblaze B2 download
-    if w_set.b2_file_url:
-        storage = get_storage_service()
-        if storage.is_configured:
-            try:
-                raw_bytes, _ = await storage.download_file(w_set.b2_file_url)
-            except Exception as e:
-                logger.warning("B2 download failed for %s: %s", w_set.b2_file_url, e)
-
-    # 2. Try local file fallback
-    if raw_bytes is None:
-        group_slug = str(w_set.group_id) if w_set.group_id else "global"
-        local_file = Path("uploads") / "wordlists" / group_slug / f"{w_set.id}.json"
-        if local_file.exists():
-            try:
-                raw_bytes = local_file.read_bytes()
-            except Exception as e:
-                logger.warning("Failed reading local wordlist json: %s", e)
-
-    # 3. Parse JSON items if loaded
-    if raw_bytes:
-        try:
-            parsed_data = json.loads(raw_bytes.decode("utf-8"))
-            if isinstance(parsed_data, dict):
-                raw_items = parsed_data.get("items") or parsed_data.get("words") or []
-            elif isinstance(parsed_data, list):
-                raw_items = parsed_data
-            else:
-                raw_items = []
-
-            for idx, it in enumerate(raw_items):
-                if not isinstance(it, dict):
-                    continue
-
-                c_at = w_set.created_at
-                if it.get("created_at"):
-                    try:
-                        c_at = datetime.fromisoformat(it["created_at"])
-                    except Exception:
-                        c_at = w_set.created_at
-
-                word_val = (it.get("term") or it.get("word") or "").strip()
-                def_val = (it.get("definition") or "").strip()
-                uz_val = (it.get("uzbek_translation") or it.get("translation") or it.get("custom_translation") or "").strip()
-                pos_val = (it.get("pos") or it.get("part_of_speech") or "").strip() or None
-
-                # Clean split if legacy combined with " — " or " - "
-                if not uz_val and " — " in def_val:
-                    parts = def_val.split(" — ", 1)
-                    uz_val = parts[0].strip()
-                    def_val = parts[1].strip()
-                elif not uz_val and " - " in def_val and len(def_val.split(" - ")) == 2:
-                    parts = def_val.split(" - ", 1)
-                    uz_val = parts[0].strip()
-                    def_val = parts[1].strip()
-
-                if not word_val and not def_val and not uz_val:
-                    continue
-
-                item_id_raw = it.get("id")
-                try:
-                    item_id = uuid.UUID(str(item_id_raw)) if item_id_raw else uuid.uuid4()
-                except Exception:
-                    item_id = uuid.uuid4()
-
-                items_out.append(
-                    WordlistItemOut(
-                        id=item_id,
-                        set_id=w_set.id,
-                        word=word_val or def_val or uz_val,
-                        part_of_speech=pos_val,
-                        phonetic=it.get("phonetic") or None,
-                        definition=def_val or None,
-                        uzbek_translation=uz_val or None,
-                        example=it.get("example") or None,
-                        audio_us_url=it.get("audio_us_url") or None,
-                        audio_gb_url=it.get("audio_gb_url") or None,
-                        order_index=it.get("order_index", idx),
-                        created_at=c_at,
-                    )
-                )
-        except Exception as e:
-            logger.warning("Failed parsing wordlist JSON for set %s: %s", w_set.id, e)
-
-    # 4. Fallback to legacy database items if no items loaded from JSON
-    if not items_out and w_set.items:
-        items_out = []
-        for item in w_set.items:
+    # 1. Primary: Use eagerly-loaded database WordlistItem rows
+    if w_set.items:
+        for idx, item in enumerate(w_set.items):
             raw_def = item.definition or ""
             uz_val = None
             clean_def = raw_def
@@ -913,14 +1198,97 @@ async def get_wordlist_set(
                     part_of_speech=item.part_of_speech,
                     phonetic=item.phonetic,
                     definition=clean_def or None,
-                    uzbek_translation=None,
+                    uzbek_translation=uz_val or None,
                     example=item.example,
                     audio_us_url=item.audio_us_url,
                     audio_gb_url=item.audio_gb_url,
-                    order_index=item.order_index,
-                    created_at=item.created_at,
+                    order_index=item.order_index if item.order_index is not None else idx,
+                    created_at=item.created_at or w_set.created_at,
                 )
             )
+
+    # 2. Secondary: If no DB items, fallback to Backblaze B2 / local JSON file
+    if not items_out:
+        raw_bytes: bytes | None = None
+        if w_set.b2_file_url:
+            storage = get_storage_service()
+            if storage.is_configured:
+                try:
+                    raw_bytes, _ = await storage.download_file(w_set.b2_file_url)
+                except Exception as e:
+                    logger.warning("B2 download failed for %s: %s", w_set.b2_file_url, e)
+
+        if raw_bytes is None:
+            group_slug = str(w_set.group_id) if w_set.group_id else "global"
+            local_file = Path("uploads") / "wordlists" / group_slug / f"{w_set.id}.json"
+            if local_file.exists():
+                try:
+                    raw_bytes = local_file.read_bytes()
+                except Exception as e:
+                    logger.warning("Failed reading local wordlist json: %s", e)
+
+        if raw_bytes:
+            try:
+                parsed_data = json.loads(raw_bytes.decode("utf-8"))
+                if isinstance(parsed_data, dict):
+                    raw_items = parsed_data.get("items") or parsed_data.get("words") or []
+                elif isinstance(parsed_data, list):
+                    raw_items = parsed_data
+                else:
+                    raw_items = []
+
+                for idx, it in enumerate(raw_items):
+                    if not isinstance(it, dict):
+                        continue
+
+                    c_at = w_set.created_at
+                    if it.get("created_at"):
+                        try:
+                            c_at = datetime.fromisoformat(it["created_at"])
+                        except Exception:
+                            c_at = w_set.created_at
+
+                    word_val = (it.get("term") or it.get("word") or "").strip()
+                    def_val = (it.get("definition") or "").strip()
+                    uz_val = (it.get("uzbek_translation") or it.get("translation") or it.get("custom_translation") or "").strip()
+                    pos_val = (it.get("pos") or it.get("part_of_speech") or "").strip() or None
+
+                    if not uz_val and " — " in def_val:
+                        parts = def_val.split(" — ", 1)
+                        uz_val = parts[0].strip()
+                        def_val = parts[1].strip()
+                    elif not uz_val and " - " in def_val and len(def_val.split(" - ")) == 2:
+                        parts = def_val.split(" - ", 1)
+                        uz_val = parts[0].strip()
+                        def_val = parts[1].strip()
+
+                    if not word_val and not def_val and not uz_val:
+                        continue
+
+                    item_id_raw = it.get("id")
+                    try:
+                        item_id = uuid.UUID(str(item_id_raw)) if item_id_raw else uuid.uuid4()
+                    except Exception:
+                        item_id = uuid.uuid4()
+
+                    items_out.append(
+                        WordlistItemOut(
+                            id=item_id,
+                            set_id=w_set.id,
+                            word=word_val or def_val or uz_val,
+                            part_of_speech=pos_val,
+                            phonetic=it.get("phonetic") or None,
+                            definition=def_val or None,
+                            uzbek_translation=uz_val or None,
+                            example=it.get("example") or None,
+                            audio_us_url=it.get("audio_us_url") or None,
+                            audio_gb_url=it.get("audio_gb_url") or None,
+                            order_index=it.get("order_index", idx),
+                            created_at=c_at,
+                        )
+                    )
+            except Exception as e:
+                logger.warning("Failed parsing wordlist JSON for set %s: %s", w_set.id, e)
 
     st_profile = None
     if current_user.role == UserRole.STUDENT:

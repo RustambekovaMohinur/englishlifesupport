@@ -21,6 +21,7 @@ import {
   StudentHistoryOut,
   StudentListItem,
   StudentOut,
+  StudentStatsOut,
   SubmissionCommentOut,
   SubmissionCorrectionOut,
   SubmissionAIFeedbackOut,
@@ -80,6 +81,7 @@ export const getStudentParentReport = (student_id: string) =>
 export const getPeerProfile = (student_id: string) =>
   cachedGet<PeerProfileOut>(`/students/${student_id}/peer-profile`);
 export const getMyStudentProfile = () => cachedGet<StudentOut>("/students/me");
+export const getMyStudentStats = () => cachedGet<StudentStatsOut>("/students/me/stats");
 export const updateStudent = (id: string, body: Partial<{ full_name: string; phone: string; group_id: string | null }>) =>
   api.patch<StudentOut>(`/students/${id}`, body).then((r) => r.data);
 export const deleteStudent = (id: string) => api.delete(`/students/${id}`);
@@ -525,7 +527,9 @@ export const createWordlistSet = async (data: {
     order_index?: number;
   }>;
 }) => {
+  apiCache.invalidate(WORDLISTS_URL);
   const r = await api.post<import("@/types").WordlistSetDetail>(WORDLISTS_URL, data);
+  apiCache.invalidate(WORDLISTS_URL);
   return r.data;
 };
 
@@ -537,16 +541,38 @@ export const listWordlistSets = async (params?: { group_id?: string }) => {
   }, { ttlMs: 120_000 });
 };
 
-export const getWordlistSet = async (setId: string) => {
+export const getWordlistSet = async (setId: string, forceRefresh = false) => {
   const key = `${WORDLISTS_URL}/${setId}`;
   return apiCache.fetch(key, async () => {
     const r = await api.get<import("@/types").WordlistSetDetail>(`${WORDLISTS_URL}/${setId}`);
     return r.data;
-  }, { ttlMs: 180_000 });
+  }, {
+    ttlMs: 60_000,
+    forceRefresh,
+    cachePredicate: (data) => Boolean(data && Array.isArray(data.items) && data.items.length > 0),
+  });
+};
+
+export const getWeekendArena = async () => {
+  const r = await api.get<import("@/types").WeekendArenaOut>(`${WORDLISTS_URL}/weekend-arena`);
+  return r.data;
+};
+
+export const submitWeekendArena = async (data: {
+  total_questions: number;
+  correct_answers: number;
+  time_spent_seconds: number;
+}) => {
+  const r = await api.post<import("@/types").WeekendArenaSubmitResponse>(`${WORDLISTS_URL}/weekend-arena/submit`, data);
+  apiCache.invalidate("/leaderboard");
+  apiCache.invalidate("/gamification");
+  return r.data;
 };
 
 export const deleteWordlistSet = async (setId: string) => {
+  apiCache.invalidate(WORDLISTS_URL);
   const r = await api.delete(`${WORDLISTS_URL}/${setId}`);
+  apiCache.invalidate(WORDLISTS_URL);
   return r.data;
 };
 

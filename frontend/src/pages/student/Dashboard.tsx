@@ -9,6 +9,7 @@ import { PeerProfileModal } from "@/components/PeerProfileModal";
 import { PlatformFeedbackModal, PublicCommunityReviewsWall } from "@/components/PlatformFeedbackModal";
 import {
   getStudentDashboard,
+  getMyStudentStats,
   getGamificationSummary,
   getWeeklyLeaderboard,
   getPlatformFeedbackSummary,
@@ -17,6 +18,7 @@ import {
 } from "@/services/lmsService";
 import {
   StudentDashboard,
+  StudentStatsOut,
   StudentGamificationSummary,
   WeeklyLeaderboardOut,
   PlatformFeedbackSummary,
@@ -79,6 +81,7 @@ export default function StudentDashboardPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [data, setData] = useState<StudentDashboard | null>(null);
+  const [stats, setStats] = useState<StudentStatsOut | null>(null);
   const [gamify, setGamify] = useState<StudentGamificationSummary | null>(null);
   const [leaderboard, setLeaderboard] = useState<WeeklyLeaderboardOut | null>(null);
   const [parentInfo, setParentInfo] = useState<ParentLinkInfo | null>(null);
@@ -102,15 +105,21 @@ export default function StudentDashboardPage() {
   const loadDashboard = () => {
     setIsLoading(true);
     setError(null);
-    getStudentDashboard()
-      .then(setData)
-      .catch(() => setError("Failed to load dashboard."))
+    Promise.allSettled([
+      getStudentDashboard().then(setData),
+      getMyStudentStats().then(setStats),
+      getGamificationSummary().then(setGamify),
+      getWeeklyLeaderboard().then(setLeaderboard),
+      getPlatformFeedbackSummary().then(setFeedbackSummary),
+      getParentLinkInfo().then(setParentInfo),
+    ])
+      .then((results) => {
+        if (results[0].status === "rejected") {
+          setError("Failed to load dashboard.");
+        }
+      })
       .finally(() => setIsLoading(false));
 
-    getGamificationSummary().then(setGamify).catch(() => null);
-    getWeeklyLeaderboard().then(setLeaderboard).catch(() => null);
-    getPlatformFeedbackSummary().then(setFeedbackSummary).catch(() => null);
-    getParentLinkInfo().then(setParentInfo).catch(() => null);
     fetchReviews();
   };
 
@@ -157,10 +166,19 @@ export default function StudentDashboardPage() {
   const hasFreePass = gamify?.free_pass ? !gamify.free_pass.is_used : (data.free_pass_available ?? true);
   const displayLevel = formatEnglishLevel(data.english_level);
 
-  // Safe zero-division math for task completion
-  const totalActiveTasks = data.total_assignments || 0;
-  const completedTasks = data.completed_assignments || 0;
-  const rate = totalActiveTasks > 0 ? ((completedTasks / totalActiveTasks) * 100).toFixed(1) : "0.0";
+  // Safe zero-division math for task completion using actual student stats
+  const totalActiveTasks = stats?.total_assignments ?? data.total_assignments ?? 0;
+  const completedTasks = Math.min(
+    stats?.completed_assignments ?? data.completed_assignments ?? 0,
+    totalActiveTasks
+  );
+  const rate = stats?.progress_percent != null
+    ? stats.progress_percent.toFixed(1)
+    : stats?.completion_percent != null
+    ? stats.completion_percent.toFixed(1)
+    : stats?.completion_percentage != null
+    ? stats.completion_percentage.toFixed(1)
+    : (totalActiveTasks > 0 ? ((completedTasks / totalActiveTasks) * 100).toFixed(1) : "0.0");
 
   // Sorted leaderboard: primary sort by completion_rate, fallback to weekly_xp, then weekly_stars
   const sortedEntries = [...(leaderboard?.entries || [])].sort((a, b) => {

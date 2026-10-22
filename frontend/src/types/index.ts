@@ -46,6 +46,8 @@ export interface SubmissionImageOut {
   file_size: number;
   order_index: number;
   created_at: string;
+  url?: string;
+  file_url?: string;
 }
 
 export interface StudentListItem {
@@ -80,6 +82,8 @@ export interface StudentListItem {
   parent_linked_at?: string | null;
   last_parent_digest_sent_at?: string | null;
   is_parent_linked?: boolean;
+  weekly_badge?: string | null;
+  badge_expires_at?: string | null;
 }
 
 export interface AssignmentItemOverview {
@@ -193,6 +197,7 @@ export interface PeerProfileOut {
   total_lightning: number;
   total_assignments_completed: number;
   total_vocabulary_completed: number;
+  weekly_badge?: string | null;
 }
 
 export interface StudentHistoryOut {
@@ -236,6 +241,8 @@ export interface StudentOut {
   phone: string | null;
   bio?: string | null;
   avatar_url?: string | null;
+  weekly_badge?: string | null;
+  badge_expires_at?: string | null;
   is_active: boolean;
   total_stars: number;
   group: GroupBrief | null;
@@ -246,6 +253,14 @@ export interface StudentOut {
   parent_linked_at?: string | null;
   last_parent_digest_sent_at?: string | null;
   is_parent_linked?: boolean;
+}
+
+export interface StudentStatsOut {
+  total_assignments: number;
+  completed_assignments: number;
+  completion_percentage: number;
+  completion_percent?: number;
+  progress_percent?: number;
 }
 
 export interface ParentLinkInfo {
@@ -546,6 +561,7 @@ export interface SubmissionOut {
   file_url: string | null;
   file_original_name: string | null;
   images?: SubmissionImageOut[];
+  attachments?: SubmissionImageOut[];
   status: "submitted" | "late" | "graded";
   is_relevant?: boolean;
   submitted_at: string;
@@ -684,6 +700,7 @@ export interface StudentDashboard {
   completed_assignments: number;
   upcoming_deadlines: { id: string; title: string; deadline: string; submitted: boolean; is_locked?: boolean; lock_reason?: string | null }[];
   recent_grades: { assignment_title: string; score: number; stars: number; graded_at: string }[];
+  weekly_badge?: string | null;
 }
 
 export interface StarTransactionOut {
@@ -723,6 +740,7 @@ export interface StudentGamificationSummary {
   free_pass: FreePassStatus;
   achievements: AchievementOut[];
   recent_transactions: StarTransactionOut[];
+  weekly_badge?: string | null;
 }
 
 export interface LeaderboardEntry {
@@ -735,6 +753,8 @@ export interface LeaderboardEntry {
   streak: number;
   completion_rate: number;
   is_current_user: boolean;
+  badge?: string | null;
+  weekly_badge?: string | null;
 }
 
 export interface WeeklyLeaderboardOut {
@@ -884,4 +904,52 @@ export interface AIWordlistParseItem {
   ai_generated?: boolean;
   fallback_used?: boolean;
 }
+
+export interface WeekendArenaQuestion {
+  id: string;
+  word: string;
+  part_of_speech?: string | null;
+  prompt: string;
+  prompt_uzbek?: string | null;
+  prompt_definition?: string | null;
+  prompt_type: "en" | "uz";
+  correct_answer: string;
+  options: string[];
+  audio_us_url?: string | null;
+}
+
+export interface WeekendArenaLeaderboardEntry {
+  rank: number;
+  student_id: string;
+  student_name: string;
+  avatar_url?: string | null;
+  score_percentage: number;
+  correct_answers: number;
+  total_questions: number;
+  time_spent_seconds: number;
+  badge?: "gold" | "silver" | "bronze" | null;
+  created_at: string;
+}
+
+export interface WeekendArenaOut {
+  week_key: string;
+  is_weekend: boolean;
+  total_questions: number;
+  time_limit_seconds: number;
+  questions: WeekendArenaQuestion[];
+  items: WordlistItem[];
+  top_performers: WeekendArenaLeaderboardEntry[];
+  user_attempt?: QuizAttempt | null;
+}
+
+export interface WeekendArenaSubmitResponse {
+  success: boolean;
+  score_percentage: number;
+  xp_awarded: number;
+  stars_awarded: number;
+  badge_awarded?: "gold" | "silver" | "bronze" | null;
+  rank?: number | null;
+  message: string;
+}
+
 

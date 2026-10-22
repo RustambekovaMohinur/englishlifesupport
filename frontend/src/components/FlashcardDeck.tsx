@@ -29,7 +29,24 @@ export function FlashcardDeck({ items, title, onClose }: FlashcardDeckProps) {
   const cards = useMemo(() => {
     return rawCards
       .map((item: any, idx: number) => {
-        if (!item || typeof item !== "object") return null;
+        if (!item) return null;
+        if (typeof item === "string") {
+          const parts = item.split(" - ");
+          const w = parts[0]?.trim() || item.trim();
+          const tr = parts.length > 1 ? parts.slice(1).join(" - ").trim() : "";
+          return {
+            id: `card-${idx}`,
+            word: w,
+            uzbek_translation: tr,
+            definition: "",
+            part_of_speech: "",
+            phonetic: "",
+            example: "",
+            audio_us_url: null,
+            audio_gb_url: null,
+          };
+        }
+        if (typeof item !== "object") return null;
         const word = (item.term || item.word || "").trim();
         const { uzbek, definition } = parseWordMeanings(item);
         const part_of_speech = (item.pos || item.part_of_speech || "").trim();

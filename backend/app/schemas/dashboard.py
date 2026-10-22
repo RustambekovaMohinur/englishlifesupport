@@ -45,6 +45,7 @@ class StudentDashboard(BaseModel):
     completed_assignments: int
     upcoming_deadlines: list["UpcomingAssignmentItem"]
     recent_grades: list["RecentGradeItem"]
+    weekly_badge: str | None = None
 
 
 class UpcomingAssignmentItem(BaseModel):

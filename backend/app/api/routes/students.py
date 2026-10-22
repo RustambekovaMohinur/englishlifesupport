@@ -33,6 +33,7 @@ from app.schemas.student import (
     StudentListItem,
     StudentOut,
     StudentPlacementUpdate,
+    StudentStatsOut,
     StudentStatusUpdate,
     StudentUpdate,
     StudentWordlistProgressItem,
@@ -588,6 +589,8 @@ async def get_my_profile(
         phone=full_profile.phone,
         bio=full_profile.bio,
         avatar_url=full_profile.avatar_url,
+        weekly_badge=full_profile.weekly_badge,
+        badge_expires_at=full_profile.badge_expires_at,
         is_active=full_profile.user.is_active,
         total_stars=full_profile.total_stars,
         group=full_profile.group,
@@ -598,6 +601,67 @@ async def get_my_profile(
         parent_linked_at=full_profile.parent_linked_at,
         last_parent_digest_sent_at=full_profile.last_parent_digest_sent_at,
         is_parent_linked=bool(full_profile.parent_telegram_chat_id),
+    )
+
+
+@router.get("/me/stats", response_model=StudentStatsOut)
+async def get_my_stats(
+    profile: StudentProfile = Depends(get_current_student_profile),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns actual assignment counts and calculated completion percentage for the logged-in student.
+    """
+    active_assign_ids = set()
+    if profile.group_id:
+        # 1. Count ALL published assignments active for the student's group/cohort
+        group_asgn_res = await db.execute(
+            select(Assignment.id).where(
+                Assignment.group_id == profile.group_id,
+                Assignment.status == AssignmentStatus.PUBLISHED,
+            )
+        )
+        active_assign_ids = set(group_asgn_res.scalars().all())
+
+    # Fallback to all published assignments if cohort is unassigned or group has no published tasks
+    if not active_assign_ids:
+        all_published_res = await db.execute(
+            select(Assignment.id).where(Assignment.status == AssignmentStatus.PUBLISHED)
+        )
+        active_assign_ids = set(all_published_res.scalars().all())
+
+    total_assignments = len(active_assign_ids)
+
+    # 2. Count distinct completed/submitted assignments by current user / profile
+    st_sub_query = (
+        select(func.count(func.distinct(Submission.assignment_id)))
+        .join(StudentProfile, Submission.student_id == StudentProfile.id)
+        .where(
+            or_(
+                Submission.student_id == profile.id,
+                StudentProfile.user_id == current_user.id,
+            ),
+            Submission.is_archived.is_(False),
+        )
+    )
+    if active_assign_ids:
+        st_sub_query = st_sub_query.where(Submission.assignment_id.in_(active_assign_ids))
+
+    completed_assignments = (await db.execute(st_sub_query)).scalar() or 0
+
+    if total_assignments > 0 and completed_assignments > total_assignments:
+        completed_assignments = total_assignments
+
+    # 3. Formula: progress_percent = round((completed_count / total_count) * 100, 1) if total_count > 0 else 0.0
+    progress_percent = round((completed_assignments / total_assignments) * 100, 1) if total_assignments > 0 else 0.0
+
+    return StudentStatsOut(
+        total_assignments=total_assignments,
+        completed_assignments=completed_assignments,
+        completion_percentage=progress_percent,
+        completion_percent=progress_percent,
+        progress_percent=progress_percent,
     )
 
 
@@ -1120,6 +1184,27 @@ async def get_peer_profile(
     grp = profile.group
     level_str = grp.english_level.value if grp and hasattr(grp.english_level, "value") else (str(grp.english_level) if grp and grp.english_level else None)
 
+    weekly_badge = None
+    if profile.group_id:
+        try:
+            from app.models.gamification import StudentXP
+            from datetime import timedelta
+            week_start = (utcnow() - timedelta(days=utcnow().weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+            top_xp_res = await db.execute(
+                select(StudentXP.student_id, func.sum(StudentXP.amount).label("sum_xp"))
+                .join(StudentProfile, StudentProfile.id == StudentXP.student_id)
+                .where(StudentProfile.group_id == profile.group_id, StudentXP.created_at >= week_start)
+                .group_by(StudentXP.student_id)
+                .order_by(func.sum(StudentXP.amount).desc())
+                .limit(3)
+            )
+            top_xp_students = [r[0] for r in top_xp_res.all()]
+            if profile.id in top_xp_students:
+                r_idx = top_xp_students.index(profile.id) + 1
+                weekly_badge = "gold" if r_idx == 1 else ("silver" if r_idx == 2 else "bronze")
+        except Exception:
+            pass
+
     return PeerProfileOut(
         id=profile.id,
         full_name=profile.full_name or "Student",
@@ -1132,6 +1217,7 @@ async def get_peer_profile(
         total_lightning=getattr(profile, "total_lightning", 0) or 0,
         total_assignments_completed=total_assignments_completed,
         total_vocabulary_completed=total_vocab_completed,
+        weekly_badge=weekly_badge,
     )
 
 

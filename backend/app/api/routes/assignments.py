@@ -45,6 +45,13 @@ router = APIRouter(prefix="/assignments", tags=["assignments"])
 teacher_assignments_router = APIRouter(prefix="/teacher/assignments", tags=["assignments"])
 
 
+def _clean_telegram_chat_id(chat_id: Any) -> str:
+    """Safely normalizes and casts 64-bit group / channel IDs (e.g., -100...) to string."""
+    if chat_id is None:
+        return ""
+    return str(chat_id).strip().strip("'\"")
+
+
 async def _get_assignment_with_relations(db: AsyncSession, assignment_id: uuid.UUID) -> Assignment | None:
     """
     Eagerly loads an Assignment and all linked relationships via selectinload.
@@ -364,23 +371,28 @@ async def create_assignment(
 
     async def _notify_creation():
         # 1. Group chat notification
-        if target_group_chat_id:
+        cleaned_group_chat_id = _clean_telegram_chat_id(target_group_chat_id)
+        if cleaned_group_chat_id:
             try:
                 await notify_group_assignment(
-                    chat_id=target_group_chat_id,
+                    chat_id=cleaned_group_chat_id,
                     assignment_title=assign_title,
                     due_date=assign_deadline,
                     assignment_id=assign_id,
                     is_update=False,
+                    group_name=group_name,
                 )
             except Exception as ex:
                 logger.warning("Failed to dispatch group assignment notification: %s", ex)
 
         # 2. Parent notifications
         for p_chat_id, stu_name in parent_notifications:
+            cleaned_p_chat_id = _clean_telegram_chat_id(p_chat_id)
+            if not cleaned_p_chat_id:
+                continue
             try:
                 await notify_parent_assignment(
-                    chat_id=p_chat_id,
+                    chat_id=cleaned_p_chat_id,
                     student_name=stu_name,
                     assignment_title=assign_title,
                     due_date=assign_deadline,
@@ -1078,16 +1090,18 @@ async def edit_assignment_in_place(
     )
 
     target_group_chat_id = getattr(reloaded.group, "telegram_group_chat_id", None)
-    if target_group_chat_id and reloaded.status == AssignmentStatus.PUBLISHED:
+    cleaned_group_chat_id = _clean_telegram_chat_id(target_group_chat_id)
+    if cleaned_group_chat_id and reloaded.status == AssignmentStatus.PUBLISHED:
         import asyncio
         from app.services.telegram_bot import notify_group_assignment
         asyncio.create_task(
             notify_group_assignment(
-                chat_id=target_group_chat_id,
+                chat_id=cleaned_group_chat_id,
                 assignment_title=reloaded.title,
                 due_date=reloaded.deadline,
                 assignment_id=str(reloaded.id),
                 is_update=True,
+                group_name=group_name,
             )
         )
 
@@ -1158,16 +1172,18 @@ async def update_assignment(
     )
 
     target_group_chat_id = getattr(reloaded.group, "telegram_group_chat_id", None)
-    if target_group_chat_id and reloaded.status == AssignmentStatus.PUBLISHED:
+    cleaned_group_chat_id = _clean_telegram_chat_id(target_group_chat_id)
+    if cleaned_group_chat_id and reloaded.status == AssignmentStatus.PUBLISHED:
         import asyncio
         from app.services.telegram_bot import notify_group_assignment
         asyncio.create_task(
             notify_group_assignment(
-                chat_id=target_group_chat_id,
+                chat_id=cleaned_group_chat_id,
                 assignment_title=reloaded.title,
                 due_date=reloaded.deadline,
                 assignment_id=str(reloaded.id),
                 is_update=True,
+                group_name=group_name,
             )
         )
 

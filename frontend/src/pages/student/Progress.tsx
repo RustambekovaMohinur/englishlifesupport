@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { LoadingRows, StatCard } from "@/components/ui";
 import { StudentProgressMatrix } from "@/components/StudentProgressMatrix";
-import { getStudentDashboard, getGamificationSummary, getMyCohortMatrix } from "@/services/lmsService";
-import { StudentDashboard, StudentGamificationSummary, GroupDetailOut } from "@/types";
+import { getStudentDashboard, getMyStudentStats, getGamificationSummary, getMyCohortMatrix } from "@/services/lmsService";
+import { StudentDashboard, StudentStatsOut, StudentGamificationSummary, GroupDetailOut } from "@/types";
 
 export default function StudentProgressPage() {
   const [data, setData] = useState<StudentDashboard | null>(null);
+  const [stats, setStats] = useState<StudentStatsOut | null>(null);
   const [gamify, setGamify] = useState<StudentGamificationSummary | null>(null);
   const [cohortMatrix, setCohortMatrix] = useState<GroupDetailOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -14,6 +15,7 @@ export default function StudentProgressPage() {
   useEffect(() => {
     Promise.all([
       getStudentDashboard().then(setData),
+      getMyStudentStats().then(setStats).catch(() => null),
       getGamificationSummary().then(setGamify).catch(() => null),
       getMyCohortMatrix().then(setCohortMatrix).catch(() => null),
     ])
@@ -24,7 +26,11 @@ export default function StudentProgressPage() {
   if (isLoading) return <LoadingRows rows={4} />;
   if (!data) return null;
 
-  const completionRate = data.total_assignments > 0 ? Math.round((data.completed_assignments / data.total_assignments) * 100) : 0;
+  const totalTasks = stats?.total_assignments ?? data.total_assignments ?? 0;
+  const completedTasks = stats?.completed_assignments ?? data.completed_assignments ?? 0;
+  const completionRate = stats?.completion_percentage != null
+    ? stats.completion_percentage
+    : (totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0);
   const streakVal = gamify?.streak ?? data.streak ?? 0;
   const xpVal = gamify?.total_xp ?? data.total_xp ?? 0;
   const levelVal = gamify?.level ?? data.level ?? 1;
@@ -41,7 +47,7 @@ export default function StudentProgressPage() {
         <StatCard label="Total Stars" value={`⭐ ${data.total_stars}`} hint="Lifetime accumulated" />
         <StatCard label="Learning Streak" value={`⚡ ${streakVal} days`} hint={`Longest: ${gamify?.longest_streak ?? streakVal} days`} />
         <StatCard label="Level & XP" value={`Lvl ${levelVal} · ${xpVal} XP`} hint={levelTitle} />
-        <StatCard label="Completion Rate" value={`${completionRate}%`} hint={`${data.completed_assignments}/${data.total_assignments} completed`} />
+        <StatCard label="Completion Rate" value={`${completionRate}%`} hint={`${completedTasks}/${totalTasks} completed`} />
       </div>
 
       {/* Levels Overview */}

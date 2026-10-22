@@ -855,7 +855,7 @@ function GradeModal({
                   className="group relative cursor-pointer overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 aspect-square hover:shadow-md transition-shadow"
                 >
                   <AuthenticatedImage
-                    url={`/api/submissions/${currentSub.id}/images/${img.id}`}
+                    url={img.url || img.file_url || `/api/submissions/${currentSub.id}/images/${img.id}`}
                     alt={img.original_name}
                     className="h-full w-full object-cover transition-transform group-hover:scale-105"
                   />
@@ -1088,7 +1088,7 @@ function GradeModal({
       <ImageLightbox
         isOpen={lightboxOpen}
         images={(currentSub.images || []).map((img) => ({
-          url: `/api/submissions/${currentSub.id}/images/${img.id}`,
+          url: img.url || img.file_url || `/api/submissions/${currentSub.id}/images/${img.id}`,
           name: img.original_name,
         }))}
         initialIndex={lightboxIndex}

@@ -98,19 +98,22 @@ export default function PastDeadlinesPage() {
     }
   }
 
-  // Filter lists
+  const hasSubmission = (a: AssignmentForStudent) => {
+    return Boolean(
+      a.submission_id ||
+      a.submission_status ||
+      a.detailed_status === "SUBMITTED_LATE" ||
+      a.detailed_status === "COMPLETED_ON_TIME"
+    );
+  };
+
+  // Filter lists: ensure any existing submission (including late) is in submitted & excluded from missing
   const missingAssignments = useMemo(() => {
-    return assignments.filter((a) => {
-      const isMissing = !a.submission_status && !a.submission_id;
-      return isMissing || a.detailed_status === "OVERDUE / PENDING_LATE";
-    });
+    return assignments.filter((a) => !hasSubmission(a));
   }, [assignments]);
 
   const submittedAssignments = useMemo(() => {
-    return assignments.filter((a) => {
-      const hasSub = Boolean(a.submission_status || a.submission_id);
-      return hasSub && a.detailed_status !== "OVERDUE / PENDING_LATE";
-    });
+    return assignments.filter((a) => hasSubmission(a));
   }, [assignments]);
 
   const displayedList = useMemo(() => {
@@ -232,11 +235,12 @@ export default function PastDeadlinesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {displayedList.map((a) => {
             const skillBadge = getSkillBadge(a.title);
-            const isMissing = !a.submission_status && !a.submission_id;
+            const isSubmitted = hasSubmission(a);
+            const isMissing = !isSubmitted;
             const isLateSubmission =
               a.detailed_status === "SUBMITTED_LATE" ||
               a.submission_status === "late" ||
-              (a.submission_status && a.is_past_deadline && a.detailed_status !== "COMPLETED_ON_TIME");
+              (isSubmitted && a.is_past_deadline && a.detailed_status !== "COMPLETED_ON_TIME");
             const isCompletedOnTime =
               a.detailed_status === "COMPLETED_ON_TIME" ||
               (!isLateSubmission && (a.submission_status === "graded" || a.submission_status === "submitted"));

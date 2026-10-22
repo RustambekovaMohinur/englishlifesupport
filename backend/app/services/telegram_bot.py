@@ -27,6 +27,34 @@ from app.utils.datetimes import utcnow
 
 logger = logging.getLogger(__name__)
 
+
+def format_english_level(level: Any) -> str:
+    """Format raw enum string or value into clean human-readable title."""
+    if not level:
+        return ""
+    val = level.value if hasattr(level, "value") else str(level)
+    if "." in val:
+        val = val.split(".")[-1]
+    val = val.replace("_", " ").strip()
+    lower = val.lower()
+    if lower in ("pre intermediate", "pre-intermediate"):
+        return "Pre-Intermediate"
+    if lower in ("upper intermediate", "upper-intermediate"):
+        return "Upper-Intermediate"
+    return val.title()
+
+
+def format_group_display(group: Any) -> str:
+    """Format group name with human-readable level without raw enum syntax."""
+    if not group:
+        return "Guruh belgilanmagan"
+    lvl = format_english_level(getattr(group, "english_level", None))
+    gname = getattr(group, "name", "")
+    if lvl and lvl.lower() not in gname.lower():
+        return f"{gname} ({lvl})"
+    return gname or "Asosiy guruh"
+
+
 # Cached bot username
 _CACHED_BOT_USERNAME: str | None = None
 
@@ -96,6 +124,16 @@ async def get_bot_username() -> str:
     return _CACHED_BOT_USERNAME
 
 
+def _clean_telegram_chat_id(chat_id: str | int | Any) -> str:
+    """Safely normalizes and validates Telegram chat ID, preserving negative 64-bit supergroup IDs."""
+    if chat_id is None:
+        return ""
+    c_str = str(chat_id).strip()
+    # Remove quotes or extra spaces that may have been stored
+    c_str = c_str.strip("'\"")
+    return c_str
+
+
 async def send_telegram_message_detailed(
     chat_id: str | int,
     text: str,
@@ -105,17 +143,24 @@ async def send_telegram_message_detailed(
 ) -> tuple[bool, str]:
     """
     Sends an async message to a specified Telegram chat and returns (success: bool, detail: str).
+    Guarantees direct HTTP POST via httpx.AsyncClient with safe 64-bit chat_id string parsing.
     Logs explicit Telegram API error descriptions on failure (e.g. ChatNotFound, BotKicked).
     """
+    cleaned_chat_id = _clean_telegram_chat_id(chat_id)
+    if not cleaned_chat_id:
+        msg = f"Empty or invalid chat_id provided: {chat_id}"
+        logger.warning(msg)
+        return False, msg
+
     token = get_telegram_bot_token()
     if not token:
-        msg = f"TELEGRAM_BOT_TOKEN is not configured. Telegram message skipped for chat_id={chat_id}"
+        msg = f"TELEGRAM_BOT_TOKEN is not configured. Telegram message skipped for chat_id={cleaned_chat_id}"
         logger.warning(msg)
         return False, msg
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload: dict[str, Any] = {
-        "chat_id": str(chat_id),
+        "chat_id": cleaned_chat_id,
         "text": text,
         "parse_mode": parse_mode,
         "disable_web_page_preview": disable_web_page_preview,
@@ -135,13 +180,13 @@ async def send_telegram_message_detailed(
                 err_msg = f"Telegram API error ({err_code}): {err_desc}"
                 logger.warning(
                     "Telegram error sending to chat_id=%s: %s",
-                    chat_id,
+                    cleaned_chat_id,
                     err_msg,
                 )
                 return False, err_msg
     except Exception as ex:
         err_msg = f"Telegram dispatch exception: {ex}"
-        logger.exception("Failed to send Telegram message to chat_id=%s: %s", chat_id, ex)
+        logger.exception("Failed to send Telegram message to chat_id=%s: %s", cleaned_chat_id, ex)
         return False, err_msg
 
 
@@ -181,12 +226,46 @@ async def notify_student_assignment(chat_id: int | str, assignment_title: str, d
     return await send_telegram_message(chat_id=chat_id, text=text)
 
 
-async def notify_parent_assignment(chat_id: int | str, student_name: str, assignment_title: str, due_date: datetime, is_update: bool = False) -> bool:
-    """Notify a parent about a student's assignment."""
-    action = "Yangilangan" if is_update else "Yangi"
-    emoji = "✏️" if not is_update else "🔄"
-    text = f"{emoji} {action} topshiriq 📚 oʻquvchiga {student_name}:\n<b>{assignment_title}</b>\n⏰ Muddati: {due_date.strftime('%d.%m.%Y')}"
-    return await send_telegram_message(chat_id=chat_id, text=text)
+async def notify_parent_assignment(
+    chat_id: int | str,
+    student_name: str,
+    assignment_title: str,
+    due_date: datetime | Any = None,
+    is_update: bool = False,
+) -> bool:
+    """Notify parent bot account with personalized update mentioning child's name."""
+    if not chat_id:
+        return False
+
+    deadline_str = ""
+    if due_date:
+        try:
+            deadline_str = f"\n⏰ Muddati: {due_date.strftime('%d.%m.%Y, %H:%M') if hasattr(due_date, 'strftime') else str(due_date)}"
+        except Exception:
+            deadline_str = f"\n⏰ Muddati: {due_date}"
+
+    text = (
+        f"👨‍👩‍👧 <b>Farzandingiz [{student_name}] uchun yangi xabar</b>\n"
+        f"Topshiriq: <b>{assignment_title}</b>"
+        f"{deadline_str}\n\n"
+        "🔗 Platforma orqali topshiriqni kuzatishingiz mumkin:"
+    )
+    url = "https://englishlifesupport.vercel.app/student/parent-portal"
+    reply_markup = {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "Ota-ona portali 📱",
+                    "url": url,
+                }
+            ]
+        ]
+    }
+    return await send_telegram_message(
+        chat_id=chat_id,
+        text=text,
+        reply_markup=reply_markup,
+    )
 
 
 async def notify_group_assignment(
@@ -196,26 +275,21 @@ async def notify_group_assignment(
     assignment_id: uuid.UUID | str | None = None,
     group_chat_id: int | str | None = None,
     is_update: bool = False,
+    group_name: str | None = None,
 ) -> bool:
-    """Send group notification for a new or updated assignment with styled direct link button."""
+    """Send clean group notification when a teacher posts an assignment."""
     target_chat = chat_id if chat_id is not None else group_chat_id
     if not target_chat:
         logger.debug("notify_group_assignment called without valid chat_id")
         return False
 
-    deadline_str = "Belgilanmagan"
-    if due_date:
-        try:
-            deadline_str = due_date.strftime("%d.%m.%Y, %H:%M") if hasattr(due_date, "strftime") else str(due_date)
-        except Exception:
-            deadline_str = str(due_date)
-
-    header = "🔄 <b>Vazifa yangilandi!</b>" if is_update else "📌 <b>Yangi vazifa joylandi!</b>"
+    grp_display = group_name or "Asosiy guruh"
+    header = "🔄 <b>Topshiriq yangilandi!</b>" if is_update else "📌 <b>Yangi topshiriq!</b>"
     text = (
-        f"{header}\n\n"
-        f"📚 <b>Vazifa:</b> {assignment_title}\n"
-        f"📅 <b>Oxirgi muddat:</b> {deadline_str}\n\n"
-        "🔗 Vazifani bajarish uchun platformaga o'ting:"
+        f"{header}\n"
+        f"Sinf/Guruh: <b>{grp_display}</b>\n"
+        f"Mavzu: <b>{assignment_title}</b>\n\n"
+        "Kiring va bajaring! 🚀"
     )
     url = "https://englishlifesupport.vercel.app/student/assignments"
     reply_markup = {
@@ -537,16 +611,37 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
     )
     if is_status_cmd:
         if user_role == "student" and student_record:
-            # Student's own report
-            group_str = f"{student_record.group.name} ({student_record.group.english_level})" if student_record.group else "Guruh belgilanmagan"
-            # Compute aggregated stars for the student
+            # Student's own report with accurate stars, streak, XP, and completed count syncing with /students/me/stats
+            group_str = format_group_display(student_record.group)
             stars_stmt = select(sa.func.coalesce(sa.func.sum(Grade.stars), 0)).select_from(Grade).join(Submission).where(Submission.student_id == student_record.id)
             stars_res = await db.execute(stars_stmt)
             aggregated_stars = stars_res.scalar_one()
+
+            sub_cnt_stmt = select(sa.func.count(sa.func.distinct(Submission.assignment_id))).where(
+                Submission.student_id == student_record.id,
+                Submission.is_archived.is_(False),
+            )
+            completed_count = (await db.execute(sub_cnt_stmt)).scalar() or 0
+
+            total_asgns_count = 0
+            if student_record.group_id:
+                grp_asgns_stmt = select(sa.func.count(Assignment.id)).where(
+                    Assignment.group_id == student_record.group_id,
+                    Assignment.status == AssignmentStatus.PUBLISHED,
+                )
+                total_asgns_count = (await db.execute(grp_asgns_stmt)).scalar() or 0
+
+            stars_val = getattr(student_record, "total_stars", 0) or aggregated_stars or 0
+            streak_val = getattr(student_record, "streak", 0) or 0
+            xp_val = getattr(student_record, "total_xp", 0) or 0
+            task_str = f"{completed_count}/{total_asgns_count}" if total_asgns_count > 0 else f"{completed_count}"
+            pct_val = round((completed_count / total_asgns_count) * 100, 1) if total_asgns_count > 0 else 0.0
+
             lines = [
                 f"📊 <b>{student_record.full_name} — Shaxsiy ko'rsatkichlar</b>",
                 f"👥 Guruh: <b>{group_str}</b>",
-                f"⭐ To'plangan yulduzlar: <b>{aggregated_stars}</b> | ⚡ Faollik: <b>{student_record.total_lightning}</b>\n",
+                f"⭐ Yulduzlar: <b>{stars_val}</b> | 🔥 Streak: <b>{streak_val} kun</b>",
+                f"⚡ XP: <b>{xp_val}</b> | ✅ Bajarilgan vazifalar: <b>{task_str} ({pct_val}%)</b>\n",
             ]
             sub_stmt = (
                 select(Submission)
@@ -581,15 +676,36 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
 
         if user_role == "parent" and linked_students:
             for s in linked_students:
-                group_str = f"{s.group.name} ({s.group.english_level})" if s.group else "Guruh belgilanmagan"
-                # Compute aggregated stars for the student
+                group_str = format_group_display(s.group)
                 stars_stmt = select(sa.func.coalesce(sa.func.sum(Grade.stars), 0)).select_from(Grade).join(Submission).where(Submission.student_id == s.id)
                 stars_res = await db.execute(stars_stmt)
                 aggregated_stars = stars_res.scalar_one()
+
+                sub_cnt_stmt = select(sa.func.count(sa.func.distinct(Submission.assignment_id))).where(
+                    Submission.student_id == s.id,
+                    Submission.is_archived.is_(False),
+                )
+                completed_count = (await db.execute(sub_cnt_stmt)).scalar() or 0
+
+                total_asgns_count = 0
+                if s.group_id:
+                    grp_asgns_stmt = select(sa.func.count(Assignment.id)).where(
+                        Assignment.group_id == s.group_id,
+                        Assignment.status == AssignmentStatus.PUBLISHED,
+                    )
+                    total_asgns_count = (await db.execute(grp_asgns_stmt)).scalar() or 0
+
+                stars_val = getattr(s, "total_stars", 0) or aggregated_stars or 0
+                streak_val = getattr(s, "streak", 0) or 0
+                xp_val = getattr(s, "total_xp", 0) or 0
+                task_str = f"{completed_count}/{total_asgns_count}" if total_asgns_count > 0 else f"{completed_count}"
+                pct_val = round((completed_count / total_asgns_count) * 100, 1) if total_asgns_count > 0 else 0.0
+
                 lines = [
-                    f"📊 <b>{s.full_name} — O'qish ko'rsatkichlari</b>",
-                    f"👥 Guruh: <b>{group_str}</b>",
-                    f"⭐ To'plangan yulduzlar: <b>{aggregated_stars}</b> | ⚡ Faollik: <b>{s.total_lightning}</b>\n",
+                    f"👨‍👩‍👧 <b>Farzandingiz [{s.full_name}] — O'qish ko'rsatkichlari</b>",
+                    f"👥 Guruh: <b>{group_display}</b>" if 'group_display' in locals() else f"👥 Guruh: <b>{group_str}</b>",
+                    f"⭐ Yulduzlar: <b>{stars_val}</b> | 🔥 Streak: <b>{streak_val} kun</b>",
+                    f"⚡ XP: <b>{xp_val}</b> | ✅ Bajarilgan vazifalar: <b>{task_str} ({pct_val}%)</b>\n",
                 ]
 
                 # Query recent 5 submissions with assignment and grade

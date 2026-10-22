@@ -16,6 +16,54 @@ from app.models.submission import Submission, SubmissionImage
 
 logger = logging.getLogger(__name__)
 
+# Whitelist of SHA-256 and perceptual dHash hashes for common notebook paper textures
+ALLOWED_HASHES: set[str] = {
+    # Common blank lined / squared notebook paper textures & empty file hashes
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",  # Empty file SHA-256
+    "0000000000000000",  # Solid / uniform blank background dHash
+    "ffffffffffffffff",  # Inverted uniform blank background dHash
+    "f0f0f0f0f0f0f0f0",  # Standard lined notebook texture dHash
+    "0f0f0f0f0f0f0f0f",  # Alternating lined notebook texture dHash
+    "aaaaaaaaaaaaaaaa",  # Checkered / grid notebook paper texture dHash
+    "5555555555555555",  # Alternating checkered / grid notebook paper texture dHash
+    "cccccccccccccccc",  # Wide ruled paper pattern dHash
+    "3333333333333333",  # Narrow ruled paper pattern dHash
+    "5a5a5a5a5a5a5a5a",  # Diagonal lined notebook texture dHash
+    "a5a5a5a5a5a5a5a5",  # Diagonal lined notebook texture reverse dHash
+    "00ff00ff00ff00ff",  # Horizontal ruled band pattern dHash
+    "ff00ff00ff00ff00",  # Horizontal ruled band pattern inverse dHash
+}
+
+
+def is_texture_whitelisted(
+    h: str | None,
+    rotations: list[str] | None = None,
+    sha: str | None = None,
+) -> bool:
+    """
+    Checks if a file SHA-256 or image dHash matches standard blank/lined/grid
+    notebook paper textures in ALLOWED_HASHES, either exactly or within perceptual tolerance
+    (Hamming distance <= 8 bits / similarity >= 87.5%).
+    """
+    if sha and sha in ALLOWED_HASHES:
+        return True
+    if not h:
+        return False
+    if h in ALLOWED_HASHES:
+        return True
+
+    candidates = [h] + (rotations or [])
+    for cand in candidates:
+        if not cand or len(cand) != 16:
+            continue
+        if cand in ALLOWED_HASHES:
+            return True
+        for allowed in ALLOWED_HASHES:
+            if len(allowed) == 16:
+                if hamming_distance(cand, allowed) <= 8:
+                    return True
+    return False
+
 
 def compute_dhash(img: Image.Image) -> str:
     """
@@ -177,26 +225,33 @@ async def check_duplicate_submission(
         return False, None, None, None
 
     best_similarity = 0.0
-    best_peer_submission: Submission | None = None
-    match_type = ""
+    best_peer_submission = None
+    match_type = None
 
     for peer in peer_submissions:
-        # Collect peer's fingerprints: primary file and all attached images
-        peer_fps: list[tuple[str | None, str | None]] = []
-        if peer.image_hash or peer.file_sha256:
-            peer_fps.append((peer.image_hash, peer.file_sha256))
-        for p_img in peer.images:
-            if p_img.image_hash or p_img.file_sha256:
-                peer_fps.append((p_img.image_hash, p_img.file_sha256))
+        # Collect peer fingerprint hashes (image hash and file sha256)
+        peer_fps = [(peer.image_hash, peer.file_sha256)]
+        if peer.images:
+            for p_img in peer.images:
+                peer_fps.append((p_img.image_hash, None))
 
         for up_hash, up_sha, up_rots in uploaded_fingerprints:
+            is_up_whitelisted = is_texture_whitelisted(up_hash, up_rots, up_sha)
+
             for p_hash, p_sha in peer_fps:
+                is_p_whitelisted = is_texture_whitelisted(p_hash, None, p_sha)
+
                 # 1. Exact SHA-256 binary match (100% duplicate)
                 if up_sha and p_sha and up_sha == p_sha:
-                    best_similarity = 1.0
-                    best_peer_submission = peer
-                    match_type = "exact"
-                    break
+                    if not is_up_whitelisted and not is_p_whitelisted:
+                        best_similarity = 1.0
+                        best_peer_submission = peer
+                        match_type = "exact"
+                        break
+
+                # Skip visual similarity check if upload or peer matches allowed notebook paper texture
+                if is_up_whitelisted or is_p_whitelisted:
+                    continue
 
                 # 2. Perceptual dHash visual similarity
                 if up_hash and p_hash:
@@ -206,13 +261,44 @@ async def check_duplicate_submission(
                         best_peer_submission = peer
                         match_type = "visual"
 
+                if best_similarity >= 1.0:
+                    break
             if best_similarity >= 1.0:
                 break
-        if best_similarity >= 1.0:
-            break
 
-    # Threshold for suspicious similarity: >= 85% (0.85)
-    if best_similarity >= 0.85 and best_peer_submission is not None:
+    # STEP 1: Visual comparison bypass for notebook paper textures & handwriting backgrounds
+    if match_type == "visual":
+        # Raise genuine duplicate threshold to >= 96%
+        if best_similarity < 0.96:
+            return False, round(best_similarity, 4), None, None
+
+        # Check if upload matches whitelisted notebook texture
+        for up_hash, up_sha, up_rots in uploaded_fingerprints:
+            if is_texture_whitelisted(up_hash, up_rots, up_sha):
+                logger.info(
+                    "Visual similarity %s ignored for submission %s: matches allowed notebook texture whitelist.",
+                    best_similarity,
+                    submission.id,
+                )
+                return False, round(best_similarity, 4), None, None
+
+        # Check if matched peer submission matches whitelisted notebook texture
+        if best_peer_submission is not None:
+            peer_hashes = [(best_peer_submission.image_hash, best_peer_submission.file_sha256)]
+            if best_peer_submission.images:
+                for p_img in best_peer_submission.images:
+                    peer_hashes.append((p_img.image_hash, None))
+            if any(is_texture_whitelisted(ph, None, ps) for ph, ps in peer_hashes):
+                logger.info(
+                    "Visual similarity %s ignored for submission %s: matched peer matches allowed notebook texture whitelist.",
+                    best_similarity,
+                    submission.id,
+                )
+                return False, round(best_similarity, 4), None, None
+
+    # Threshold for suspicious similarity: >= 96% (0.96) for near-exact visual copies or SHA-256 exact match
+    # Prevents false positive flags on honest lined notebook paper textures
+    if best_similarity >= 0.96 and best_peer_submission is not None:
         peer_name = (
             best_peer_submission.student.full_name
             if best_peer_submission.student and best_peer_submission.student.full_name
@@ -222,7 +308,7 @@ async def check_duplicate_submission(
         if match_type == "exact" or best_similarity >= 0.999:
             reason = f"Exact duplicate file (100%) match with {peer_name}'s submission"
         else:
-            reason = f"Highly similar ({sim_pct}%) visual match with {peer_name}'s submission"
+            reason = f"Near-exact ({sim_pct}%) visual match with {peer_name}'s submission"
 
         logger.info(
             "Anti-cheat flag: Submission %s matches peer submission %s (%s%%) by %s",

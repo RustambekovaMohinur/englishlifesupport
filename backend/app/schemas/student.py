@@ -22,7 +22,8 @@ class StudentOut(BaseModel):
     phone: str | None = None
     telegram_username: str | None = None
     bio: str | None = None
-    avatar_url: str | None = None
+    weekly_badge: str | None = None
+    badge_expires_at: str | None = None
     is_active: bool
     approval_status: str = "approved"
     total_stars: int
@@ -156,6 +157,14 @@ class PaginatedStudents(BaseModel):
     page: int
     page_size: int
 
+class StudentStatsOut(BaseModel):
+    total_assignments: int
+    completed_assignments: int
+    completion_percentage: float | int
+    completion_percent: float | int = 0.0
+    progress_percent: float = 0.0
+
+
 
 class StudentHistoryItem(BaseModel):
     assignment_id: uuid.UUID
@@ -213,6 +222,7 @@ class PeerProfileOut(BaseModel):
     total_lightning: int = 0
     total_assignments_completed: int = 0
     total_vocabulary_completed: int = 0
+    weekly_badge: str | None = None
 
     class Config:
         from_attributes = True

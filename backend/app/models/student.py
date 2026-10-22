@@ -31,6 +31,8 @@ class StudentProfile(UUIDPKMixin, TimestampMixin, Base):
     parent_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     parent_linked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_parent_digest_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    weekly_badge: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    badge_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="student_profile")
     group: Mapped["Group | None"] = relationship(back_populates="students")

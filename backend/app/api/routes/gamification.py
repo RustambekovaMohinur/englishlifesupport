@@ -127,6 +127,26 @@ async def get_my_gamification_summary(
         .all()
     )
 
+    # Determine weekly badge if in top 3 of group
+    weekly_badge = None
+    if profile.group_id:
+        try:
+            week_start = (utcnow() - timedelta(days=utcnow().weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+            top_xp_res = await db.execute(
+                select(StudentXP.student_id, func.sum(StudentXP.amount).label("sum_xp"))
+                .join(StudentProfile, StudentProfile.id == StudentXP.student_id)
+                .where(StudentProfile.group_id == profile.group_id, StudentXP.created_at >= week_start)
+                .group_by(StudentXP.student_id)
+                .order_by(func.sum(StudentXP.amount).desc())
+                .limit(3)
+            )
+            top_xp_students = [r[0] for r in top_xp_res.all()]
+            if profile.id in top_xp_students:
+                r_idx = top_xp_students.index(profile.id) + 1
+                weekly_badge = "gold" if r_idx == 1 else ("silver" if r_idx == 2 else "bronze")
+        except Exception:
+            pass
+
     return StudentGamificationSummary(
         total_stars=profile.total_stars,
         streak=current_streak,
@@ -149,6 +169,7 @@ async def get_my_gamification_summary(
             )
             for t in txs
         ],
+        weekly_badge=weekly_badge,
     )
 
 
@@ -302,6 +323,7 @@ async def get_weekly_leaderboard(
     for idx, e in enumerate(entries_data, start=1):
         if e["is_current_user"]:
             current_student_rank = idx
+        badge = "gold" if idx == 1 else ("silver" if idx == 2 else ("bronze" if idx == 3 else None))
         ranked_entries.append(
             LeaderboardEntry(
                 rank=idx,
@@ -313,6 +335,8 @@ async def get_weekly_leaderboard(
                 streak=e["streak"],
                 completion_rate=e["completion_rate"],
                 is_current_user=e["is_current_user"],
+                badge=badge,
+                weekly_badge=badge,
             )
         )
 

@@ -146,6 +146,16 @@ def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = 
             file_size=img.file_size_bytes,
             order_index=img.order_index,
             created_at=img.created_at,
+            url=(
+                img.file_path
+                if (img.file_path and (img.file_path.startswith("http://") or img.file_path.startswith("https://")))
+                else f"/api/submissions/{sub.id}/images/{img.id}"
+            ),
+            file_url=(
+                img.file_path
+                if (img.file_path and (img.file_path.startswith("http://") or img.file_path.startswith("https://")))
+                else f"/api/submissions/{sub.id}/images/{img.id}"
+            ),
         )
         for img in (getattr(sub, "images", None) or [])
     ]
@@ -188,6 +198,7 @@ def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = 
         ),
         file_original_name=sub.file_original_name,
         images=images_out,
+        attachments=images_out,
         status=sub.status.value,
         is_late=bool(
             sub.status == SubmissionStatus.LATE
@@ -1242,28 +1253,36 @@ async def get_submission_image(
     if not img:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
 
+    # If already a full URL, redirect directly with CORS headers
+    if img.file_path and (img.file_path.startswith("http://") or img.file_path.startswith("https://")):
+        return RedirectResponse(
+            url=img.file_path,
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            headers={
+                "Cache-Control": "private, max-age=3600",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
     # Fast Path: Redirect to Backblaze B2 presigned URL for direct high-speed CDN delivery
     if redirect and img.file_path:
+        norm_key = img.file_path.replace("\\", "/").lstrip("/")
         try:
-            blob = (
-                await db.execute(
-                    select(FileBlob).where(FileBlob.file_path == img.file_path)
+            storage_service = get_storage_service()
+            if storage_service.is_configured:
+                presigned_url = await storage_service.generate_presigned_url(norm_key, expires_in=3600)
+                return RedirectResponse(
+                    url=presigned_url,
+                    status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+                    headers={
+                        "Cache-Control": "private, max-age=600",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "GET, OPTIONS",
+                        "Access-Control-Allow-Headers": "*",
+                    },
                 )
-            ).scalars().first()
-            if blob and (blob.storage_backend == "b2" or blob.storage_key):
-                storage_service = get_storage_service()
-                if storage_service.is_configured:
-                    presigned_url = await storage_service.generate_presigned_url(
-                        blob.storage_key or blob.file_path, expires_in=3600
-                    )
-                    return RedirectResponse(
-                        url=presigned_url,
-                        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-                        headers={
-                            "Cache-Control": "private, max-age=600",
-                            "Access-Control-Allow-Origin": "*",
-                        },
-                    )
         except Exception as e:
             logger.warning("B2 presigned redirect failed for image %s: %s", image_id, e)
 
@@ -1275,6 +1294,8 @@ async def get_submission_image(
         headers={
             "Cache-Control": "private, max-age=86400, immutable",
             "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
         },
     )
 

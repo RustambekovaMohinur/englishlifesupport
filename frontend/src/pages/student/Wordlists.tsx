@@ -12,8 +12,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { listWordlistSets, getWordlistSet } from "@/services/lmsService";
-import { WordlistSetBrief, WordlistSetDetail } from "@/types";
+import { listWordlistSets, getWordlistSet, getWeekendArena } from "@/services/lmsService";
+import { WordlistSetBrief, WordlistSetDetail, WeekendArenaOut } from "@/types";
 import { FlashcardDeck } from "@/components/FlashcardDeck";
 import { VocabularyQuiz } from "@/components/VocabularyQuiz";
 import { MatchPairsGame } from "@/components/MatchPairsGame";
@@ -28,9 +28,11 @@ export default function StudentWordlistsPage() {
   const [selectedSet, setSelectedSet] = useState<WordlistSetDetail | null>(null);
   const [isLoadingDeck, setIsLoadingDeck] = useState(false);
   const [studyMode, setStudyMode] = useState<StudyMode>("flashcards");
+  const [arena, setArena] = useState<WeekendArenaOut | null>(null);
 
   useEffect(() => {
     loadSets();
+    getWeekendArena().then(setArena).catch(() => null);
   }, []);
 
   const loadSets = () => {
@@ -67,6 +69,24 @@ export default function StudentWordlistsPage() {
 
   const handleExitDeck = () => {
     setSelectedSet(null);
+  };
+
+  const handleStartArena = () => {
+    if (!arena || !arena.items || arena.items.length === 0) {
+      toast.error("Bu haftalik Weekend Arena savollari hali shakllanmadi.");
+      return;
+    }
+    setSelectedSet({
+      id: "weekend-arena",
+      title: "🏆 Weekend Arena Quiz (15 Questions)",
+      group_id: null,
+      group_name: "Weekly Arena",
+      created_by: "",
+      created_at: new Date().toISOString(),
+      items: arena.items,
+    });
+    setStudyMode("quiz");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
@@ -168,6 +188,59 @@ export default function StudentWordlistsPage() {
                 </p>
               </div>
             </div>
+
+            {/* Weekend Arena Quiz Banner */}
+            {arena && arena.items && arena.items.length > 0 && (
+              <div className="relative overflow-hidden rounded-2xl p-4 sm:p-5 bg-gradient-to-br from-amber-500/10 via-purple-500/10 to-indigo-500/10 border border-amber-500/30 dark:border-amber-500/20 shadow-sm space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xl">🏆</span>
+                      <h2 className="text-base sm:text-lg font-black text-zinc-900 dark:text-white tracking-tight">
+                        Weekend Arena Quiz
+                      </h2>
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                        {arena.is_weekend ? "🔥 Ochiq (Active Now)" : "🎯 Mashq / Preview"}
+                      </span>
+                      {arena.user_attempt && (
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          ✅ Siz topshirdingiz: {arena.user_attempt.score_percentage}%
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400 max-w-2xl">
+                      Ushbu haftaning lug&apos;atlaridan avtomatik shakllantirilgan 15 ta savolli arena quizi. Eng yuqori ball va eng tez ishlagan talabalarga 🥇 Oltin, 🥈 Kumush va 🥉 Bronza nishonlari beriladi!
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleStartArena}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-amber-500 to-indigo-600 text-white shadow-md hover:opacity-95 transition-all whitespace-nowrap active:scale-95 shrink-0"
+                  >
+                    <span>🚀 Arenani Boshlash</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Top 3 Podium preview */}
+                {arena.top_performers && arena.top_performers.length > 0 && (
+                  <div className="pt-2 border-t border-amber-500/10 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-semibold text-zinc-500 dark:text-zinc-400">Bu haftalik liderlar:</span>
+                    {arena.top_performers.map((p, i) => (
+                      <span
+                        key={p.student_id}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/80 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700 font-medium text-zinc-800 dark:text-zinc-200"
+                      >
+                        <span>{i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉"}</span>
+                        <span className="font-bold">{p.student_name}</span>
+                        <span className="text-[10px] text-zinc-400">({p.score_percentage}%, {p.time_spent_seconds}s)</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Deck List */}
             {isLoading ? (

@@ -45,6 +45,7 @@ class StudentGamificationSummary(BaseModel):
     free_pass: FreePassStatus
     achievements: list[AchievementOut]
     recent_transactions: list[StarTransactionOut]
+    weekly_badge: str | None = None
 
 
 class LeaderboardEntry(BaseModel):
@@ -57,6 +58,9 @@ class LeaderboardEntry(BaseModel):
     streak: int
     completion_rate: int
     is_current_user: bool = False
+    badge: str | None = None
+    weekly_badge: str | None = None
+
 
 
 class WeeklyLeaderboardOut(BaseModel):
