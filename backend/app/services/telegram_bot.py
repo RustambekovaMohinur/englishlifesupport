@@ -411,6 +411,77 @@ async def notify_parent_submission_graded(
     )
 
 
+
+async def _calculate_student_stats(db: AsyncSession, student: StudentProfile) -> dict[str, Any]:
+    """Calculates assignment counts, completion percentage, and stars synced with /students/me/stats."""
+    active_assign_ids = set()
+    if student.group_id:
+        group_asgn_res = await db.execute(
+            select(Assignment.id).where(
+                Assignment.group_id == student.group_id,
+                Assignment.status == AssignmentStatus.PUBLISHED,
+            )
+        )
+        active_assign_ids = set(group_asgn_res.scalars().all())
+
+    if not active_assign_ids:
+        all_published_res = await db.execute(
+            select(Assignment.id).where(Assignment.status == AssignmentStatus.PUBLISHED)
+        )
+        active_assign_ids = set(all_published_res.scalars().all())
+
+    total_assignments = len(active_assign_ids)
+
+    st_sub_query = (
+        select(sa.func.count(sa.func.distinct(Submission.assignment_id)))
+        .join(StudentProfile, Submission.student_id == StudentProfile.id)
+        .where(
+            sa.or_(
+                Submission.student_id == student.id,
+                StudentProfile.user_id == student.user_id,
+            ),
+            Submission.is_archived.is_(False),
+        )
+    )
+    if active_assign_ids:
+        st_sub_query = st_sub_query.where(Submission.assignment_id.in_(active_assign_ids))
+
+    completed_assignments = (await db.execute(st_sub_query)).scalar() or 0
+    if total_assignments > 0 and completed_assignments > total_assignments:
+        completed_assignments = total_assignments
+
+    progress_percent = round((completed_assignments / total_assignments) * 100, 1) if total_assignments > 0 else 0.0
+
+    stars_stmt = (
+        select(sa.func.coalesce(sa.func.sum(Grade.stars), 0))
+        .select_from(Grade)
+        .join(Submission)
+        .where(
+            sa.or_(
+                Submission.student_id == student.id,
+                Submission.student_id.in_(
+                    select(StudentProfile.id).where(StudentProfile.user_id == student.user_id)
+                ),
+            )
+        )
+    )
+    stars_res = await db.execute(stars_stmt)
+    aggregated_stars = stars_res.scalar_one()
+
+    stars_val = getattr(student, "total_stars", 0) or aggregated_stars or 0
+    streak_val = getattr(student, "streak", 0) or 0
+    xp_val = getattr(student, "total_xp", 0) or getattr(student, "total_lightning", 0) or 0
+
+    return {
+        "total_assignments": total_assignments,
+        "completed_assignments": completed_assignments,
+        "progress_percent": progress_percent,
+        "stars": stars_val,
+        "streak": streak_val,
+        "xp": xp_val,
+    }
+
+
 async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
     """
     Processes incoming Telegram Webhook / Update object.
@@ -622,7 +693,79 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
 
     user_is_linked = user_role in ("parent", "student", "teacher")
 
-    # 2. Handle /status or button "📊 Farzandim ko'rsatkichlari" / "📊 Ko'rsatkichlarim"
+    # 2. Handle /unlink command (Clear all Telegram bindings)
+    if text.startswith("/unlink") or text.lower() in ("unlink", "/disconnect", "uzish") or "uzish" in text.lower():
+        # Clear all Telegram parent bindings for this chat_id
+        res_p = await db.execute(
+            select(StudentProfile).where(
+                (StudentProfile.parent_telegram_chat_id == str(chat_id))
+                | (StudentProfile.parent_telegram_chat_id == f"-{chat_id}")
+            )
+        )
+        for s in res_p.scalars().all():
+            s.parent_telegram_chat_id = None
+            s.parent_telegram_username = None
+            s.parent_name = None
+            s.parent_linked_at = None
+            s.last_parent_digest_sent_at = None
+
+        # Clear student profile phone / telegram bindings
+        res_s = await db.execute(
+            select(StudentProfile).where(
+                (StudentProfile.phone == str(chat_id))
+                | (StudentProfile.phone == f"+{chat_id}")
+            )
+        )
+        for s in res_s.scalars().all():
+            s.phone = None
+
+        # Clear teacher profile phone bindings
+        res_t = await db.execute(
+            select(TeacherProfile).where(
+                (TeacherProfile.phone == str(chat_id))
+                | (TeacherProfile.phone == f"+{chat_id}")
+            )
+        )
+        for t in res_t.scalars().all():
+            t.phone = None
+
+        await db.commit()
+
+        await send_telegram_message(
+            chat_id=chat_id,
+            text="✅ Barcha Telegram bog'lanishlaringiz uzildi! Yangidan bog'lanish uchun /start buyrug'ini bosing.",
+            reply_markup=REMOVE_KEYBOARD,
+        )
+        return {"ok": True, "action": "unlinked"}
+
+    # 3. Handle "ℹ️ Yordam" / /help
+    is_help_cmd = (
+        text.startswith("/help")
+        or text == "ℹ️ Yordam"
+        or text == "Yordam"
+        or "yordam" in text.lower()
+    )
+    if is_help_cmd:
+        help_text = (
+            "ℹ️ <b>English Life LMS Bot Yordam</b>\n\n"
+            "- /start — Akkauntni qayta bog'lash\n"
+            "- 📊 Ko'rsatkichlarim — Shaxsiy ball va vazifalaringizni ko'rish\n"
+            "- /unlink — Telegram profilini platformadan uzish"
+        )
+        help_kb = REMOVE_KEYBOARD
+        if user_role == "student":
+            help_kb = STUDENT_KEYBOARD
+        elif user_role == "parent":
+            help_kb = PARENT_KEYBOARD
+
+        await send_telegram_message(
+            chat_id=chat_id,
+            text=help_text,
+            reply_markup=help_kb,
+        )
+        return {"ok": True, "action": "help_sent"}
+
+    # 4. Handle /status or button "📊 Farzandim ko'rsatkichlari" / "📊 Ko'rsatkichlarim"
     is_status_cmd = (
         text == "/status"
         or text == "📊 Farzandim ko'rsatkichlari"
@@ -631,38 +774,27 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
         or "ko'rsatkich" in text.lower()
     )
     if is_status_cmd:
-        if user_role == "student" and student_record:
-            # Student's own report with accurate stars, streak, XP, and completed count syncing with /students/me/stats
-            group_str = format_group_display(student_record.group)
-            stars_stmt = select(sa.func.coalesce(sa.func.sum(Grade.stars), 0)).select_from(Grade).join(Submission).where(Submission.student_id == student_record.id)
-            stars_res = await db.execute(stars_stmt)
-            aggregated_stars = stars_res.scalar_one()
+        target_student = student_record
+        is_student_view = (text == "📊 Ko'rsatkichlarim" or user_role == "student")
 
-            sub_cnt_stmt = select(sa.func.count(sa.func.distinct(Submission.assignment_id))).where(
-                Submission.student_id == student_record.id,
-                Submission.is_archived.is_(False),
+        if is_student_view and not target_student and linked_students:
+            target_student = linked_students[0]
+
+        if target_student and (is_student_view or not linked_students or user_role == "student"):
+            group_str = format_group_display(target_student.group)
+            stats = await _calculate_student_stats(db, target_student)
+
+            task_str = (
+                f"{stats['completed_assignments']}/{stats['total_assignments']}"
+                if stats['total_assignments'] > 0
+                else f"{stats['completed_assignments']}"
             )
-            completed_count = (await db.execute(sub_cnt_stmt)).scalar() or 0
-
-            total_asgns_count = 0
-            if student_record.group_id:
-                grp_asgns_stmt = select(sa.func.count(Assignment.id)).where(
-                    Assignment.group_id == student_record.group_id,
-                    Assignment.status == AssignmentStatus.PUBLISHED,
-                )
-                total_asgns_count = (await db.execute(grp_asgns_stmt)).scalar() or 0
-
-            stars_val = getattr(student_record, "total_stars", 0) or aggregated_stars or 0
-            streak_val = getattr(student_record, "streak", 0) or 0
-            xp_val = getattr(student_record, "total_xp", 0) or 0
-            task_str = f"{completed_count}/{total_asgns_count}" if total_asgns_count > 0 else f"{completed_count}"
-            pct_val = round((completed_count / total_asgns_count) * 100, 1) if total_asgns_count > 0 else 0.0
 
             lines = [
-                f"📊 <b>{student_record.full_name} — Shaxsiy ko'rsatkichlar</b>",
+                f"📊 <b>{target_student.full_name} — Shaxsiy ko'rsatkichlar</b>",
                 f"👥 Guruh: <b>{group_str}</b>",
-                f"⭐ Yulduzlar: <b>{stars_val}</b> | 🔥 Streak: <b>{streak_val} kun</b>",
-                f"⚡ XP: <b>{xp_val}</b> | ✅ Bajarilgan vazifalar: <b>{task_str} ({pct_val}%)</b>\n",
+                f"⭐ Yulduzlar: <b>{stats['stars']}</b> | 🔥 Streak: <b>{stats['streak']} kun</b>",
+                f"⚡ XP: <b>{stats['xp']}</b> | ✅ Bajarilgan vazifalar: <b>{task_str} ({stats['progress_percent']}%)</b>\n",
             ]
             sub_stmt = (
                 select(Submission)
@@ -670,7 +802,14 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                     selectinload(Submission.assignment),
                     selectinload(Submission.grade),
                 )
-                .where(Submission.student_id == student_record.id)
+                .where(
+                    sa.or_(
+                        Submission.student_id == target_student.id,
+                        Submission.student_id.in_(
+                            select(StudentProfile.id).where(StudentProfile.user_id == target_student.user_id)
+                        ),
+                    )
+                )
                 .order_by(Submission.submitted_at.desc())
                 .limit(5)
             )
@@ -698,45 +837,34 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
         if user_role == "parent" and linked_students:
             for s in linked_students:
                 group_str = format_group_display(s.group)
-                stars_stmt = select(sa.func.coalesce(sa.func.sum(Grade.stars), 0)).select_from(Grade).join(Submission).where(Submission.student_id == s.id)
-                stars_res = await db.execute(stars_stmt)
-                aggregated_stars = stars_res.scalar_one()
-
-                sub_cnt_stmt = select(sa.func.count(sa.func.distinct(Submission.assignment_id))).where(
-                    Submission.student_id == s.id,
-                    Submission.is_archived.is_(False),
+                stats = await _calculate_student_stats(db, s)
+                task_str = (
+                    f"{stats['completed_assignments']}/{stats['total_assignments']}"
+                    if stats['total_assignments'] > 0
+                    else f"{stats['completed_assignments']}"
                 )
-                completed_count = (await db.execute(sub_cnt_stmt)).scalar() or 0
-
-                total_asgns_count = 0
-                if s.group_id:
-                    grp_asgns_stmt = select(sa.func.count(Assignment.id)).where(
-                        Assignment.group_id == s.group_id,
-                        Assignment.status == AssignmentStatus.PUBLISHED,
-                    )
-                    total_asgns_count = (await db.execute(grp_asgns_stmt)).scalar() or 0
-
-                stars_val = getattr(s, "total_stars", 0) or aggregated_stars or 0
-                streak_val = getattr(s, "streak", 0) or 0
-                xp_val = getattr(s, "total_xp", 0) or 0
-                task_str = f"{completed_count}/{total_asgns_count}" if total_asgns_count > 0 else f"{completed_count}"
-                pct_val = round((completed_count / total_asgns_count) * 100, 1) if total_asgns_count > 0 else 0.0
 
                 lines = [
                     f"👨‍👩‍👧 <b>Farzandingiz [{s.full_name}] — O'qish ko'rsatkichlari</b>",
-                    f"👥 Guruh: <b>{group_display}</b>" if 'group_display' in locals() else f"👥 Guruh: <b>{group_str}</b>",
-                    f"⭐ Yulduzlar: <b>{stars_val}</b> | 🔥 Streak: <b>{streak_val} kun</b>",
-                    f"⚡ XP: <b>{xp_val}</b> | ✅ Bajarilgan vazifalar: <b>{task_str} ({pct_val}%)</b>\n",
+                    f"👥 Guruh: <b>{group_str}</b>",
+                    f"⭐ Yulduzlar: <b>{stats['stars']}</b> | 🔥 Streak: <b>{stats['streak']} kun</b>",
+                    f"⚡ XP: <b>{stats['xp']}</b> | ✅ Bajarilgan vazifalar: <b>{task_str} ({stats['progress_percent']}%)</b>\n",
                 ]
 
-                # Query recent 5 submissions with assignment and grade
                 sub_stmt = (
                     select(Submission)
                     .options(
                         selectinload(Submission.assignment),
                         selectinload(Submission.grade),
                     )
-                    .where(Submission.student_id == s.id)
+                    .where(
+                        sa.or_(
+                            Submission.student_id == s.id,
+                            Submission.student_id.in_(
+                                select(StudentProfile.id).where(StudentProfile.user_id == s.user_id)
+                            ),
+                        )
+                    )
                     .order_by(Submission.submitted_at.desc())
                     .limit(5)
                 )
@@ -760,7 +888,6 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                 else:
                     lines.append("📝 Hozircha topshirilgan vazifalar mavjud emas.")
 
-                # Check missed assignments
                 if s.group_id:
                     missed_stmt = (
                         select(Assignment)
@@ -769,7 +896,14 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                             Assignment.status == AssignmentStatus.PUBLISHED,
                             Assignment.deadline < utcnow(),
                             ~Assignment.id.in_(
-                                select(Submission.assignment_id).where(Submission.student_id == s.id)
+                                select(Submission.assignment_id).where(
+                                    sa.or_(
+                                        Submission.student_id == s.id,
+                                        Submission.student_id.in_(
+                                            select(StudentProfile.id).where(StudentProfile.user_id == s.user_id)
+                                        ),
+                                    )
+                                )
                             ),
                         )
                         .order_by(Assignment.deadline.desc())
@@ -801,44 +935,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
         )
         return {"ok": True}
 
-    # 3. Handle /unlink
-    if text == "/unlink" or "uzish" in text.lower():
-        if not user_is_linked:
-            await send_telegram_message(
-                chat_id=chat_id,
-                text="Siz birorta ham talabaga yoki profilga ulanmagansiz.",
-                reply_markup=REMOVE_KEYBOARD,
-            )
-            return {"ok": True}
-
-        if linked_students:
-            for s in linked_students:
-                s.parent_telegram_chat_id = None
-                s.parent_telegram_username = None
-                s.parent_name = None
-                s.parent_linked_at = None
-            await db.commit()
-
-        if student_record and (student_record.phone == str(chat_id) or student_record.phone == f"+{chat_id}"):
-            student_record.phone = None
-            await db.commit()
-
-        if teacher_record and (teacher_record.phone == str(chat_id) or teacher_record.phone == f"+{chat_id}"):
-            teacher_record.phone = None
-            await db.commit()
-
-        await send_telegram_message(
-            chat_id=chat_id,
-            text=(
-                "✅ <b>Bildirishnomalar to'xtatildi.</b>\n\n"
-                "Siz hisobotlardan muvaffaqiyatli uzildingiz. Xohlagan vaqtingizda "
-                "qaytadan ulanishingiz mumkin."
-            ),
-            reply_markup=REMOVE_KEYBOARD,
-        )
-        return {"ok": True, "action": "unlinked"}
-
-    # 4. Default /start, /help, or "ℹ️ Yordam" (Role-based dynamic welcome message)
+    # 5. Default /start, or unregistered welcome message
     bot_name = await get_bot_username()
 
     if user_role == "student":
@@ -864,14 +961,14 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
         )
         keyboard = PARENT_KEYBOARD
     else:
-        # Teacher or Unregistered / Not linked yet
         welcome_text = (
             "Assalomu alaykum! 👋\n\n"
             f"Bu English Life LMS rasmiy yordamchi boti (@{bot_name}).\n\n"
             "🔗 Iltimos, platformadagi profilingizni Telegram bilan ulash uchun shaxsiy kabinetingizdagi QR-kodni skanerlang.\n\n"
             "📌 <b>Buyruqlar:</b>\n"
-            "• /unlink — Akkauntni uzish\n"
-            "• ℹ️ Yordam"
+            "- /start — Akkauntni qayta bog'lash\n"
+            "- 📊 Ko'rsatkichlarim — Shaxsiy ball va vazifalaringizni ko'rish\n"
+            "- /unlink — Telegram profilini platformadan uzish"
         )
         keyboard = REMOVE_KEYBOARD
 
