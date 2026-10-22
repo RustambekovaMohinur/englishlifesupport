@@ -334,27 +334,27 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                   )}
 
                   {/* Photo Scans / Uploaded Images */}
-                  {submission.images && submission.images.length > 0 && (
+                  {((submission.images && submission.images.length > 0) || (submission.attachments && submission.attachments.length > 0)) && (
                     <div className="space-y-2 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 p-4 bg-zinc-50/50 dark:bg-zinc-900/40">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                           <ImageIcon className="w-4 h-4 text-purple-500" />
-                          <span>Notebook Scans & Photos ({submission.images.length})</span>
+                          <span>Notebook Scans & Photos ({(submission.images || submission.attachments || []).length})</span>
                         </span>
                         <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
                           Click to enlarge
                         </span>
                       </div>
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1">
-                        {submission.images.map((img, idx) => (
+                        {(submission.images && submission.images.length > 0 ? submission.images : submission.attachments || []).map((img, idx) => (
                           <div
-                            key={img.id}
+                            key={img.id || idx}
                             onClick={() => setLightboxIndex(idx)}
                             className="aspect-square rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:opacity-90 hover:scale-[1.02] transition shadow-2xs group relative bg-black/5"
                           >
                             <AuthenticatedImage
-                              url={img.url || img.file_url || `/api/submissions/${submission.id}/images/${img.id}`}
-                              alt={`Notebook scan ${idx + 1}`}
+                              url={img.url || img.file_url || `/api/submissions/${submission.id}/files/${img.id}`}
+                              alt={img.original_name || `Notebook scan ${idx + 1}`}
                               className="w-full h-full object-cover"
                             />
                             <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
@@ -368,7 +368,8 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
 
                   {!submission.file_url &&
                     !submission.text_answer &&
-                    (!submission.images || submission.images.length === 0) && (
+                    (!submission.images || submission.images.length === 0) &&
+                    (!submission.attachments || submission.attachments.length === 0) && (
                       <div className="p-4 rounded-xl bg-zinc-100 dark:bg-zinc-800/40 text-xs text-zinc-500 text-center">
                         No direct text or attachments provided with this submission record.
                       </div>
@@ -513,12 +514,12 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
           </div>
 
           {/* Lightbox for Enlargeable Images */}
-          {submission?.images && lightboxIndex !== null && (
+          {((submission?.images && submission.images.length > 0) || (submission?.attachments && submission.attachments.length > 0)) && lightboxIndex !== null && (
             <ImageLightbox
               isOpen={lightboxIndex !== null}
-              images={submission.images.map((img, idx) => ({
-                url: img.url || img.file_url || `/api/submissions/${submission.id}/images/${img.id}`,
-                name: `Scan ${idx + 1}`,
+              images={(submission.images && submission.images.length > 0 ? submission.images : submission.attachments || []).map((img, idx) => ({
+                url: img.url || img.file_url || `/api/submissions/${submission.id}/files/${img.id}`,
+                name: img.original_name || `Scan ${idx + 1}`,
               }))}
               initialIndex={lightboxIndex}
               onClose={() => setLightboxIndex(null)}

@@ -181,12 +181,20 @@ export function AuthenticatedAudio({ url, className }: { url: string; className?
 
   useEffect(() => {
     if (!url) return;
-    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) {
+    if (url.startsWith("blob:") || url.startsWith("data:")) {
       setSrc(url);
       return;
     }
+    // If it's a direct presigned cloud URL or external CDN, use directly
+    if ((url.startsWith("http://") || url.startsWith("https://")) && !url.includes("/api/")) {
+      setSrc(url);
+      return;
+    }
+
     let objectUrl: string | null = null;
     let cancelled = false;
+
+    // Use authenticated blob fetching to stream bytes with correct mime-type & CORS
     fetchAuthenticatedBlobUrl(url)
       .then((blobUrl) => {
         objectUrl = blobUrl;
@@ -194,13 +202,33 @@ export function AuthenticatedAudio({ url, className }: { url: string; className?
         else URL.revokeObjectURL(blobUrl);
       })
       .catch(() => {
-        if (!cancelled) toast.error("Failed to load audio");
+        // Fallback to tokenized direct URL if blob fetching failed
+        if (!cancelled) {
+          const fallbackDirect = getAuthenticatedImageUrl(url);
+          setSrc(fallbackDirect);
+        }
       });
+
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [url]);
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      // Fix for WebM audio duration bug in browsers (0:00 / Infinity)
+      if (audioRef.current.duration === Infinity || isNaN(audioRef.current.duration) || audioRef.current.duration === 0) {
+        audioRef.current.currentTime = 1e101;
+        audioRef.current.ontimeupdate = () => {
+          if (audioRef.current) {
+            audioRef.current.ontimeupdate = null;
+            audioRef.current.currentTime = 0;
+          }
+        };
+      }
+    }
+  };
 
   function changeRate(rate: number) {
     setPlaybackRate(rate);
@@ -212,7 +240,14 @@ export function AuthenticatedAudio({ url, className }: { url: string; className?
   if (!src) return <p className="text-xs text-neutral-400">Loading audio...</p>;
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-      <audio ref={audioRef} controls src={src} className={className} />
+      <audio
+        ref={audioRef}
+        controls
+        preload="metadata"
+        onLoadedMetadata={handleLoadedMetadata}
+        src={src}
+        className={className}
+      />
       <div className="flex items-center gap-1 shrink-0">
         {[1.0, 1.25, 1.5, 2.0].map((rate) => (
           <button
@@ -315,6 +350,11 @@ export function ImageLightbox({
     if (currentImage.url.startsWith("blob:") || currentImage.url.startsWith("data:")) {
       setDisplayUrl(currentImage.url);
       setLoading(false);
+      return;
+    }
+
+    if ((currentImage.url.startsWith("http://") || currentImage.url.startsWith("https://")) && !currentImage.url.includes("/api/")) {
+      setDisplayUrl(currentImage.url);
       return;
     }
 

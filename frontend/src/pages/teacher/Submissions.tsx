@@ -836,18 +836,18 @@ function GradeModal({
         )}
 
         {/* Attached images from student */}
-        {currentSub.images && currentSub.images.length > 0 && (
+        {((currentSub.images && currentSub.images.length > 0) || (currentSub.attachments && currentSub.attachments.length > 0)) && (
           <div className="space-y-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 bg-zinc-50/50 dark:bg-zinc-900/50">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
-                📸 Notebook Photos & Images ({currentSub.images.length})
+                📸 Notebook Photos & Images ({(currentSub.images || currentSub.attachments || []).length})
               </span>
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Click to enlarge</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
-              {currentSub.images.map((img, idx) => (
+              {(currentSub.images && currentSub.images.length > 0 ? currentSub.images : currentSub.attachments || []).map((img, idx) => (
                 <div
-                  key={img.id}
+                  key={img.id || idx}
                   onClick={() => {
                     setLightboxIndex(idx);
                     setLightboxOpen(true);
@@ -855,8 +855,8 @@ function GradeModal({
                   className="group relative cursor-pointer overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 aspect-square hover:shadow-md transition-shadow"
                 >
                   <AuthenticatedImage
-                    url={img.url || img.file_url || `/api/submissions/${currentSub.id}/images/${img.id}`}
-                    alt={img.original_name}
+                    url={img.url || img.file_url || `/api/submissions/${currentSub.id}/files/${img.id}`}
+                    alt={img.original_name || `Notebook scan ${idx + 1}`}
                     className="h-full w-full object-cover transition-transform group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -1087,9 +1087,9 @@ function GradeModal({
 
       <ImageLightbox
         isOpen={lightboxOpen}
-        images={(currentSub.images || []).map((img) => ({
-          url: img.url || img.file_url || `/api/submissions/${currentSub.id}/images/${img.id}`,
-          name: img.original_name,
+        images={((currentSub.images && currentSub.images.length > 0 ? currentSub.images : currentSub.attachments) || []).map((img, idx) => ({
+          url: img.url || img.file_url || `/api/submissions/${currentSub.id}/files/${img.id}`,
+          name: img.original_name || `Scan ${idx + 1}`,
         }))}
         initialIndex={lightboxIndex}
         onClose={() => setLightboxOpen(false)}

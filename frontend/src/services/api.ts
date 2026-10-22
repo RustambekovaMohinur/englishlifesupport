@@ -181,20 +181,40 @@ export async function fetchAuthenticatedBlobUrl(fileUrl: string): Promise<string
       } catch {}
     }
     if (!isOurBackend) {
-      const resp = await axios.get<Blob>(fileUrl, { responseType: "blob" });
-      return URL.createObjectURL(resp.data);
+      try {
+        const resp = await axios.get<Blob>(fileUrl, { responseType: "blob" });
+        return URL.createObjectURL(resp.data);
+      } catch {
+        // Fallback to backend proxy
+      }
     }
   }
 
   const path = toApiPath(fileUrl);
-  // For submission / assignment image endpoints, pass redirect=false to stream bytes directly from backend
+  // For submission / assignment image & file endpoints, pass redirect=false to stream bytes directly from backend
   const sep = path.includes("?") ? "&" : "?";
-  const finalPath = path.includes("/images/") && !path.includes("redirect=")
-    ? `${path}${sep}redirect=false`
-    : path;
+  const needsNoRedirect = (path.includes("/images/") || path.includes("/files/") || path.includes("/file")) && !path.includes("redirect=");
+  const finalPath = needsNoRedirect ? `${path}${sep}redirect=false` : path;
 
   const { data } = await api.get<Blob>(finalPath, { responseType: "blob" });
-  return URL.createObjectURL(data);
+  let blob = data;
+  if (!blob.type || blob.type === "application/octet-stream") {
+    let deducedType = "";
+    const lower = fileUrl.toLowerCase();
+    if (lower.includes(".m4a") || lower.includes(".mp4")) deducedType = "audio/mp4";
+    else if (lower.includes(".webm")) deducedType = "audio/webm";
+    else if (lower.includes(".mp3")) deducedType = "audio/mpeg";
+    else if (lower.includes(".wav")) deducedType = "audio/wav";
+    else if (lower.includes(".ogg")) deducedType = "audio/ogg";
+    else if (lower.includes(".jpg") || lower.includes(".jpeg")) deducedType = "image/jpeg";
+    else if (lower.includes(".png")) deducedType = "image/png";
+    else if (lower.includes(".webp")) deducedType = "image/webp";
+
+    if (deducedType) {
+      blob = new Blob([data], { type: deducedType });
+    }
+  }
+  return URL.createObjectURL(blob);
 }
 
 let isRefreshing = false;

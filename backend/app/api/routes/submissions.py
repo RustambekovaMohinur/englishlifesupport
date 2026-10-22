@@ -105,6 +105,43 @@ from app.schemas.submission import (
 )
 
 
+def _detect_audio_mime_type(filename: str = "", default_mime: str = "") -> str:
+    fn = (filename or "").lower()
+    dm = (default_mime or "").lower()
+    if fn.endswith(".m4a") or "m4a" in dm or fn.endswith(".mp4"):
+        return "audio/mp4"
+    if fn.endswith(".webm") or "webm" in dm:
+        return "audio/webm"
+    if fn.endswith(".mp3") or "mp3" in dm or "mpeg" in dm:
+        return "audio/mpeg"
+    if fn.endswith(".wav") or "wav" in dm:
+        return "audio/wav"
+    if fn.endswith(".ogg") or "ogg" in dm or fn.endswith(".oga"):
+        return "audio/ogg"
+    if fn.endswith(".aac") or "aac" in dm:
+        return "audio/aac"
+    if fn.endswith(".flac") or "flac" in dm:
+        return "audio/flac"
+    return default_mime or "application/octet-stream"
+
+
+def _detect_file_mime_type(filename: str = "", default_mime: str = "") -> str:
+    fn = (filename or "").lower()
+    if fn.endswith(".jpg") or fn.endswith(".jpeg"):
+        return "image/jpeg"
+    if fn.endswith(".png"):
+        return "image/png"
+    if fn.endswith(".webp"):
+        return "image/webp"
+    if fn.endswith(".gif"):
+        return "image/gif"
+    if fn.endswith(".svg"):
+        return "image/svg+xml"
+    if fn.endswith(".pdf"):
+        return "application/pdf"
+    return _detect_audio_mime_type(filename, default_mime)
+
+
 def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = None) -> SubmissionOut:
     grade_out = None
     if sub.grade:
@@ -138,27 +175,38 @@ def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = 
         )
         for c in (getattr(sub, "comments", None) or [])
     ]
-    images_out = [
-        SubmissionImageOut(
-            id=img.id,
-            file_path=img.file_path,
-            original_name=img.file_original_name,
-            file_size=img.file_size_bytes,
-            order_index=img.order_index,
-            created_at=img.created_at,
-            url=(
-                img.file_path
-                if (img.file_path and (img.file_path.startswith("http://") or img.file_path.startswith("https://")))
-                else f"/api/submissions/{sub.id}/images/{img.id}"
-            ),
-            file_url=(
-                img.file_path
-                if (img.file_path and (img.file_path.startswith("http://") or img.file_path.startswith("https://")))
-                else f"/api/submissions/{sub.id}/images/{img.id}"
-            ),
+    storage_svc = None
+    try:
+        storage_svc = get_storage_service()
+    except Exception:
+        pass
+
+    images_out = []
+    for img in (getattr(sub, "images", None) or []):
+        img_resolved_url = None
+        if img.file_path and (img.file_path.startswith("http://") or img.file_path.startswith("https://")):
+            img_resolved_url = img.file_path
+        elif img.file_path and storage_svc and getattr(storage_svc, "is_configured", False):
+            try:
+                img_resolved_url = storage_svc._sync_generate_presigned_url(img.file_path, expires_in=7200)
+            except Exception:
+                img_resolved_url = None
+
+        fallback_endpoint = f"/api/submissions/{sub.id}/images/{img.id}"
+        final_url = img_resolved_url or fallback_endpoint
+
+        images_out.append(
+            SubmissionImageOut(
+                id=img.id,
+                file_path=img.file_path or "",
+                original_name=img.file_original_name or "scan.jpg",
+                file_size=img.file_size_bytes or 0,
+                order_index=img.order_index or 0,
+                created_at=img.created_at,
+                url=final_url,
+                file_url=final_url,
+            )
         )
-        for img in (getattr(sub, "images", None) or [])
-    ]
     ai_fb = getattr(sub, "ai_feedback", None)
     ai_feedback_out = None
     if ai_fb is not None:
@@ -184,6 +232,18 @@ def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = 
     if getattr(sub, "duplicate_of", None) and sub.duplicate_of.student:
         orig_student_name = sub.duplicate_of.student.full_name
 
+    primary_file_url = None
+    if sub.file_path:
+        if sub.file_path.startswith("http://") or sub.file_path.startswith("https://"):
+            primary_file_url = sub.file_path
+        elif storage_svc and getattr(storage_svc, "is_configured", False):
+            try:
+                primary_file_url = storage_svc._sync_generate_presigned_url(sub.file_path, expires_in=7200)
+            except Exception:
+                primary_file_url = None
+        if not primary_file_url:
+            primary_file_url = f"/api/submissions/{sub.id}/file"
+
     return SubmissionOut(
         id=sub.id,
         assignment_id=sub.assignment_id,
@@ -191,11 +251,7 @@ def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = 
         student_id=sub.student_id,
         student_name=sub.student.full_name if sub.student else "",
         text_answer=sub.text_answer,
-        file_url=(
-            sub.file_path
-            if (sub.file_path and (sub.file_path.startswith("http://") or sub.file_path.startswith("https://")))
-            else (f"/api/submissions/{sub.id}/file" if sub.file_path else None)
-        ),
+        file_url=primary_file_url,
         file_original_name=sub.file_original_name,
         images=images_out,
         attachments=images_out,
@@ -921,9 +977,7 @@ async def download_submission_file(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Streams the stored file back. Authorization: the owning student, or the
-    teacher, may access it - nobody else, regardless of URL guessing (file
-    paths are random UUIDs, but we still enforce ownership server-side).
+    Streams the stored file back with explicit MIME types, CORS, and byte-range support.
     """
     submission = await _get_submission_or_404(submission_id, db)
     await _authorize_submission_access(submission, current_user, db)
@@ -931,14 +985,36 @@ async def download_submission_file(
     if not submission.file_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This submission has no file")
 
-    if submission.file_path.startswith("http://") or submission.file_path.startswith("https://"):
-        return RedirectResponse(submission.file_path, status_code=307)
+    media_type = _detect_audio_mime_type(
+        filename=submission.file_original_name or "",
+        default_mime=submission.file_content_type or "",
+    )
 
-    absolute_path = await resolve_submission_file_async(submission.file_path, db=db, fallback_name=submission.file_original_name)
+    if submission.file_path.startswith("http://") or submission.file_path.startswith("https://"):
+        return RedirectResponse(
+            url=submission.file_path,
+            status_code=307,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+
+    absolute_path = await resolve_submission_file_async(
+        submission.file_path, db=db, fallback_name=submission.file_original_name
+    )
     return FileResponse(
         path=absolute_path,
-        media_type=submission.file_content_type or "application/octet-stream",
+        media_type=media_type,
         filename=submission.file_original_name or "submission",
+        headers={
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Cache-Control": "private, max-age=86400",
+        },
     )
 
 
@@ -1230,6 +1306,7 @@ async def delete_submission_image(
 
 
 @router.get("/{submission_id}/images/{image_id}")
+@router.get("/{submission_id}/files/{image_id}")
 async def get_submission_image(
     submission_id: uuid.UUID,
     image_id: uuid.UUID,
@@ -1250,51 +1327,58 @@ async def get_submission_image(
             )
         )
     ).scalars().first()
-    if not img:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+    target_path = img.file_path if img else submission.file_path
+    orig_name = img.file_original_name if img else submission.file_original_name
+    content_type = img.file_content_type if img else submission.file_content_type
+
+    if not target_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
 
     # If already a full URL, redirect directly with CORS headers
-    if img.file_path and (img.file_path.startswith("http://") or img.file_path.startswith("https://")):
+    if target_path.startswith("http://") or target_path.startswith("https://"):
         return RedirectResponse(
-            url=img.file_path,
+            url=target_path,
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             headers={
                 "Cache-Control": "private, max-age=3600",
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
                 "Access-Control-Allow-Headers": "*",
             },
         )
 
     # Fast Path: Redirect to Backblaze B2 presigned URL for direct high-speed CDN delivery
-    if redirect and img.file_path:
-        norm_key = img.file_path.replace("\\", "/").lstrip("/")
+    if redirect:
+        norm_key = target_path.replace("\\", "/").lstrip("/")
         try:
             storage_service = get_storage_service()
-            if storage_service.is_configured:
-                presigned_url = await storage_service.generate_presigned_url(norm_key, expires_in=3600)
+            if getattr(storage_service, "is_configured", False):
+                presigned_url = await storage_service.generate_presigned_url(norm_key, expires_in=7200)
                 return RedirectResponse(
                     url=presigned_url,
                     status_code=status.HTTP_307_TEMPORARY_REDIRECT,
                     headers={
                         "Cache-Control": "private, max-age=600",
                         "Access-Control-Allow-Origin": "*",
-                        "Access-Control-Allow-Methods": "GET, OPTIONS",
+                        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
                         "Access-Control-Allow-Headers": "*",
                     },
                 )
         except Exception as e:
-            logger.warning("B2 presigned redirect failed for image %s: %s", image_id, e)
+            logger.warning("B2 presigned redirect failed for attachment %s: %s", image_id, e)
 
-    path = await resolve_submission_file_async(img.file_path, db=db, fallback_name=img.file_original_name)
+    path = await resolve_submission_file_async(target_path, db=db, fallback_name=orig_name)
+    media_type = _detect_file_mime_type(orig_name or "", content_type or "")
     return FileResponse(
         path=path,
-        media_type=img.file_content_type or "image/jpeg",
-        filename=img.file_original_name,
+        media_type=media_type,
+        filename=orig_name or "attachment",
         headers={
+            "Accept-Ranges": "bytes",
             "Cache-Control": "private, max-age=86400, immutable",
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
             "Access-Control-Allow-Headers": "*",
         },
     )
@@ -1659,13 +1743,17 @@ async def ai_evaluate_speaking_submission_route(
     if sub.assignment and sub.assignment.description:
         prompt_topic += f"\n{sub.assignment.description}"
 
-    from app.services.ai_speaking_examiner import evaluate_speaking_submission
-    eval_result = await evaluate_speaking_submission(
-        audio_bytes=audio_bytes,
-        filename=filename,
-        mime_type=mime,
-        prompt_topic=prompt_topic,
-    )
+    from app.services.ai_speaking_examiner import evaluate_speaking_submission, _evaluate_speaking_locally
+    try:
+        eval_result = await evaluate_speaking_submission(
+            audio_bytes=audio_bytes,
+            filename=filename,
+            mime_type=mime,
+            prompt_topic=prompt_topic,
+        )
+    except Exception as exc:
+        logger.warning("Gemini AI speaking evaluation exception (%s); using local heuristic fallback.", exc)
+        eval_result = _evaluate_speaking_locally(audio_bytes, filename, mime, prompt_topic)
 
     sub.audio_transcript = eval_result.get("transcript")
     sub.speaking_metrics_json = json.dumps({
