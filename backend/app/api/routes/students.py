@@ -808,11 +808,7 @@ async def get_student_history(
         assignments = assignments_res.scalars().all()
 
         current_cycle = getattr(grp, "current_cycle", 1) or 1
-        cycle_matching = [
-            a for a in assignments
-            if a.status == AssignmentStatus.PUBLISHED and (getattr(a, "cycle_number", 1) or 1) == current_cycle
-        ]
-        active_assignments_list = cycle_matching if len(cycle_matching) > 0 else [
+        active_assignments_list = [
             a for a in assignments if a.status == AssignmentStatus.PUBLISHED
         ]
         active_assignment_ids = {a.id for a in active_assignments_list}

@@ -216,16 +216,19 @@ export function AuthenticatedAudio({ url, className }: { url: string; className?
   }, [url]);
 
   const handleLoadedMetadata = () => {
-    if (audioRef.current) {
-      // Fix for WebM audio duration bug in browsers (0:00 / Infinity)
-      if (audioRef.current.duration === Infinity || isNaN(audioRef.current.duration) || audioRef.current.duration === 0) {
-        audioRef.current.currentTime = 1e101;
-        audioRef.current.ontimeupdate = () => {
-          if (audioRef.current) {
-            audioRef.current.ontimeupdate = null;
-            audioRef.current.currentTime = 0;
-          }
-        };
+    const el = audioRef.current;
+    if (!el) return;
+    // Fix for WebM audio duration bug in browsers (Infinity or NaN)
+    if (el.duration === Infinity || isNaN(el.duration)) {
+      const onTimeUpdate = () => {
+        el.removeEventListener("timeupdate", onTimeUpdate);
+        el.currentTime = 0;
+      };
+      el.addEventListener("timeupdate", onTimeUpdate);
+      try {
+        el.currentTime = 1e101;
+      } catch {
+        el.removeEventListener("timeupdate", onTimeUpdate);
       }
     }
   };
@@ -243,8 +246,10 @@ export function AuthenticatedAudio({ url, className }: { url: string; className?
       <audio
         ref={audioRef}
         controls
-        preload="metadata"
+        preload="auto"
         onLoadedMetadata={handleLoadedMetadata}
+        onDurationChange={handleLoadedMetadata}
+        onCanPlay={handleLoadedMetadata}
         src={src}
         className={className}
       />
@@ -353,6 +358,12 @@ export function ImageLightbox({
       return;
     }
 
+    if (imageBlobCache.has(currentImage.url)) {
+      setDisplayUrl(imageBlobCache.get(currentImage.url)!);
+      setLoading(false);
+      return;
+    }
+
     if ((currentImage.url.startsWith("http://") || currentImage.url.startsWith("https://")) && !currentImage.url.includes("/api/")) {
       setDisplayUrl(currentImage.url);
       return;
@@ -402,13 +413,20 @@ export function ImageLightbox({
       setTriedBlobFallback(true);
       fetchAuthenticatedBlobUrl(currentImage.url)
         .then((blobUrl) => {
+          imageBlobCache.set(currentImage.url, blobUrl);
           setDisplayUrl(blobUrl);
           setLoading(false);
           setHasError(false);
         })
         .catch(() => {
-          setHasError(true);
-          setLoading(false);
+          const directUrl = getAuthenticatedImageUrl(currentImage.url);
+          if (directUrl && directUrl !== displayUrl) {
+            setDisplayUrl(directUrl);
+            setLoading(false);
+          } else {
+            setHasError(true);
+            setLoading(false);
+          }
         });
     } else {
       setHasError(true);

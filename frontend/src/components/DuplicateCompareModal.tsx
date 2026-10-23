@@ -410,7 +410,31 @@ export default function DuplicateCompareModal({
       {/* Lightbox for full image viewing */}
       <ImageLightbox
         isOpen={Boolean(activeLightboxImg)}
-        images={activeLightboxImg ? [{ url: activeLightboxImg, name: "Homework comparison enlarged" }] : []}
+        images={
+          activeLightboxImg
+            ? [
+                ...(data?.current.image_urls || []).map((u, i) => ({
+                  url: u,
+                  name: `${data?.current.student_name || "Current Student"} - Scan ${i + 1}`,
+                })),
+                ...(data?.original.image_urls || []).map((u, i) => ({
+                  url: u,
+                  name: `${data?.original.student_name || "Original Student"} - Scan ${i + 1}`,
+                })),
+              ].filter((img, idx, arr) => arr.findIndex((x) => x.url === img.url) === idx)
+            : []
+        }
+        initialIndex={
+          activeLightboxImg
+            ? Math.max(
+                0,
+                [
+                  ...(data?.current.image_urls || []),
+                  ...(data?.original.image_urls || []),
+                ].findIndex((u) => u === activeLightboxImg)
+              )
+            : 0
+        }
         onClose={() => setActiveLightboxImg(null)}
       />
     </div>

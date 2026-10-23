@@ -242,13 +242,8 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
     now_dt = utcnow()
 
     # Dynamic Proportional Calculation Engine:
-    # N = count of active, unarchived assignments where assignment.group_id == group_id and assignment.cycle == group.current_cycle and assignment.status == AssignmentStatus.PUBLISHED.
-    # Defensive fallback: if no assignments match current_cycle, include all published assignments for the cohort
-    cycle_assignments = [
-        a for a in assignments
-        if a.status == AssignmentStatus.PUBLISHED and (getattr(a, "cycle_number", 1) or 1) == current_cycle
-    ]
-    active_assignments = cycle_assignments if len(cycle_assignments) > 0 else [
+    # Count of all active, published assignments for the cohort/group
+    active_assignments = [
         a for a in assignments
         if a.status == AssignmentStatus.PUBLISHED
     ]
@@ -272,13 +267,9 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
             )
             .order_by(Submission.submitted_at.desc(), Submission.id.desc())
         )
-        assignment_map = {a.id: a for a in assignments}
         for sub in subs_res.scalars().all():
-            target_assign = assignment_map.get(sub.assignment_id)
-            target_cycle = (getattr(target_assign, "cycle_number", 1) or 1) if target_assign else 1
-            if (getattr(sub, "cycle_number", 1) or 1) == target_cycle:
-                if (sub.assignment_id, sub.student_id) not in submissions_map:
-                    submissions_map[(sub.assignment_id, sub.student_id)] = sub
+            if (sub.assignment_id, sub.student_id) not in submissions_map:
+                submissions_map[(sub.assignment_id, sub.student_id)] = sub
 
         from app.models.gamification import TaskLockOverride
         ov_res = await db.execute(

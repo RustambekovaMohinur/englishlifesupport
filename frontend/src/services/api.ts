@@ -185,7 +185,8 @@ export async function fetchAuthenticatedBlobUrl(fileUrl: string): Promise<string
         const resp = await axios.get<Blob>(fileUrl, { responseType: "blob" });
         return URL.createObjectURL(resp.data);
       } catch {
-        // Fallback to backend proxy
+        // Direct browser can render external presigned media tag without CORS fetch
+        return fileUrl;
       }
     }
   }
@@ -196,20 +197,25 @@ export async function fetchAuthenticatedBlobUrl(fileUrl: string): Promise<string
   const needsNoRedirect = (path.includes("/images/") || path.includes("/files/") || path.includes("/file")) && !path.includes("redirect=");
   const finalPath = needsNoRedirect ? `${path}${sep}redirect=false` : path;
 
-  const { data } = await api.get<Blob>(finalPath, { responseType: "blob" });
+  const { data, headers } = await api.get<Blob>(finalPath, { responseType: "blob" });
   let blob = data;
-  if (!blob.type || blob.type === "application/octet-stream") {
-    let deducedType = "";
-    const lower = fileUrl.toLowerCase();
-    if (lower.includes(".m4a") || lower.includes(".mp4")) deducedType = "audio/mp4";
-    else if (lower.includes(".webm")) deducedType = "audio/webm";
-    else if (lower.includes(".mp3")) deducedType = "audio/mpeg";
-    else if (lower.includes(".wav")) deducedType = "audio/wav";
-    else if (lower.includes(".ogg")) deducedType = "audio/ogg";
-    else if (lower.includes(".jpg") || lower.includes(".jpeg")) deducedType = "image/jpeg";
-    else if (lower.includes(".png")) deducedType = "image/png";
-    else if (lower.includes(".webp")) deducedType = "image/webp";
-
+  const rawContentType = headers?.["content-type"] || headers?.["Content-Type"] || blob.type;
+  const contentType = typeof rawContentType === "string" ? rawContentType : "";
+  if (!blob.type || blob.type === "application/octet-stream" || !blob.type.includes("/")) {
+    let deducedType = contentType && contentType !== "application/octet-stream" ? contentType : "";
+    const disp = typeof headers?.["content-disposition"] === "string" ? headers["content-disposition"] : "";
+    const lower = (fileUrl + " " + disp).toLowerCase();
+    if (!deducedType) {
+      if (lower.includes(".m4a") || lower.includes(".mp4")) deducedType = "audio/mp4";
+      else if (lower.includes(".webm")) deducedType = "audio/webm";
+      else if (lower.includes(".mp3")) deducedType = "audio/mpeg";
+      else if (lower.includes(".wav")) deducedType = "audio/wav";
+      else if (lower.includes(".ogg")) deducedType = "audio/ogg";
+      else if (lower.includes(".jpg") || lower.includes(".jpeg")) deducedType = "image/jpeg";
+      else if (lower.includes(".png")) deducedType = "image/png";
+      else if (lower.includes(".webp")) deducedType = "image/webp";
+      else if (lower.includes("audio") || fileUrl.includes("/file")) deducedType = "audio/mp4";
+    }
     if (deducedType) {
       blob = new Blob([data], { type: deducedType });
     }

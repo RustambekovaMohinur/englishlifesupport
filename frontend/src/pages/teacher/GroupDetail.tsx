@@ -504,8 +504,8 @@ export default function GroupDetailPage() {
                     (a.completion_percentage >= 100 || (a as any).has_submission)
                 ).length;
                 const completedCount =
-                  student.completed_cycle_count ??
                   student.completed_assignments_count ??
+                  student.completed_cycle_count ??
                   activeCompleted;
                 const totalCount =
                   unifiedTotalActiveTasks > 0
@@ -648,8 +648,8 @@ export default function GroupDetailPage() {
                 (a.completion_percentage >= 100 || (a as any).has_submission)
             ).length;
             const completedCount =
-              student.completed_cycle_count ??
               student.completed_assignments_count ??
+              student.completed_cycle_count ??
               activeCompleted;
             const totalCount =
               unifiedTotalActiveTasks > 0

@@ -973,6 +973,7 @@ async def trigger_ai_evaluation(
 @router.get("/{submission_id}/file")
 async def download_submission_file(
     submission_id: uuid.UUID,
+    redirect: bool = Query(True, description="Whether to redirect to cloud storage or stream directly"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -985,10 +986,25 @@ async def download_submission_file(
     if not submission.file_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This submission has no file")
 
+    test_name = f"{submission.file_original_name or ''} {submission.file_path or ''}"
     media_type = _detect_audio_mime_type(
-        filename=submission.file_original_name or "",
+        filename=test_name,
         default_mime=submission.file_content_type or "",
     )
+    if not media_type or media_type == "application/octet-stream":
+        fn_lower = test_name.lower()
+        if ".m4a" in fn_lower or ".mp4" in fn_lower:
+            media_type = "audio/mp4"
+        elif ".webm" in fn_lower:
+            media_type = "audio/webm"
+        elif ".mp3" in fn_lower:
+            media_type = "audio/mpeg"
+        elif ".wav" in fn_lower:
+            media_type = "audio/wav"
+        elif ".ogg" in fn_lower:
+            media_type = "audio/ogg"
+        else:
+            media_type = "audio/mp4"
 
     if submission.file_path.startswith("http://") or submission.file_path.startswith("https://"):
         return RedirectResponse(
@@ -1000,6 +1016,25 @@ async def download_submission_file(
                 "Access-Control-Allow-Headers": "*",
             },
         )
+
+    if redirect:
+        norm_key = submission.file_path.replace("\\", "/").lstrip("/")
+        try:
+            storage_service = get_storage_service()
+            if getattr(storage_service, "is_configured", False):
+                presigned_url = await storage_service.generate_presigned_url(norm_key, expires_in=7200)
+                return RedirectResponse(
+                    url=presigned_url,
+                    status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+                    headers={
+                        "Cache-Control": "private, max-age=600",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                        "Access-Control-Allow-Headers": "*",
+                    },
+                )
+        except Exception as e:
+            logger.warning("Presigned redirect failed for submission file %s: %s", submission_id, e)
 
     absolute_path = await resolve_submission_file_async(
         submission.file_path, db=db, fallback_name=submission.file_original_name
@@ -1402,14 +1437,41 @@ async def compare_duplicate_submission(
     orig = await _get_submission_or_404(sub.duplicate_of_submission_id, db)
 
     def _build_compare_item(s: Submission) -> SubmissionCompareItem:
+        storage_svc = None
+        try:
+            storage_svc = get_storage_service()
+        except Exception:
+            pass
+
         img_urls = []
         for im in (getattr(s, "images", None) or []):
-            img_urls.append(f"/api/submissions/{s.id}/images/{im.id}")
-        file_url = (
-            s.file_path
-            if (s.file_path and (s.file_path.startswith("http://") or s.file_path.startswith("https://")))
-            else (f"/api/submissions/{s.id}/file" if s.file_path else None)
-        )
+            img_resolved_url = None
+            if im.file_path and (im.file_path.startswith("http://") or im.file_path.startswith("https://")):
+                img_resolved_url = im.file_path
+            elif im.file_path and storage_svc and getattr(storage_svc, "is_configured", False):
+                try:
+                    img_resolved_url = storage_svc._sync_generate_presigned_url(im.file_path, expires_in=7200)
+                except Exception:
+                    img_resolved_url = None
+            img_urls.append(img_resolved_url or f"/api/submissions/{s.id}/images/{im.id}")
+
+        file_url = None
+        if s.file_path:
+            if s.file_path.startswith("http://") or s.file_path.startswith("https://"):
+                file_url = s.file_path
+            elif storage_svc and getattr(storage_svc, "is_configured", False):
+                try:
+                    file_url = storage_svc._sync_generate_presigned_url(s.file_path, expires_in=7200)
+                except Exception:
+                    file_url = None
+            file_url = file_url or f"/api/submissions/{s.id}/file"
+
+        # If image_urls is empty but file is an image, include in image_urls as well
+        if not img_urls and s.file_path:
+            norm_p = (s.file_original_name or s.file_path or "").lower()
+            if any(norm_p.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".heic"]):
+                img_urls.append(file_url)
+
         return SubmissionCompareItem(
             submission_id=s.id,
             student_id=s.student_id,
@@ -1745,12 +1807,17 @@ async def ai_evaluate_speaking_submission_route(
 
     from app.services.ai_speaking_examiner import evaluate_speaking_submission, _evaluate_speaking_locally
     try:
-        eval_result = await evaluate_speaking_submission(
-            audio_bytes=audio_bytes,
-            filename=filename,
-            mime_type=mime,
-            prompt_topic=prompt_topic,
-        )
+        try:
+            eval_result = await evaluate_speaking_submission(
+                audio_bytes=audio_bytes,
+                filename=filename,
+                mime_type=mime,
+                prompt_topic=prompt_topic,
+            )
+        except Exception as e:
+            logger.warning("Error during speaking evaluation call (%s); falling back to local heuristics.", e)
+            from app.services.ai_speaking_examiner import _evaluate_speaking_locally
+            eval_result = _evaluate_speaking_locally(audio_bytes, filename, mime, prompt_topic)
     except Exception as exc:
         logger.warning("Gemini AI speaking evaluation exception (%s); using local heuristic fallback.", exc)
         eval_result = _evaluate_speaking_locally(audio_bytes, filename, mime, prompt_topic)
@@ -1804,12 +1871,17 @@ async def approve_speaking_grade_route(
             prompt_topic += f"\n{sub.assignment.description}"
 
         from app.services.ai_speaking_examiner import evaluate_speaking_submission
-        eval_result = await evaluate_speaking_submission(
-            audio_bytes=audio_bytes,
-            filename=filename,
-            mime_type=mime,
-            prompt_topic=prompt_topic,
-        )
+        try:
+            eval_result = await evaluate_speaking_submission(
+                audio_bytes=audio_bytes,
+                filename=filename,
+                mime_type=mime,
+                prompt_topic=prompt_topic,
+            )
+        except Exception as e:
+            logger.warning("Error during speaking evaluation call (%s); falling back to local heuristics.", e)
+            from app.services.ai_speaking_examiner import _evaluate_speaking_locally
+            eval_result = _evaluate_speaking_locally(audio_bytes, filename, mime, prompt_topic)
         sub.audio_transcript = eval_result.get("transcript")
         sub.speaking_metrics_json = json.dumps({
             "words_count": eval_result.get("words_count", 0),
