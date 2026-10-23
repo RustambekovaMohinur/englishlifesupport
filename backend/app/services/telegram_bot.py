@@ -600,6 +600,44 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             elif clean_token.lower().startswith("parent-"):
                 clean_token = clean_token[7:].strip()
 
+            # Check link_teacher_ prefix
+            if clean_token.lower().startswith("link_teacher_"):
+                teacher_raw_id = clean_token[13:].strip()
+                try:
+                    t_uuid = uuid.UUID(teacher_raw_id)
+                    res_t = await db.execute(select(TeacherProfile).where(TeacherProfile.id == t_uuid))
+                    t_prof = res_t.scalar_one_or_none()
+                    if t_prof:
+                        t_prof.phone = str(chat_id)
+                        await db.commit()
+                        await send_telegram_message(
+                            chat_id=chat_id,
+                            text=f"✅ Hurmatli <b>{t_prof.full_name}</b>, Telegram hisobingiz o'qituvchi profilingizga muvaffaqiyatli bog'landi!",
+                            reply_markup=REMOVE_KEYBOARD,
+                        )
+                        return {"ok": True, "action": "teacher_linked"}
+                except Exception as e:
+                    logger.warning("Teacher link error: %s", e)
+
+            # Check link_student_ prefix
+            elif clean_token.lower().startswith("link_student_"):
+                st_raw_id = clean_token[13:].strip()
+                try:
+                    s_uuid = uuid.UUID(st_raw_id)
+                    res_s = await db.execute(select(StudentProfile).where(StudentProfile.id == s_uuid))
+                    s_prof = res_s.scalar_one_or_none()
+                    if s_prof:
+                        s_prof.phone = str(chat_id)
+                        await db.commit()
+                        await send_telegram_message(
+                            chat_id=chat_id,
+                            text=f"✅ Hurmatli <b>{s_prof.full_name}</b>, Telegram hisobingiz o'quvchi profilingizga muvaffaqiyatli bog'landi!",
+                            reply_markup=STUDENT_KEYBOARD,
+                        )
+                        return {"ok": True, "action": "student_linked"}
+                except Exception as e:
+                    logger.warning("Student link error: %s", e)
+
             student: StudentProfile | None = None
             # A. Try parsing as UUID
             try:
@@ -662,53 +700,56 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             )
             return {"ok": True, "action": "parent_linked", "student_id": str(student.id)}
 
-    # Check role and linked identity in database
+    # Check role and linked identity strictly by matching chat_id
+    str_chat_id = str(chat_id).strip()
+
     # 1) Check if user is linked as Parent
     res_parent = await db.execute(
         select(StudentProfile)
         .options(selectinload(StudentProfile.group))
-        .where(StudentProfile.parent_telegram_chat_id == str(chat_id))
+        .where(
+            (StudentProfile.parent_telegram_chat_id == str_chat_id)
+            | (StudentProfile.parent_telegram_chat_id == f"-{str_chat_id}")
+        )
     )
     linked_students = res_parent.scalars().all()
 
-    # 2) Check if user is linked as Student (via student profile phone or matching username/chat_id)
+    # 2) Check if user is linked as Student (strictly by chat_id)
     student_record: StudentProfile | None = None
     res_student = await db.execute(
         select(StudentProfile)
         .options(selectinload(StudentProfile.group))
         .where(
-            (StudentProfile.phone == str(chat_id))
-            | (StudentProfile.phone == f"+{chat_id}")
-            | (StudentProfile.phone == (username or "___none___"))
-            | (StudentProfile.phone == f"@{username}" if username else False)
+            (StudentProfile.phone == str_chat_id)
+            | (StudentProfile.phone == f"+{str_chat_id}")
         )
     )
     student_record = res_student.scalars().first()
 
-    # 3) Check if user is linked as Teacher (via teacher profile phone or matching username/chat_id)
+    # 3) Check if user is linked as Teacher (strictly by chat_id)
     teacher_record: TeacherProfile | None = None
     res_teacher = await db.execute(
         select(TeacherProfile)
         .where(
-            (TeacherProfile.phone == str(chat_id))
-            | (TeacherProfile.phone == f"+{chat_id}")
-            | (TeacherProfile.phone == (username or "___none___"))
-            | (TeacherProfile.phone == f"@{username}" if username else False)
+            (TeacherProfile.phone == str_chat_id)
+            | (TeacherProfile.phone == f"+{str_chat_id}")
         )
     )
     teacher_record = res_teacher.scalars().first()
 
     # Determine user role
     user_role: str = "unregistered"
-    display_name: str = parent_name
+    display_name: str = ""
     if linked_students:
         user_role = "parent"
+        first_child = linked_students[0]
+        display_name = first_child.parent_name or parent_name or first_child.full_name
     elif student_record:
         user_role = "student"
-        display_name = student_record.full_name or parent_name
+        display_name = student_record.full_name or ""
     elif teacher_record:
         user_role = "teacher"
-        display_name = teacher_record.full_name or parent_name
+        display_name = teacher_record.full_name or ""
 
     user_is_linked = user_role in ("parent", "student", "teacher")
 
@@ -947,17 +988,17 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
         await send_telegram_message(
             chat_id=chat_id,
             text=(
-                "ℹ️ <b>Siz hali birorta ham akkauntga ulanmagansiz.</b>\n\n"
-                "Platformadagi profilingiz orqali Telegram botga ulanish havolasini oching."
+                "Assalomu alaykum! 👋\n"
+                "English Life LMS Botiga xush kelibsiz.\n\n"
+                "Sizning Telegram hisobingiz platformaga hali bog'lanmagan.\n\n"
+                "Bog'lanish uchun platformadan O'quvchi/Ota-ona kodingizni kiriting yoki shaxsiy kabinetingizdan 'Link Telegram' tugmasini bosing."
             ),
             reply_markup=REMOVE_KEYBOARD,
         )
         return {"ok": True}
 
     # 5. Default /start, or unregistered welcome message
-    bot_name = await get_bot_username()
-
-    if user_role == "student":
+    if user_role == "student" and display_name:
         welcome_text = (
             f"Assalomu alaykum, {display_name}! 👋\n\n"
             "Bu English Life LMS o'quvchi yordamchi boti.\n\n"
@@ -968,7 +1009,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             "• ℹ️ Yordam — Botdan foydalanish yo'riqnomasi"
         )
         keyboard = STUDENT_KEYBOARD
-    elif user_role == "parent":
+    elif user_role == "parent" and display_name:
         welcome_text = (
             f"Assalomu alaykum, {display_name}! 👋\n\n"
             "Bu English Life LMS ota-onalar xabarnoma boti.\n\n"
@@ -979,15 +1020,22 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             "• ℹ️ Yordam"
         )
         keyboard = PARENT_KEYBOARD
+    elif user_role == "teacher" and display_name:
+        welcome_text = (
+            f"Assalomu alaykum, {display_name}! 👋\n\n"
+            "Bu English Life LMS o'qituvchi yordamchi boti.\n\n"
+            "📌 <b>Sizning imkoniyatlaringiz:</b>\n"
+            "• 🔔 Yangi topshiriq va xabarnomalar\n"
+            "• ⚙️ /unlink — Akkauntni uzish\n"
+            "• ℹ️ Yordam"
+        )
+        keyboard = REMOVE_KEYBOARD
     else:
         welcome_text = (
-            "Assalomu alaykum! 👋\n\n"
-            f"Bu English Life LMS rasmiy yordamchi boti (@{bot_name}).\n\n"
-            "🔗 Iltimos, platformadagi profilingizni Telegram bilan ulash uchun shaxsiy kabinetingizdagi QR-kodni skanerlang.\n\n"
-            "📌 <b>Buyruqlar:</b>\n"
-            "- /start — Akkauntni qayta bog'lash\n"
-            "- 📊 Ko'rsatkichlarim — Shaxsiy ball va vazifalaringizni ko'rish\n"
-            "- /unlink — Telegram profilini platformadan uzish"
+            "Assalomu alaykum! 👋\n"
+            "English Life LMS Botiga xush kelibsiz.\n\n"
+            "Sizning Telegram hisobingiz platformaga hali bog'lanmagan.\n\n"
+            "Bog'lanish uchun platformadan O'quvchi/Ota-ona kodingizni kiriting yoki shaxsiy kabinetingizdan 'Link Telegram' tugmasini bosing."
         )
         keyboard = REMOVE_KEYBOARD
 
