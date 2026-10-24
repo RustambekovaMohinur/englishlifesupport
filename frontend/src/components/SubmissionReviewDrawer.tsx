@@ -153,6 +153,11 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
       /\.(mp3|wav|m4a|aac|ogg|webm)$/i.test(submission.file_original_name)
   );
 
+  const isImageFile = Boolean(
+    submission?.file_original_name &&
+      /\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|svg)$/i.test(submission.file_original_name)
+  );
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
       {/* Backdrop */}
@@ -290,8 +295,34 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                     />
                   )}
 
-                  {/* Document Download if non-audio attachment */}
-                  {submission.file_url && !isAudio && (
+                  {/* Image preview if primary file is an image */}
+                  {submission.file_url && !isAudio && isImageFile && (
+                    <div className="space-y-2 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 p-4 bg-zinc-50/50 dark:bg-zinc-900/40">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <ImageIcon className="w-4 h-4 text-purple-500" />
+                          <span>{submission.file_original_name || "Submitted Image"}</span>
+                        </span>
+                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Click to enlarge</span>
+                      </div>
+                      <div
+                        className="relative rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:opacity-90 transition shadow-2xs group bg-black/5 max-h-64"
+                        onClick={() => setLightboxIndex(-1)}
+                      >
+                        <AuthenticatedImage
+                          url={submission.file_url || `/api/submissions/${submission.id}/file`}
+                          alt={submission.file_original_name || "Submitted image"}
+                          className="w-full h-full object-contain max-h-64"
+                        />
+                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                          <ExternalLink className="w-5 h-5 drop-shadow" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Document Download if non-audio, non-image attachment */}
+                  {submission.file_url && !isAudio && !isImageFile && (
                     <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <FileText className="w-5 h-5 text-indigo-500 shrink-0" />
@@ -514,14 +545,18 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
           </div>
 
           {/* Lightbox for Enlargeable Images */}
-          {((submission?.images && submission.images.length > 0) || (submission?.attachments && submission.attachments.length > 0)) && lightboxIndex !== null && (
+          {lightboxIndex !== null && submission && (
             <ImageLightbox
               isOpen={lightboxIndex !== null}
-              images={(submission.images && submission.images.length > 0 ? submission.images : submission.attachments || []).map((img, idx) => ({
-                url: img.url || img.file_url || `/api/submissions/${submission.id}/files/${img.id}`,
-                name: img.original_name || `Scan ${idx + 1}`,
-              }))}
-              initialIndex={lightboxIndex}
+              images={
+                lightboxIndex === -1 && submission.file_url && isImageFile
+                  ? [{ url: submission.file_url || `/api/submissions/${submission.id}/file`, name: submission.file_original_name || "Image" }]
+                  : (submission.images && submission.images.length > 0 ? submission.images : submission.attachments || []).map((img, idx) => ({
+                      url: img.url || img.file_url || `/api/submissions/${submission.id}/images/${img.id}`,
+                      name: img.original_name || `Scan ${idx + 1}`,
+                    }))
+              }
+              initialIndex={lightboxIndex === -1 ? 0 : lightboxIndex}
               onClose={() => setLightboxIndex(null)}
             />
           )}
