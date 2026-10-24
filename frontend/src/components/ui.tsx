@@ -635,20 +635,36 @@ export function AuthenticatedImage({
       return;
     }
 
+    // Blob/data URIs or external presigned cloud URLs (B2/S3): use directly
     if (url.startsWith("blob:") || url.startsWith("data:") || (url.startsWith("http") && !url.includes("/api/"))) {
       setSrc(url);
       setLoading(false);
       return;
     }
 
+    // Check blob cache first
     if (imageBlobCache.has(url)) {
       setSrc(imageBlobCache.get(url)!);
       setLoading(false);
       return;
     }
 
-    const directUrl = getAuthenticatedImageUrl(url);
-    setSrc(directUrl);
+    // For /api/ paths — eagerly fetch via authenticated blob to avoid CORS issues
+    // with cross-origin <img> tags that use ?token= query param
+    fetchAuthenticatedBlobUrl(url)
+      .then((blobUrl) => {
+        if (!active) return;
+        imageBlobCache.set(url, blobUrl);
+        setSrc(blobUrl);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        // Fallback: direct authenticated URL with token in query param
+        const directUrl = getAuthenticatedImageUrl(url);
+        setSrc(directUrl);
+        setLoading(false);
+      });
 
     return () => {
       active = false;
