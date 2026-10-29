@@ -22,6 +22,10 @@ class UserProfileOut(BaseModel):
     approval_status: str | None = None
     total_stars: int = 0
     total_lightning: int = 0
+    parent_phone: str | None = None
+    parent_telegram_id: str | None = None
+    parent_telegram_chat_id: str | None = None
+    parent_name: str | None = None
 
 
 class UserProfileUpdate(BaseModel):
@@ -32,6 +36,10 @@ class UserProfileUpdate(BaseModel):
     telegram_username: str | None = Field(default=None, max_length=64)
     phone: str | None = Field(default=None, max_length=64)
     bio: str | None = Field(default=None, max_length=2000)
+    parent_phone: str | None = Field(default=None, max_length=64)
+    parent_telegram_id: str | None = Field(default=None, max_length=64)
+    parent_telegram_chat_id: str | None = Field(default=None, max_length=64)
+    parent_name: str | None = Field(default=None, max_length=255)
 
 
 class ChangePasswordRequest(BaseModel):

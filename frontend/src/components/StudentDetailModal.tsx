@@ -683,8 +683,16 @@ export default function StudentDetailModal({
                   <span className="flex items-center gap-1.5">
                     Telegram: <TelegramLink username={telegram} />
                   </span>
+                  {(history?.parent_phone || profile?.parent_phone) && (
+                    <span className="flex items-center gap-1.5">
+                      📞 Parent Phone:{" "}
+                      <strong className="text-zinc-800 dark:text-zinc-200 font-medium">
+                        {history?.parent_phone || profile?.parent_phone}
+                      </strong>
+                    </span>
+                  )}
                   <span className="flex items-center gap-1.5">
-                    📱 Parent:{" "}
+                    📱 Parent TG:{" "}
                     {(history?.is_parent_linked || profile?.is_parent_linked) ? (
                       <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />

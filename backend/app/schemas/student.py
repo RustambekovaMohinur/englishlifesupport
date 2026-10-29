@@ -30,6 +30,8 @@ class StudentOut(BaseModel):
     total_lightning: int = 0
     group: StudentGroupBrief | None = None
     created_at: datetime
+    parent_phone: str | None = None
+    parent_phone: str | None = None
     parent_telegram_chat_id: str | None = None
     parent_telegram_id: str | None = None
     parent_telegram_username: str | None = None
@@ -67,6 +69,8 @@ class StudentListItem(BaseModel):
     cycle_completed_tasks: int = 0
     cycle_total_tasks: int = 0
     group: StudentGroupBrief | None = None
+    parent_phone: str | None = None
+    parent_phone: str | None = None
     parent_telegram_chat_id: str | None = None
     parent_telegram_id: str | None = None
     parent_telegram_username: str | None = None
@@ -83,6 +87,10 @@ class StudentUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=32)
     bio: str | None = Field(default=None, max_length=2000)
     group_id: uuid.UUID | None = None
+    parent_phone: str | None = Field(default=None, max_length=32)
+    parent_telegram_id: str | None = Field(default=None, max_length=64)
+    parent_telegram_chat_id: str | None = Field(default=None, max_length=64)
+    parent_name: str | None = Field(default=None, max_length=255)
 
 
 class StudentStatusUpdate(BaseModel):
@@ -246,6 +254,9 @@ class StudentHistoryOut(BaseModel):
     total_vocabulary_words: int = 0
     mastered_vocabulary_words: int = 0
     mastered_vocabulary_sets: int = 0
+    parent_phone: str | None = None
+    parent_phone: str | None = None
+    parent_phone: str | None = None
     parent_telegram_chat_id: str | None = None
     parent_telegram_id: str | None = None
     parent_telegram_username: str | None = None
@@ -260,6 +271,8 @@ class ParentLinkInfo(BaseModel):
     bot_username: str
     telegram_link: str
     is_parent_linked: bool = False
+    parent_phone: str | None = None
+    parent_phone: str | None = None
     parent_telegram_chat_id: str | None = None
     parent_telegram_id: str | None = None
     parent_telegram_username: str | None = None

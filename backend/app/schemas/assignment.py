@@ -99,6 +99,8 @@ class AssignmentOut(BaseModel):
     cycle_number: int = 1
     prerequisite_id: uuid.UUID | None = None
     parent_digest_sent: bool = False
+    parent_notification_sent: bool = False
+    parent_notifications_sent_count: int = 0
     unlock_at: datetime | None = None
     day_offset: int | None = None
     is_locked: bool = False

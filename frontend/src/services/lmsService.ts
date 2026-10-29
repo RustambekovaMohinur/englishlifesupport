@@ -84,7 +84,7 @@ export const getPeerProfile = (student_id: string) =>
   cachedGet<PeerProfileOut>(`/students/${student_id}/peer-profile`);
 export const getMyStudentProfile = () => cachedGet<StudentOut>("/students/me");
 export const getMyStudentStats = () => cachedGet<StudentStatsOut>("/students/me/stats");
-export const updateStudent = (id: string, body: Partial<{ full_name: string; phone: string; group_id: string | null }>) =>
+export const updateStudent = (id: string, body: Partial<{ full_name: string; phone: string; group_id: string | null; parent_phone?: string; parent_telegram_id?: string; parent_telegram_chat_id?: string; parent_name?: string }>) =>
   api.patch<StudentOut>(`/students/${id}`, body).then((r) => r.data);
 export const deleteStudent = (id: string) => api.delete(`/students/${id}`);
 export const setStudentStatus = (id: string, is_active: boolean) =>
@@ -610,6 +610,11 @@ export const unlinkParent = async (): Promise<{ success: boolean; message: strin
 
 export const sendParentDigest = async (studentId: string): Promise<SendParentDigestResponse> => {
   const res = await api.post<SendParentDigestResponse>(`/students/${studentId}/send-parent-digest`);
+  return res.data;
+};
+
+export const notifyParentsMissingHomework = async (assignmentId: string): Promise<{ success: boolean; message: string; notified_count: number }> => {
+  const res = await api.post<{ success: boolean; message: string; notified_count: number }>(`/assignments/${assignmentId}/notify-parents-missing`);
   return res.data;
 };
 

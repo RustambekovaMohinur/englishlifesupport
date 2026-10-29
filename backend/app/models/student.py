@@ -25,6 +25,7 @@ class StudentProfile(UUIDPKMixin, TimestampMixin, Base):
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # Parent notification bot fields
+    parent_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     parent_telegram_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     parent_telegram_id = synonym("parent_telegram_chat_id")
     parent_telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)

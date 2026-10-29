@@ -1383,6 +1383,9 @@ function EditStudentModal({
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [groupId, setGroupId] = useState("");
+  const [parentName, setParentName] = useState("");
+  const [parentPhone, setParentPhone] = useState("");
+  const [parentTelegramId, setParentTelegramId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -1390,6 +1393,9 @@ function EditStudentModal({
       setFullName(student.full_name);
       setPhone(student.phone ?? "");
       setGroupId(groups.find((g) => g.name === student.group_name)?.id ?? "");
+      setParentName(student.parent_name ?? "");
+      setParentPhone(student.parent_phone ?? "");
+      setParentTelegramId(student.parent_telegram_chat_id ?? student.parent_telegram_id ?? "");
     }
   }, [student, groups]);
 
@@ -1402,6 +1408,9 @@ function EditStudentModal({
         full_name: fullName,
         phone: phone || undefined,
         group_id: groupId || null,
+        parent_name: parentName || undefined,
+        parent_phone: parentPhone || undefined,
+        parent_telegram_id: parentTelegramId || undefined,
       });
       toast.success("Student updated");
       onSaved();
@@ -1438,6 +1447,38 @@ function EditStudentModal({
               </option>
             ))}
           </select>
+        </div>
+        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+            👨‍👩‍👧 Ota-ona bildirishnomalari (Parent Alerts)
+          </p>
+          <div>
+            <label className="label">Ota-ona ismi (Parent Name)</label>
+            <input
+              className="input"
+              value={parentName}
+              onChange={(e) => setParentName(e.target.value)}
+              placeholder="Masalan, Alisher Rahimov"
+            />
+          </div>
+          <div>
+            <label className="label">Ota-ona telefoni (SMS raqami)</label>
+            <input
+              className="input"
+              value={parentPhone}
+              onChange={(e) => setParentPhone(e.target.value)}
+              placeholder="+998901234567"
+            />
+          </div>
+          <div>
+            <label className="label">Ota-ona Telegram ID (@EnglishLife_edu_bot)</label>
+            <input
+              className="input"
+              value={parentTelegramId}
+              onChange={(e) => setParentTelegramId(e.target.value)}
+              placeholder="Telegram Chat ID (masalan, 123456789)"
+            />
+          </div>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button className="btn-secondary" onClick={onClose}>

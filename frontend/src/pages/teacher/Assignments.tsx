@@ -1,9 +1,9 @@
 import { FormEvent, useEffect, useState, useMemo } from "react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
-import { EmptyState, LoadingRows, useConfirm, FileDownloadButton } from "@/components/ui";
+import { EmptyState, LoadingRows, useConfirm, FileDownloadButton, Spinner } from "@/components/ui";
 import { AssignmentDiscussionDrawer } from "@/components/AssignmentDiscussionDrawer";
-import { createAssignment, deleteAssignment, listAssignments, listGroups, updateAssignmentInPlace } from "@/services/lmsService";
+import { createAssignment, deleteAssignment, listAssignments, listGroups, updateAssignmentInPlace, notifyParentsMissingHomework } from "@/services/lmsService";
 import { AssignmentOut, Group } from "@/types";
 import { compressImage } from "@/utils/imageCompressor";
 
@@ -78,6 +78,20 @@ export default function AssignmentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showBuilder, setShowBuilder] = useState(false);
   const [discussionAssignment, setDiscussionAssignment] = useState<AssignmentOut | null>(null);
+  const [alertingAssignmentId, setAlertingAssignmentId] = useState<string | null>(null);
+
+  async function handleAlertParents(a: AssignmentOut) {
+    setAlertingAssignmentId(a.id);
+    try {
+      const res = await notifyParentsMissingHomework(a.id);
+      toast.success(res.message || "Parent notifications processed successfully! 📩", { duration: 4500 });
+      refresh();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Failed to send parent alerts");
+    } finally {
+      setAlertingAssignmentId(null);
+    }
+  }
   const { confirm, ConfirmDialog } = useConfirm();
 
   // Builder state
@@ -1278,6 +1292,14 @@ export default function AssignmentsPage() {
                   >
                     {a.status.toUpperCase()}
                   </span>
+                  {Boolean(a.parent_notification_sent || (a.parent_notifications_sent_count ?? 0) > 0) && (
+                    <span
+                      className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-800 flex items-center gap-1 shadow-2xs"
+                      title={`Ota-onalarga xabarnomalar yuborilgan (${a.parent_notifications_sent_count ?? 1} ta)`}
+                    >
+                      📩 Parent Alerted ({a.parent_notifications_sent_count ?? 1})
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span>📅 Due: <strong className="text-zinc-700 dark:text-zinc-300">{format(new Date(a.deadline), "MMM d, yyyy HH:mm")}</strong></span>
@@ -1310,6 +1332,24 @@ export default function AssignmentsPage() {
 
               {/* Action Buttons: Q&A Discussion, Edit, View Submissions, Delete */}
               <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                <button
+                  type="button"
+                  disabled={alertingAssignmentId === a.id}
+                  onClick={() => handleAlertParents(a)}
+                  className="btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 border-blue-200 dark:border-blue-800 font-semibold"
+                  title="Missing / Incomplete homework haqida ota-onalarga Telegram va SMS orqali bildirishnoma yuborish"
+                >
+                  {alertingAssignmentId === a.id ? (
+                    <>
+                      <Spinner className="w-3.5 h-3.5" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>📩 Alert Parents</span>
+                    </>
+                  )}
+                </button>
                 <button
                   type="button"
                   onClick={() => setDiscussionAssignment(a)}

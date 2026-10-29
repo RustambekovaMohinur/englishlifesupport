@@ -492,5 +492,7 @@ async def startup_event():
     # Launch background parent notification reporter loop
     from app.services.parent_reporter import start_parent_reporter_loop
     asyncio.create_task(start_parent_reporter_loop())
+    from app.services.notifications import start_missing_homework_notification_loop
+    asyncio.create_task(start_missing_homework_notification_loop())
 
 

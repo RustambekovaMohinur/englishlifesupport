@@ -136,6 +136,10 @@ async def get_my_profile(
             approval_status=current_user.approval_status.value if hasattr(current_user.approval_status, "value") else str(current_user.approval_status),
             total_stars=getattr(profile, "total_stars", 0),
             total_lightning=getattr(profile, "total_lightning", 0),
+            parent_phone=profile.parent_phone,
+            parent_telegram_id=profile.parent_telegram_chat_id,
+            parent_telegram_chat_id=profile.parent_telegram_chat_id,
+            parent_name=profile.parent_name,
         )
 
     # Teacher
@@ -221,6 +225,16 @@ async def update_my_profile(
         if body.bio is not None:
             profile.bio = body.bio.strip() or None
 
+        # Update parent fields
+        if body.parent_phone is not None:
+            profile.parent_phone = body.parent_phone.strip() or None
+        if body.parent_name is not None:
+            profile.parent_name = body.parent_name.strip() or None
+        if body.parent_telegram_id is not None:
+            profile.parent_telegram_chat_id = body.parent_telegram_id.strip() or None
+        elif body.parent_telegram_chat_id is not None:
+            profile.parent_telegram_chat_id = body.parent_telegram_chat_id.strip() or None
+
         await db.commit()
         await db.refresh(profile)
         await db.refresh(current_user)
@@ -246,6 +260,10 @@ async def update_my_profile(
             approval_status=current_user.approval_status.value if hasattr(current_user.approval_status, "value") else str(current_user.approval_status),
             total_stars=getattr(profile, "total_stars", 0),
             total_lightning=getattr(profile, "total_lightning", 0),
+            parent_phone=profile.parent_phone,
+            parent_telegram_id=profile.parent_telegram_chat_id,
+            parent_telegram_chat_id=profile.parent_telegram_chat_id,
+            parent_name=profile.parent_name,
         )
 
     # Teacher

@@ -233,6 +233,7 @@ async def list_students(
                 cycle_completed_tasks=completed_asgns,
                 cycle_total_tasks=total_asgns,
                 group=group_brief,
+                parent_phone=profile.parent_phone,
                 parent_telegram_chat_id=profile.parent_telegram_chat_id,
                 parent_telegram_username=profile.parent_telegram_username,
                 parent_name=profile.parent_name,
@@ -595,6 +596,7 @@ async def get_my_profile(
         total_stars=full_profile.total_stars,
         group=full_profile.group,
         created_at=full_profile.created_at,
+        parent_phone=full_profile.parent_phone,
         parent_telegram_chat_id=full_profile.parent_telegram_chat_id,
         parent_telegram_username=full_profile.parent_telegram_username,
         parent_name=full_profile.parent_name,
@@ -688,6 +690,14 @@ async def update_my_student_profile(
         full_profile.phone = raw_phone or None
     if body.bio is not None:
         full_profile.bio = body.bio
+    if body.parent_phone is not None:
+        full_profile.parent_phone = body.parent_phone.strip() or None
+    if body.parent_name is not None:
+        full_profile.parent_name = body.parent_name.strip() or None
+    if body.parent_telegram_id is not None:
+        full_profile.parent_telegram_chat_id = body.parent_telegram_id.strip() or None
+    elif body.parent_telegram_chat_id is not None:
+        full_profile.parent_telegram_chat_id = body.parent_telegram_chat_id.strip() or None
 
     await db.commit()
     await db.refresh(full_profile, attribute_names=["group", "user"])
@@ -705,6 +715,7 @@ async def update_my_student_profile(
         total_stars=full_profile.total_stars,
         group=full_profile.group,
         created_at=full_profile.created_at,
+        parent_phone=full_profile.parent_phone,
         parent_telegram_chat_id=full_profile.parent_telegram_chat_id,
         parent_telegram_username=full_profile.parent_telegram_username,
         parent_name=full_profile.parent_name,
@@ -750,6 +761,7 @@ async def get_student(
         total_lightning=getattr(profile, "total_lightning", 0) or 0,
         group=profile.group,
         created_at=profile.created_at,
+        parent_phone=profile.parent_phone,
         parent_telegram_chat_id=profile.parent_telegram_chat_id,
         parent_telegram_username=profile.parent_telegram_username,
         parent_name=profile.parent_name,
@@ -1101,6 +1113,7 @@ async def get_student_history(
         total_vocabulary_words=total_vocab_words,
         mastered_vocabulary_words=mastered_vocab_words,
         mastered_vocabulary_sets=mastered_vocab_sets,
+        parent_phone=profile.parent_phone,
         parent_telegram_chat_id=profile.parent_telegram_chat_id,
         parent_telegram_id=profile.parent_telegram_chat_id,
         parent_telegram_username=profile.parent_telegram_username,
@@ -1236,20 +1249,36 @@ async def update_student(student_id: uuid.UUID, body: StudentUpdate, db: AsyncSe
 
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(profile, field, value)
+        if field == "parent_telegram_id" and value is not None:
+            profile.parent_telegram_chat_id = value.strip() or None
+        elif hasattr(profile, field):
+            setattr(profile, field, value)
 
     await db.commit()
     await db.refresh(profile, attribute_names=["group", "user"])
     return StudentOut(
         id=profile.id,
         user_id=profile.user_id,
-        email=profile.user.email,
+        email=profile.user.email if profile.user else "",
+        username=profile.user.username if profile.user else "",
         full_name=profile.full_name,
         phone=profile.phone,
-        is_active=profile.user.is_active,
+        bio=profile.bio,
+        avatar_url=profile.avatar_url,
+        is_active=profile.user.is_active if profile.user else True,
+        approval_status=profile.user.approval_status.value if profile.user and hasattr(profile.user.approval_status, "value") else "approved",
         total_stars=profile.total_stars,
+        total_lightning=getattr(profile, "total_lightning", 0),
         group=profile.group,
         created_at=profile.created_at,
+        parent_phone=profile.parent_phone,
+        parent_telegram_chat_id=profile.parent_telegram_chat_id,
+        parent_telegram_id=profile.parent_telegram_chat_id,
+        parent_telegram_username=profile.parent_telegram_username,
+        parent_name=profile.parent_name,
+        parent_linked_at=profile.parent_linked_at,
+        last_parent_digest_sent_at=profile.last_parent_digest_sent_at,
+        is_parent_linked=bool(profile.parent_telegram_chat_id),
     )
 
 

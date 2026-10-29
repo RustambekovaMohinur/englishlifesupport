@@ -79,6 +79,8 @@ export interface StudentListItem {
   cycle_completed_tasks?: number;
   cycle_total_tasks?: number;
   group?: { id: string; name: string; english_level?: string } | null;
+  parent_phone?: string | null;
+  parent_telegram_id?: string | null;
   parent_telegram_chat_id?: string | null;
   parent_telegram_username?: string | null;
   parent_name?: string | null;
@@ -232,6 +234,7 @@ export interface StudentHistoryOut {
   total_vocabulary_words?: number;
   mastered_vocabulary_words?: number;
   mastered_vocabulary_sets?: number;
+  parent_phone?: string | null;
   parent_telegram_chat_id?: string | null;
   parent_telegram_id?: string | null;
   parent_telegram_username?: string | null;
@@ -256,6 +259,8 @@ export interface StudentOut {
   total_stars: number;
   group: GroupBrief | null;
   created_at: string;
+  parent_phone?: string | null;
+  parent_telegram_id?: string | null;
   parent_telegram_chat_id?: string | null;
   parent_telegram_username?: string | null;
   parent_name?: string | null;
@@ -387,6 +392,8 @@ export interface AssignmentOut {
   order_index?: number;
   cycle_number?: number;
   prerequisite_id?: string | null;
+  parent_notification_sent?: boolean;
+  parent_notifications_sent_count?: number;
 }
 
 export interface AssignmentForStudent {

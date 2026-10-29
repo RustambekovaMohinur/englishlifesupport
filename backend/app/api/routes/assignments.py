@@ -15,6 +15,7 @@ from app.db.session import get_db
 from app.services.telegram_bot import notify_student_assignment, notify_parent_assignment, notify_group_assignment
 from app.models.group import Group
 from app.models.student import StudentProfile
+from app.models.notification import ParentHomeworkNotification
 from app.models.assignment import Assignment, AssignmentComment, AssignmentStatus
 from app.models.teacher import TeacherProfile
 from app.models.submission import Submission, SubmissionStatus
@@ -144,7 +145,7 @@ async def _get_assignment_with_relations(db: AsyncSession, assignment_id: uuid.U
     return (await db.execute(query)).scalars().first()
 
 
-def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, vocab_words: list[VocabularyWord] | None = None) -> AssignmentOut:
+def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, vocab_words: list[VocabularyWord] | None = None, parent_notifs_count: int = 0) -> AssignmentOut:
     vocab_items = [
         VocabWordItem(
             id=w.id,
@@ -204,6 +205,8 @@ def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, 
         unlock_at=assign_unlock,
         day_offset=getattr(assignment, "day_offset", None),
         is_locked=is_locked_calc,
+        parent_notification_sent=bool(parent_notifs_count > 0),
+        parent_notifications_sent_count=parent_notifs_count,
     )
 
 
@@ -221,6 +224,16 @@ async def list_assignments(
         query = query.where(Assignment.group_id == group_id)
     query = query.order_by(Assignment.deadline.desc())
     rows = (await db.execute(query)).all()
+
+    asgn_ids = [a.id for a, _ in rows]
+    notif_counts: dict[uuid.UUID, int] = {}
+    if asgn_ids:
+        nc_res = await db.execute(
+            select(ParentHomeworkNotification.assignment_id, func.count(ParentHomeworkNotification.id))
+            .where(ParentHomeworkNotification.assignment_id.in_(asgn_ids))
+            .group_by(ParentHomeworkNotification.assignment_id)
+        )
+        notif_counts = dict(nc_res.all())
 
     result = []
     for assignment, group_name in rows:
@@ -242,7 +255,7 @@ async def list_assignments(
         if vocab_assoc:
             vocab_words = vocab_assoc.words
 
-        result.append(_assignment_to_out(assignment, group_name, sub_count, vocab_words))
+        result.append(_assignment_to_out(assignment, group_name, sub_count, vocab_words, parent_notifs_count=notif_counts.get(assignment.id, 0)))
     return result
 
 
@@ -935,7 +948,12 @@ async def get_assignment(
     group_name = assignment.group.name if assignment.group else (
         (await db.execute(select(Group.name).where(Group.id == assignment.group_id))).scalar_one_or_none() or ""
     )
-    return _assignment_to_out(assignment, group_name, sub_count, vocab_words)
+    p_count = (
+        await db.execute(
+            select(func.count()).select_from(ParentHomeworkNotification).where(ParentHomeworkNotification.assignment_id == assignment.id)
+        )
+    ).scalar_one()
+    return _assignment_to_out(assignment, group_name, sub_count, vocab_words, parent_notifs_count=p_count)
 
 
 async def get_assignment_for_student(
@@ -1742,3 +1760,27 @@ async def toggle_like_assignment_comment(
 
 
 
+
+
+@router.post("/{assignment_id}/notify-parents-missing", dependencies=[Depends(require_teacher)])
+async def notify_parents_missing_homework(
+    assignment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Teacher on-demand trigger to check missing/incomplete homework
+    and send alerts to parents via Telegram (@EnglishLife_edu_bot) and SMS with deduplication.
+    """
+    from app.services.notifications import check_and_send_missing_homework_alerts
+
+    result = await check_and_send_missing_homework_alerts(db, assignment_id=assignment_id)
+    notified_total = result.get("total_alerts_sent", 0)
+    tg_sent = result.get("telegram_notifications_sent", 0)
+    sms_sent = result.get("sms_notifications_sent", 0)
+    msg = f"Ota-onalarga {notified_total} ta xabarnoma yuborildi ({tg_sent} Telegram, {sms_sent} SMS)."
+    return {
+        "success": True,
+        "message": msg,
+        "notified_count": notified_total,
+        "details": result,
+    }
