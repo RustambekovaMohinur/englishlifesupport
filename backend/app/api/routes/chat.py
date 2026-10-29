@@ -27,23 +27,20 @@ logger = logging.getLogger("app.api.routes.chat")
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-AI_COMPANION_SYSTEM_PROMPT = """You are Aura, the English Life LMS AI Learning Coach & Companion.
-Your mission is to help English learners practice conversational English, refine grammar, expand vocabulary, and prepare for exams (such as IELTS or CEFR).
+AI_COMPANION_SYSTEM_PROMPT = """You are Aura, a friendly native English tutor in a casual chat app. You talk like a real person — warm, natural, and encouraging.
 
-STRICT PEDAGOGICAL POLICY & GUARDRAILS (ABSOLUTE REQUIREMENT):
-1. NEVER WRITE COMPLETE HOMEWORK ANSWERS OR ESSAYS:
-   - If a student asks you to "write an essay about...", "solve this test question", "do my homework", or "give me the answers to...", you must politely and clearly REFUSE to do the work for them.
-   - Say something encouraging like: "As your English Life learning coach, I can't write your essay or solve your exercises directly, but I'd love to help you master it yourself! Let's break it down together."
-2. COACHING INSTEAD OF SOLVING:
-   - Provide essay structure outlines, brainstorming bullet points, topic vocabulary, or sentence-starter ideas.
-   - Ask guiding questions so the student formulates their own arguments.
-3. CONSTRUCTIVE ERROR CORRECTION:
-   - If the student writes sentences or paragraphs in English, analyze them constructively:
-     a) Point out any grammatical, spelling, or collocation errors.
-     b) Explain the grammar rule briefly and clearly.
-     c) Offer 1-2 natural, more native phrasing alternatives.
-4. TONE & STYLE:
-   - Friendly, encouraging, educational, and concise. Use clear formatting with bullet points when helpful.
+RESPONSE STYLE (CRITICAL — follow this every time):
+1. ANSWER FIRST, ALWAYS:
+   - Respond directly to what the student said or asked, like a real conversation. No formal headers. No "Coaching Feedback for:" labels. No word-count statistics.
+   - React naturally: if they say something interesting, show genuine curiosity. If they make a point, engage with it first.
+2. GRAMMAR CORRECTIONS — GENTLE & AT THE END ONLY:
+   - Only correct major grammar mistakes (ones that seriously affect meaning or naturalness). Minor errors: let them pass.
+   - If you do correct, do it briefly and casually at the end — e.g., "By the way, a more natural way to say that is: '...' 😊" — never as the opening or main focus.
+   - Never say "You used X words" or count anything. Never output word statistics.
+3. HOMEWORK & ESSAY REQUESTS:
+   - Warmly decline to write complete essays or solve exercises directly. Offer to help them build their own answer step by step — brainstorm together, give an outline, ask guiding questions.
+4. TONE:
+   - Casual, warm, real. Short sentences. Natural English. Use light emoji sparingly (not every sentence). No bullet-point walls for simple conversational messages. Keep replies concise — 3-5 sentences for casual chat, more detail only when explaining grammar or vocabulary on request.
 """
 
 
@@ -302,16 +299,11 @@ def generate_pedagogical_guidance(
     user_text: str, student_name: str | None = None, history: list[AIChatMessage] | None = None
 ) -> str:
     """
-    Generates an intelligent, context-aware pedagogical response tailored to the student's prompt
-    when the Gemini API is offline, unconfigured, or rate-limited.
-    Strictly follows the pedagogical guardrails:
-    - Never generates direct homework/essay answers
-    - Scaffolds outlines, guiding questions, and topic collocations
-    - Corrects grammar errors with rules & native examples
-    - Explains grammar concepts with clear formulas
-    - Preserves session memory without repeating initial welcome banners
+    Fallback response engine used when Gemini is offline or rate-limited.
+    Matches common student requests (greetings, grammar questions, homework, vocab)
+    and returns natural, conversational replies — no formal headers, no word counts.
     """
-    name = (student_name or "").split()[0] if student_name else "Learner"
+    name = (student_name or "").split()[0] if student_name else "there"
     lower = user_text.lower()
 
     # 1. ESSAY & HOMEWORK REFUSAL + SCAFFOLDING (English & Uzbek keywords)
@@ -323,159 +315,120 @@ def generate_pedagogical_guidance(
     ]
     if any(p in lower for p in essay_homework_patterns):
         return (
-            f"🎓 **Aura English Coach:**\n\n"
-            f"Hello {name}! As your English Life learning coach, I cannot write complete essays or solve homework exercises for you directly. "
-            f"True fluency comes from your own writing and critical thinking!\n\n"
-            f"However, I'm here to guide you step-by-step so you can ace this assignment yourself! 🚀\n\n"
-            f"### 📋 Recommended 4-Paragraph Structure:\n"
-            f"1. **Introduction (approx. 40 words):**\n"
-            f"   - *Hook & Paraphrase:* Rephrase the prompt in your own words.\n"
-            f"   - *Thesis Statement:* State your main argument or perspective clearly.\n"
-            f"2. **Body Paragraph 1 (approx. 90 words):**\n"
-            f"   - *Topic Sentence:* Introduce your strongest point.\n"
-            f"   - *Explanation & Real-world Example:* Support it with concrete details.\n"
-            f"   - *Concluding Impact:* How does this affect society or individuals?\n"
-            f"3. **Body Paragraph 2 (approx. 90 words):**\n"
-            f"   - *Counter-argument or Second Reason:* Analyze the alternate viewpoint.\n"
-            f"   - *Evidence / Elaboration:* Show why your perspective holds.\n"
-            f"4. **Conclusion (approx. 30 words):**\n"
-            f"   - *Restate Thesis:* In fresh synonyms without adding new arguments.\n\n"
-            f"### 💡 Next Step:\n"
-            f"Draft your **Thesis Statement** or your **first paragraph** right here, and I will analyze your grammar, vocabulary, and cohesion together with you!"
+            f"I'd love to help, {name} — but I can't write the essay for you directly. "
+            f"The real progress comes from your own words! 💪\n\n"
+            f"Here's what I *can* do: help you build a solid structure together. "
+            f"A strong essay usually looks like this:\n\n"
+            f"1. **Introduction** — Hook + paraphrase the prompt + your thesis in 1 clear sentence.\n"
+            f"2. **Body 1** — Your strongest argument, with a real-world example.\n"
+            f"3. **Body 2** — A second reason or a counter-argument you can address.\n"
+            f"4. **Conclusion** — Restate your thesis in fresh words, no new ideas.\n\n"
+            f"Start by writing your thesis sentence here and I'll give you feedback on it right away!"
         )
 
-    # 2. COMMON GRAMMAR ERRORS & CORRECTION REQUESTS
+    # 2. COMMON GRAMMAR ERRORS
     if "have went" in lower or "has went" in lower:
         return (
-            f"🔍 **Grammar Check: 'Have went' vs 'Have gone'**\n\n"
-            f"Good eye! There is an important rule here:\n"
-            f"- **'Went'** is the *Past Simple (V2)*: used for finished past actions (e.g. *'I went to the store yesterday'*).\n"
-            f"- After auxiliary **'have/has'** (Present Perfect), you must use the **Past Participle (V3)**, which is **'gone'** or **'been'**.\n\n"
-            f"✅ **Correct phrasing:**\n"
-            f"- *'I have gone to London.'* (Still there / ongoing)\n"
-            f"- *'I have been to London.'* (Visited and returned — experience)\n"
-            f"- *'I went to London last summer.'* (Specific finished time)\n\n"
-            f"**Your turn:** Can you write a sentence about a city you have visited using *'have been to'*?"
+            f"Quick grammar note on that, {name}! After *have/has*, you need the past participle — so it's **'have gone'**, not *'have went'*.\n\n"
+            f"- ✅ *'I have gone to London.'* / *'I have been to London.'*\n"
+            f"- ✅ *'I went to London last year.'* (past simple — no 'have')\n\n"
+            f"*Went* is past simple on its own; *gone* is the past participle for perfect tenses. "
+            f"Want to try writing a sentence using *'have been to'*?"
         )
 
     if "didn't knew" in lower or "did not knew" in lower or "didn't saw" in lower:
         return (
-            f"🔍 **Grammar Check: Auxiliary 'Did' + Base Verb**\n\n"
-            f"Remember this golden rule for past questions and negatives:\n"
-            f"- The auxiliary verb **'did / didn't'** already carries the past tense.\n"
-            f"- Therefore, the main verb following it MUST be in the **bare infinitive (base form, V1)**!\n\n"
-            f"❌ *'I didn't knew that.'*\n"
-            f"✅ *'I didn't **know** that.'*\n\n"
-            f"❌ *'She didn't saw the message.'*\n"
-            f"✅ *'She didn't **see** the message.'*\n\n"
-            f"**Challenge:** Try correcting this sentence: *'We didn't went there yesterday.'*"
+            f"Good catch to bring up, {name}! The rule here: when you use *did / didn't*, the verb after it stays in base form — no *-ed* or irregular past.\n\n"
+            f"- ❌ *'I didn't knew'* → ✅ *'I didn't **know**'*\n"
+            f"- ❌ *'She didn't saw'* → ✅ *'She didn't **see**'*\n\n"
+            f"*Did* already carries the past meaning, so the main verb doesn't need to change. "
+            f"Can you correct this one? *'We didn't went there yesterday.'*"
         )
 
     if "more better" in lower or "more easier" in lower:
         return (
-            f"🔍 **Grammar Check: Double Comparatives**\n\n"
-            f"Notice: in English we do not combine **'more'** with **'-er'** comparatives!\n\n"
-            f"- For short 1-syllable adjectives (like *good -> better*, *fast -> faster*), use the irregular or *-er* form alone: **'better'** (not *'more better'*).\n"
-            f"- For 2-syllable adjectives ending in -y (like *easy -> easier*), use **'easier'** (not *'more easier'*).\n"
-            f"- Use **'more'** only with multi-syllable adjectives (e.g. *'more comfortable'*, *'more challenging'*).\n\n"
-            f"✅ *'This method is much better and easier to remember.'*"
+            f"Nice try, {name}! English comparatives can be tricky. Short adjectives use *-er* on their own — you don't add *more* on top:\n\n"
+            f"- ❌ *more better* → ✅ **better**\n"
+            f"- ❌ *more easier* → ✅ **easier**\n\n"
+            f"Use *more* only with longer adjectives: *more comfortable*, *more interesting*. "
+            f"Try writing a comparison sentence and I'll check it for you!"
         )
 
     if any(k in lower for k in ["check this", "correct this", "is this correct", "xatomi", "to'g'rimi", "check my sentence", "check grammar"]):
         return (
-            f"✍️ **Sentence & Grammar Inspection:**\n\n"
-            f"Let's review what you've written! To give you the most accurate IELTS/CEFR feedback:\n\n"
-            f"1. **Grammar & Agreement:** Make sure subjects and verbs agree (e.g., *'He goes'* vs *'They go'*).\n"
-            f"2. **Tense Consistency:** If you are describing an ongoing experience, use *Present Perfect* (*'I have worked here for 2 years'*). If specifying a past date, use *Past Simple* (*'I joined in 2022'*).\n"
-            f"3. **Lexical Variety:** Look for words that can be upgraded with stronger collocations (e.g. *'very important'* ➔ *'crucial / vital'*).\n\n"
-            f"Paste your full sentence below, and I will highlight any mistakes and provide native alternative expressions!"
+            f"Sure, paste the sentence and I'll look it over! 😊\n\n"
+            f"I'll flag any grammar issues and suggest a more natural phrasing if needed. "
+            f"Just drop it here whenever you're ready."
         )
 
     # 3. GRAMMAR CONCEPTS
     if "since" in lower and "for" in lower:
         return (
-            f"💡 **Grammar Masterclass: 'Since' vs 'For'**\n\n"
-            f"Both are used with Perfect Tenses to talk about time, but they answer different questions:\n\n"
-            f"### 1. **FOR + Duration / Period of Time**\n"
-            f"Tells us *how long* something has lasted.\n"
-            f"- *for 2 hours, for 5 years, for a long time, for 6 months*\n"
-            f"- 📌 *'I have lived in Samarkand **for** 3 years.'*\n\n"
-            f"### 2. **SINCE + Starting Point in Time**\n"
-            f"Tells us *when* the action started.\n"
-            f"- *since 2018, since 9:00 AM, since Monday, since my childhood*\n"
-            f"- 📌 *'I have lived in Samarkand **since** 2021.'*\n\n"
-            f"**Quick Quiz:** Fill in the blank: *'They have been waiting _____ morning.'* (since or for?)"
+            f"Great question, {name}! Both *since* and *for* go with the present perfect, but they answer different things:\n\n"
+            f"- **for** = a duration → *for 3 years, for a long time*\n"
+            f"  *'I have lived here **for** 3 years.'*\n"
+            f"- **since** = a starting point → *since 2021, since Monday*\n"
+            f"  *'I have lived here **since** 2021.'*\n\n"
+            f"Quick quiz: *'They have been waiting _____ morning.'* — since or for?"
         )
 
     if "conditional" in lower or "if clause" in lower:
         return (
-            f"💡 **Grammar Masterclass: Conditionals Summary**\n\n"
-            f"- **Zero Conditional (Universal Truths):**\n"
-            f"  `If + Present Simple, Present Simple`\n"
-            f"  *If you heat ice, it melts.*\n\n"
-            f"- **First Conditional (Real Future Possibility):**\n"
-            f"  `If + Present Simple, will + V1`\n"
-            f"  *If I pass my IELTS exam, I will apply to university.*\n\n"
-            f"- **Second Conditional (Hypothetical / Unreal Present):**\n"
-            f"  `If + Past Simple, would + V1`\n"
-            f"  *If I had more free time, I would travel the world.*\n\n"
-            f"- **Third Conditional (Past Regrets / Unreal Past):**\n"
-            f"  `If + Past Perfect (had + V3), would have + V3`\n"
-            f"  *If I had studied harder, I would have scored Band 8.0.*\n\n"
-            f"Which conditional would you like to practice creating a sentence with?"
+            f"Conditionals! Love it. Here's a quick breakdown:\n\n"
+            f"- **Zero** (always true): *If you heat ice, it melts.*\n"
+            f"- **First** (real future): *If I study hard, I will pass.*\n"
+            f"- **Second** (imaginary now): *If I had more time, I would travel.*\n"
+            f"- **Third** (past regret): *If I had studied, I would have passed.*\n\n"
+            f"Which one do you want to practice? Write a sentence and I'll check it, {name}!"
         )
 
     if "present perfect" in lower or "past simple" in lower:
         return (
-            f"💡 **Present Perfect vs Past Simple**\n\n"
-            f"- **Past Simple:** Used when the time is **finished** and specified (*yesterday, last year, in 2020, two hours ago*).\n"
-            f"  *I visited Bukhara in 2022.*\n\n"
-            f"- **Present Perfect (have/has + V3):** Used for **life experience**, recent actions with **present results**, or **unspecified time**.\n"
-            f"  *I have visited Bukhara three times.* (In my life so far)\n"
-            f"  *I have lost my keys!* (Result: I cannot enter right now)\n\n"
-            f"Can you tell me one memorable thing you did last year in Past Simple, and one thing you have achieved this year in Present Perfect?"
+            f"These two mix people up all the time! Here's the simple version:\n\n"
+            f"- **Past simple** = finished time you know: *'I visited Bukhara in 2022.'*\n"
+            f"- **Present perfect** = life experience or recent result (no specific time): *'I have visited Bukhara three times.'*\n\n"
+            f"Tell me one thing you did last year (past simple) and one thing you've achieved recently (present perfect) — I'll check them both!"
         )
 
     # 4. VOCABULARY & IELTS TOPIC COLLOCATIONS
     if any(k in lower for k in ["ielts", "vocabulary", "collocations", "words", "lug'at", "so'zlar"]):
-        topic_name = "Academic & Everyday English"
         if "tech" in lower or "computer" in lower or "ai" in lower:
             topic_name = "Technology & Innovation"
             items = [
-                ("Breakthrough innovation", "Inqilobiy yangilik", "The discovery was hailed as a breakthrough innovation."),
-                ("Facilitate seamless communication", "Uzluksiz aloqani ta'minlash", "Digital platforms facilitate seamless communication."),
-                ("Automate repetitive tasks", "Bir xil takroriy ishlarni avtomatlashtirish", "AI enables employees to automate repetitive tasks.")
+                ("Breakthrough innovation", "The AI chip was hailed as a breakthrough innovation."),
+                ("Facilitate seamless communication", "These apps facilitate seamless communication across borders."),
+                ("Automate repetitive tasks", "AI helps companies automate repetitive tasks efficiently.")
             ]
         elif "environment" in lower or "nature" in lower or "climate" in lower:
-            topic_name = "Environment & Ecology"
+            topic_name = "Environment"
             items = [
-                ("Combat climate change", "Iqlim o'zgarishiga qarshi kurashmoq", "Global policies are essential to combat climate change."),
-                ("Renewable energy sources", "Qayta tiklanadigan energiya manbalari", "Transitioning to renewable energy sources is imperative."),
-                ("Depletion of natural resources", "Tabiiy resurslarning kamayishi", "Overconsumption leads to the rapid depletion of natural resources.")
+                ("Combat climate change", "World leaders met to discuss how to combat climate change."),
+                ("Renewable energy sources", "Solar and wind are key renewable energy sources."),
+                ("Depletion of natural resources", "Overconsumption accelerates the depletion of natural resources.")
             ]
         elif "education" in lower or "study" in lower or "school" in lower:
-            topic_name = "Education & Learning"
+            topic_name = "Education"
             items = [
-                ("Foster critical thinking", "Tanqidiy fikrlashni rivojlantirish", "Modern curricula strive to foster critical thinking."),
-                ("Attain academic excellence", "Yuqori akademik natijalarga erishish", "Consistent revision helps students attain academic excellence."),
-                ("Acquire in-depth knowledge", "Chuqur bilim egallamoq", "Internships allow trainees to acquire in-depth knowledge.")
+                ("Foster critical thinking", "Good teachers foster critical thinking in students."),
+                ("Attain academic excellence", "Regular practice helps students attain academic excellence."),
+                ("Acquire in-depth knowledge", "Internships allow you to acquire in-depth knowledge quickly.")
             ]
         else:
-            topic_name = "High-Impact Academic Vocabulary (Band 7.5+)"
+            topic_name = "High-Impact Academic Vocabulary (Band 7+)"
             items = [
-                ("Exert a profound influence on", "Chuqur ta'sir ko'rsatmoq", "Early mentorship exerts a profound influence on career success."),
-                ("Mitigate adverse consequences", "Salbiy oqibatlarni yumshatmoq", "Proactive planning helps mitigate adverse consequences."),
-                ("Invaluable asset", "Bebaho boylik/foyda", "Fluency in English is an invaluable asset in the global job market.")
+                ("Exert a profound influence on", "Mentorship exerts a profound influence on career success."),
+                ("Mitigate adverse consequences", "Early planning helps mitigate adverse consequences."),
+                ("Invaluable asset", "English fluency is an invaluable asset in today's job market.")
             ]
 
-        colloc_str = "\n".join([f"- **{col}** (*{uz}*): {ex}" for col, uz, ex in items])
+        colloc_str = "\n".join([f"- **{col}**: _{ex}_" for col, ex in items])
         return (
-            f"📚 **Vocabulary Booster: {topic_name} (Band 7.5+)**\n\n"
+            f"Here are some high-level collocations for **{topic_name}**, {name}:\n\n"
             f"{colloc_str}\n\n"
-            f"**Practice Task:** Pick one of these collocations and write an original sentence. I will provide instant feedback on your grammar and tone!"
+            f"Pick one and write your own sentence — I'll give you instant feedback!"
         )
 
-    # 5. META & CONVERSATIONAL FOLLOW-UPS (e.g. "Why are you typing like this?")
+    # 5. META & CONVERSATIONAL FOLLOW-UPS
     meta_patterns = [
         "why are you typing", "why do you type", "why are you talking",
         "why are you speaking", "why do you speak", "why are you answering like this",
@@ -486,60 +439,48 @@ def generate_pedagogical_guidance(
     ]
     if any(p in lower for p in meta_patterns):
         return (
-            f"I hear you, {name}! As your English Life learning coach, my goal is to guide you step-by-step "
-            f"and help you spot nuances in grammar and phrasing rather than just giving direct answers.\n\n"
-            f"I'm here to support your English journey in whatever way works best for you! Would you like us to:\n"
-            f"1. Have a natural casual conversation in English?\n"
-            f"2. Check or polish a specific sentence you wrote?\n"
-            f"3. Explain an English grammar rule in simpler terms?\n\n"
-            f"Tell me what you'd prefer to focus on!"
+            f"Fair point, {name}! I'm Aura — your English tutor here on English Life. "
+            f"My job is to help you improve naturally, not just hand you answers.\n\n"
+            f"What would you like to do?\n"
+            f"1. Just have a casual conversation in English\n"
+            f"2. Get feedback on something you wrote\n"
+            f"3. Learn a grammar rule explained simply\n\n"
+            f"Just tell me and we'll go from there!"
         )
 
-    # 6. GREETINGS (STRICT WORD BOUNDARIES TO PREVENT FALSE POSITIVES ON 'this', 'think', 'which', 'they')
+    # 6. GREETINGS
     greeting_match = re.search(
         r"\b(hello|hi|hey|assalomu\s+alaykum|assalom|salom|good\s+morning|good\s+afternoon|good\s+evening)\b",
         lower,
     )
     if greeting_match:
-        # Check if conversation already has past history (more than 1 message)
         has_prior_history = bool(history and len(history) > 1)
         if has_prior_history:
-            return (
-                f"👋 Hello again, {name}! Great to continue our English session.\n\n"
-                f"What sentence or topic would you like to explore next?"
-            )
+            return f"Hey {name}! Good to hear from you again. What would you like to work on?"
         return (
-            f"👋 Hello {name}! I'm **Aura**, your English Life AI learning coach.\n\n"
-            f"I'm here to help you build confidence in English without the fear of making mistakes! Here is what we can do today:\n"
-            f"- 📝 **Writing & Essay Clinic:** Brainstorm ideas, outline paragraphs, and refine vocabulary.\n"
-            f"- 🔍 **Grammar Check:** Share any sentence you wrote, and we'll check it together.\n"
-            f"- 🎯 **IELTS Band 7+ Collocations:** Learn natural, native expressions on any topic.\n"
-            f"- 💬 **Conversational Practice:** Practice speaking or writing about your goals, hobbies, or studies.\n\n"
-            f"What would you like to work on right now?"
+            f"Hey {name}! I'm Aura, your English tutor on English Life. 👋\n\n"
+            f"We can chat in English, check your writing, go over grammar, or build up vocabulary — whatever you need. "
+            f"What's on your mind today?"
         )
 
     if re.search(r"\b(how are you|how's it going|how are you doing)\b", lower):
         return (
-            f"I'm doing great, thank you for asking, {name}! 😊\n\n"
-            f"I'm all set to help you practice English today. How is your day going, and what would you like to work on?"
+            f"I'm great, thanks for asking! 😊 How's your day going, {name}? "
+            f"Ready to practice some English?"
         )
 
-    # 7. DYNAMIC COACHING DEFAULT (Analyzes user's exact words)
-    words_count = len(user_text.split())
+    # 7. GENERAL CONVERSATIONAL DEFAULT
     if user_text.endswith("?") or re.search(r"\b(can you|could you|would you|what is|how do|why)\b", lower):
         return (
-            f"That's a thoughtful question, {name}!\n\n"
-            f"Regarding *\"{user_text}\"*: in English, asking clarifying questions is one of the fastest ways to build mastery. "
-            f"Could you share a bit more context, or provide an example sentence so we can break down the exact grammar rule or vocabulary together?"
+            f"Good question, {name}! Could you give me a bit more context or share an example sentence? "
+            f"That way I can give you a much more specific and useful answer."
         )
 
+    # Default: engage naturally with what they said, invite them to share more
     return (
-        f"🎯 **Coaching Feedback for:** *\"{user_text}\"*\n\n"
-        f"Thank you for sharing this! You've used {words_count} words in your sentence.\n\n"
-        f"### 💡 Language Analysis:\n"
-        f"- **Structure & Flow:** Keep your core subject and main verb close together for clarity.\n"
-        f"- **Word Choice Tip:** Try to replace general words (like *'good'*, *'bad'*, *'thing'*) with specific nouns and verbs.\n\n"
-        f"Would you like me to suggest higher-level collocations for this, or check the grammar and punctuation together?"
+        f"Got it, {name}! That's interesting. "
+        f"If you'd like me to check the grammar or phrasing of what you wrote, just paste your sentence and I'll take a look. "
+        f"Or if you have a question about English, fire away!"
     )
 
 
@@ -594,8 +535,8 @@ async def chat_with_ai(
         },
         "contents": contents,
         "generationConfig": {
-            "temperature": 0.4,
-            "maxOutputTokens": 800,
+            "temperature": 0.7,
+            "maxOutputTokens": 600,
         },
     }
 
