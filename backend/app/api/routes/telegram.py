@@ -15,9 +15,10 @@ from app.db.session import get_db
 from app.models.group import Group
 from app.models.student import StudentProfile
 from app.models.user import User
-from app.schemas.student import ParentLinkInfo
+from app.schemas.student import ParentLinkInfo, StudentLinkInfo
 from app.services.telegram_bot import (
     build_parent_deep_link,
+    build_student_deep_link,
     delete_telegram_webhook,
     get_bot_username,
     get_telegram_bot_token,
@@ -126,6 +127,42 @@ async def unlink_parent(
     profile.parent_linked_at = None
     await db.commit()
     return {"success": True, "message": "Ota-ona Telegram boti muvaffaqiyatli uzildi."}
+
+
+@router.get("/student-link-info", response_model=StudentLinkInfo)
+async def get_student_link_info(
+    profile: StudentProfile = Depends(get_current_student_profile),
+):
+    """
+    Returns the one-click Telegram deep link and current student connection status
+    for the authenticated student (accessible for Standard & Pro VIP tiers).
+    """
+    bot_user = await get_bot_username()
+    link = build_student_deep_link(bot_user, profile.id)
+    is_paid = bool(profile.is_premium or profile.premium_plan in ("standard", "pro_vip"))
+    is_linked = bool(profile.phone and str(profile.phone).strip().isdigit())
+
+    return StudentLinkInfo(
+        student_id=profile.id,
+        bot_username=bot_user,
+        telegram_link=link,
+        is_student_linked=is_linked,
+        can_link_student=is_paid,
+        premium_plan=profile.premium_plan or "free",
+        student_telegram_chat_id=profile.phone if is_linked else None,
+    )
+
+
+@router.post("/unlink-student")
+async def unlink_student(
+    profile: StudentProfile = Depends(get_current_student_profile),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unlinks the student's personal Telegram account from the profile."""
+    profile.phone = None
+    await db.commit()
+    return {"success": True, "message": "Shaxsiy Telegram boti muvaffaqiyatli uzildi."}
+
 
 
 @router.post("/test-mock-link")

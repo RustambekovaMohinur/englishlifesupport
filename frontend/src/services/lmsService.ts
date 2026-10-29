@@ -32,6 +32,7 @@ import {
   UserProfileOut,
   UserProfileUpdate,
   ParentLinkInfo,
+  StudentLinkInfo,
   SendParentDigestResponse,
   CurriculumTemplate,
   CurriculumTemplateCreate,
@@ -624,6 +625,17 @@ export const unlinkParent = async (): Promise<{ success: boolean; message: strin
   const res = await api.post<{ success: boolean; message: string }>("/telegram/unlink-parent");
   return res.data;
 };
+
+export const getStudentLinkInfo = async (): Promise<StudentLinkInfo> => {
+  const res = await api.get<StudentLinkInfo>("/telegram/student-link-info");
+  return res.data;
+};
+
+export const unlinkStudent = async (): Promise<{ success: boolean; message: string }> => {
+  const res = await api.post<{ success: boolean; message: string }>("/telegram/unlink-student");
+  return res.data;
+};
+
 
 export const sendParentDigest = async (studentId: string): Promise<SendParentDigestResponse> => {
   const res = await api.post<SendParentDigestResponse>(`/students/${studentId}/send-parent-digest`);

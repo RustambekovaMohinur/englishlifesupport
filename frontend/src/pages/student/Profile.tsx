@@ -10,15 +10,17 @@ import {
   getMyPremiumStatus,
   getMyUnifiedProfile,
   getParentLinkInfo,
+  getStudentLinkInfo,
   removeMyAvatar,
   unlinkParent,
+  unlinkStudent,
   updateMyUnifiedProfile,
   uploadMyAvatar,
 } from "@/services/lmsService";
-import { Check, Copy, ExternalLink, KeyRound, LogOut, QrCode, Send, ShieldCheck, UserCheck } from "lucide-react";
+import { Bot, Check, Copy, ExternalLink, KeyRound, LogOut, QrCode, Send, ShieldCheck, Sparkles, UserCheck } from "lucide-react";
 import { getFileUrl } from "@/services/api";
 import { useAuth } from "@/hooks/useAuth";
-import { ParentLinkInfo, PremiumStatusOut, UserProfileOut } from "@/types";
+import { ParentLinkInfo, PremiumStatusOut, StudentLinkInfo, UserProfileOut } from "@/types";
 
 export default function StudentProfilePage() {
   const { logout, updateUser } = useAuth();
@@ -29,6 +31,10 @@ export default function StudentProfilePage() {
   const [showQR, setShowQR] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isUnlinking, setIsUnlinking] = useState(false);
+  const [studentLink, setStudentLink] = useState<StudentLinkInfo | null>(null);
+  const [showStudentQR, setShowStudentQR] = useState(false);
+  const [isStudentCopied, setIsStudentCopied] = useState(false);
+  const [isUnlinkingStudent, setIsUnlinkingStudent] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Edit modal state
@@ -65,8 +71,19 @@ export default function StudentProfilePage() {
       .catch(() => toast.error("Failed to load profile details"))
       .finally(() => setIsLoading(false));
 
+    getMyPremiumStatus()
+      .then((status) => {
+        setPremiumStatus(status);
+        if (status?.premium_plan) setPlan(status.premium_plan as any);
+      })
+      .catch(() => {});
+
     getParentLinkInfo()
       .then(setParentLink)
+      .catch(() => {});
+
+    getStudentLinkInfo()
+      .then(setStudentLink)
       .catch(() => {});
   }
 
@@ -90,6 +107,29 @@ export default function StudentProfilePage() {
       toast.error("Failed to disconnect parent bot");
     } finally {
       setIsUnlinking(false);
+    }
+  };
+
+  const copyStudentLink = () => {
+    if (!studentLink?.telegram_link) return;
+    navigator.clipboard.writeText(studentLink.telegram_link);
+    setIsStudentCopied(true);
+    toast.success("Student bot link copied to clipboard!");
+    setTimeout(() => setIsStudentCopied(false), 2500);
+  };
+
+  const handleUnlinkStudent = async () => {
+    if (!window.confirm("Are you sure you want to disconnect your personal Telegram bot?")) return;
+    setIsUnlinkingStudent(true);
+    try {
+      await unlinkStudent();
+      toast.success("Student Telegram bot disconnected successfully");
+      const updated = await getStudentLinkInfo();
+      setStudentLink(updated);
+    } catch {
+      toast.error("Failed to disconnect student bot");
+    } finally {
+      setIsUnlinkingStudent(false);
     }
   };
 
@@ -211,6 +251,12 @@ export default function StudentProfilePage() {
   const initials = `${profile.first_name?.[0] || profile.full_name?.[0] || "S"}${
     profile.last_name?.[0] || ""
   }`.toUpperCase();
+
+  const isPaid = Boolean(
+    premiumStatus?.is_premium ||
+    (premiumStatus?.premium_plan && premiumStatus.premium_plan !== "free") ||
+    studentLink?.can_link_student
+  );
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -504,8 +550,154 @@ export default function StudentProfilePage() {
           )}
         </div>
 
+        {/* Paid Plan Only: Student Personal Telegram Bot Connection Card */}
+        {isPaid && (
+          <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
+                    <Bot className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    <span>Student Personal Telegram Bot</span>
+                  </p>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
+                    <Sparkles className="w-3 h-3 text-purple-600" />
+                    <span className="capitalize">{premiumStatus?.premium_plan?.replace("_", " ") || "Standard"}</span>
+                  </span>
+                  {studentLink?.is_student_linked ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Connected</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+                      Not Connected
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                  Exclusive premium bot: receive homework reminders, flashcard spaced-repetition prompts, and test results in @{studentLink?.bot_username || "EnglishLife_edu_bot"}.
+                </p>
+              </div>
+
+              {studentLink?.is_student_linked && (
+                <button
+                  type="button"
+                  onClick={handleUnlinkStudent}
+                  disabled={isUnlinkingStudent}
+                  className="self-start sm:self-auto px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 transition active:scale-95 cursor-pointer"
+                >
+                  {isUnlinkingStudent ? "Disconnecting..." : "Disconnect (Unlink)"}
+                </button>
+              )}
+            </div>
+
+            {studentLink?.is_student_linked ? (
+              <div className="p-4 rounded-xl bg-purple-500/[0.06] dark:bg-purple-500/[0.1] border border-purple-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1 text-xs">
+                  <p className="font-semibold text-purple-950 dark:text-purple-200 flex items-center gap-1.5">
+                    <UserCheck className="w-4 h-4 text-purple-600" />
+                    <span>Personal Bot Connected</span>
+                    {studentLink.student_telegram_chat_id && (
+                      <span className="font-mono text-purple-700 dark:text-purple-400 font-normal">
+                        (ID: {studentLink.student_telegram_chat_id})
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Bot commands active: /status, /vazifalar, /reyting, /sozlar
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`https://t.me/${studentLink.bot_username || "EnglishLife_edu_bot"}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Open Bot in Telegram</span>
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/70 dark:border-purple-800/50 space-y-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-purple-950 dark:text-purple-200">
+                      Link your personal Telegram in 1 click:
+                    </p>
+                    <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl">
+                      Tap the button below to open Telegram and hit <strong>Start</strong> to sync your study profile with the bot.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {studentLink?.telegram_link && (
+                      <a
+                        href={studentLink.telegram_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition active:scale-95 shadow-xs"
+                      >
+                        <Send className="w-3.5 h-3.5 fill-current" />
+                        <span>Connect My Telegram</span>
+                        <ExternalLink className="w-3 h-3 opacity-70" />
+                      </a>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={copyStudentLink}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-semibold text-xs border border-zinc-200 dark:border-zinc-700 transition active:scale-95 shadow-2xs cursor-pointer"
+                    >
+                      {isStudentCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{isStudentCopied ? "Copied!" : "Copy Link"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowStudentQR((prev) => !prev)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-semibold text-xs border border-zinc-200 dark:border-zinc-700 transition active:scale-95 shadow-2xs cursor-pointer"
+                    >
+                      <QrCode className="w-3.5 h-3.5 text-purple-600" />
+                      <span>{showStudentQR ? "Hide QR" : "QR Code"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Collapsible QR Code */}
+                {showStudentQR && studentLink?.telegram_link && (
+                  <div className="pt-3 border-t border-purple-200/50 dark:border-purple-800/40 flex flex-col sm:flex-row items-center gap-4">
+                    <div className="p-2 bg-white rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-xs shrink-0">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(studentLink.telegram_link)}`}
+                        alt="Student Telegram QR Code"
+                        className="w-32 h-32 block"
+                      />
+                    </div>
+                    <div className="text-xs text-zinc-600 dark:text-zinc-300 space-y-1 text-center sm:text-left">
+                      <p className="font-bold text-zinc-800 dark:text-zinc-100">
+                        Scan with your phone
+                      </p>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                        Open your camera or Telegram app to scan this QR code and link your account.
+                      </p>
+                      <p className="font-mono text-[10px] text-zinc-400 break-all pt-1 select-all">
+                        {studentLink.telegram_link}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Password & Security Card */}
         <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+
           <div>
             <p className="text-sm font-semibold text-zinc-900 dark:text-white">Security &amp; Password</p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Ensure your account is using a secure password</p>

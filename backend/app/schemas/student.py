@@ -302,3 +302,14 @@ class SendParentDigestResponse(BaseModel):
     message: str
     recipient_chat_id: str | None = None
     digest_preview: str | None = None
+
+
+class StudentLinkInfo(BaseModel):
+    student_id: uuid.UUID
+    bot_username: str
+    telegram_link: str
+    is_student_linked: bool = False
+    can_link_student: bool = False
+    premium_plan: str = "free"
+    student_telegram_chat_id: str | None = None
+

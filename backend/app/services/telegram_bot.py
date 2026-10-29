@@ -217,6 +217,12 @@ def build_parent_deep_link(bot_username: str, student_id: uuid.UUID | str) -> st
     return f"https://t.me/{clean_bot}?start=parent_{student_id}"
 
 
+def build_student_deep_link(bot_username: str, student_id: uuid.UUID | str) -> str:
+    """Builds the one-click Telegram deep link for student personal bot linking (Standard & Pro VIP)."""
+    clean_bot = bot_username.replace("@", "").strip()
+    return f"https://t.me/{clean_bot}?start=link_student_{student_id}"
+
+
 # Notification helper functions for assignment and wordlist events
 async def notify_student_assignment(chat_id: int | str, assignment_title: str, due_date: datetime, is_update: bool = False) -> bool:
     """Send a Telegram message to a student about a new or updated assignment."""
@@ -627,11 +633,29 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                     res_s = await db.execute(select(StudentProfile).where(StudentProfile.id == s_uuid))
                     s_prof = res_s.scalar_one_or_none()
                     if s_prof:
+                        is_paid = bool(s_prof.is_premium or (s_prof.premium_plan in ("standard", "pro_vip")))
+                        if not is_paid:
+                            await send_telegram_message(
+                                chat_id=chat_id,
+                                text=(
+                                    f"🔒 Hurmatli <b>{s_prof.full_name}</b>, shaxsiy o'quvchi Telegram boti "
+                                    f"faqat <b>Standard (19k)</b> yoki <b>Pro VIP (29k)</b> obunachilari uchun mo'ljallangan.\n\n"
+                                    f"Ota-onangiz uchun bepul bildirishnomalarni esa LMS profilingizdagi "
+                                    f"<b>Ota-ona Telegram boti</b> orqali bepul ulashingiz mumkin! 🚀"
+                                ),
+                                reply_markup=REMOVE_KEYBOARD,
+                            )
+                            return {"ok": False, "reason": "student_bot_paid_only"}
+
                         s_prof.phone = str(chat_id)
                         await db.commit()
                         await send_telegram_message(
                             chat_id=chat_id,
-                            text=f"✅ Hurmatli <b>{s_prof.full_name}</b>, Telegram hisobingiz o'quvchi profilingizga muvaffaqiyatli bog'landi!",
+                            text=(
+                                f"✅ Hurmatli <b>{s_prof.full_name}</b>, shaxsiy Telegram hisobingiz muvaffaqiyatli bog'landi!\n\n"
+                                f"🌟 Rejangiz: <b>{s_prof.premium_plan.upper()}</b>\n"
+                                f"Endi dars jadvallari, vazifa eslatmalari va reytingingizni bot orqali bevosita kuzatishingiz mumkin."
+                            ),
                             reply_markup=STUDENT_KEYBOARD,
                         )
                         return {"ok": True, "action": "student_linked"}

@@ -306,6 +306,17 @@ export interface ParentLinkInfo {
   last_parent_digest_sent_at?: string | null;
 }
 
+export interface StudentLinkInfo {
+  student_id: string;
+  bot_username: string;
+  telegram_link: string;
+  is_student_linked: boolean;
+  can_link_student: boolean;
+  premium_plan: string;
+  student_telegram_chat_id?: string | null;
+}
+
+
 export interface SendParentDigestResponse {
   success: boolean;
   message: string;
