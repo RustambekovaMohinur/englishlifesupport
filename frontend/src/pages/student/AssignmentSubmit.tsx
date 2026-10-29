@@ -751,12 +751,19 @@ export default function StudentAssignmentSubmitPage() {
     assignment.is_past_deadline ||
     (assignment.deadline && new Date(assignment.deadline).getTime() < Date.now())
   );
-  // Do NOT lock past-deadline assignments; keep inputs and submit CTA unlocked for late catch-up submission!
+  // Check time-based curriculum release & sequential locking
+  const isTimeLocked = Boolean(
+    assignment.unlock_at && new Date(assignment.unlock_at).getTime() > Date.now()
+  );
+  // Do NOT lock past-deadline assignments; keep inputs and submit CTA unlocked for late catch-up submission,
+  // but future unreleased curriculum lessons are strictly locked!
   const isTaskLocked = Boolean(
-    !isElapsedDeadline &&
-    assignment.is_locked &&
-    assignment.prerequisite_id !== assignment.id &&
-    !assignment.title.toLowerCase().includes("ket listening test2")
+    isTimeLocked ||
+    (!isElapsedDeadline &&
+      assignment.is_locked &&
+      !assignment.unlocked_by_teacher &&
+      !assignment.is_exempted &&
+      !assignment.title.toLowerCase().includes("ket listening test2"))
   );
   const isGraded = assignment.submission_status === "graded";
   const isPastDeadline = isElapsedDeadline;
@@ -856,21 +863,23 @@ export default function StudentAssignmentSubmitPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200">
-                    Assignment Locked by Prerequisite Sequence
+                    {isTimeLocked ? "Lesson Locked (Curriculum Schedule)" : "Assignment Locked by Prerequisite Sequence"}
                   </h3>
                   <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                    {assignment.lock_reason || "You must finish previous homework before unlocking this task."}
+                    {assignment.lock_reason || (isTimeLocked ? "This lesson has not been unlocked yet according to the group curriculum schedule." : "You must finish previous homework before unlocking this task.")}
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                disabled={applyingPass}
-                onClick={handleApplyFreePass}
-                className="btn-sm bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1.5 rounded-xl font-bold shadow-xs shrink-0"
-              >
-                {applyingPass ? "Applying..." : "🛡 Use Free Pass"}
-              </button>
+              {!isTimeLocked && (
+                <button
+                  type="button"
+                  disabled={applyingPass}
+                  onClick={handleApplyFreePass}
+                  className="btn-sm bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1.5 rounded-xl font-bold shadow-xs shrink-0"
+                >
+                  {applyingPass ? "Applying..." : "🛡 Use Free Pass"}
+                </button>
+              )}
             </div>
           </div>
         )}

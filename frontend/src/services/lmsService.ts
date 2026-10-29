@@ -33,6 +33,8 @@ import {
   UserProfileUpdate,
   ParentLinkInfo,
   SendParentDigestResponse,
+  CurriculumTemplate,
+  CurriculumTemplateCreate,
   WeeklyLeaderboardOut,
 } from "@/types";
 
@@ -111,9 +113,9 @@ export const getGroupDetail = (group_id: string) =>
   cachedGet<GroupDetailOut>(`/groups/${group_id}/detail`);
 export const getMyCohortMatrix = () =>
   cachedGet<GroupDetailOut>("/groups/my/matrix");
-export const createGroup = (body: { name: string; english_level: string; schedule?: string; default_homework_time?: string; telegram_group_chat_id?: string }) =>
+export const createGroup = (body: { name: string; english_level: string; schedule?: string; default_homework_time?: string; telegram_group_chat_id?: string; start_date?: string | null; curriculum_template_id?: string | null }) =>
   api.post<Group>("/groups", body).then((r) => r.data);
-export const updateGroup = (id: string, body: Partial<{ name: string; english_level: string; schedule: string; default_homework_time?: string; is_active: boolean; telegram_group_chat_id?: string }>) =>
+export const updateGroup = (id: string, body: Partial<{ name: string; english_level: string; schedule: string; default_homework_time?: string; is_active: boolean; telegram_group_chat_id?: string; start_date?: string | null; curriculum_template_id?: string | null }>) =>
   api.patch<Group>(`/groups/${id}`, body).then((r) => r.data);
 export const deleteGroup = (id: string) => api.delete(`/groups/${id}`);
 export interface PublishCyclePayload {
@@ -622,3 +624,25 @@ export const testMockLinkParent = async (
   return res.data;
 };
 
+
+// Curriculum Template Release Engine
+export const listCurriculumTemplates = () =>
+  api.get<CurriculumTemplate[]>("/curriculum/templates").then((r) => r.data);
+
+export const getCurriculumTemplate = (id: string) =>
+  api.get<CurriculumTemplate>(`/curriculum/templates/${id}`).then((r) => r.data);
+
+export const createCurriculumTemplate = (body: CurriculumTemplateCreate) =>
+  api.post<CurriculumTemplate>("/curriculum/templates", body).then((r) => r.data);
+
+export const updateCurriculumTemplate = (id: string, body: Partial<CurriculumTemplateCreate>) =>
+  api.put<CurriculumTemplate>(`/curriculum/templates/${id}`, body).then((r) => r.data);
+
+export const deleteCurriculumTemplate = (id: string) =>
+  api.delete(`/curriculum/templates/${id}`);
+
+export const applyCurriculumTemplate = (templateId: string, groupId: string, startDate?: string | null) =>
+  api.post<{ success: boolean; message: string; assignments_created: number; assignments_updated: number; group_id: string; start_date?: string | null }>(
+    `/curriculum/templates/${templateId}/apply/${groupId}`,
+    startDate ? { start_date: startDate } : {}
+  ).then((r) => r.data);

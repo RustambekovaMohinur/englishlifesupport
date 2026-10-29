@@ -192,7 +192,8 @@ export default function StudentAssignmentsPage() {
     const handleCardClick = (e?: React.MouseEvent) => {
       if (isTaskLocked) {
         if (e) e.preventDefault();
-        toast(`🔒 Locked: Please complete and submit "${prereqTitle}" before starting this assignment.`, {
+        const msg = a.lock_reason || `Locked: Please complete and submit "${prereqTitle}" before starting this assignment.`;
+        toast(`🔒 ${msg}`, {
           icon: "🔒",
           duration: 4000,
         });

@@ -1,7 +1,8 @@
+from datetime import datetime
 import enum
 import uuid
 
-from sqlalchemy import Boolean, Enum, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,6 +35,11 @@ class Group(UUIDPKMixin, TimestampMixin, Base):
     # Telegram group chat ID for bound group notifications
     telegram_group_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     current_cycle: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    curriculum_template_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("curriculum_templates.id", ondelete="SET NULL"), nullable=True
+    )
 
+    curriculum_template: Mapped["CurriculumTemplate | None"] = relationship("CurriculumTemplate", lazy="selectin")
     students: Mapped[list["StudentProfile"]] = relationship(back_populates="group")
     assignments: Mapped[list["Assignment"]] = relationship(back_populates="group", cascade="all, delete-orphan")

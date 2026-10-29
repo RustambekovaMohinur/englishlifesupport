@@ -44,10 +44,12 @@ import {
   updateStudentPlacement,
   resetStudentPassword,
   deleteStudent,
+  listCurriculumTemplates,
 } from "@/services/lmsService";
 import {
   Group,
   GroupDetailOut,
+  CurriculumTemplate,
   GroupStudentDetail,
   GroupAssignmentHeader,
   AssignmentItemOverview,
@@ -346,6 +348,17 @@ export default function GroupDetailPage() {
               <span>⏰</span>
               <span>Default homework due time: <strong className="text-zinc-700 dark:text-zinc-300">{groupDetail.default_homework_time || "20:00"}</strong></span>
             </p>
+            {groupDetail.start_date && (
+              <p className="mt-1 text-xs text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 font-semibold">
+                <span>🗓️</span>
+                <span>Cohort Start Date: <strong className="font-mono">{new Date(groupDetail.start_date).toLocaleDateString()}</strong></span>
+                {groupDetail.curriculum_template_title && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-[11px]">
+                    📚 {groupDetail.curriculum_template_title}
+                  </span>
+                )}
+              </p>
+            )}
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                 🔄 Cycle {groupDetail.current_cycle || 1} Active
@@ -1224,13 +1237,22 @@ function EditGroupModal({
   const [level, setLevel] = useState(group.english_level);
   const [schedule, setSchedule] = useState(group.schedule ?? "");
   const [defaultHomeworkTime, setDefaultHomeworkTime] = useState(group.default_homework_time ?? "20:00");
+  const [startDate, setStartDate] = useState(group.start_date ? group.start_date.split("T")[0] : "");
+  const [curriculumTemplateId, setCurriculumTemplateId] = useState(group.curriculum_template_id ?? "");
+  const [curriculumTemplates, setCurriculumTemplates] = useState<CurriculumTemplate[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    listCurriculumTemplates().then(setCurriculumTemplates).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setName(group.name);
     setLevel(group.english_level);
     setSchedule(group.schedule ?? "");
     setDefaultHomeworkTime(group.default_homework_time ?? "20:00");
+    setStartDate(group.start_date ? group.start_date.split("T")[0] : "");
+    setCurriculumTemplateId(group.curriculum_template_id ?? "");
   }, [group, open]);
 
   async function handleSubmit(e: FormEvent) {
@@ -1242,6 +1264,8 @@ function EditGroupModal({
         english_level: level,
         schedule,
         default_homework_time: defaultHomeworkTime || "20:00",
+        start_date: startDate ? new Date(startDate).toISOString() : null,
+        curriculum_template_id: curriculumTemplateId || null,
       });
       toast.success("Group updated");
       onSaved();
@@ -1282,6 +1306,35 @@ function EditGroupModal({
             onChange={(e) => setSchedule(e.target.value)}
             placeholder="Mon/Wed/Fri 16:00-17:30"
           />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="label">Group Start Date</label>
+            <input
+              type="date"
+              className="input font-mono text-xs"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+            <p className="mt-1 text-[11px] text-zinc-400">
+              Curriculum lessons unlock based on start_date + offset
+            </p>
+          </div>
+          <div>
+            <label className="label">Curriculum Template</label>
+            <select
+              className="input text-xs"
+              value={curriculumTemplateId}
+              onChange={(e) => setCurriculumTemplateId(e.target.value)}
+            >
+              <option value="">None / Custom</option>
+              {curriculumTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title} ({t.items.length} lessons)
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div>
           <label className="label">Default Homework Due Time</label>

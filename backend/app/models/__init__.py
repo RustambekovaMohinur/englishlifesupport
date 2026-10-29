@@ -10,7 +10,8 @@ from app.models.refresh_token import RefreshToken  # noqa: F401
 from app.models.teacher import TeacherProfile  # noqa: F401
 from app.models.group import Group, EnglishLevel  # noqa: F401
 from app.models.student import StudentProfile  # noqa: F401
-from app.models.assignment import Assignment, AssignmentComment  # noqa: F401
+from app.models.curriculum import CurriculumTemplate, CurriculumItem  # noqa: F401
+from app.models.assignment import Assignment, AssignmentComment, AssignmentImage  # noqa: F401
 from app.models.feedback import FeedbackLike, FeedbackReply, PlatformFeedback  # noqa: F401
 from app.models.submission import (  # noqa: F401
     Submission,
@@ -55,8 +56,11 @@ __all__ = [
     "Group",
     "EnglishLevel",
     "StudentProfile",
+    "CurriculumTemplate",
+    "CurriculumItem",
     "Assignment",
     "AssignmentComment",
+    "AssignmentImage",
     "PlatformFeedback",
     "FeedbackReply",
     "FeedbackLike",

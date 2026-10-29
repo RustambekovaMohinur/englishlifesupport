@@ -13,8 +13,8 @@ class GroupCreate(BaseModel):
     english_level: EnglishLevel
     schedule: str | None = Field(default=None, max_length=255)
     telegram_group_chat_id: str | None = Field(default=None, max_length=32)
-
-    
+    start_date: datetime | None = None
+    curriculum_template_id: uuid.UUID | None = None
 
 
 class GroupUpdate(BaseModel):
@@ -24,6 +24,8 @@ class GroupUpdate(BaseModel):
     default_homework_time: str | None = Field(default=None, max_length=10)
     is_active: bool | None = None
     telegram_group_chat_id: str | None = Field(default=None, max_length=32)
+    start_date: datetime | None = None
+    curriculum_template_id: uuid.UUID | None = None
 
     @field_validator("default_homework_time")
     @classmethod
@@ -43,6 +45,9 @@ class GroupOut(BaseModel):
     is_active: bool
     telegram_group_chat_id: str | None = None
     student_count: int = 0
+    start_date: datetime | None = None
+    curriculum_template_id: uuid.UUID | None = None
+    curriculum_template_title: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -61,6 +66,8 @@ class AssignmentItemOverview(BaseModel):
     has_submission: bool = False
     is_overdue: bool = False
     is_locked: bool = False
+    unlock_at: datetime | None = None
+    day_offset: int | None = None
     submitted_at: datetime | None = None
 
 
@@ -92,6 +99,9 @@ class GroupAssignmentHeader(BaseModel):
     status: str
     cycle_number: int = 1
     prerequisite_id: uuid.UUID | None = None
+    unlock_at: datetime | None = None
+    day_offset: int | None = None
+    is_locked: bool = False
 
 
 class GroupDetailOut(BaseModel):
@@ -104,6 +114,9 @@ class GroupDetailOut(BaseModel):
     is_active: bool
     student_count: int = 0
     cycle_completion_percentage: int = 0
+    start_date: datetime | None = None
+    curriculum_template_id: uuid.UUID | None = None
+    curriculum_template_title: str | None = None
     assignments: list[GroupAssignmentHeader] = []
     students: list[GroupStudentDetail] = []
 

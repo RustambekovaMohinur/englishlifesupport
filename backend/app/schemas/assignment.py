@@ -24,6 +24,8 @@ class AssignmentCreate(BaseModel):
     status: AssignmentStatus = AssignmentStatus.DRAFT
     order_index: int = 0
     prerequisite_id: uuid.UUID | None = None
+    unlock_at: datetime | None = None
+    day_offset: int | None = None
 
 
 class AssignmentUpdate(BaseModel):
@@ -35,6 +37,8 @@ class AssignmentUpdate(BaseModel):
     status: AssignmentStatus | None = None
     order_index: int | None = None
     prerequisite_id: uuid.UUID | None = None
+    unlock_at: datetime | None = None
+    day_offset: int | None = None
 
 
 class AssignmentImageOut(BaseModel):
@@ -75,7 +79,6 @@ class AssignmentCommentOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-
 class AssignmentOut(BaseModel):
     id: uuid.UUID
     group_id: uuid.UUID
@@ -96,6 +99,9 @@ class AssignmentOut(BaseModel):
     cycle_number: int = 1
     prerequisite_id: uuid.UUID | None = None
     parent_digest_sent: bool = False
+    unlock_at: datetime | None = None
+    day_offset: int | None = None
+    is_locked: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -122,6 +128,8 @@ class AssignmentForStudent(BaseModel):
     order_index: int = 0
     cycle_number: int = 1
     prerequisite_id: uuid.UUID | None = None
+    unlock_at: datetime | None = None
+    day_offset: int | None = None
     is_locked: bool = False
     lock_reason: str | None = None
     is_exempted: bool = False
@@ -137,5 +145,3 @@ class AssignmentForStudent(BaseModel):
     flag_reason: str | None = None
 
     model_config = {"from_attributes": True}
-
-

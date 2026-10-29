@@ -22,6 +22,7 @@ const AssignmentsPage = lazy(() => import("@/pages/teacher/Assignments"));
 const SubmissionsPage = lazy(() => import("@/pages/teacher/Submissions"));
 const TeacherProfilePage = lazy(() => import("@/pages/teacher/Profile"));
 const TeacherWordlistsPage = lazy(() => import("@/pages/teacher/Wordlists"));
+const TeacherCurriculumPage = lazy(() => import("@/pages/teacher/Curriculum"));
 
 // Lazy-loaded student pages
 const StudentDashboardPage = lazy(() => import("@/pages/student/Dashboard"));
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="groups" element={<GroupsPage />} />
               <Route path="groups/:groupId" element={<GroupDetailPage />} />
               <Route path="assignments" element={<AssignmentsPage />} />
+              <Route path="curriculum" element={<TeacherCurriculumPage />} />
               <Route path="wordlists" element={<TeacherWordlistsPage />} />
               <Route path="submissions" element={<SubmissionsPage />} />
               <Route path="profile" element={<TeacherProfilePage />} />

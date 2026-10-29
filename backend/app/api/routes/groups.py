@@ -12,6 +12,8 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.group import Group
+from app.models.curriculum import CurriculumTemplate
+from datetime import timedelta
 from app.models.student import StudentProfile
 from app.models.submission import Submission
 from app.models.user import ApprovalStatus, User
@@ -97,6 +99,13 @@ async def get_active_student_counts(db: AsyncSession, group_ids: list[uuid.UUID]
 
 async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
     counts_map = await get_active_student_counts(db, [group.id])
+    tpl_title = None
+    if getattr(group, "curriculum_template", None):
+        tpl_title = group.curriculum_template.title
+    elif getattr(group, "curriculum_template_id", None):
+        tpl = (await db.execute(select(CurriculumTemplate.title).where(CurriculumTemplate.id == group.curriculum_template_id))).scalar_one_or_none()
+        tpl_title = tpl
+
     return GroupOut(
         id=group.id,
         name=group.name,
@@ -105,8 +114,10 @@ async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
         default_homework_time=group.default_homework_time or "20:00",
         current_cycle=getattr(group, "current_cycle", 1) or 1,
         is_active=group.is_active,
-        # telegram_group_chat_id removed – column does not exist
         student_count=counts_map.get(group.id, 0),
+        start_date=group.start_date,
+        curriculum_template_id=group.curriculum_template_id,
+        curriculum_template_title=tpl_title,
         created_at=group.created_at,
     )
 
@@ -136,6 +147,13 @@ async def list_groups(
     group_ids = [g.id for g in groups]
     counts_map = await get_active_student_counts(db, group_ids)
 
+    # Map template titles for groups in one query
+    tpl_ids = [g.curriculum_template_id for g in groups if getattr(g, "curriculum_template_id", None)]
+    tpl_map = {}
+    if tpl_ids:
+        tpl_res = await db.execute(select(CurriculumTemplate.id, CurriculumTemplate.title).where(CurriculumTemplate.id.in_(tpl_ids)))
+        tpl_map = dict(tpl_res.all())
+
     return [
         GroupOut(
             id=g.id,
@@ -146,6 +164,9 @@ async def list_groups(
             current_cycle=getattr(g, "current_cycle", 1) or 1,
             is_active=g.is_active,
             student_count=counts_map.get(g.id, 0),
+            start_date=g.start_date,
+            curriculum_template_id=g.curriculum_template_id,
+            curriculum_template_title=tpl_map.get(g.curriculum_template_id),
             created_at=g.created_at,
         )
         for g in groups
@@ -159,6 +180,8 @@ async def create_group(body: GroupCreate, current_user: User = Depends(require_t
         english_level=body.english_level,
         schedule=body.schedule,
         default_homework_time=body.default_homework_time or "20:00",
+        start_date=body.start_date,
+        curriculum_template_id=body.curriculum_template_id,
         created_by=current_user.id,
     )
     db.add(group)
@@ -424,9 +447,19 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
             status=a.status.value if hasattr(a.status, "value") else str(a.status),
             cycle_number=getattr(a, "cycle_number", 1) or 1,
             prerequisite_id=a.prerequisite_id,
+            unlock_at=a.unlock_at,
+            day_offset=a.day_offset,
+            is_locked=bool(a.unlock_at and now_dt < as_utc(a.unlock_at)),
         )
         for a in active_assignments
     ]
+
+    tpl_title = None
+    if getattr(group, "curriculum_template", None):
+        tpl_title = group.curriculum_template.title
+    elif getattr(group, "curriculum_template_id", None):
+        tpl_res = await db.execute(select(CurriculumTemplate.title).where(CurriculumTemplate.id == group.curriculum_template_id))
+        tpl_title = tpl_res.scalar_one_or_none()
 
     return GroupDetailOut(
         id=group.id,
@@ -438,6 +471,9 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
         is_active=group.is_active,
         student_count=len(final_students),
         cycle_completion_percentage=group_cycle_pct,
+        start_date=group.start_date,
+        curriculum_template_id=group.curriculum_template_id,
+        curriculum_template_title=tpl_title,
         assignments=headers,
         students=final_students,
     )
@@ -641,6 +677,24 @@ async def update_group(
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(group, field, value)
+
+    # When start_date is assigned or changed, automatically update lesson unlocking logic (start_date + lesson_offset)
+    if "start_date" in update_data and group.start_date:
+        assigns_res = await db.execute(
+            select(Assignment).where(
+                Assignment.group_id == group.id,
+                Assignment.day_offset.is_not(None),
+            )
+        )
+        for a in assigns_res.scalars().all():
+            new_unlock = as_utc(group.start_date) + timedelta(days=a.day_offset)
+            dl_offset = 1
+            if a.deadline and a.unlock_at:
+                dl_diff = (a.deadline - a.unlock_at).days
+                if dl_diff > 0:
+                    dl_offset = dl_diff
+            a.unlock_at = new_unlock
+            a.deadline = new_unlock + timedelta(days=dl_offset)
 
     try:
         await db.commit()

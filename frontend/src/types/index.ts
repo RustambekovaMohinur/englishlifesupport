@@ -27,6 +27,9 @@ export interface Group {
   telegram_group_chat_id?: string | null;
   is_active: boolean;
   student_count: number;
+  start_date?: string | null;
+  curriculum_template_id?: string | null;
+  curriculum_template_title?: string | null;
   created_at: string;
 }
 
@@ -128,6 +131,9 @@ export interface GroupAssignmentHeader {
   status: string;
   cycle_number?: number;
   prerequisite_id?: string | null;
+  unlock_at?: string | null;
+  day_offset?: number | null;
+  is_locked?: boolean;
 }
 
 export interface GroupDetailOut {
@@ -140,6 +146,9 @@ export interface GroupDetailOut {
   current_cycle?: number;
   cycle_completion_percentage?: number;
   student_count: number;
+  start_date?: string | null;
+  curriculum_template_id?: string | null;
+  curriculum_template_title?: string | null;
   assignments: GroupAssignmentHeader[];
   students: GroupStudentDetail[];
 }
@@ -402,6 +411,8 @@ export interface AssignmentForStudent {
   order_index?: number;
   cycle_number?: number;
   prerequisite_id?: string | null;
+  unlock_at?: string | null;
+  day_offset?: number | null;
   is_locked?: boolean;
   lock_reason?: string | null;
   is_exempted?: boolean;
@@ -953,3 +964,38 @@ export interface WeekendArenaSubmitResponse {
 }
 
 
+
+export interface CurriculumItem {
+  id: string;
+  template_id: string;
+  title: string;
+  description?: string | null;
+  day_offset: number;
+  order_index: number;
+  deadline_offset_days: number;
+  created_at: string;
+}
+
+export interface CurriculumTemplate {
+  id: string;
+  title: string;
+  description?: string | null;
+  english_level?: string | null;
+  created_by?: string | null;
+  items: CurriculumItem[];
+  item_count: number;
+  created_at: string;
+}
+
+export interface CurriculumTemplateCreate {
+  title: string;
+  description?: string | null;
+  english_level?: string | null;
+  items: {
+    title: string;
+    description?: string | null;
+    day_offset: number;
+    order_index?: number;
+    deadline_offset_days?: number;
+  }[];
+}

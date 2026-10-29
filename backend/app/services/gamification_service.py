@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.assignment import Assignment, AssignmentStatus
+from app.models.group import Group
 from app.models.gamification import (
     Achievement,
     FreePass,
@@ -326,6 +327,20 @@ async def is_assignment_locked_for_student(
     ).scalar_one_or_none()
     if not assignment:
         return False, None
+
+    now = ensure_utc(utcnow())
+    # 3.1 Check curriculum template release date (unlock_at or start_date + day_offset)
+    if assignment.unlock_at and now < ensure_utc(assignment.unlock_at):
+        unlock_str = ensure_utc(assignment.unlock_at).strftime("%b %d, %Y at %H:%M")
+        day_lbl = f" (Day {assignment.day_offset})" if getattr(assignment, 'day_offset', None) is not None else ""
+        return True, f"Locked: Lesson unlocks on {unlock_str}{day_lbl}"
+
+    if getattr(assignment, 'day_offset', None) is not None:
+        grp = (await db.execute(select(Group).where(Group.id == assignment.group_id))).scalar_one_or_none()
+        if grp and grp.start_date:
+            calc_unlock = ensure_utc(grp.start_date) + timedelta(days=assignment.day_offset)
+            if now < calc_unlock:
+                return True, f"Locked: Day {assignment.day_offset} lesson unlocks on {calc_unlock.strftime('%b %d, %Y')}"
 
     # 4. Determine prerequisite assignment (explicit or chronological N-1)
     prereq_id = assignment.prerequisite_id

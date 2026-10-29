@@ -341,13 +341,14 @@ async def submit_homework(
     now = ensure_utc(utcnow())
     is_late = ensure_utc(assignment.deadline) < now
 
-    # Enforce sequential task lock strictly on backend for active assignments
-    # Overdue/past deadline coursework is permitted to allow students to catch up
+    # Enforce sequential task lock and curriculum unlock date strictly on backend
+    # Overdue/past deadline coursework is permitted to allow students to catch up, but unreleased lessons are strictly 403
     is_locked, lock_reason = await is_assignment_locked_for_student(db, assignment_uuid, profile.id)
-    if is_locked and not is_late:
+    is_future_unreleased = bool(assignment.unlock_at and now < ensure_utc(assignment.unlock_at))
+    if is_future_unreleased or (is_locked and not is_late):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Task is locked: {lock_reason}",
+            detail=f"Task is locked: {lock_reason or 'This lesson has not been unlocked yet.'}",
         )
 
     # Harmonize text answer from content or text_answer

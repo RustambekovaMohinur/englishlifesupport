@@ -178,6 +178,10 @@ def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, 
     if insp is not None and "comments" in insp.attrs and insp.attrs.comments.loaded_value is not NO_VALUE:
         comment_count = len(assignment.comments or [])
 
+    now_chk = ensure_utc(utcnow())
+    assign_unlock = getattr(assignment, "unlock_at", None)
+    is_locked_calc = bool(assign_unlock and now_chk < ensure_utc(assign_unlock))
+
     return AssignmentOut(
         id=assignment.id,
         group_id=assignment.group_id,
@@ -197,6 +201,9 @@ def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, 
         order_index=getattr(assignment, "order_index", 0) or 0,
         cycle_number=getattr(assignment, "cycle_number", 1) or 1,
         prerequisite_id=getattr(assignment, "prerequisite_id", None),
+        unlock_at=assign_unlock,
+        day_offset=getattr(assignment, "day_offset", None),
+        is_locked=is_locked_calc,
     )
 
 
@@ -686,6 +693,21 @@ async def _build_student_assignments(
                 is_locked = False
                 lock_reason = None
 
+        # Check time-based / curriculum-offset release
+        if not is_locked and submission is None:
+            assign_unlock_at = getattr(assignment, "unlock_at", None)
+            if assign_unlock_at and now < ensure_utc(assign_unlock_at):
+                is_locked = True
+                unlock_str = ensure_utc(assign_unlock_at).strftime("%b %d, %Y at %H:%M")
+                day_lbl = f" (Day {assignment.day_offset})" if getattr(assignment, "day_offset", None) is not None else ""
+                lock_reason = f"Locked: Available on {unlock_str}{day_lbl}"
+            elif getattr(assignment, "day_offset", None) is not None and getattr(assignment.group, "start_date", None):
+                calc_unlock = ensure_utc(assignment.group.start_date) + timedelta(days=assignment.day_offset)
+                if now < calc_unlock:
+                    is_locked = True
+                    unlock_str = calc_unlock.strftime("%b %d, %Y")
+                    lock_reason = f"Locked: Day {assignment.day_offset} lesson unlocks on {unlock_str}"
+
         deadline_utc = ensure_utc(assignment.deadline)
         is_past_dl = deadline_utc < now
         is_overdue = is_past_dl and (submission is None)
@@ -747,6 +769,8 @@ async def _build_student_assignments(
                 order_index=getattr(assignment, "order_index", 0) or 0,
                 prerequisite_id=prereq_id,
                 prerequisite_title=prereq.title if (prereq_id and prereq) else None,
+                unlock_at=getattr(assignment, "unlock_at", None),
+                day_offset=getattr(assignment, "day_offset", None),
                 is_locked=is_locked,
                 lock_reason=lock_reason,
                 is_exempted=is_ovr_exempted,

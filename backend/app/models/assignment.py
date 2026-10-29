@@ -46,9 +46,15 @@ class Assignment(UUIDPKMixin, TimestampMixin, Base):
     parent_digest_sent: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=sa.text("false"), nullable=False
     )
+    unlock_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    day_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    curriculum_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("curriculum_items.id", ondelete="SET NULL"), nullable=True
+    )
 
     group: Mapped["Group"] = relationship(back_populates="assignments", lazy="selectin")
     prerequisite: Mapped["Assignment | None"] = relationship(remote_side="Assignment.id")
+    curriculum_item: Mapped["CurriculumItem | None"] = relationship("CurriculumItem", foreign_keys=[curriculum_item_id])
     submissions: Mapped[list["Submission"]] = relationship(
         back_populates="assignment", cascade="all, delete-orphan"
     )
@@ -107,6 +113,3 @@ class AssignmentComment(UUIDPKMixin, TimestampMixin, Base):
 
     assignment: Mapped["Assignment"] = relationship(back_populates="comments")
     user: Mapped["User"] = relationship(lazy="joined")
-
-
-

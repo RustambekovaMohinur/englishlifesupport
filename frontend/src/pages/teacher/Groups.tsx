@@ -10,8 +10,9 @@ import {
   getStudentHistory,
   listGroups,
   updateGroup,
+  listCurriculumTemplates,
 } from "@/services/lmsService";
-import { Group, GroupDetailOut, StudentHistoryOut } from "@/types";
+import { Group, GroupDetailOut, StudentHistoryOut, CurriculumTemplate } from "@/types";
 
 const LEVELS = [
   "beginner",
@@ -138,10 +139,23 @@ export default function GroupsPage() {
                   </div>
                 </div>
                 {g.schedule && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{g.schedule}</p>}
-                <div className="mt-1.5 flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                   <span>👥 {g.student_count} {g.student_count === 1 ? "student" : "students"}</span>
                   <span>•</span>
-                  <span>⏰ Due time: {g.default_homework_time || "20:00"}</span>
+                  <span>⏰ Due: {g.default_homework_time || "20:00"}</span>
+                  {g.start_date && (
+                    <>
+                      <span>•</span>
+                      <span className="font-mono text-indigo-600 dark:text-indigo-400 font-semibold">
+                        🗓 Start: {new Date(g.start_date).toLocaleDateString()}
+                      </span>
+                    </>
+                  )}
+                  {g.curriculum_template_title && (
+                    <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 text-[10px] font-bold">
+                      📚 {g.curriculum_template_title}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-2 flex items-center justify-between">
                   <span className="text-xs text-brand-600 dark:text-brand-400 font-semibold group-hover:underline">View Group Details →</span>
@@ -414,7 +428,14 @@ function GroupModal({
   const [schedule, setSchedule] = useState("");
   const [defaultHomeworkTime, setDefaultHomeworkTime] = useState("20:00");
   const [telegramGroupChatId, setTelegramGroupChatId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [curriculumTemplateId, setCurriculumTemplateId] = useState('');
+  const [curriculumTemplates, setCurriculumTemplates] = useState<CurriculumTemplate[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    listCurriculumTemplates().then(setCurriculumTemplates).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setName(group?.name ?? "");
@@ -422,12 +443,17 @@ function GroupModal({
     setSchedule(group?.schedule ?? "");
     setDefaultHomeworkTime(group?.default_homework_time ?? "20:00");
     setTelegramGroupChatId(group?.telegram_group_chat_id ?? "");
+    setStartDate(group?.start_date ? group.start_date.split("T")[0] : "");
+    setCurriculumTemplateId(group?.curriculum_template_id ?? "");
   }, [group, open]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setIsSaving(true);
     try {
+      const formattedStart = startDate ? new Date(startDate).toISOString() : null;
+      const formattedTpl = curriculumTemplateId || null;
+
       if (group) {
         await updateGroup(group.id, {
           telegram_group_chat_id: telegramGroupChatId,
@@ -435,6 +461,8 @@ function GroupModal({
           english_level: level,
           schedule,
           default_homework_time: defaultHomeworkTime || "20:00",
+          start_date: formattedStart,
+          curriculum_template_id: formattedTpl,
         });
       } else {
         await createGroup({
@@ -443,6 +471,8 @@ function GroupModal({
           schedule,
           telegram_group_chat_id: telegramGroupChatId,
           default_homework_time: defaultHomeworkTime || "20:00",
+          start_date: formattedStart,
+          curriculum_template_id: formattedTpl,
         });
       }
       toast.success(group ? "Group updated" : "Group created");
@@ -474,6 +504,35 @@ function GroupModal({
         <div>
           <label className="label">Schedule</label>
           <input className="input" value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="Mon/Wed/Fri 16:00-17:30" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="label">Group Start Date</label>
+            <input
+              type="date"
+              className="input font-mono text-xs"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+            <p className="mt-1 text-[11px] text-zinc-400">
+              Curriculum lessons unlock based on start_date + offset
+            </p>
+          </div>
+          <div>
+            <label className="label">Curriculum Template</label>
+            <select
+              className="input text-xs"
+              value={curriculumTemplateId}
+              onChange={(e) => setCurriculumTemplateId(e.target.value)}
+            >
+              <option value="">None / Custom</option>
+              {curriculumTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title} ({t.items.length} lessons)
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div>
           <label className="label">Default Homework Due Time</label>
