@@ -44,6 +44,11 @@ import {
   PublicNoteOut,
   StudyGroupCreate,
   StudyGroupOut,
+  AIChatMessageOut,
+  AIChatSend,
+  PeerChatContactOut,
+  PrivateMessageOut,
+  PrivateMessageSend,
 } from "@/types";
 
 /**
@@ -709,3 +714,21 @@ export const joinStudyGroup = (body: { group_id?: string; invite_code?: string }
 
 export const leaveStudyGroup = (groupId: string): Promise<{ status: string; message: string }> =>
   api.post<{ status: string; message: string }>(`/social/study-groups/${groupId}/leave`).then((r) => r.data);
+
+
+// ─── Step 4: Private Chat & AI Companion ─────────────────────────────────────
+
+export const listChatContacts = (): Promise<PeerChatContactOut[]> =>
+  api.get<PeerChatContactOut[]>('/chat/contacts').then((r) => r.data);
+
+export const getPeerMessages = (peerId: string): Promise<PrivateMessageOut[]> =>
+  api.get<PrivateMessageOut[]>(`/chat/messages/${peerId}`).then((r) => r.data);
+
+export const sendPrivateMessage = (body: PrivateMessageSend): Promise<PrivateMessageOut> =>
+  api.post<PrivateMessageOut>('/chat/messages', body).then((r) => r.data);
+
+export const getAIChatHistory = (): Promise<AIChatMessageOut[]> =>
+  api.get<AIChatMessageOut[]>('/chat/ai/history').then((r) => r.data);
+
+export const chatWithAI = (body: AIChatSend): Promise<AIChatMessageOut> =>
+  api.post<AIChatMessageOut>('/chat/ai', body).then((r) => r.data);

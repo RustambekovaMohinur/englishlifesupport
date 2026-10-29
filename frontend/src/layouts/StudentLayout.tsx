@@ -12,6 +12,7 @@ import {
   Clock,
   Layers,
   Users,
+  MessageSquare,
 } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/ui";
 import { MarqueeTicker } from "@/components/MarqueeTicker";
@@ -32,6 +33,7 @@ const sidebarNavItems = [
   { to: "/student/submissions", label: "My Submissions", icon: CheckSquare, hasBadge: false },
   { to: "/student/results", label: "My Results", icon: Trophy, hasBadge: false },
   { to: "/student/progress", label: "My Progress", icon: Flame, hasBadge: false },
+  { to: "/student/chat", label: "Chat & AI Coach", icon: MessageSquare, hasBadge: false },
   { to: "/student/social", label: "Community & Notes", icon: Users, hasBadge: false },
   { to: "/student/profile", label: "Profile", icon: User, hasBadge: false },
 ];
@@ -42,6 +44,7 @@ const bottomNavItems = [
   { to: "/student/vocabulary", label: "Cards", icon: Layers, hasBadge: false },
   { to: "/student/past-deadlines", label: "Past Due", icon: Clock, hasBadge: true },
   { to: "/student/leaderboard", label: "Rank", icon: Trophy, hasBadge: false },
+  { to: "/student/chat", label: "Chat & AI Coach", icon: MessageSquare, hasBadge: false },
   { to: "/student/social", label: "Community & Notes", icon: Users, hasBadge: false },
   { to: "/student/profile", label: "Profile", icon: User, hasBadge: false },
 ];

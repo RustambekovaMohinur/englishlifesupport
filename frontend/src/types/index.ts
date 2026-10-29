@@ -1134,3 +1134,47 @@ export interface StudyGroupCreate {
   topic?: string;
   max_members?: number;
 }
+
+
+// ─── Step 4: Private Chat & AI Companion ─────────────────────────────────────
+
+export interface PrivateMessageOut {
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  content: string;
+  is_read: boolean;
+  created_at: string;
+  sender_name: string;
+  sender_avatar?: string | null;
+  sender_badge?: string | null;
+  is_me: boolean;
+}
+
+export interface PrivateMessageSend {
+  recipient_id: string;
+  content: string;
+}
+
+export interface PeerChatContactOut {
+  student_id: string;
+  full_name: string;
+  username?: string | null;
+  avatar_url?: string | null;
+  custom_badge?: string | null;
+  premium_plan?: string | null;
+  last_message?: string | null;
+  last_message_at?: string | null;
+  unread_count?: number;
+}
+
+export interface AIChatMessageOut {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
+export interface AIChatSend {
+  message: string;
+}

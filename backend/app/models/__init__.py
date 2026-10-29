@@ -1,3 +1,7 @@
+from app.models.chat import (  # noqa: F401
+    PrivateMessage,
+    AIChatMessage,
+)
 from app.models.social import (  # noqa: F401
     PublicNote,
     NoteLike,
@@ -94,6 +98,8 @@ __all__ = [
     "WordlistItem",
     "WordlistQuizAttempt",
     "PublicNote",
+    "PrivateMessage",
+    "AIChatMessage",
     "NoteLike",
     "StudyGroup",
     "StudyGroupMember",
