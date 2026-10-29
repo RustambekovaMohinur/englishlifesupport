@@ -15,6 +15,9 @@ import {
 import { Logo, ThemeToggle } from "@/components/ui";
 import { MarqueeTicker } from "@/components/MarqueeTicker";
 import { useAuth } from "@/hooks/useAuth";
+import { PremiumBadge } from "@/components/PremiumBadge";
+import { useTheme } from "@/contexts/ThemeContext";
+import { getMyPremiumStatus } from "@/services/lmsService";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { PlatformFeedbackFloatingTrigger } from "@/components/PlatformFeedbackModal";
 import { listPastDeadlineAssignments } from "@/services/lmsService";
@@ -42,6 +45,9 @@ const bottomNavItems = [
 
 export default function StudentLayout() {
   const { user, logout } = useAuth();
+  const { setPlan } = useTheme();
+  const [premiumBadge, setPremiumBadge] = useState<string | null>(null);
+  const [premiumPlan, setPremiumPlan] = useState<string>("free");
   const location = useLocation();
   const isSubmitPage = location.pathname.includes("/submit");
 
@@ -67,6 +73,13 @@ export default function StudentLayout() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Load premium plan for badge display
+  useEffect(() => {
+    getMyPremiumStatus()
+      .then((s) => { setPremiumPlan(s.premium_plan); setPremiumBadge(s.custom_badge); setPlan(s.premium_plan); })
+      .catch(() => {});
   }, []);
 
   // Dynamic Overdue Count for "Past Deadlines" nav badge
@@ -268,7 +281,7 @@ export default function StudentLayout() {
               />
               <div className="text-left hidden xl:block">
                 <p className="text-xs font-semibold text-zinc-900 dark:text-white leading-tight group-hover:text-brand-600 transition">
-                  {user?.full_name || user?.username || "Student"}
+                  {user?.full_name || user?.username || "Student"} <PremiumBadge plan={premiumPlan} custom_badge={premiumBadge} />
                 </p>
                 <p className="text-[10px] text-zinc-400 font-mono">
                   {user?.email}

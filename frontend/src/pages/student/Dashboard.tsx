@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { EmptyState, LoadingRows, StatCard } from "@/components/ui";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { PeerProfileModal } from "@/components/PeerProfileModal";
+import { PremiumBadge } from "@/components/PremiumBadge";
 import { PlatformFeedbackModal, PublicCommunityReviewsWall } from "@/components/PlatformFeedbackModal";
 import {
   getStudentDashboard,
@@ -642,7 +643,7 @@ export default function StudentDashboardPage() {
                             size="xs"
                           />
                           <span className="truncate max-w-[130px] font-semibold text-neutral-900 dark:text-white">
-                            {entry.student_name} {entry.is_current_user && "(You)"}
+                            {entry.student_name} <PremiumBadge plan={entry.premium_plan} custom_badge={entry.custom_badge} /> {entry.is_current_user && "(You)"}
                           </span>
                         </div>
 

@@ -111,3 +111,116 @@
   background: rgba(99, 102, 241, 0.65); /* Vibrant Indigo on hover */
 }
 
+/* ─── Premium Themes ──────────────────────────────────────────────────── */
+/* Each theme overrides CSS custom-properties on the root element. */
+
+/* Default (unchanged) */
+.theme-default {}
+
+/* Light */
+.theme-light {
+  --tw-bg-opacity: 1;
+  background-color: #FFFFFF !important;
+  color: #111827 !important;
+}
+.theme-light .card { background: #F9FAFB !important; border-color: #E5E7EB !important; }
+
+/* Dark */
+.theme-dark {
+  background-color: #0B0F19 !important;
+  color: #F3F4F6 !important;
+}
+.theme-dark .card { background: #161B22 !important; border-color: #30363D !important; }
+
+/* Cyber Purple */
+.theme-cyber-purple {
+  background: linear-gradient(135deg, #1a0533 0%, #0d001a 50%, #160030 100%) !important;
+  color: #e9d5ff !important;
+}
+.theme-cyber-purple .card {
+  background: rgba(88, 28, 135, 0.25) !important;
+  border-color: rgba(167, 139, 250, 0.3) !important;
+  backdrop-filter: blur(12px);
+}
+.theme-cyber-purple header,
+.theme-cyber-purple nav,
+.theme-cyber-purple aside {
+  background: rgba(88, 28, 135, 0.4) !important;
+  border-color: rgba(167, 139, 250, 0.2) !important;
+}
+
+/* Neon Pink */
+.theme-neon-pink {
+  background: linear-gradient(135deg, #1f001a 0%, #0f0010 50%, #1f0a16 100%) !important;
+  color: #fce7f3 !important;
+}
+.theme-neon-pink .card {
+  background: rgba(157, 23, 77, 0.2) !important;
+  border-color: rgba(249, 168, 212, 0.3) !important;
+  backdrop-filter: blur(12px);
+}
+.theme-neon-pink header,
+.theme-neon-pink nav,
+.theme-neon-pink aside {
+  background: rgba(157, 23, 77, 0.35) !important;
+  border-color: rgba(249, 168, 212, 0.2) !important;
+}
+
+/* Emerald Green */
+.theme-emerald-green {
+  background: linear-gradient(135deg, #00201a 0%, #001a10 50%, #002218 100%) !important;
+  color: #d1fae5 !important;
+}
+.theme-emerald-green .card {
+  background: rgba(6, 95, 70, 0.25) !important;
+  border-color: rgba(110, 231, 183, 0.3) !important;
+  backdrop-filter: blur(12px);
+}
+.theme-emerald-green header,
+.theme-emerald-green nav,
+.theme-emerald-green aside {
+  background: rgba(6, 95, 70, 0.4) !important;
+  border-color: rgba(110, 231, 183, 0.2) !important;
+}
+
+/* Golden Sunset */
+.theme-golden-sunset {
+  background: linear-gradient(135deg, #1c0e00 0%, #1a0800 50%, #200d00 100%) !important;
+  color: #fef3c7 !important;
+}
+.theme-golden-sunset .card {
+  background: rgba(120, 53, 15, 0.25) !important;
+  border-color: rgba(252, 211, 77, 0.3) !important;
+  backdrop-filter: blur(12px);
+}
+.theme-golden-sunset header,
+.theme-golden-sunset nav,
+.theme-golden-sunset aside {
+  background: rgba(120, 53, 15, 0.4) !important;
+  border-color: rgba(252, 211, 77, 0.2) !important;
+}
+
+/* Animated gradient profile background for premium users */
+@keyframes premiumGradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.premium-profile-bg {
+  background-size: 300% 300%;
+  animation: premiumGradientShift 6s ease infinite;
+}
+.premium-profile-bg.cyber_purple {
+  background-image: linear-gradient(270deg, #7c3aed, #a21caf, #312e81, #7c3aed);
+}
+.premium-profile-bg.neon_pink {
+  background-image: linear-gradient(270deg, #ec4899, #be185d, #6d28d9, #ec4899);
+}
+.premium-profile-bg.emerald_green {
+  background-image: linear-gradient(270deg, #059669, #047857, #065f46, #059669);
+}
+.premium-profile-bg.golden_sunset {
+  background-image: linear-gradient(270deg, #f59e0b, #d97706, #b45309, #f59e0b);
+}
+

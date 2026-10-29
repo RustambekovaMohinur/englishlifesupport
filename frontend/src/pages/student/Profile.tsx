@@ -1,8 +1,12 @@
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { useTheme } from "@/contexts/ThemeContext";
+import ThemeSwitcher from "@/components/ThemeSwitcher";
+import { PremiumBadge } from "@/components/PremiumBadge";
 import toast from "react-hot-toast";
 import { LoadingRows, StatCard } from "@/components/ui";
 import {
   changeUserPassword,
+  getMyPremiumStatus,
   getMyUnifiedProfile,
   getParentLinkInfo,
   removeMyAvatar,
@@ -13,10 +17,12 @@ import {
 import { Check, Copy, ExternalLink, KeyRound, LogOut, QrCode, Send, ShieldCheck, UserCheck } from "lucide-react";
 import { getFileUrl } from "@/services/api";
 import { useAuth } from "@/hooks/useAuth";
-import { ParentLinkInfo, UserProfileOut } from "@/types";
+import { ParentLinkInfo, PremiumStatusOut, UserProfileOut } from "@/types";
 
 export default function StudentProfilePage() {
   const { logout, updateUser } = useAuth();
+  const { setPlan } = useTheme();
+  const [premiumStatus, setPremiumStatus] = useState<PremiumStatusOut | null>(null);
   const [profile, setProfile] = useState<UserProfileOut | null>(null);
   const [parentLink, setParentLink] = useState<ParentLinkInfo | null>(null);
   const [showQR, setShowQR] = useState(false);
@@ -242,7 +248,7 @@ export default function StudentProfilePage() {
 
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-zinc-900 dark:text-white">{profile.full_name}</h2>
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-white">{profile.full_name} <PremiumBadge plan={premiumStatus?.premium_plan} custom_badge={premiumStatus?.custom_badge} className="text-lg" /></h2>
                 <span className="badge bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 capitalize">{profile.role}</span>
               </div>
               <p className="text-sm font-medium text-brand-600 dark:text-brand-400">@{profile.username}</p>
@@ -328,6 +334,21 @@ export default function StudentProfilePage() {
             <span className="text-zinc-500 dark:text-zinc-400">Candidate ID</span>
             <span className="font-mono text-xs text-zinc-400 dark:text-zinc-500">{profile.user_id}</span>
           </div>
+        </div>
+
+        {/* Premium Theme Switcher */}
+        <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
+          <ThemeSwitcher />
+          {premiumStatus && premiumStatus.premium_plan !== "free" && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+              <span>Current plan:</span>
+              <span className="font-bold text-purple-600 dark:text-purple-400 capitalize">{premiumStatus.premium_plan.replace("_", " ")}</span>
+              <PremiumBadge plan={premiumStatus.premium_plan} custom_badge={premiumStatus.custom_badge} />
+              {premiumStatus.premium_expires_at && (
+                <span className="text-zinc-400">expires {new Date(premiumStatus.premium_expires_at).toLocaleDateString()}</span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Parent Telegram Notifications Card */}

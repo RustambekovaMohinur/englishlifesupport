@@ -791,6 +791,8 @@ export interface LeaderboardEntry {
   is_current_user: boolean;
   badge?: string | null;
   weekly_badge?: string | null;
+  custom_badge?: string | null;
+  premium_plan?: string | null;
 }
 
 export interface WeeklyLeaderboardOut {
