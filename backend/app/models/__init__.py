@@ -1,3 +1,9 @@
+from app.models.social import (  # noqa: F401
+    PublicNote,
+    NoteLike,
+    StudyGroup,
+    StudyGroupMember,
+)
 """
 Import every model module here so that:
 1. `Base.metadata` (used by Alembic autogenerate) knows about all tables.
@@ -87,4 +93,8 @@ __all__ = [
     "WordlistSet",
     "WordlistItem",
     "WordlistQuizAttempt",
+    "PublicNote",
+    "NoteLike",
+    "StudyGroup",
+    "StudyGroupMember",
 ]

@@ -40,6 +40,10 @@ import {
   SetPremiumPlanRequest,
   UpdatePremiumPreferencesRequest,
   PremiumThemesOut,
+  PublicNoteCreate,
+  PublicNoteOut,
+  StudyGroupCreate,
+  StudyGroupOut,
 } from "@/types";
 
 /**
@@ -678,3 +682,30 @@ export const adminSetPremiumPlan = (
 /** Get available themes for current user's plan */
 export const getPremiumThemes = (): Promise<PremiumThemesOut> =>
   api.get<PremiumThemesOut>('/premium/themes').then((r) => r.data);
+
+
+// ─── Step 3: Public Notes (Zametka) & Study Groups ──────────────────────────
+
+export const listPublicNotes = (params?: { category?: string; limit?: number; offset?: number }): Promise<PublicNoteOut[]> =>
+  api.get<PublicNoteOut[]>('/social/notes', { params }).then((r) => r.data);
+
+export const createPublicNote = (body: PublicNoteCreate): Promise<PublicNoteOut> =>
+  api.post<PublicNoteOut>('/social/notes', body).then((r) => r.data);
+
+export const toggleNoteLike = (noteId: string): Promise<{ liked: boolean; likes_count: number }> =>
+  api.post<{ liked: boolean; likes_count: number }>(`/social/notes/${noteId}/like`).then((r) => r.data);
+
+export const deletePublicNote = (noteId: string): Promise<void> =>
+  api.delete(`/social/notes/${noteId}`).then(() => undefined);
+
+export const listStudyGroups = (): Promise<StudyGroupOut[]> =>
+  api.get<StudyGroupOut[]>('/social/study-groups').then((r) => r.data);
+
+export const createStudyGroup = (body: StudyGroupCreate): Promise<StudyGroupOut> =>
+  api.post<StudyGroupOut>('/social/study-groups', body).then((r) => r.data);
+
+export const joinStudyGroup = (body: { group_id?: string; invite_code?: string }): Promise<{ status: string; message: string }> =>
+  api.post<{ status: string; message: string }>('/social/study-groups/join', body).then((r) => r.data);
+
+export const leaveStudyGroup = (groupId: string): Promise<{ status: string; message: string }> =>
+  api.post<{ status: string; message: string }>(`/social/study-groups/${groupId}/leave`).then((r) => r.data);

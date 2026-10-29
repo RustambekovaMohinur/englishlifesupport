@@ -1071,3 +1071,66 @@ export interface PremiumThemesOut {
   themes: PremiumThemeInfo[];
   available_theme_ids: string[];
 }
+
+// ─── Step 3: Public Notes (Zametka) & Study Groups ──────────────────────────
+
+export interface PublicNoteAuthor {
+  id: string;
+  full_name: string;
+  username?: string | null;
+  avatar_url?: string | null;
+  custom_badge?: string | null;
+  premium_plan?: string | null;
+}
+
+export interface PublicNoteOut {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  is_pinned: boolean;
+  likes_count: number;
+  has_liked: boolean;
+  created_at: string;
+  updated_at: string;
+  author: PublicNoteAuthor;
+}
+
+export interface PublicNoteCreate {
+  title: string;
+  content: string;
+  category?: string;
+}
+
+export interface StudyGroupMemberOut {
+  student_id: string;
+  full_name: string;
+  username?: string | null;
+  avatar_url?: string | null;
+  custom_badge?: string | null;
+  role: string;
+  joined_at: string;
+}
+
+export interface StudyGroupOut {
+  id: string;
+  name: string;
+  description: string;
+  topic: string;
+  max_members: number;
+  invite_code: string;
+  is_active: boolean;
+  member_count: number;
+  is_member: boolean;
+  is_creator: boolean;
+  created_at: string;
+  creator: PublicNoteAuthor;
+  members: StudyGroupMemberOut[];
+}
+
+export interface StudyGroupCreate {
+  name: string;
+  description?: string;
+  topic?: string;
+  max_members?: number;
+}
