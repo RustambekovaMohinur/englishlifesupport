@@ -349,9 +349,13 @@ export default function ChatHubPage() {
         <div className="flex-1 card overflow-hidden p-0 border border-zinc-200 dark:border-zinc-800 grid grid-cols-1 md:grid-cols-3">
           {/* Contacts List */}
           <div className="border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto flex flex-col">
-            <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-                Classmates & Peers
+            <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <span>Classmates & Peers</span>
+              </span>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                Paid Only
               </span>
             </div>
 
@@ -361,8 +365,9 @@ export default function ChatHubPage() {
                   <LoadingRows rows={3} />
                 </div>
               ) : contacts.length === 0 ? (
-                <div className="p-4 text-center text-xs text-zinc-400">
-                  No peers available yet.
+                <div className="p-4 text-center text-xs text-zinc-400 space-y-1">
+                  <p className="font-semibold text-zinc-600 dark:text-zinc-300">No paid peers available yet</p>
+                  <p className="text-[11px] text-zinc-400">Classmates who upgrade to Standard or Pro VIP will automatically appear here!</p>
                 </div>
               ) : (
                 contacts.map((contact) => {

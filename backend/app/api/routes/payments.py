@@ -47,7 +47,7 @@ PLAN_PERMISSIONS = {
 }
 
 
-def _activate_plan(student: StudentProfile, user: User, plan: str):
+async def _activate_plan(student: StudentProfile, user: User, plan: str, db: AsyncSession | None = None):
     """Activate 30-day premium plan on student profile and user model."""
     perms = PLAN_PERMISSIONS.get(plan, PLAN_PERMISSIONS["standard"])
     expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
@@ -60,6 +60,14 @@ def _activate_plan(student: StudentProfile, user: User, plan: str):
         obj.can_write_notes = perms["can_write_notes"]
         obj.can_private_chat = perms["can_private_chat"]
         obj.can_create_groups = perms["can_create_groups"]
+
+    if db and plan in ("standard", "pro_vip"):
+        try:
+            from app.api.routes.social import ensure_global_premium_group
+            await ensure_global_premium_group(db, student)
+        except Exception as ex:
+            logger.warning("Failed to auto-enroll student in global premium group: %s", ex)
+
 
 
 @router.post("/create-order", response_model=CreateOrderResponse, summary="Create a tokenized payment order")
@@ -161,7 +169,7 @@ async def mock_checkout(
     tx.completed_at = datetime.datetime.now(datetime.timezone.utc)
 
     # Activate premium plan
-    _activate_plan(tx.student, tx.student.user, tx.plan)
+    await _activate_plan(tx.student, tx.student.user, tx.plan, db)
 
     await db.commit()
     logger.info("Payment order %s completed successfully. Activated plan=%s for %s", tx.provider_transaction_id, tx.plan, tx.student.full_name)
@@ -229,7 +237,7 @@ async def click_webhook(
     if str(action) == "1":
         tx.status = "completed"
         tx.completed_at = datetime.datetime.now(datetime.timezone.utc)
-        _activate_plan(tx.student, tx.student.user, tx.plan)
+        await _activate_plan(tx.student, tx.student.user, tx.plan, db)
         await db.commit()
 
         return {
@@ -291,7 +299,7 @@ async def payme_webhook(
 
         tx.status = "completed"
         tx.completed_at = datetime.datetime.now(datetime.timezone.utc)
-        _activate_plan(tx.student, tx.student.user, tx.plan)
+        await _activate_plan(tx.student, tx.student.user, tx.plan, db)
         await db.commit()
 
         return {

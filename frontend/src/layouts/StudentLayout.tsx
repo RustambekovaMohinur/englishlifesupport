@@ -14,6 +14,9 @@ import {
   Users,
   MessageSquare,
   CreditCard,
+  Menu,
+  X,
+  Star,
 } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/ui";
 import { MarqueeTicker } from "@/components/MarqueeTicker";
@@ -22,7 +25,7 @@ import { PremiumBadge } from "@/components/PremiumBadge";
 import { useTheme } from "@/contexts/ThemeContext";
 import { getMyPremiumStatus } from "@/services/lmsService";
 import { UserAvatar } from "@/components/common/UserAvatar";
-import { PlatformFeedbackFloatingTrigger } from "@/components/PlatformFeedbackModal";
+import { PlatformFeedbackFloatingTrigger, PlatformFeedbackModal } from "@/components/PlatformFeedbackModal";
 import { listPastDeadlineAssignments } from "@/services/lmsService";
 import { PageLoadingFallback } from "@/components/common/PageLoadingFallback";
 
@@ -40,16 +43,12 @@ const sidebarNavItems = [
   { to: "/student/profile", label: "Profile", icon: User, hasBadge: false },
 ];
 
+// Clean, 4-item mobile bottom nav + 5th Menu toggle button (zero overflow or truncation)
 const bottomNavItems = [
   { to: "/student", label: "Home", icon: LayoutDashboard, end: true, hasBadge: false },
   { to: "/student/assignments", label: "Tasks", icon: BookOpen, hasBadge: false },
   { to: "/student/vocabulary", label: "Cards", icon: Layers, hasBadge: false },
-  { to: "/student/past-deadlines", label: "Past Due", icon: Clock, hasBadge: true },
-  { to: "/student/leaderboard", label: "Rank", icon: Trophy, hasBadge: false },
-  { to: "/student/billing", label: "Premium Plans", icon: CreditCard, hasBadge: false },
-  { to: "/student/chat", label: "Chat & AI Coach", icon: MessageSquare, hasBadge: false },
-  { to: "/student/social", label: "Community & Notes", icon: Users, hasBadge: false },
-  { to: "/student/profile", label: "Profile", icon: User, hasBadge: false },
+  { to: "/student/chat", label: "Chat", icon: MessageSquare, hasBadge: false },
 ];
 
 export default function StudentLayout() {
@@ -57,7 +56,10 @@ export default function StudentLayout() {
   const { setPlan } = useTheme();
   const [premiumBadge, setPremiumBadge] = useState<string | null>(null);
   const [premiumPlan, setPremiumPlan] = useState<string>("free");
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const location = useLocation();
+
   const isSubmitPage = location.pathname.includes("/submit");
 
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -105,6 +107,12 @@ export default function StudentLayout() {
       })
       .catch(() => {});
   }, [location.pathname]);
+
+  // Close mobile drawer on navigation
+  useEffect(() => {
+    setIsMobileDrawerOpen(false);
+  }, [location.pathname]);
+
 
   return (
     <div className="flex h-screen max-h-screen w-full max-w-full overflow-hidden overflow-x-hidden bg-[#FBFBFA] dark:bg-[#0B0F19] font-sans antialiased text-zinc-900 dark:text-zinc-100 transition-colors">
@@ -234,17 +242,26 @@ export default function StudentLayout() {
       <div className="flex min-w-0 flex-1 flex-col h-full overflow-hidden">
         {/* Tablet & Mobile Header (lg:hidden) */}
         {!isSubmitPage && (
-          <header className="flex h-16 items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-[#111827]/80 backdrop-blur-md px-4 sm:px-6 lg:hidden shrink-0 sticky top-0 z-30">
-            <div className="flex items-center gap-2.5">
+          <header className="flex h-16 items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-[#111827]/80 backdrop-blur-md px-3 sm:px-6 lg:hidden shrink-0 sticky top-0 z-30">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsMobileDrawerOpen(true)}
+                className="p-2 -ml-1 rounded-xl text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition active:scale-95"
+                title="Open Navigation Menu"
+                aria-label="Open Navigation Menu"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
               <Logo className="h-7 w-7 text-xs" />
               <div>
-                <span className="font-bold text-zinc-900 dark:text-white block leading-tight text-sm tracking-tight">
-                  Asadbek Khasanov
+                <span className="font-bold text-zinc-900 dark:text-white block leading-tight text-sm tracking-tight truncate max-w-[130px] sm:max-w-none">
+                  {user?.full_name || "Candidate Portal"}
                 </span>
                 <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Candidate Portal</span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <ThemeToggle />
               <NavLink
                 to="/student/profile"
@@ -332,7 +349,7 @@ export default function StudentLayout() {
       {!isSubmitPage && (
         <nav
           aria-label="Mobile Navigation"
-          className="fixed bottom-0 left-0 right-0 z-50 block lg:hidden bg-white/90 dark:bg-[#111827]/90 backdrop-blur-xl border-t border-zinc-200/80 dark:border-zinc-800/80 px-2 py-1.5 flex justify-around items-center shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+          className="fixed bottom-0 left-0 right-0 z-40 block lg:hidden bg-white/95 dark:bg-[#111827]/95 backdrop-blur-xl border-t border-zinc-200/80 dark:border-zinc-800/80 px-2 py-1.5 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
         >
           <div className="flex items-center justify-around w-full max-w-md mx-auto">
             {bottomNavItems.map((item) => (
@@ -341,7 +358,7 @@ export default function StudentLayout() {
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) =>
-                  `flex flex-col items-center justify-center min-w-[56px] py-1 px-1 transition-all duration-150 active:scale-95 select-none ${
+                  `flex flex-col items-center justify-center flex-1 py-1 px-1 transition-all duration-150 active:scale-95 select-none ${
                     isActive
                       ? "text-indigo-600 dark:text-indigo-400 font-semibold"
                       : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
@@ -373,12 +390,143 @@ export default function StudentLayout() {
                 )}
               </NavLink>
             ))}
+
+            {/* 5th Mobile Bottom Bar Item: Standard Hamburger Menu Trigger */}
+            <button
+              type="button"
+              onClick={() => setIsMobileDrawerOpen(true)}
+              className={`flex flex-col items-center justify-center flex-1 py-1 px-1 transition-all duration-150 active:scale-95 select-none ${
+                isMobileDrawerOpen
+                  ? "text-indigo-600 dark:text-indigo-400 font-semibold"
+                  : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+              }`}
+              aria-label="Open Navigation Menu"
+            >
+              <div className="relative p-1 rounded-xl">
+                <Menu className="h-[18px] w-[18px]" strokeWidth={isMobileDrawerOpen ? 2.5 : 1.75} />
+                {overdueCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] leading-tight mt-0.5 tracking-tight truncate max-w-full">
+                Menu
+              </span>
+            </button>
           </div>
         </nav>
       )}
 
+      {/* Slide-out Mobile Navigation Drawer (Full Menu Collapse) */}
+      {isMobileDrawerOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          {/* Backdrop overlay */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            onClick={() => setIsMobileDrawerOpen(false)}
+          />
+
+          {/* Drawer container */}
+          <div className="fixed inset-y-0 left-0 w-full max-w-xs bg-white dark:bg-[#111827] shadow-2xl flex flex-col border-r border-zinc-200/80 dark:border-zinc-800 animate-in slide-in-from-left duration-200 z-10">
+            {/* Drawer Header */}
+            <div className="p-4 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <UserAvatar
+                  src={user?.avatar_url}
+                  name={user?.full_name || user?.username || user?.email}
+                  size="md"
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-zinc-900 dark:text-white truncate flex items-center gap-1.5">
+                    <span>{user?.full_name || user?.username || "Student"}</span>
+                    <PremiumBadge plan={premiumPlan} custom_badge={premiumBadge} />
+                  </p>
+                  <p className="text-[11px] text-zinc-400 truncate font-mono">{user?.email}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileDrawerOpen(false)}
+                className="p-1.5 rounded-xl text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition active:scale-95"
+                aria-label="Close Menu"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Drawer Nav Items */}
+            <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+              {sidebarNavItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.end}
+                    onClick={() => setIsMobileDrawerOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition active:scale-[0.98] ${
+                        isActive
+                          ? "bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-600/20"
+                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white"
+                      }`
+                    }
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {item.hasBadge && overdueCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-rose-500 text-white">
+                        {overdueCount}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
+
+              {/* Student Feedback & Reviews Trigger inside Drawer */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileDrawerOpen(false);
+                  setIsFeedbackModalOpen(true);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition active:scale-[0.98]"
+              >
+                <Star className="w-4 h-4 shrink-0 fill-amber-500" />
+                <span className="flex-1 text-left truncate">Student Reviews & Feedback</span>
+              </button>
+            </nav>
+
+            {/* Drawer Footer */}
+            <div className="p-4 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/30">
+              <ThemeToggle />
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileDrawerOpen(false);
+                  logout();
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition active:scale-95"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Community Platform Feedback Floating Widget */}
       {!isSubmitPage && <PlatformFeedbackFloatingTrigger />}
+
+      {/* Mobile Drawer Feedback Modal Instance */}
+      <PlatformFeedbackModal
+        isOpen={isFeedbackModalOpen}
+        onClose={() => setIsFeedbackModalOpen(false)}
+      />
     </div>
   );
 }
+

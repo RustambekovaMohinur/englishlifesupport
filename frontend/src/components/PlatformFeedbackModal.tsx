@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Star, MessageSquarePlus, MessageSquare, X, Check, Loader2, Sparkles, Heart, Send } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -229,18 +230,27 @@ export function PlatformFeedbackModal({ isOpen, onClose, onSubmitted, onSuccess 
 
 export function PlatformFeedbackFloatingTrigger() {
   const [modalOpen, setModalOpen] = useState(false);
+  const location = useLocation();
+
+  // Hide on chat and assignment submit routes so the button never blocks input boxes or send buttons
+  const isChatRoute = location.pathname.includes("/chat");
+  const isSubmitRoute = location.pathname.includes("/submit");
+
+  if (isChatRoute || isSubmitRoute) {
+    return null;
+  }
 
   return (
     <>
       <button
         type="button"
         onClick={() => setModalOpen(true)}
-        className="fixed bottom-20 sm:bottom-6 right-4 lg:right-6 z-40 inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold shadow-lg shadow-amber-500/25 transition-all hover:scale-105 active:scale-95 group"
+        className="fixed bottom-20 sm:bottom-6 right-3 sm:right-6 z-40 inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold shadow-lg shadow-amber-500/25 transition-all hover:scale-105 active:scale-95 group"
         title="Platform Feedback & Reviews"
       >
         <Star className="w-3.5 h-3.5 fill-white transition-transform group-hover:rotate-12" />
         <span className="hidden sm:inline">Feedback & Reviews</span>
-        <span className="sm:hidden">Reviews</span>
+        <span className="sm:hidden text-[11px]">Reviews</span>
       </button>
 
       <PlatformFeedbackModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />

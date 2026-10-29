@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -66,18 +67,19 @@ async def list_chat_contacts(
     if not profile:
         raise HTTPException(status_code=403, detail="Student profile required.")
 
-    # Find peers who have can_private_chat or are in the same cohort
+    # Find peers who have an active paid plan (Standard / Pro VIP)
     peers_query = (
         select(StudentProfile)
         .options(selectinload(StudentProfile.user))
         .where(
             StudentProfile.id != profile.id,
             or_(
-                StudentProfile.can_private_chat.is_(True),
-                StudentProfile.group_id == profile.group_id,
+                StudentProfile.premium_plan.in_(["standard", "pro_vip"]),
+                StudentProfile.is_premium.is_(True),
             ),
+            StudentProfile.premium_plan != "free",
         )
-        .limit(30)
+        .limit(50)
     )
     peers = (await db.execute(peers_query)).scalars().all()
 
@@ -296,7 +298,9 @@ def format_gemini_multiturn_contents(
     return [{"role": r, "parts": [{"text": t}]} for r, t in coalesced]
 
 
-def generate_pedagogical_guidance(user_text: str, student_name: str | None = None) -> str:
+def generate_pedagogical_guidance(
+    user_text: str, student_name: str | None = None, history: list[AIChatMessage] | None = None
+) -> str:
     """
     Generates an intelligent, context-aware pedagogical response tailored to the student's prompt
     when the Gemini API is offline, unconfigured, or rate-limited.
@@ -305,6 +309,7 @@ def generate_pedagogical_guidance(user_text: str, student_name: str | None = Non
     - Scaffolds outlines, guiding questions, and topic collocations
     - Corrects grammar errors with rules & native examples
     - Explains grammar concepts with clear formulas
+    - Preserves session memory without repeating initial welcome banners
     """
     name = (student_name or "").split()[0] if student_name else "Learner"
     lower = user_text.lower()
@@ -470,9 +475,39 @@ def generate_pedagogical_guidance(user_text: str, student_name: str | None = Non
             f"**Practice Task:** Pick one of these collocations and write an original sentence. I will provide instant feedback on your grammar and tone!"
         )
 
-    # 5. GREETING & CONVERSATIONAL ENGAGEMENT
-    greetings = ["hello", "hi", "hey", "assalom", "salom", "good morning", "good evening", "how are you"]
-    if any(g in lower for g in greetings):
+    # 5. META & CONVERSATIONAL FOLLOW-UPS (e.g. "Why are you typing like this?")
+    meta_patterns = [
+        "why are you typing", "why do you type", "why are you talking",
+        "why are you speaking", "why do you speak", "why are you answering like this",
+        "why like this", "why do you answer like this", "what do you mean",
+        "who are you", "what are you", "nega bunday", "nega unaqa",
+        "tushunmadim", "javob ber", "stop saying that", "don't repeat",
+        "why do you say", "why are you saying",
+    ]
+    if any(p in lower for p in meta_patterns):
+        return (
+            f"I hear you, {name}! As your English Life learning coach, my goal is to guide you step-by-step "
+            f"and help you spot nuances in grammar and phrasing rather than just giving direct answers.\n\n"
+            f"I'm here to support your English journey in whatever way works best for you! Would you like us to:\n"
+            f"1. Have a natural casual conversation in English?\n"
+            f"2. Check or polish a specific sentence you wrote?\n"
+            f"3. Explain an English grammar rule in simpler terms?\n\n"
+            f"Tell me what you'd prefer to focus on!"
+        )
+
+    # 6. GREETINGS (STRICT WORD BOUNDARIES TO PREVENT FALSE POSITIVES ON 'this', 'think', 'which', 'they')
+    greeting_match = re.search(
+        r"\b(hello|hi|hey|assalomu\s+alaykum|assalom|salom|good\s+morning|good\s+afternoon|good\s+evening)\b",
+        lower,
+    )
+    if greeting_match:
+        # Check if conversation already has past history (more than 1 message)
+        has_prior_history = bool(history and len(history) > 1)
+        if has_prior_history:
+            return (
+                f"👋 Hello again, {name}! Great to continue our English session.\n\n"
+                f"What sentence or topic would you like to explore next?"
+            )
         return (
             f"👋 Hello {name}! I'm **Aura**, your English Life AI learning coach.\n\n"
             f"I'm here to help you build confidence in English without the fear of making mistakes! Here is what we can do today:\n"
@@ -483,8 +518,21 @@ def generate_pedagogical_guidance(user_text: str, student_name: str | None = Non
             f"What would you like to work on right now?"
         )
 
-    # 6. DYNAMIC COACHING DEFAULT (Analyzes user's exact words)
+    if re.search(r"\b(how are you|how's it going|how are you doing)\b", lower):
+        return (
+            f"I'm doing great, thank you for asking, {name}! 😊\n\n"
+            f"I'm all set to help you practice English today. How is your day going, and what would you like to work on?"
+        )
+
+    # 7. DYNAMIC COACHING DEFAULT (Analyzes user's exact words)
     words_count = len(user_text.split())
+    if user_text.endswith("?") or re.search(r"\b(can you|could you|would you|what is|how do|why)\b", lower):
+        return (
+            f"That's a thoughtful question, {name}!\n\n"
+            f"Regarding *\"{user_text}\"*: in English, asking clarifying questions is one of the fastest ways to build mastery. "
+            f"Could you share a bit more context, or provide an example sentence so we can break down the exact grammar rule or vocabulary together?"
+        )
+
     return (
         f"🎯 **Coaching Feedback for:** *\"{user_text}\"*\n\n"
         f"Thank you for sharing this! You've used {words_count} words in your sentence.\n\n"
@@ -493,6 +541,7 @@ def generate_pedagogical_guidance(user_text: str, student_name: str | None = Non
         f"- **Word Choice Tip:** Try to replace general words (like *'good'*, *'bad'*, *'thing'*) with specific nouns and verbs.\n\n"
         f"Would you like me to suggest higher-level collocations for this, or check the grammar and punctuation together?"
     )
+
 
 
 @router.post("/ai", response_model=AIChatMessageOut, summary="Chat with AI Learning Companion (Safe)")
@@ -567,7 +616,7 @@ async def chat_with_ai(
 
     if not reply_text:
         # Context-rich dynamic pedagogical response
-        reply_text = generate_pedagogical_guidance(user_text, student_name=profile.full_name)
+        reply_text = generate_pedagogical_guidance(user_text, student_name=profile.full_name, history=history_rows)
 
     # Save assistant message
     ai_msg = AIChatMessage(

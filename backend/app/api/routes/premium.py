@@ -205,6 +205,14 @@ async def admin_set_premium_plan(
     _apply_plan(profile, user, body.plan, body.expires_at, body.custom_badge)
 
     await db.commit()
+
+    if body.plan in ("standard", "pro_vip"):
+        try:
+            from app.api.routes.social import ensure_global_premium_group
+            await ensure_global_premium_group(db, profile)
+        except Exception as ex:
+            logger.warning("Failed to auto-enroll into global premium group: %s", ex)
+
     logger.info(
         "Teacher %s set premium plan=%s for student %s (expires=%s)",
         current_user.username, body.plan, profile.full_name, body.expires_at

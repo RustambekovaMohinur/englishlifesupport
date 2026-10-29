@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -224,6 +224,102 @@ async def delete_public_note(
 
 # ─── Study Groups ─────────────────────────────────────────────────────────────
 
+GLOBAL_PREMIUM_GROUP_CODE = "PREMIUM-GLOBAL"
+
+
+async def ensure_global_premium_group(
+    db: AsyncSession,
+    trigger_profile: StudentProfile | None = None,
+) -> StudyGroup:
+    """
+    Ensures the system-wide '🌟 Global Premium Study Lounge' exists,
+    and automatically enrolls all students with active paid plans (Standard & Pro VIP).
+    """
+    stmt = (
+        select(StudyGroup)
+        .options(
+            selectinload(StudyGroup.creator).selectinload(StudentProfile.user),
+            selectinload(StudyGroup.members).selectinload(StudyGroupMember.student).selectinload(StudentProfile.user),
+        )
+        .where(StudyGroup.invite_code == GLOBAL_PREMIUM_GROUP_CODE)
+    )
+    group = (await db.execute(stmt)).scalar_one_or_none()
+
+    if not group:
+        creator_id = trigger_profile.id if trigger_profile else None
+        if not creator_id:
+            first_vip = (
+                await db.execute(
+                    select(StudentProfile)
+                    .where(
+                        or_(
+                            StudentProfile.premium_plan.in_(["standard", "pro_vip"]),
+                            StudentProfile.is_premium.is_(True),
+                        )
+                    )
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if first_vip:
+                creator_id = first_vip.id
+            else:
+                any_student = (await db.execute(select(StudentProfile).limit(1))).scalar_one_or_none()
+                creator_id = any_student.id if any_student else uuid.uuid4()
+
+        group = StudyGroup(
+            id=uuid.uuid4(),
+            creator_id=creator_id,
+            name="🌟 Global Premium Study Lounge",
+            description="Official unified study lounge for all English Life Standard & Pro VIP members. Network, share practice notes, and discuss assignments together!",
+            topic="Global Premium IELTS & CEFR Community",
+            max_members=1000,
+            invite_code=GLOBAL_PREMIUM_GROUP_CODE,
+            is_active=True,
+        )
+        db.add(group)
+        await db.commit()
+        await db.refresh(group)
+
+    # Auto-enroll all active paid tier students
+    paid_students = (
+        await db.execute(
+            select(StudentProfile)
+            .where(
+                or_(
+                    StudentProfile.premium_plan.in_(["standard", "pro_vip"]),
+                    StudentProfile.is_premium.is_(True),
+                ),
+                StudentProfile.premium_plan != "free",
+            )
+        )
+    ).scalars().all()
+
+    existing_members = (
+        await db.execute(
+            select(StudyGroupMember).where(StudyGroupMember.study_group_id == group.id)
+        )
+    ).scalars().all()
+    existing_member_student_ids = {m.student_id for m in existing_members}
+
+    new_memberships = False
+    for st in paid_students:
+        if st.id not in existing_member_student_ids:
+            member_entry = StudyGroupMember(
+                id=uuid.uuid4(),
+                study_group_id=group.id,
+                student_id=st.id,
+                role="member",
+                joined_at=datetime.now(timezone.utc),
+            )
+            db.add(member_entry)
+            new_memberships = True
+
+    if new_memberships:
+        await db.commit()
+
+    return group
+
+
 @router.get("/study-groups", response_model=list[StudyGroupOut], summary="List active study groups")
 async def list_study_groups(
     current_user: User = Depends(get_current_user),
@@ -231,6 +327,9 @@ async def list_study_groups(
 ):
     profile = await _get_student_profile(db, current_user)
     student_id = profile.id if profile else None
+
+    # Ensure the Global Premium Study Lounge is active and populated
+    await ensure_global_premium_group(db, profile)
 
     query = (
         select(StudyGroup)
@@ -242,6 +341,7 @@ async def list_study_groups(
         .order_by(StudyGroup.created_at.desc())
     )
     groups = (await db.execute(query)).scalars().all()
+
 
     out = []
     for g in groups:
@@ -283,6 +383,9 @@ async def list_study_groups(
                 members=members_out,
             )
         )
+
+    # Place Global Premium Lounge at the very top of the list
+    out.sort(key=lambda x: (0 if x.invite_code == GLOBAL_PREMIUM_GROUP_CODE else 1, -x.created_at.timestamp()))
     return out
 
 
