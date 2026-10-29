@@ -1,4 +1,4 @@
-"""
+﻿"""
 Centralized application configuration.
 
 All secrets and environment-specific values are loaded from environment
@@ -18,6 +18,26 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = ""
     ASYNC_DATABASE_URL: str = ""
+
+    @staticmethod
+    def _inject_pooler(url: str) -> str:
+        """Ensure a Neon DATABASE_URL uses the pooler endpoint (-pooler suffix).
+
+        Neon free-tier PgBouncer requires the -pooler suffix on the endpoint-id.
+        This method is idempotent — safe to call when already present.
+        """
+        import urllib.parse
+        if not url or "neon.tech" not in url:
+            return url
+        parsed = urllib.parse.urlparse(url)
+        host = parsed.hostname or ""
+        parts = host.split(".")
+        if parts and not parts[0].endswith("-pooler"):
+            parts[0] += "-pooler"
+            new_host = ".".join(parts)
+            netloc = parsed.netloc.replace(host, new_host, 1)
+            url = urllib.parse.urlunparse(parsed._replace(netloc=netloc))
+        return url
 
     @model_validator(mode="after")
     def sync_database_urls(self) -> "Settings":
@@ -42,6 +62,10 @@ class Settings(BaseSettings):
             db_url = "postgresql+psycopg2://" + db_url[len("postgresql+asyncpg://"):]
         elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+"):
             db_url = "postgresql+psycopg2://" + db_url[len("postgresql://"):]
+
+        # Ensure Neon URLs use the pooler endpoint before storing
+        db_url = self._inject_pooler(db_url)
+        async_db_url = self._inject_pooler(async_db_url)
 
         self.DATABASE_URL = db_url
         self.ASYNC_DATABASE_URL = async_db_url
