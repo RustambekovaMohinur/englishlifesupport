@@ -1178,3 +1178,38 @@ export interface AIChatMessageOut {
 export interface AIChatSend {
   message: string;
 }
+
+
+// ─── Step 5: Secure Mock Payment Architecture ────────────────────────────────
+
+export interface CreateOrderRequest {
+  plan: 'standard' | 'pro_vip';
+  provider?: 'click' | 'payme' | 'mock';
+}
+
+export interface CreateOrderResponse {
+  order_id: string;
+  transaction_id: string;
+  amount_uzs: number;
+  plan: string;
+  provider: string;
+  token: string;
+  checkout_url: string;
+}
+
+export interface MockCheckoutRequest {
+  order_id: string;
+  token: string;
+}
+
+export interface PaymentTransactionOut {
+  id: string;
+  provider: string;
+  provider_transaction_id: string;
+  plan: string;
+  amount_uzs: number;
+  currency: string;
+  status: string;
+  created_at: string;
+  completed_at?: string | null;
+}

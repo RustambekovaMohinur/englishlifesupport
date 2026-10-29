@@ -49,6 +49,10 @@ import {
   PeerChatContactOut,
   PrivateMessageOut,
   PrivateMessageSend,
+  CreateOrderRequest,
+  CreateOrderResponse,
+  MockCheckoutRequest,
+  PaymentTransactionOut,
 } from "@/types";
 
 /**
@@ -732,3 +736,15 @@ export const getAIChatHistory = (): Promise<AIChatMessageOut[]> =>
 
 export const chatWithAI = (body: AIChatSend): Promise<AIChatMessageOut> =>
   api.post<AIChatMessageOut>('/chat/ai', body).then((r) => r.data);
+
+
+// ─── Step 5: Secure Mock Payment Architecture ────────────────────────────────
+
+export const createPaymentOrder = (body: CreateOrderRequest): Promise<CreateOrderResponse> =>
+  api.post<CreateOrderResponse>('/payments/create-order', body).then((r) => r.data);
+
+export const mockCheckout = (body: MockCheckoutRequest): Promise<{ status: string; message: string; plan: string; amount_uzs: number; expires_at: string }> =>
+  api.post<{ status: string; message: string; plan: string; amount_uzs: number; expires_at: string }>('/payments/mock-checkout', body).then((r) => r.data);
+
+export const getPaymentHistory = (): Promise<PaymentTransactionOut[]> =>
+  api.get<PaymentTransactionOut[]>('/payments/history').then((r) => r.data);

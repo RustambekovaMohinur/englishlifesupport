@@ -32,6 +32,7 @@ const StudentWordlistsPage = lazy(() => import("@/pages/student/Wordlists"));
 const StudentSubmissionsPage = lazy(() => import("@/pages/student/Submissions"));
 const StudentResultsPage = lazy(() => import("@/pages/student/Results"));
 const StudentProgressPage = lazy(() => import("@/pages/student/Progress"));
+const BillingPage = lazy(() => import("@/pages/student/Billing"));
 const ChatHubPage = lazy(() => import("@/pages/student/ChatHub"));
 const SocialHubPage = lazy(() => import("@/pages/student/SocialHub"));
 const StudentProfilePage = lazy(() => import("@/pages/student/Profile"));
@@ -81,7 +82,8 @@ export default function App() {
               <Route path="results" element={<StudentResultsPage />} />
               <Route path="leaderboard" element={<StudentDashboardPage />} />
               <Route path="progress" element={<StudentProgressPage />} />
-              <Route path="chat" element={<ChatHubPage />} />
+              <Route path="billing" element={<BillingPage />} />
+            <Route path="chat" element={<ChatHubPage />} />
             <Route path="social" element={<SocialHubPage />} />
             <Route path="profile" element={<StudentProfilePage />} />
               <Route path="parent-portal" element={<ParentPortalPage />} />

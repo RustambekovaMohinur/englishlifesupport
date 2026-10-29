@@ -1,3 +1,6 @@
+from app.models.payment import (  # noqa: F401
+    PaymentTransaction,
+)
 from app.models.chat import (  # noqa: F401
     PrivateMessage,
     AIChatMessage,
@@ -100,6 +103,7 @@ __all__ = [
     "PublicNote",
     "PrivateMessage",
     "AIChatMessage",
+    "PaymentTransaction",
     "NoteLike",
     "StudyGroup",
     "StudyGroupMember",
