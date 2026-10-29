@@ -102,8 +102,10 @@ async def list_chat_contacts(
             PeerChatContactOut(
                 student_id=peer.id,
                 full_name=peer.full_name,
-                username=peer.user.username if peer.user else None,
-                avatar_url=peer.user.avatar_url if peer.user else None,
+                username=peer.user.username if getattr(peer, "user", None) else None,
+                avatar_url=getattr(peer, "avatar_url", None)
+                or (getattr(peer.user, "avatar_url", None) if getattr(peer, "user", None) else None)
+                or "default_avatar_url",
                 custom_badge=getattr(peer, "custom_badge", None),
                 premium_plan=getattr(peer, "premium_plan", "free"),
                 last_message=last_msg.content if last_msg else None,
@@ -161,7 +163,9 @@ async def get_peer_messages(
             is_read=m.is_read,
             created_at=m.created_at,
             sender_name=m.sender.full_name,
-            sender_avatar=m.sender.user.avatar_url if m.sender.user else None,
+            sender_avatar=getattr(m.sender, "avatar_url", None)
+            or (getattr(m.sender.user, "avatar_url", None) if getattr(m.sender, "user", None) else None)
+            or "default_avatar_url",
             sender_badge=getattr(m.sender, "custom_badge", None),
             is_me=(m.sender_id == profile.id),
         )
@@ -211,7 +215,9 @@ async def send_private_message(
         is_read=False,
         created_at=msg.created_at,
         sender_name=profile.full_name,
-        sender_avatar=profile.user.avatar_url if profile.user else None,
+        sender_avatar=getattr(profile, "avatar_url", None)
+        or (getattr(profile.user, "avatar_url", None) if getattr(profile, "user", None) else None)
+        or "default_avatar_url",
         sender_badge=getattr(profile, "custom_badge", None),
         is_me=True,
     )

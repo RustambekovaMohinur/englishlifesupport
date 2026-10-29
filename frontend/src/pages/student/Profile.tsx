@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
+import BadgeSelector from "@/components/BadgeSelector";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import toast from "react-hot-toast";
 import { LoadingRows, StatCard } from "@/components/ui";
@@ -339,6 +340,19 @@ export default function StudentProfilePage() {
         {/* Premium Theme Switcher */}
         <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
           <ThemeSwitcher />
+        </div>
+
+        {/* Tier-Based Badge & Sticker Selector */}
+        <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
+          <BadgeSelector
+            currentBadge={premiumStatus?.custom_badge || null}
+            currentPlan={premiumStatus?.premium_plan || "free"}
+            onBadgeUpdated={(newBadge) => {
+              if (premiumStatus) {
+                setPremiumStatus({ ...premiumStatus, custom_badge: newBadge });
+              }
+            }}
+          />
           {premiumStatus && premiumStatus.premium_plan !== "free" && (
             <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
               <span>Current plan:</span>

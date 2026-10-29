@@ -111,93 +111,209 @@
   background: rgba(99, 102, 241, 0.65); /* Vibrant Indigo on hover */
 }
 
-/* ─── Premium Themes ──────────────────────────────────────────────────── */
-/* Each theme overrides CSS custom-properties on the root element. */
+/* ─── Premium Themes & Color Engine ───────────────────────────────────── */
 
-/* Default (unchanged) */
-.theme-default {}
-
-/* Light */
-.theme-light {
-  --tw-bg-opacity: 1;
-  background-color: #FFFFFF !important;
-  color: #111827 !important;
+/* Global Smooth Transitions */
+html, body, #root, aside, nav, header, .card, main {
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.theme-light .card { background: #F9FAFB !important; border-color: #E5E7EB !important; }
 
-/* Dark */
-.theme-dark {
+/* 1. Light Theme */
+.theme-light,
+.theme-light body,
+.theme-light #root {
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
+}
+.theme-light [class*="bg-[#FBFBFA]"],
+.theme-light [class*="dark:bg-[#0B0F19]"] {
+  background: transparent !important;
+}
+.theme-light aside,
+.theme-light nav,
+.theme-light header {
+  background: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+.theme-light .card {
+  background: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+  color: #0F172A !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
+}
+.theme-light input,
+.theme-light select,
+.theme-light textarea {
+  background: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+/* 2. Dark Theme */
+.theme-dark,
+.theme-dark body,
+.theme-dark #root {
   background-color: #0B0F19 !important;
   color: #F3F4F6 !important;
 }
-.theme-dark .card { background: #161B22 !important; border-color: #30363D !important; }
+.theme-dark aside,
+.theme-dark nav,
+.theme-dark header {
+  background: #111827 !important;
+  border-color: #1F2937 !important;
+  color: #F3F4F6 !important;
+}
+.theme-dark .card {
+  background: #161B22 !important;
+  border-color: #30363D !important;
+  color: #F3F4F6 !important;
+}
+.theme-dark input,
+.theme-dark select,
+.theme-dark textarea {
+  background: #0D1117 !important;
+  border-color: #30363D !important;
+  color: #F3F4F6 !important;
+}
 
-/* Cyber Purple */
-.theme-cyber-purple {
-  background: linear-gradient(135deg, #1a0533 0%, #0d001a 50%, #160030 100%) !important;
-  color: #e9d5ff !important;
+/* 3. Cyber Purple Theme (VIP) */
+.theme-cyber-purple,
+.theme-cyber-purple body,
+.theme-cyber-purple #root {
+  background: linear-gradient(135deg, #130324 0%, #080012 50%, #150228 100%) !important;
+  color: #E9D5FF !important;
+}
+.theme-cyber-purple [class*="bg-[#FBFBFA]"],
+.theme-cyber-purple [class*="dark:bg-[#0B0F19]"] {
+  background: transparent !important;
+}
+.theme-cyber-purple aside,
+.theme-cyber-purple nav,
+.theme-cyber-purple header {
+  background: rgba(30, 8, 55, 0.85) !important;
+  border-color: rgba(168, 85, 247, 0.25) !important;
+  backdrop-filter: blur(16px);
+  color: #E9D5FF !important;
 }
 .theme-cyber-purple .card {
-  background: rgba(88, 28, 135, 0.25) !important;
-  border-color: rgba(167, 139, 250, 0.3) !important;
-  backdrop-filter: blur(12px);
+  background: rgba(40, 12, 75, 0.55) !important;
+  border-color: rgba(168, 85, 247, 0.3) !important;
+  backdrop-filter: blur(14px);
+  color: #F3E8FF !important;
+  box-shadow: 0 4px 20px -2px rgba(147, 51, 234, 0.15) !important;
 }
-.theme-cyber-purple header,
-.theme-cyber-purple nav,
-.theme-cyber-purple aside {
-  background: rgba(88, 28, 135, 0.4) !important;
-  border-color: rgba(167, 139, 250, 0.2) !important;
+.theme-cyber-purple input,
+.theme-cyber-purple select,
+.theme-cyber-purple textarea {
+  background: rgba(22, 6, 42, 0.75) !important;
+  border-color: rgba(168, 85, 247, 0.35) !important;
+  color: #F3E8FF !important;
 }
 
-/* Neon Pink */
-.theme-neon-pink {
-  background: linear-gradient(135deg, #1f001a 0%, #0f0010 50%, #1f0a16 100%) !important;
-  color: #fce7f3 !important;
+/* 4. Neon Pink Theme (VIP) */
+.theme-neon-pink,
+.theme-neon-pink body,
+.theme-neon-pink #root {
+  background: linear-gradient(135deg, #1f0116 0%, #0d000a 50%, #1a0113 100%) !important;
+  color: #FCE7F3 !important;
+}
+.theme-neon-pink [class*="bg-[#FBFBFA]"],
+.theme-neon-pink [class*="dark:bg-[#0B0F19]"] {
+  background: transparent !important;
+}
+.theme-neon-pink aside,
+.theme-neon-pink nav,
+.theme-neon-pink header {
+  background: rgba(45, 4, 32, 0.85) !important;
+  border-color: rgba(236, 72, 153, 0.25) !important;
+  backdrop-filter: blur(16px);
+  color: #FCE7F3 !important;
 }
 .theme-neon-pink .card {
-  background: rgba(157, 23, 77, 0.2) !important;
-  border-color: rgba(249, 168, 212, 0.3) !important;
-  backdrop-filter: blur(12px);
+  background: rgba(60, 8, 44, 0.55) !important;
+  border-color: rgba(236, 72, 153, 0.3) !important;
+  backdrop-filter: blur(14px);
+  color: #FDF2F8 !important;
+  box-shadow: 0 4px 20px -2px rgba(236, 72, 153, 0.15) !important;
 }
-.theme-neon-pink header,
-.theme-neon-pink nav,
-.theme-neon-pink aside {
-  background: rgba(157, 23, 77, 0.35) !important;
-  border-color: rgba(249, 168, 212, 0.2) !important;
+.theme-neon-pink input,
+.theme-neon-pink select,
+.theme-neon-pink textarea {
+  background: rgba(30, 2, 22, 0.75) !important;
+  border-color: rgba(236, 72, 153, 0.35) !important;
+  color: #FDF2F8 !important;
 }
 
-/* Emerald Green */
-.theme-emerald-green {
-  background: linear-gradient(135deg, #00201a 0%, #001a10 50%, #002218 100%) !important;
-  color: #d1fae5 !important;
+/* 5. Emerald Green Theme (VIP) */
+.theme-emerald-green,
+.theme-emerald-green body,
+.theme-emerald-green #root {
+  background: linear-gradient(135deg, #021a14 0%, #000d0a 50%, #011712 100%) !important;
+  color: #D1FAE5 !important;
+}
+.theme-emerald-green [class*="bg-[#FBFBFA]"],
+.theme-emerald-green [class*="dark:bg-[#0B0F19]"] {
+  background: transparent !important;
+}
+.theme-emerald-green aside,
+.theme-emerald-green nav,
+.theme-emerald-green header {
+  background: rgba(4, 40, 30, 0.85) !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
+  backdrop-filter: blur(16px);
+  color: #D1FAE5 !important;
 }
 .theme-emerald-green .card {
-  background: rgba(6, 95, 70, 0.25) !important;
-  border-color: rgba(110, 231, 183, 0.3) !important;
-  backdrop-filter: blur(12px);
+  background: rgba(6, 50, 38, 0.55) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  backdrop-filter: blur(14px);
+  color: #ECFDF5 !important;
+  box-shadow: 0 4px 20px -2px rgba(16, 185, 129, 0.15) !important;
 }
-.theme-emerald-green header,
-.theme-emerald-green nav,
-.theme-emerald-green aside {
-  background: rgba(6, 95, 70, 0.4) !important;
-  border-color: rgba(110, 231, 183, 0.2) !important;
+.theme-emerald-green input,
+.theme-emerald-green select,
+.theme-emerald-green textarea {
+  background: rgba(2, 25, 19, 0.75) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+  color: #ECFDF5 !important;
 }
 
-/* Golden Sunset */
-.theme-golden-sunset {
-  background: linear-gradient(135deg, #1c0e00 0%, #1a0800 50%, #200d00 100%) !important;
-  color: #fef3c7 !important;
+/* 6. Golden Sunset Theme (VIP) */
+.theme-golden-sunset,
+.theme-golden-sunset body,
+.theme-golden-sunset #root {
+  background: linear-gradient(135deg, #1c0e00 0%, #0d0600 50%, #170b00 100%) !important;
+  color: #FEF3C7 !important;
+}
+.theme-golden-sunset [class*="bg-[#FBFBFA]"],
+.theme-golden-sunset [class*="dark:bg-[#0B0F19]"] {
+  background: transparent !important;
+}
+.theme-golden-sunset aside,
+.theme-golden-sunset nav,
+.theme-golden-sunset header {
+  background: rgba(45, 22, 2, 0.85) !important;
+  border-color: rgba(245, 158, 11, 0.25) !important;
+  backdrop-filter: blur(16px);
+  color: #FEF3C7 !important;
 }
 .theme-golden-sunset .card {
-  background: rgba(120, 53, 15, 0.25) !important;
-  border-color: rgba(252, 211, 77, 0.3) !important;
-  backdrop-filter: blur(12px);
+  background: rgba(60, 28, 4, 0.55) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+  backdrop-filter: blur(14px);
+  color: #FFFBEB !important;
+  box-shadow: 0 4px 20px -2px rgba(245, 158, 11, 0.15) !important;
 }
-.theme-golden-sunset header,
-.theme-golden-sunset nav,
-.theme-golden-sunset aside {
-  background: rgba(120, 53, 15, 0.4) !important;
-  border-color: rgba(252, 211, 77, 0.2) !important;
+.theme-golden-sunset input,
+.theme-golden-sunset select,
+.theme-golden-sunset textarea {
+  background: rgba(28, 12, 1, 0.75) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+  color: #FFFBEB !important;
 }
 
 /* Animated gradient profile background for premium users */

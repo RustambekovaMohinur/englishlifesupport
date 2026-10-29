@@ -28,7 +28,7 @@ router = APIRouter(prefix="/premium", tags=["premium"])
 # ---------- Schemas ----------
 
 VALID_PLANS = {"free", "standard", "pro_vip"}
-VALID_BADGES = {None, "", "👑", "⭐", "🕊️"}
+VALID_BADGES = {None, "", "👑", "⭐", "🕊️", "🔥", "💎"}
 VALID_THEMES = {"default", "light", "dark", "cyber_purple", "neon_pink", "emerald_green", "golden_sunset"}
 
 PLAN_PERMISSIONS = {
@@ -41,6 +41,12 @@ PLAN_THEMES = {
     "free":     ["default", "light", "dark"],
     "standard": ["default", "light", "dark", "cyber_purple", "neon_pink", "emerald_green", "golden_sunset"],
     "pro_vip":  ["default", "light", "dark", "cyber_purple", "neon_pink", "emerald_green", "golden_sunset"],
+}
+
+PLAN_BADGES = {
+    "free":     [],
+    "standard": ["⭐"],
+    "pro_vip":  ["👑", "🔥", "💎", "⭐", "🕊️"],
 }
 
 
@@ -57,6 +63,7 @@ class PremiumStatusOut(BaseModel):
     can_private_chat: bool
     can_create_groups: bool
     available_themes: list[str]
+    available_badges: list[str] = []
 
 
 class SetPremiumPlanRequest(BaseModel):
@@ -104,6 +111,7 @@ def _profile_to_out(profile: StudentProfile, user: User) -> PremiumStatusOut:
         can_private_chat=bool(getattr(profile, "can_private_chat", False)),
         can_create_groups=bool(getattr(profile, "can_create_groups", False)),
         available_themes=PLAN_THEMES.get(plan, PLAN_THEMES["free"]),
+        available_badges=PLAN_BADGES.get(plan, []),
     )
 
 
@@ -155,13 +163,17 @@ async def update_my_preferences(
         current_user.profile_bg_theme = body.profile_bg_theme
 
     if body.custom_badge is not None:
-        if not getattr(profile, "is_premium", False) and body.custom_badge:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Custom badges require a premium plan.",
-            )
-        profile.custom_badge = body.custom_badge or None
-        current_user.custom_badge = body.custom_badge or None
+        badge = body.custom_badge.strip() if body.custom_badge else None
+        if badge:
+            allowed_badges = PLAN_BADGES.get(plan, [])
+            if badge not in allowed_badges:
+                tier_msg = "Pro VIP (29k UZS)" if badge in ["👑", "🔥", "💎"] else "Standard (19k UZS) or higher"
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Badge '{badge}' requires {tier_msg} plan. Available for your plan: {allowed_badges}",
+                )
+        profile.custom_badge = badge
+        current_user.custom_badge = badge
 
     await db.commit()
     return _profile_to_out(profile, current_user)

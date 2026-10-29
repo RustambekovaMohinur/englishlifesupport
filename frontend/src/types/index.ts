@@ -1043,6 +1043,7 @@ export interface PremiumStatusOut {
   can_private_chat: boolean;
   can_create_groups: boolean;
   available_themes: string[];
+  available_badges?: string[];
 }
 
 export interface SetPremiumPlanRequest {

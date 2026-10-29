@@ -59,8 +59,15 @@ function applyThemeClass(id: string) {
   const root = document.documentElement;
   // Remove all theme classes
   Object.values(THEME_CSS).forEach((cls) => root.classList.remove(cls));
-  const cls = THEME_CSS[id] ?? THEME_CSS["default"];
+  const cls = THEME_CSS[id] ?? THEME_CSS["dark"];
   if (cls && cls !== "theme-default") root.classList.add(cls);
+
+  // Synchronize dark class on <html> for Tailwind's dark: variants
+  if (id === "light") {
+    root.classList.remove("dark");
+  } else {
+    root.classList.add("dark");
+  }
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

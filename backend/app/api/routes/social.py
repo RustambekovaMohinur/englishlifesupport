@@ -38,11 +38,17 @@ async def _get_student_profile(db: AsyncSession, user: User) -> StudentProfile |
 
 
 def _author_from_profile(profile: StudentProfile) -> PublicNoteAuthor:
+    user = getattr(profile, "user", None)
+    avatar = (
+        getattr(profile, "avatar_url", None)
+        or (getattr(user, "avatar_url", None) if user else None)
+        or "default_avatar_url"
+    )
     return PublicNoteAuthor(
         id=profile.id,
         full_name=profile.full_name,
-        username=profile.user.username if profile.user else None,
-        avatar_url=profile.user.avatar_url if profile.user else None,
+        username=user.username if user else None,
+        avatar_url=avatar,
         custom_badge=getattr(profile, "custom_badge", None),
         premium_plan=getattr(profile, "premium_plan", "free"),
     )
@@ -249,8 +255,10 @@ async def list_study_groups(
             StudyGroupMemberOut(
                 student_id=m.student_id,
                 full_name=m.student.full_name,
-                username=m.student.user.username if m.student.user else None,
-                avatar_url=m.student.user.avatar_url if m.student.user else None,
+                username=m.student.user.username if getattr(m.student, "user", None) else None,
+                avatar_url=getattr(m.student, "avatar_url", None)
+                or (getattr(m.student.user, "avatar_url", None) if getattr(m.student, "user", None) else None)
+                or "default_avatar_url",
                 custom_badge=getattr(m.student, "custom_badge", None),
                 role=m.role,
                 joined_at=m.joined_at,
@@ -353,8 +361,10 @@ async def create_study_group(
             StudyGroupMemberOut(
                 student_id=profile.id,
                 full_name=profile.full_name,
-                username=profile.user.username if profile.user else None,
-                avatar_url=profile.user.avatar_url if profile.user else None,
+                username=profile.user.username if getattr(profile, "user", None) else None,
+                avatar_url=getattr(profile, "avatar_url", None)
+                or (getattr(profile.user, "avatar_url", None) if getattr(profile, "user", None) else None)
+                or "default_avatar_url",
                 custom_badge=getattr(profile, "custom_badge", None),
                 role="creator",
                 joined_at=creator_member.joined_at,
