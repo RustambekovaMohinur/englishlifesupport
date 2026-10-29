@@ -39,6 +39,14 @@ class StudentOut(BaseModel):
     parent_linked_at: datetime | None = None
     last_parent_digest_sent_at: datetime | None = None
     is_parent_linked: bool = False
+    is_premium: bool = False
+    premium_plan: str = "free"
+    premium_expires_at: datetime | None = None
+    custom_badge: str | None = None
+    profile_bg_theme: str = "default"
+    can_write_notes: bool = False
+    can_private_chat: bool = False
+    can_create_groups: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -91,6 +99,14 @@ class StudentUpdate(BaseModel):
     parent_telegram_id: str | None = Field(default=None, max_length=64)
     parent_telegram_chat_id: str | None = Field(default=None, max_length=64)
     parent_name: str | None = Field(default=None, max_length=255)
+    is_premium: bool | None = None
+    premium_plan: str | None = Field(default=None, max_length=32)
+    premium_expires_at: datetime | None = None
+    custom_badge: str | None = Field(default=None, max_length=16)
+    profile_bg_theme: str | None = Field(default=None, max_length=64)
+    can_write_notes: bool | None = None
+    can_private_chat: bool | None = None
+    can_create_groups: bool | None = None
 
 
 class StudentStatusUpdate(BaseModel):

@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
@@ -34,6 +34,16 @@ class StudentProfile(UUIDPKMixin, TimestampMixin, Base):
     last_parent_digest_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     weekly_badge: Mapped[str | None] = mapped_column(String(16), nullable=True)
     badge_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Premium & Social Ecosystem fields
+    is_premium: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    premium_plan: Mapped[str] = mapped_column(String(32), default="free", nullable=False)
+    premium_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    custom_badge: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    profile_bg_theme: Mapped[str] = mapped_column(String(64), default="default", nullable=False)
+    can_write_notes: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_private_chat: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_create_groups: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     user: Mapped["User"] = relationship(back_populates="student_profile")
     group: Mapped["Group | None"] = relationship(back_populates="students")

@@ -1,10 +1,17 @@
 import enum
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Boolean, Enum, String
+from sqlalchemy import Boolean, DateTime, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base, TimestampMixin, UUIDPKMixin
+
+
+class PremiumPlan(str, enum.Enum):
+    FREE = "free"
+    STANDARD = "standard"
+    PRO_VIP = "pro_vip"
 
 
 class UserRole(str, enum.Enum):
@@ -38,6 +45,15 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     # Global unique username (case‑insensitive)
     username: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
 
+    # Premium & Social Ecosystem fields
+    is_premium: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    premium_plan: Mapped[str] = mapped_column(String(32), default="free", nullable=False)
+    premium_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    custom_badge: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    profile_bg_theme: Mapped[str] = mapped_column(String(64), default="default", nullable=False)
+    can_write_notes: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_private_chat: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_create_groups: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
     student_profile: Mapped["StudentProfile | None"] = relationship(

@@ -89,6 +89,15 @@ export interface StudentListItem {
   is_parent_linked?: boolean;
   weekly_badge?: string | null;
   badge_expires_at?: string | null;
+  // Premium & Social fields
+  is_premium?: boolean;
+  premium_plan?: 'free' | 'standard' | 'pro_vip';
+  premium_expires_at?: string | null;
+  custom_badge?: string | null;
+  profile_bg_theme?: string;
+  can_write_notes?: boolean;
+  can_private_chat?: boolean;
+  can_create_groups?: boolean;
 }
 
 export interface AssignmentItemOverview {
@@ -267,6 +276,15 @@ export interface StudentOut {
   parent_linked_at?: string | null;
   last_parent_digest_sent_at?: string | null;
   is_parent_linked?: boolean;
+  // Premium & Social fields
+  is_premium?: boolean;
+  premium_plan?: 'free' | 'standard' | 'pro_vip';
+  premium_expires_at?: string | null;
+  custom_badge?: string | null;
+  profile_bg_theme?: string;
+  can_write_notes?: boolean;
+  can_private_chat?: boolean;
+  can_create_groups?: boolean;
 }
 
 export interface StudentStatsOut {
@@ -1005,4 +1023,49 @@ export interface CurriculumTemplateCreate {
     order_index?: number;
     deadline_offset_days?: number;
   }[];
+}
+
+
+// --- Premium & Social Ecosystem ---------------------------------------------
+
+export interface PremiumStatusOut {
+  student_id: string;
+  username: string;
+  full_name: string;
+  is_premium: boolean;
+  premium_plan: 'free' | 'standard' | 'pro_vip';
+  premium_expires_at: string | null;
+  custom_badge: string | null;
+  profile_bg_theme: string;
+  can_write_notes: boolean;
+  can_private_chat: boolean;
+  can_create_groups: boolean;
+  available_themes: string[];
+}
+
+export interface SetPremiumPlanRequest {
+  student_id: string;
+  plan: 'free' | 'standard' | 'pro_vip';
+  expires_at?: string | null;
+  custom_badge?: string | null;
+}
+
+export interface UpdatePremiumPreferencesRequest {
+  profile_bg_theme?: string;
+  custom_badge?: string | null;
+}
+
+export interface PremiumThemeInfo {
+  id: string;
+  label: string;
+  premium: boolean;
+  css_class: string;
+  min_plan?: string;
+  unlocked: boolean;
+}
+
+export interface PremiumThemesOut {
+  current_plan: string;
+  themes: PremiumThemeInfo[];
+  available_theme_ids: string[];
 }

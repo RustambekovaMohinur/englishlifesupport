@@ -36,6 +36,10 @@ import {
   CurriculumTemplate,
   CurriculumTemplateCreate,
   WeeklyLeaderboardOut,
+  PremiumStatusOut,
+  SetPremiumPlanRequest,
+  UpdatePremiumPreferencesRequest,
+  PremiumThemesOut,
 } from "@/types";
 
 /**
@@ -651,3 +655,26 @@ export const applyCurriculumTemplate = (templateId: string, groupId: string, sta
     `/curriculum/templates/${templateId}/apply/${groupId}`,
     startDate ? { start_date: startDate } : {}
   ).then((r) => r.data);
+
+
+// --- Premium & Social Ecosystem ---------------------------------------------
+
+/** Get own premium status (student must be logged in) */
+export const getMyPremiumStatus = (): Promise<PremiumStatusOut> =>
+  api.get<PremiumStatusOut>('/premium/me').then((r) => r.data);
+
+/** Update own theme / badge preferences */
+export const updatePremiumPreferences = (
+  body: UpdatePremiumPreferencesRequest
+): Promise<PremiumStatusOut> =>
+  api.patch<PremiumStatusOut>('/premium/me/preferences', body).then((r) => r.data);
+
+/** Teacher/admin sets a student's premium plan */
+export const adminSetPremiumPlan = (
+  body: SetPremiumPlanRequest
+): Promise<PremiumStatusOut> =>
+  api.post<PremiumStatusOut>('/premium/admin/set-plan', body).then((r) => r.data);
+
+/** Get available themes for current user's plan */
+export const getPremiumThemes = (): Promise<PremiumThemesOut> =>
+  api.get<PremiumThemesOut>('/premium/themes').then((r) => r.data);
