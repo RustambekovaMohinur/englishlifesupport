@@ -756,3 +756,33 @@ export const createPaymentOrder = (body: CreateOrderRequest): Promise<CreateOrde
 
 export const getPaymentHistory = (): Promise<PaymentTransactionOut[]> =>
   api.get<PaymentTransactionOut[]>('/payments/history').then((r) => r.data);
+
+// ─── Super Admin: Teacher Management ──────────────────────────────────────────
+
+export interface CreateTeacherPayload {
+  first_name: string;
+  last_name: string;
+  email: string;
+  username: string;
+  password: string;
+  phone?: string;
+  bio?: string;
+}
+
+export interface TeacherItemOut {
+  id: string;
+  user_id: string;
+  email: string;
+  username: string;
+  full_name: string;
+  phone?: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
+  created_at: string;
+}
+
+export const listAllTeachers = (): Promise<TeacherItemOut[]> =>
+  api.get<TeacherItemOut[]>('/teachers').then((r) => r.data);
+
+export const createTeacherAccount = (body: CreateTeacherPayload): Promise<TeacherItemOut> =>
+  api.post<TeacherItemOut>('/teachers', body).then((r) => r.data);

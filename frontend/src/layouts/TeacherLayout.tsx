@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -11,6 +11,7 @@ import {
   LogOut,
   BookOpen,
   Calendar,
+  Shield,
 } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/ui";
 import { MarqueeTicker } from "@/components/MarqueeTicker";
@@ -26,6 +27,7 @@ const sidebarNavItems = [
   { to: "/teacher/curriculum", label: "Curriculum", icon: Calendar },
   { to: "/teacher/wordlists", label: "Wordlists", icon: BookOpen },
   { to: "/teacher/submissions", label: "Submissions", icon: CheckSquare },
+  { to: "/teacher/admin/teachers", label: "Admin & Teachers", icon: Shield },
   { to: "/teacher/profile", label: "Profile", icon: User },
 ];
 
@@ -36,6 +38,7 @@ const bottomNavItems = [
   { to: "/teacher/curriculum", label: "Curriculum", icon: Calendar },
   { to: "/teacher/wordlists", label: "Words", icon: BookOpen },
   { to: "/teacher/submissions", label: "Review", icon: CheckSquare },
+  { to: "/teacher/admin/teachers", label: "Admin & Teachers", icon: Shield },
   { to: "/teacher/profile", label: "Profile", icon: User },
 ];
 
@@ -80,7 +83,7 @@ export default function TeacherLayout() {
               <Logo className="h-8 w-8 text-xs shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-bold leading-tight text-zinc-900 dark:text-white tracking-tight truncate">
-                  Asadbek Khasanov
+                  {user?.full_name || user?.username || "Teacher"}
                 </p>
                 <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">Examiner Desk</p>
               </div>
@@ -180,7 +183,7 @@ export default function TeacherLayout() {
             <Logo className="h-7 w-7 text-xs" />
             <div>
               <span className="font-bold text-zinc-900 dark:text-white block leading-tight text-sm tracking-tight">
-                Asadbek Khasanov
+                {user?.full_name || user?.username || "Teacher"}
               </span>
               <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Examiner Desk</span>
             </div>

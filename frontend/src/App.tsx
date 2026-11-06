@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+﻿import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
@@ -23,6 +23,7 @@ const SubmissionsPage = lazy(() => import("@/pages/teacher/Submissions"));
 const TeacherProfilePage = lazy(() => import("@/pages/teacher/Profile"));
 const TeacherWordlistsPage = lazy(() => import("@/pages/teacher/Wordlists"));
 const TeacherCurriculumPage = lazy(() => import("@/pages/teacher/Curriculum"));
+const AdminTeachersPage = lazy(() => import("@/pages/teacher/AdminTeachers"));
 
 // Lazy-loaded student pages
 const StudentDashboardPage = lazy(() => import("@/pages/student/Dashboard"));
@@ -65,6 +66,7 @@ export default function App() {
               <Route path="groups/:groupId" element={<GroupDetailPage />} />
               <Route path="assignments" element={<AssignmentsPage />} />
               <Route path="curriculum" element={<TeacherCurriculumPage />} />
+              <Route path="admin/teachers" element={<AdminTeachersPage />} />
               <Route path="wordlists" element={<TeacherWordlistsPage />} />
               <Route path="submissions" element={<SubmissionsPage />} />
               <Route path="profile" element={<TeacherProfilePage />} />

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState, useMemo } from "react";
+﻿import { FormEvent, useEffect, useState, useMemo } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ExternalLink,
@@ -210,7 +210,7 @@ export default function GroupDetailPage() {
   function handleRemoveStudent(student: GroupStudentDetail) {
     if (!student) return;
     confirm(
-      `Remove "${student.full_name}" from cohort "${groupDetail?.name}"? Their account, earned stars (⭐️ ${student.total_stars ?? 0}), and past submissions will remain 100% preserved.`,
+      `Remove "${student.full_name}" from cohort "${groupDetail?.name}"? Their account, earned stars (в­ђпёЏ ${student.total_stars ?? 0}), and past submissions will remain 100% preserved.`,
       async () => {
         try {
           await updateStudentPlacement(student.student_id, null);
@@ -264,7 +264,7 @@ export default function GroupDetailPage() {
       <div className="space-y-6">
         <div className="flex items-center gap-3">
           <Link to="/teacher/groups" className="text-sm font-medium text-brand-600 hover:underline">
-            ← Back to Groups
+            в†ђ Back to Groups
           </Link>
         </div>
         <LoadingRows rows={6} />
@@ -276,7 +276,7 @@ export default function GroupDetailPage() {
     return (
       <div className="space-y-6">
         <Link to="/teacher/groups" className="text-sm font-medium text-brand-600 hover:underline">
-          ← Back to Groups
+          в†ђ Back to Groups
         </Link>
         <EmptyState
           title="Group not found"
@@ -303,7 +303,7 @@ export default function GroupDetailPage() {
           to="/teacher/groups"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700 hover:underline"
         >
-          <span>←</span>
+          <span>в†ђ</span>
           <span>Back to Groups</span>
         </Link>
 
@@ -340,28 +340,28 @@ export default function GroupDetailPage() {
             </div>
             {groupDetail.schedule && (
               <p className="mt-1.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
-                <span>🗓️</span>
+                <span>рџ—“пёЏ</span>
                 <span>{groupDetail.schedule}</span>
               </p>
             )}
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-              <span>⏰</span>
+              <span>вЏ°</span>
               <span>Default homework due time: <strong className="text-zinc-700 dark:text-zinc-300">{groupDetail.default_homework_time || "20:00"}</strong></span>
             </p>
             {groupDetail.start_date && (
               <p className="mt-1 text-xs text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 font-semibold">
-                <span>🗓️</span>
+                <span>рџ—“пёЏ</span>
                 <span>Cohort Start Date: <strong className="font-mono">{new Date(groupDetail.start_date).toLocaleDateString()}</strong></span>
                 {groupDetail.curriculum_template_title && (
                   <span className="ml-2 px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-[11px]">
-                    📚 {groupDetail.curriculum_template_title}
+                    рџ“љ {groupDetail.curriculum_template_title}
                   </span>
                 )}
               </p>
             )}
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                🔄 Cycle {groupDetail.current_cycle || 1} Active
+                рџ”„ Cycle {groupDetail.current_cycle || 1} Active
               </span>
               <button
                 type="button"
@@ -369,7 +369,7 @@ export default function GroupDetailPage() {
                 className="btn-sm bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1.5"
                 title="Publish homework batch for this cohort, archive past tasks, and start clean cycle"
               >
-                <span>🚀</span>
+                <span>рџљЂ</span>
                 <span>Publish Homework Batch (Start Cycle)</span>
               </button>
             </div>
@@ -425,19 +425,19 @@ export default function GroupDetailPage() {
         <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-5 border-t border-zinc-100 dark:border-zinc-800">
           <div className="text-center p-2.5 rounded-lg bg-zinc-50/80 dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800">
             <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium block">Total Students</span>
-            <span className="text-xl font-bold font-mono tabular-nums text-zinc-900 dark:text-white mt-0.5 block">👥 {totalStudents}</span>
+            <span className="text-xl font-bold font-mono tabular-nums text-zinc-900 dark:text-white mt-0.5 block">рџ‘Ґ {totalStudents}</span>
           </div>
           <div className="text-center p-2.5 rounded-lg bg-zinc-50/80 dark:bg-zinc-900/80 border border-zinc-200/60 dark:border-zinc-800">
             <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium block">Published Tasks</span>
-            <span className="text-xl font-bold font-mono tabular-nums text-zinc-900 dark:text-white mt-0.5 block">📝 {totalAssignments}</span>
+            <span className="text-xl font-bold font-mono tabular-nums text-zinc-900 dark:text-white mt-0.5 block">рџ“ќ {totalAssignments}</span>
           </div>
           <div className="text-center p-2.5 rounded-lg bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40">
             <span className="text-xs text-amber-700 dark:text-amber-400 font-medium block">Group Stars</span>
-            <span className="text-xl font-bold font-mono tabular-nums text-amber-600 dark:text-amber-300 mt-0.5 block">⭐ {totalGroupStars}</span>
+            <span className="text-xl font-bold font-mono tabular-nums text-amber-600 dark:text-amber-300 mt-0.5 block">в­ђ {totalGroupStars}</span>
           </div>
           <div className="text-center p-2.5 rounded-lg bg-yellow-50/60 dark:bg-yellow-950/30 border border-yellow-200/60 dark:border-yellow-900/40">
             <span className="text-xs text-yellow-700 dark:text-yellow-400 font-medium block">Group Lightning</span>
-            <span className="text-xl font-bold font-mono tabular-nums text-yellow-600 dark:text-yellow-300 mt-0.5 block">⚡ {totalGroupLightning}</span>
+            <span className="text-xl font-bold font-mono tabular-nums text-yellow-600 dark:text-yellow-300 mt-0.5 block">вљЎ {totalGroupLightning}</span>
           </div>
         </div>
       </div>
@@ -581,7 +581,7 @@ export default function GroupDetailPage() {
                         </div>
                         {student.overdue_assignments_count && student.overdue_assignments_count > 0 ? (
                           <div className="text-[10px] text-rose-600 dark:text-rose-400 font-medium">
-                            🔴 {student.overdue_assignments_count} overdue
+                            рџ”ґ {student.overdue_assignments_count} overdue
                           </div>
                         ) : null}
                       </div>
@@ -591,11 +591,11 @@ export default function GroupDetailPage() {
                     <td className="py-3.5 px-4 text-center">
                       <div className="inline-flex items-center gap-2">
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-bold font-mono text-xs tabular-nums">
-                          <span>⭐️</span>
+                          <span>в­ђпёЏ</span>
                           <span>{student.total_stars ?? 0}</span>
                         </span>
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-50 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800/60 font-bold font-mono text-xs tabular-nums">
-                          <span>⚡️</span>
+                          <span>вљЎпёЏ</span>
                           <span>{student.total_lightning ?? 0}</span>
                         </span>
                       </div>
@@ -713,9 +713,43 @@ export default function GroupDetailPage() {
                     }`}
                     title={isAllCompleted ? "Completed required work" : "Incomplete homework"}
                   >
-                    {isAllCompleted ? "✓" : "…"}
+                    {isAllCompleted ? "вњ“" : "вЂ¦"}
                   </span>
                 </div>
+
+                {/* Wordlist Completion Quick Badge */}
+                {(() => {
+                  const vocabAssignments = studentAssignments.filter((a) => {
+                    const title = (a.title || "").toLowerCase();
+                    return title.includes("vocab") || title.includes("word") || title.includes("glossary");
+                  });
+                  const hasVocab = vocabAssignments.length > 0;
+                  const vocabDone = hasVocab && vocabAssignments.every((a) => a.completion_percentage >= 100 || (a as any).has_submission);
+
+                  return (
+                    <div className="mt-3 flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/60 dark:border-zinc-700/60 text-xs">
+                      <span className="text-zinc-600 dark:text-zinc-400 font-medium flex items-center gap-1.5">
+                        <span>📖</span>
+                        <span>Wordlist Status</span>
+                      </span>
+                      {hasVocab ? (
+                        vocabDone ? (
+                          <span className="inline-flex items-center gap-1 font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded text-[11px]">
+                            <span>✔️ Completed</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded text-[11px]">
+                            <span>❌ Incomplete</span>
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
+                          No wordlist
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Progress bar and metrics: Cycle vs Total */}
                 <div className="mt-4 space-y-2">
@@ -738,7 +772,7 @@ export default function GroupDetailPage() {
                     <span>Active Tasks: {completedCount}/{totalCount} ({pct}%)</span>
                     {(student.overdue_assignments_count ?? 0) > 0 ? (
                       <span className="text-rose-600 dark:text-rose-400 font-semibold bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.2 rounded">
-                        🔴 {student.overdue_assignments_count} Overdue
+                        рџ”ґ {student.overdue_assignments_count} Overdue
                       </span>
                     ) : (
                       <span className="text-emerald-600 dark:text-emerald-400 font-medium">No overdue</span>
@@ -750,10 +784,10 @@ export default function GroupDetailPage() {
                 <div className="mt-3.5 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-3 text-xs">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-amber-500 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200/60 dark:border-amber-800/60">
-                      ⭐ {student.total_stars}
+                      в­ђ {student.total_stars}
                     </span>
                     <span className="font-bold text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/40 px-2 py-0.5 rounded border border-yellow-200/60 dark:border-yellow-800/60">
-                      ⚡ {student.total_lightning}
+                      вљЎ {student.total_lightning}
                     </span>
                   </div>
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -807,7 +841,7 @@ export default function GroupDetailPage() {
           fallback={
             <Modal open={true} onClose={handleCloseInspect} title="Student Details">
               <div className="p-6 text-center space-y-4">
-                <div className="text-rose-500 text-3xl">⚠️</div>
+                <div className="text-rose-500 text-3xl">вљ пёЏ</div>
                 <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
                   Failed to render student inspect view.
                 </p>
@@ -1160,7 +1194,7 @@ function GradingSlideOver({
                   </div>
 
                   <div>
-                    <label className="label text-xs">⭐ Stars Awarded (1-10)</label>
+                    <label className="label text-xs">в­ђ Stars Awarded (1-10)</label>
                     <input
                       type="number"
                       min={1}
@@ -1407,7 +1441,7 @@ function EditStudentPlacementModal({
             Student: <span className="font-bold">{student.full_name}</span> (@{student.username})
           </p>
           <p className="text-[11px] text-indigo-700 dark:text-indigo-400">
-            All accumulated stars (<span className="font-bold">⭐️ {student.total_stars ?? 0}</span>) and past homework submissions remain strictly intact.
+            All accumulated stars (<span className="font-bold">в­ђпёЏ {student.total_stars ?? 0}</span>) and past homework submissions remain strictly intact.
           </p>
         </div>
 
@@ -1597,7 +1631,7 @@ function PublishBatchModal({ open, onClose, group, onSuccess }: PublishBatchModa
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="🚀 Publish Homework Batch (Start Cycle)">
+    <Modal open={open} onClose={onClose} title="рџљЂ Publish Homework Batch (Start Cycle)">
       <div className="p-6 space-y-5">
         {/* Cycle progression banner */}
         <div className="flex items-center justify-between p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60">
@@ -1605,7 +1639,7 @@ function PublishBatchModal({ open, onClose, group, onSuccess }: PublishBatchModa
             <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium block">Current Cycle</span>
             <span className="text-base font-black text-indigo-950 dark:text-white">Cycle {group.current_cycle || 1}</span>
           </div>
-          <span className="text-lg font-bold text-indigo-400">→</span>
+          <span className="text-lg font-bold text-indigo-400">в†’</span>
           <div className="text-right">
             <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium block">New Active Cycle</span>
             <span className="text-base font-black text-indigo-600 dark:text-indigo-400">Cycle {(group.current_cycle || 1) + 1}</span>
@@ -1614,7 +1648,7 @@ function PublishBatchModal({ open, onClose, group, onSuccess }: PublishBatchModa
 
         {/* Confirmation prompt */}
         <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200 space-y-1">
-          <p className="font-semibold">⚠️ Important Cycle Reset Notice:</p>
+          <p className="font-semibold">вљ пёЏ Important Cycle Reset Notice:</p>
           <p>
             Are you sure you want to publish these assignments as the new active homework cycle? Past deadline assignments will be archived, and cohort progress will reset to <strong>0%</strong> for the new tasks until students submit.
           </p>
@@ -1720,7 +1754,7 @@ function PublishBatchModal({ open, onClose, group, onSuccess }: PublishBatchModa
               </>
             ) : (
               <>
-                <span>🚀</span>
+                <span>рџљЂ</span>
                 <span>Publish Cycle & Reset Progress</span>
               </>
             )}

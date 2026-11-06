@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Suspense } from "react";
+﻿import { useState, useEffect, useCallback, Suspense } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -129,7 +129,7 @@ export default function StudentLayout() {
               <Logo className="h-8 w-8 text-xs shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-bold leading-tight text-zinc-900 dark:text-white tracking-tight truncate">
-                  Asadbek Khasanov
+                  {user?.full_name || user?.username || "Student"}
                 </p>
                 <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">Candidate Portal</p>
               </div>

@@ -30,3 +30,12 @@ class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str
     confirm_password: str
+
+class CreateTeacherRequest(BaseModel):
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+    email: str = Field(..., min_length=5, max_length=255)
+    username: str = Field(..., min_length=3, max_length=60)
+    password: str = Field(..., min_length=6, max_length=128)
+    phone: str | None = Field(default=None, max_length=32)
+    bio: str | None = Field(default=None, max_length=2000)

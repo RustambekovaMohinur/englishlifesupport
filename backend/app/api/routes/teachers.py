@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -12,7 +12,8 @@ from app.models.refresh_token import RefreshToken
 from app.models.teacher import TeacherProfile
 from app.models.user import User
 from app.schemas.auth import TokenResponse
-from app.schemas.teacher import PasswordChangeRequest, TeacherProfileOut, TeacherProfileUpdate
+from app.schemas.teacher import CreateTeacherRequest, PasswordChangeRequest, TeacherProfileOut, TeacherProfileUpdate
+from app.models.user import UserRole, ApprovalStatus
 from app.utils.password_policy import validate_password_policy
 from app.api.routes.auth import _issue_tokens
 
@@ -165,3 +166,101 @@ async def change_teacher_password(
 
     await db.commit()
     return {"message": "Password changed successfully"}
+
+
+# ─── Super Admin: Teacher Management & Multi-Tenant Isolation ──────────────────
+
+@router.get("", response_model=list[TeacherProfileOut], summary="[Admin/Teacher] List all teachers")
+async def list_all_teachers(
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lists all teachers registered in the LMS."""
+    query = (
+        select(TeacherProfile)
+        .join(User, TeacherProfile.user_id == User.id)
+        .order_by(TeacherProfile.full_name.asc())
+    )
+    profiles = (await db.execute(query)).scalars().all()
+    results = []
+    for p in profiles:
+        u = (await db.execute(select(User).where(User.id == p.user_id))).scalar_one_or_none()
+        results.append(
+            TeacherProfileOut(
+                id=p.id,
+                user_id=p.user_id,
+                email=u.email if u else "",
+                username=u.username if u else "",
+                full_name=p.full_name,
+                phone=p.phone,
+                bio=p.bio,
+                avatar_url=p.avatar_url,
+                created_at=p.created_at,
+            )
+        )
+    return results
+
+
+@router.post("", response_model=TeacherProfileOut, status_code=status.HTTP_201_CREATED, summary="[Admin] Add new teacher with real name & credentials")
+async def create_new_teacher(
+    body: CreateTeacherRequest,
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Super Admin / Principal endpoint to register a new teacher.
+    Enforces password complexity, creates isolated teacher profile with real First & Last names.
+    """
+    clean_email = body.email.strip().lower()
+    clean_username = body.username.strip().lower()
+    full_name = f"{body.first_name.strip()} {body.last_name.strip()}".strip()
+
+    # Uniqueness check
+    existing_user = (
+        await db.execute(
+            select(User).where(
+                (User.email == clean_email) | (User.username == clean_username)
+            )
+        )
+    ).scalar_one_or_none()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with this email or username already exists.",
+        )
+
+    validate_password_policy(body.password)
+
+    new_user = User(
+        id=uuid.uuid4(),
+        email=clean_email,
+        username=clean_username,
+        password_hash=hash_password(body.password),
+        role=UserRole.TEACHER,
+        approval_status=ApprovalStatus.APPROVED,
+        is_active=True,
+    )
+    db.add(new_user)
+    await db.flush()
+
+    new_profile = TeacherProfile(
+        id=uuid.uuid4(),
+        user_id=new_user.id,
+        full_name=full_name,
+        phone=body.phone,
+        bio=body.bio,
+    )
+    db.add(new_profile)
+    await db.commit()
+
+    return TeacherProfileOut(
+        id=new_profile.id,
+        user_id=new_user.id,
+        email=new_user.email,
+        username=new_user.username,
+        full_name=new_profile.full_name,
+        phone=new_profile.phone,
+        bio=new_profile.bio,
+        avatar_url=new_profile.avatar_url,
+        created_at=new_profile.created_at,
+    )
