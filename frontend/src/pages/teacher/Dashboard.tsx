@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
@@ -278,7 +278,7 @@ export default function TeacherDashboardPage() {
               <StatCard
                 label="Wordlist Sets"
                 value={data.total_wordlists ?? 0}
-                hint="AI Importer в†’"
+                hint="AI Importer →"
                 icon={<BookOpen className="w-4 h-4 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform" />}
                 iconBg="bg-purple-50 dark:bg-purple-950/40"
               />
@@ -349,7 +349,7 @@ export default function TeacherDashboardPage() {
                   </div>
                   <div className="p-3.5 bg-white dark:bg-slate-800/90 text-slate-800 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-xs">
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Average Score</p>
-                    <p className="text-lg font-bold font-mono text-slate-900 dark:text-white tabular-nums mt-0.5">{groupReport.average_score ?? "вЂ”"}/10</p>
+                    <p className="text-lg font-bold font-mono text-slate-900 dark:text-white tabular-nums mt-0.5">{groupReport.average_score ?? "—"}/10</p>
                   </div>
                   <div className="p-3.5 bg-white dark:bg-slate-800/90 text-slate-800 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-xs">
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Late Submissions</p>
@@ -361,7 +361,7 @@ export default function TeacherDashboardPage() {
                   </div>
                   <div className="p-3.5 bg-white dark:bg-slate-800/90 text-slate-800 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-xs">
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Top Performer</p>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate mt-0.5">{groupReport.top_performer ?? "вЂ”"}</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate mt-0.5">{groupReport.top_performer ?? "—"}</p>
                   </div>
                 </div>
 
@@ -464,7 +464,7 @@ export default function TeacherDashboardPage() {
                       </div>
 
                       <div>
-                        <label className="label text-xs font-semibold text-zinc-700 dark:text-zinc-300">Stars Reward (50вЂ“100)</label>
+                        <label className="label text-xs font-semibold text-zinc-700 dark:text-zinc-300">Stars Reward (50–100)</label>
                         <select
                           value={sotwStars}
                           onChange={(e) => setSotwStars(Number(e.target.value))}
@@ -560,7 +560,7 @@ export default function TeacherDashboardPage() {
                             <span className="font-mono">@{st.username}</span>
                             {st.group_name && (
                               <>
-                                <span>В·</span>
+                                <span>·</span>
                                 <span className="font-medium text-brand-600 dark:text-brand-400 truncate max-w-[120px]">
                                   {st.group_name}
                                 </span>
@@ -585,14 +585,14 @@ export default function TeacherDashboardPage() {
                             onClick={() => handleQuickApprove(st)}
                             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50 active:scale-95 transition min-h-[36px]"
                           >
-                            {actionInProgress[st.id] ? "..." : "вњ“ Approve"}
+                            {actionInProgress[st.id] ? "..." : "✓ Approve"}
                           </button>
                           <button
                             disabled={actionInProgress[st.id]}
                             onClick={() => handleQuickReject(st)}
                             className="px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/60 disabled:opacity-50 active:scale-95 transition border border-rose-200 dark:border-rose-800 min-h-[36px]"
                           >
-                            {actionInProgress[st.id] ? "..." : "вњ• Reject"}
+                            {actionInProgress[st.id] ? "..." : "✕ Reject"}
                           </button>
                         </div>
                       </div>
@@ -623,9 +623,9 @@ export default function TeacherDashboardPage() {
                           <td className="py-2.5 px-3 text-xs">
                             <TelegramLink username={st.telegram_username} />
                           </td>
-                          <td className="py-2.5 px-3 font-medium text-brand-600 dark:text-brand-400 text-xs">{st.group_name || "вЂ”"}</td>
+                          <td className="py-2.5 px-3 font-medium text-brand-600 dark:text-brand-400 text-xs">{st.group_name || "—"}</td>
                           <td className="py-2.5 px-3 text-zinc-500 dark:text-zinc-400 capitalize text-xs">
-                            {st.english_level?.replace("_", " ") || "вЂ”"}
+                            {st.english_level?.replace("_", " ") || "—"}
                           </td>
                           <td className="py-2.5 px-3 text-right space-x-2">
                             <button
@@ -633,14 +633,14 @@ export default function TeacherDashboardPage() {
                               onClick={() => handleQuickApprove(st)}
                               className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded disabled:opacity-50 transition"
                             >
-                              {actionInProgress[st.id] ? "..." : "вњ“ Approve"}
+                              {actionInProgress[st.id] ? "..." : "✓ Approve"}
                             </button>
                             <button
                               disabled={actionInProgress[st.id]}
                               onClick={() => handleQuickReject(st)}
                               className="px-2.5 py-1 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded hover:bg-rose-100 dark:hover:bg-rose-900/60 disabled:opacity-50 transition border border-rose-200 dark:border-rose-800"
                             >
-                              {actionInProgress[st.id] ? "..." : "вњ• Reject"}
+                              {actionInProgress[st.id] ? "..." : "✕ Reject"}
                             </button>
                           </td>
                         </tr>
@@ -762,13 +762,13 @@ export default function TeacherDashboardPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-100 dark:border-zinc-800 pb-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">рџЊџ</span>
+                  <span className="text-xl">🌟</span>
                   <h2 className="text-base font-bold text-zinc-900 dark:text-white">
                     Student Platform Feedback & Reviews
                   </h2>
                   {feedbackStats && (
                     <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-mono">
-                      в­ђ {feedbackStats.average_rating} / 5.0 ({feedbackStats.total_reviews} reviews)
+                      ⭐ {feedbackStats.average_rating} / 5.0 ({feedbackStats.total_reviews} reviews)
                     </span>
                   )}
                 </div>
@@ -817,7 +817,7 @@ export default function TeacherDashboardPage() {
                         : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
                     }`}
                   >
-                    <span>{star} в…</span>
+                    <span>{star} ★</span>
                     <span className="opacity-70 text-[10px]">({count})</span>
                   </button>
                 );
@@ -829,7 +829,7 @@ export default function TeacherDashboardPage() {
               <LoadingRows rows={3} />
             ) : feedbacks.length === 0 ? (
               <div className="text-center py-10 px-4 space-y-2 bg-zinc-50/50 dark:bg-zinc-900/30 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800">
-                <div className="text-2xl">рџ“ќ</div>
+                <div className="text-2xl">📝</div>
                 <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                   {feedbackRatingFilter !== null
                     ? `No ${feedbackRatingFilter}-star reviews found`
@@ -859,16 +859,16 @@ export default function TeacherDashboardPage() {
                             {f.user_full_name}
                           </p>
                           <p className="text-[10px] text-zinc-400 font-mono">
-                            {format(new Date(f.created_at), "MMM d, yyyy В· HH:mm")}
+                            {format(new Date(f.created_at), "MMM d, yyyy · HH:mm")}
                           </p>
                         </div>
                       </div>
 
                       {/* Star Rating Badge */}
                       <div className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/40 text-amber-500 shrink-0">
-                        {"в…".repeat(f.rating)}
+                        {"★".repeat(f.rating)}
                         <span className="text-zinc-300 dark:text-zinc-700">
-                          {"в…".repeat(Math.max(0, 5 - f.rating))}
+                          {"★".repeat(Math.max(0, 5 - f.rating))}
                         </span>
                         <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 ml-1 font-mono">
                           {f.rating}/5
@@ -881,7 +881,7 @@ export default function TeacherDashboardPage() {
                       {f.what_works_well && (
                         <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-800/50">
                           <p className="font-bold text-emerald-800 dark:text-emerald-300 text-[11px] mb-0.5 flex items-center gap-1">
-                            <span>рџ’љ</span> <span>Highlights / What Works:</span>
+                            <span>💚</span> <span>Highlights / What Works:</span>
                           </p>
                           <p className="text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
                             {f.what_works_well}
@@ -892,7 +892,7 @@ export default function TeacherDashboardPage() {
                       {f.what_to_improve && (
                         <div className="p-2.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/50">
                           <p className="font-bold text-amber-800 dark:text-amber-300 text-[11px] mb-0.5 flex items-center gap-1">
-                            <span>рџ”§</span> <span>Suggestions for Improvement:</span>
+                            <span>🔧</span> <span>Suggestions for Improvement:</span>
                           </p>
                           <p className="text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
                             {f.what_to_improve}

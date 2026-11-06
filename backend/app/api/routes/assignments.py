@@ -1,4 +1,4 @@
-﻿import logging, asyncio
+import logging, asyncio
 import uuid
 from datetime import datetime, timedelta
 from typing import Any

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Centralized application configuration.
 
 All secrets and environment-specific values are loaded from environment
