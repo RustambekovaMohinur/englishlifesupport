@@ -1192,11 +1192,11 @@ export interface AIChatSend {
 }
 
 
-// ─── Step 5: Secure Mock Payment Architecture ────────────────────────────────
+// ─── Real Payment Architecture (Card Transfer) ─────────────────────────────
 
 export interface CreateOrderRequest {
   plan: 'standard' | 'pro_vip';
-  provider?: 'click' | 'payme' | 'mock';
+  provider?: 'card_transfer' | 'click' | 'payme' | 'mock';
 }
 
 export interface CreateOrderResponse {

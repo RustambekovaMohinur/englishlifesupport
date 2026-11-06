@@ -1,7 +1,10 @@
 import { FC, useEffect, useState } from "react";
 import { format } from "date-fns";
 import {
+  AlertTriangle,
   Check,
+  Clock,
+  Copy,
   CreditCard,
   Crown,
   History,
@@ -9,6 +12,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  X,
   Zap,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -20,20 +24,179 @@ import {
   createPaymentOrder,
   getMyPremiumStatus,
   getPaymentHistory,
-  mockCheckout,
 } from "@/services/lmsService";
 import {
   PaymentTransactionOut,
   PremiumStatusOut,
 } from "@/types";
 
+/* ──────────────── Card Transfer Details ──────────────── */
+const TRANSFER_CARD = {
+  number: "9860 1678 2097 3722",
+  holder: "Mansurbek Jobborov",
+};
+
+/* ──────────────── Payment Instruction Modal ──────────────── */
+interface PaymentModalProps {
+  plan: "standard" | "pro_vip";
+  amountUzs: number;
+  orderId: string;
+  onClose: () => void;
+  onConfirmSent: () => void;
+  confirming: boolean;
+}
+
+const PaymentInstructionModal: FC<PaymentModalProps> = ({
+  plan,
+  amountUzs,
+  orderId,
+  onClose,
+  onConfirmSent,
+  confirming,
+}) => {
+  const copyCard = () => {
+    navigator.clipboard.writeText(TRANSFER_CARD.number.replace(/\s/g, ""));
+    toast.success("Card number copied!");
+  };
+  const copyAmount = () => {
+    navigator.clipboard.writeText(String(amountUzs));
+    toast.success("Amount copied!");
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md relative overflow-hidden">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-5 text-white">
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 p-1 rounded-full hover:bg-white/20 transition cursor-pointer"
+          >
+            <X size={18} />
+          </button>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <CreditCard size={20} />
+            Payment Transfer
+          </h2>
+          <p className="text-sm text-white/80 mt-1">
+            {plan === "pro_vip" ? "Pro VIP" : "Standard"} Plan — Order #{orderId}
+          </p>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* Amount */}
+          <div className="text-center">
+            <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
+              Transfer Exactly
+            </span>
+            <div className="flex items-center justify-center gap-2 mt-1">
+              <span className="text-3xl font-black text-zinc-900 dark:text-white">
+                {amountUzs.toLocaleString()}
+              </span>
+              <span className="text-sm text-zinc-400 font-medium">UZS</span>
+              <button
+                onClick={copyAmount}
+                className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                title="Copy amount"
+              >
+                <Copy size={14} className="text-zinc-400" />
+              </button>
+            </div>
+          </div>
+
+          {/* Card Details */}
+          <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-4 space-y-3 border border-zinc-200 dark:border-zinc-700">
+            <div>
+              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                Card Number (Uzcard)
+              </span>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-lg font-bold font-mono text-zinc-900 dark:text-white tracking-wider">
+                  {TRANSFER_CARD.number}
+                </span>
+                <button
+                  onClick={copyCard}
+                  className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition cursor-pointer"
+                  title="Copy card number"
+                >
+                  <Copy size={14} className="text-blue-600 dark:text-blue-400" />
+                </button>
+              </div>
+            </div>
+            <div>
+              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                Card Holder
+              </span>
+              <p className="text-sm font-semibold text-zinc-900 dark:text-white mt-0.5">
+                {TRANSFER_CARD.holder}
+              </p>
+            </div>
+          </div>
+
+          {/* Instructions */}
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl p-3.5 text-xs text-amber-800 dark:text-amber-300 space-y-1.5">
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Important Instructions:</p>
+                <ol className="list-decimal list-inside space-y-1 mt-1">
+                  <li>Open your mobile bank app (Uzcard, Humo, etc.).</li>
+                  <li>Transfer <b>exactly {amountUzs.toLocaleString()} UZS</b> to the card above.</li>
+                  <li>After the transfer is complete, click <b>"I've Sent the Payment"</b> below.</li>
+                  <li>Your teacher will verify and activate your plan shortly.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-col gap-2.5">
+            <button
+              onClick={onConfirmSent}
+              disabled={confirming}
+              className="w-full py-3 px-4 rounded-xl text-sm font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98]"
+            >
+              {confirming ? (
+                <>
+                  <Clock size={16} className="animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Check size={16} />
+                  I've Sent the Payment
+                </>
+              )}
+            </button>
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+/* ──────────────── Main Billing Page ──────────────── */
 export default function BillingPage() {
   const { setPlan } = useTheme();
   const [premiumStatus, setPremiumStatus] = useState<PremiumStatusOut | null>(null);
   const [transactions, setTransactions] = useState<PaymentTransactionOut[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedProvider, setSelectedProvider] = useState<"click" | "payme">("click");
   const [processingPlan, setProcessingPlan] = useState<string | null>(null);
+
+  // Payment modal state
+  const [paymentModal, setPaymentModal] = useState<{
+    plan: "standard" | "pro_vip";
+    amountUzs: number;
+    orderId: string;
+  } | null>(null);
+  const [confirmingSent, setConfirmingSent] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -56,35 +219,63 @@ export default function BillingPage() {
     loadData();
   }, []);
 
+  /* Step 1: Create order & open transfer instruction modal */
   const handleSubscribe = async (plan: "standard" | "pro_vip") => {
     setProcessingPlan(plan);
     try {
-      // 1. Create tokenized payment order
       const order = await createPaymentOrder({
         plan,
-        provider: selectedProvider,
+        provider: "card_transfer",
       });
 
-      // 2. Perform tokenized simulated merchant checkout
-      const result = await mockCheckout({
-        order_id: order.order_id,
-        token: order.token,
+      // Open the payment instruction modal
+      setPaymentModal({
+        plan,
+        amountUzs: order.amount_uzs,
+        orderId: order.order_id,
       });
-
-      toast.success(result.message);
-      // Refresh user data & theme capabilities
-      await loadData();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Payment failed");
+      toast.error(err?.response?.data?.detail || "Failed to create order");
     } finally {
       setProcessingPlan(null);
     }
   };
 
+  /* Step 2: Student confirms they've sent the transfer */
+  const handleConfirmSent = async () => {
+    setConfirmingSent(true);
+    try {
+      // Reload data — order is already pending, teacher will verify
+      toast.success(
+        "✅ Payment submitted! Your teacher will verify and activate your plan shortly.",
+        { duration: 6000 }
+      );
+      setPaymentModal(null);
+      await loadData();
+    } catch {
+      toast.error("Something went wrong.");
+    } finally {
+      setConfirmingSent(false);
+    }
+  };
+
   const currentPlan = premiumStatus?.premium_plan || "free";
+  const hasPendingOrder = transactions.some((tx) => tx.status === "pending");
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto p-4 sm:p-6">
+      {/* Payment Instruction Modal */}
+      {paymentModal && (
+        <PaymentInstructionModal
+          plan={paymentModal.plan}
+          amountUzs={paymentModal.amountUzs}
+          orderId={paymentModal.orderId}
+          onClose={() => setPaymentModal(null)}
+          onConfirmSent={handleConfirmSent}
+          confirming={confirmingSent}
+        />
+      )}
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white flex items-center gap-2">
@@ -118,44 +309,24 @@ export default function BillingPage() {
             </p>
           )}
         </div>
-
-        {/* Payment Provider Selection */}
-        <div className="flex flex-col gap-1.5 self-start sm:self-auto">
-          <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
-            Payment Provider (Uzbekistan)
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSelectedProvider("click")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center gap-1.5 ${
-                selectedProvider === "click"
-                  ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                  : "bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800"
-              }`}
-            >
-              <span>Click</span>
-              <span className="text-[10px] opacity-80">Uz</span>
-            </button>
-            <button
-              onClick={() => setSelectedProvider("payme")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center gap-1.5 ${
-                selectedProvider === "payme"
-                  ? "bg-teal-600 text-white border-teal-600 shadow-xs"
-                  : "bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800"
-              }`}
-            >
-              <span>Payme</span>
-              <span className="text-[10px] opacity-80">Uz</span>
-            </button>
-          </div>
-        </div>
       </div>
 
-      {/* Security Guarantee Banner */}
-      <div className="rounded-xl p-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 flex items-center gap-2.5 text-xs">
-        <ShieldCheck size={18} className="text-emerald-600 shrink-0" />
+      {/* Pending Order Alert */}
+      {hasPendingOrder && currentPlan === "free" && (
+        <div className="rounded-xl p-3.5 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 flex items-start gap-2.5 text-xs">
+          <Clock size={18} className="text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <b>Payment pending verification.</b> You have submitted a transfer that is awaiting teacher confirmation.
+            Your premium plan will be activated as soon as it's verified.
+          </div>
+        </div>
+      )}
+
+      {/* Payment Method Info */}
+      <div className="rounded-xl p-3.5 bg-blue-500/10 border border-blue-500/20 text-blue-800 dark:text-blue-300 flex items-center gap-2.5 text-xs">
+        <CreditCard size={18} className="text-blue-600 shrink-0" />
         <span>
-          <b>Zero-Card-Storage Guarantee:</b> All payments are securely tokenized via official Click/Payme merchant endpoints. Our database never stores card numbers, expiration dates, or CVVs.
+          <b>Payment Method:</b> Direct card transfer to the official Uzcard account. No card data is stored on our servers.
         </span>
       </div>
 
@@ -217,19 +388,26 @@ export default function BillingPage() {
           <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800">
             <button
               onClick={() => handleSubscribe("standard")}
-              disabled={processingPlan !== null || currentPlan === "standard"}
+              disabled={processingPlan !== null || currentPlan === "standard" || currentPlan === "pro_vip"}
               className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
                 currentPlan === "standard"
+                  ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
+                  : currentPlan === "pro_vip"
                   ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
                   : "btn-primary"
               }`}
             >
               {processingPlan === "standard" ? (
-                "Processing payment..."
+                "Creating order..."
               ) : currentPlan === "standard" ? (
                 "Current Plan"
+              ) : currentPlan === "pro_vip" ? (
+                "You have Pro VIP"
               ) : (
-                `Subscribe via ${selectedProvider.toUpperCase()}`
+                <>
+                  <CreditCard size={14} />
+                  Subscribe — Transfer 19,000 UZS
+                </>
               )}
             </button>
           </div>
@@ -305,11 +483,14 @@ export default function BillingPage() {
               }`}
             >
               {processingPlan === "pro_vip" ? (
-                "Processing payment..."
+                "Creating order..."
               ) : currentPlan === "pro_vip" ? (
                 "Current Plan"
               ) : (
-                `Upgrade to Pro VIP via ${selectedProvider.toUpperCase()}`
+                <>
+                  <CreditCard size={14} />
+                  Upgrade to Pro VIP — Transfer 29,000 UZS
+                </>
               )}
             </button>
           </div>
@@ -335,7 +516,6 @@ export default function BillingPage() {
                   <th className="p-3">Order ID</th>
                   <th className="p-3">Plan</th>
                   <th className="p-3">Amount</th>
-                  <th className="p-3">Provider</th>
                   <th className="p-3">Status</th>
                   <th className="p-3">Date</th>
                 </tr>
@@ -352,16 +532,17 @@ export default function BillingPage() {
                     <td className="p-3 font-mono font-bold text-zinc-900 dark:text-white">
                       {tx.amount_uzs.toLocaleString()} {tx.currency}
                     </td>
-                    <td className="p-3 uppercase font-mono text-zinc-500">{tx.provider}</td>
                     <td className="p-3">
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                           tx.status === "completed"
                             ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300"
-                            : "bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300"
+                            : tx.status === "pending"
+                            ? "bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300"
+                            : "bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300"
                         }`}
                       >
-                        {tx.status}
+                        {tx.status === "pending" ? "⏳ Pending Verification" : tx.status}
                       </span>
                     </td>
                     <td className="p-3 text-zinc-400 font-mono">

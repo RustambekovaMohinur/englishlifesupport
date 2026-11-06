@@ -3,6 +3,7 @@ import os
 import urllib.parse
 
 from sqlalchemy.engine import URL
+from sqlalchemy.exc import OperationalError, DatabaseError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -27,12 +28,34 @@ logger = logging.getLogger("app.db.session")
 
 _IS_NEON = False  # set after URL is parsed below
 
+# Error substrings that indicate a transient Neon connection-quota problem.
+# Used by auth.py and other routes to return 503 instead of 401/500.
+DB_QUOTA_ERROR_PHRASES: tuple[str, ...] = (
+    "login quota",
+    "too many connections",
+    "connection limit",
+    "remaining connection slots",
+    "max_connections",
+    "connection refused",
+    "could not connect",
+    "ssl connection has been closed",
+    "server closed the connection",
+)
+
+
+def is_db_quota_error(exc: BaseException) -> bool:
+    """Return True when *exc* looks like a transient Neon connection-limit error."""
+    msg = str(exc).lower()
+    return any(phrase in msg for phrase in DB_QUOTA_ERROR_PHRASES)
+
 
 def _ensure_pooler_host(hostname: str) -> str:
     """Auto-inject '-pooler' into a Neon host that is missing it.
 
     e.g. 'ep-gentle-bonus-aycqd131.c-5.us-east-2.aws.neon.tech'
       -> 'ep-gentle-bonus-aycqd131-pooler.c-5.us-east-2.aws.neon.tech'
+
+    Idempotent — safe to call when the suffix is already present.
     """
     if not hostname or "neon.tech" not in hostname:
         return hostname
@@ -44,6 +67,7 @@ def _ensure_pooler_host(hostname: str) -> str:
 
 def _build_async_engine_url(raw_url: str) -> tuple[URL, dict]:
     """Parse *raw_url* and return a tuple of:
+
     1. A SQLAlchemy :class:`~sqlalchemy.engine.URL` without unsupported query params.
     2. A ``connect_args`` dict for asyncpg (``{"ssl": True}`` when on Neon / sslmode present).
 
@@ -61,7 +85,6 @@ def _build_async_engine_url(raw_url: str) -> tuple[URL, dict]:
     if "neon.tech" in hostname:
         _IS_NEON = True
         ssl_required = True
-        # Auto-correct to pooler host if needed
         corrected = _ensure_pooler_host(hostname)
         if corrected != hostname:
             logger.info(
@@ -102,7 +125,9 @@ def _build_async_engine_url(raw_url: str) -> tuple[URL, dict]:
     return clean_url, connect_args
 
 
+# ---------------------------------------------------------------------------
 # Build the engine URL — env var wins over .env / settings
+# ---------------------------------------------------------------------------
 _raw_url: str = (
     os.environ.get("ASYNC_DATABASE_URL")
     or settings.ASYNC_DATABASE_URL
@@ -153,6 +178,20 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False,
     autoflush=False,
 )
+
+
+async def dispose_engine() -> None:
+    """Dispose all pooled engine connections.
+
+    Call this at application startup to flush any stale connections left behind
+    by a previous worker/deployment.  With NullPool this is a no-op but is kept
+    for compatibility with non-Neon environments.
+    """
+    try:
+        await engine.dispose()
+        logger.info("DB engine disposed (stale connections flushed).")
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Engine dispose warning (non-fatal): %s", exc)
 
 
 async def get_db():

@@ -14,8 +14,9 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.payment import PaymentTransaction
 from app.models.student import StudentProfile
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.payment import (
+    ConfirmTransferRequest,
     CreateOrderRequest,
     CreateOrderResponse,
     MockCheckoutRequest,
@@ -350,3 +351,112 @@ async def get_payment_history(
         )
         for t in txs
     ]
+
+
+
+# ─── Teacher: Pending Transfer Management ──────────────────────────────────────
+
+@router.get("/pending-transfers", response_model=list[dict], summary="[Teacher] List all pending card transfer orders")
+async def list_pending_transfers(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Teacher-only endpoint to list all pending card transfer orders for verification."""
+    if current_user.role != UserRole.TEACHER:
+        raise HTTPException(status_code=403, detail="Teacher access required.")
+
+    txs = (
+        await db.execute(
+            select(PaymentTransaction)
+            .options(selectinload(PaymentTransaction.student).selectinload(StudentProfile.user))
+            .where(PaymentTransaction.status == "pending")
+            .order_by(PaymentTransaction.created_at.desc())
+        )
+    ).scalars().all()
+
+    return [
+        {
+            "order_id": t.provider_transaction_id,
+            "student_name": t.student.full_name if t.student else "Unknown",
+            "student_username": t.student.user.username if t.student and t.student.user else None,
+            "plan": t.plan,
+            "amount_uzs": t.amount_uzs,
+            "provider": t.provider,
+            "created_at": t.created_at.isoformat(),
+        }
+        for t in txs
+    ]
+
+
+@router.post("/confirm-transfer", summary="[Teacher] Confirm a pending card transfer and activate plan")
+async def confirm_transfer(
+    body: ConfirmTransferRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Teacher-only endpoint. Verifies that the student's card transfer was received
+    and activates their premium plan for 30 days.
+    """
+    if current_user.role != UserRole.TEACHER:
+        raise HTTPException(status_code=403, detail="Teacher access required.")
+
+    tx = (
+        await db.execute(
+            select(PaymentTransaction)
+            .options(selectinload(PaymentTransaction.student).selectinload(StudentProfile.user))
+            .where(PaymentTransaction.provider_transaction_id == body.order_id)
+        )
+    ).scalar_one_or_none()
+
+    if not tx:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    if tx.status == "completed":
+        return {"status": "already_completed", "message": f"Order {body.order_id} was already activated."}
+    if tx.status == "rejected":
+        raise HTTPException(status_code=400, detail="This order was previously rejected.")
+
+    # Mark as completed and activate plan
+    tx.status = "completed"
+    tx.completed_at = datetime.datetime.now(datetime.timezone.utc)
+    await _activate_plan(tx.student, tx.student.user, tx.plan, db)
+    await db.commit()
+
+    logger.info(
+        "Teacher %s confirmed transfer order %s. Activated plan=%s for %s",
+        current_user.username, body.order_id, tx.plan, tx.student.full_name,
+    )
+    return {
+        "status": "success",
+        "message": f"✅ Plan '{tx.plan}' activated for {tx.student.full_name} (30 days).",
+        "plan": tx.plan,
+        "student_name": tx.student.full_name,
+    }
+
+
+@router.post("/reject-transfer", summary="[Teacher] Reject a pending card transfer order")
+async def reject_transfer(
+    body: ConfirmTransferRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Teacher-only endpoint. Rejects a pending transfer order (e.g. payment not received)."""
+    if current_user.role != UserRole.TEACHER:
+        raise HTTPException(status_code=403, detail="Teacher access required.")
+
+    tx = (
+        await db.execute(
+            select(PaymentTransaction)
+            .where(PaymentTransaction.provider_transaction_id == body.order_id)
+        )
+    ).scalar_one_or_none()
+
+    if not tx:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    if tx.status == "completed":
+        raise HTTPException(status_code=400, detail="Cannot reject an already completed order.")
+
+    tx.status = "rejected"
+    await db.commit()
+    logger.info("Teacher %s rejected transfer order %s", current_user.username, body.order_id)
+    return {"status": "rejected", "message": f"Order {body.order_id} has been rejected."}

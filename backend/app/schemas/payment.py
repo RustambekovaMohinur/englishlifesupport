@@ -5,7 +5,11 @@ from pydantic import BaseModel, Field
 
 class CreateOrderRequest(BaseModel):
     plan: str = Field(..., description="standard | pro_vip")
-    provider: str = Field(default="click", description="click | payme | mock")
+    provider: str = Field(default="card_transfer", description="card_transfer | click | payme")
+
+
+class ConfirmTransferRequest(BaseModel):
+    order_id: str = Field(..., description="The order ID of the pending transfer to verify")
 
 
 class CreateOrderResponse(BaseModel):
