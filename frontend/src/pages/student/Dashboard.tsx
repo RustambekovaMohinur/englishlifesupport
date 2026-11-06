@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ArrowRight, CheckCircle2, Lock } from "lucide-react";
@@ -38,32 +38,32 @@ function getGreeting(name: string): string {
 function getSkillPill(title: string) {
   const lower = title.toLowerCase();
   if (lower.includes("speak") || lower.includes("audio") || lower.includes("record") || lower.includes("voice")) {
-    return { label: "Speaking", icon: "🎙️", bg: "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/30" };
+    return { label: "Speaking", icon: "рџЋ™пёЏ", bg: "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/30" };
   }
   if (lower.includes("listen") || lower.includes("listening")) {
-    return { label: "Listening", icon: "🎧", bg: "bg-sky-50 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-500/30" };
+    return { label: "Listening", icon: "рџЋ§", bg: "bg-sky-50 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-500/30" };
   }
   if (lower.includes("vocab") || lower.includes("word") || lower.includes("glossary")) {
-    return { label: "Vocabulary", icon: "📖", bg: "bg-purple-50 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-500/30" };
+    return { label: "Vocabulary", icon: "рџ“–", bg: "bg-purple-50 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-500/30" };
   }
   if (lower.includes("read") || lower.includes("book") || lower.includes("text") || lower.includes("unit")) {
-    return { label: "Reading", icon: "📚", bg: "bg-amber-50 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-500/30" };
+    return { label: "Reading", icon: "рџ“љ", bg: "bg-amber-50 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-500/30" };
   }
   if (lower.includes("write") || lower.includes("essay") || lower.includes("grammar")) {
-    return { label: "Writing", icon: "✍️", bg: "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30" };
+    return { label: "Writing", icon: "вњЌпёЏ", bg: "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30" };
   }
-  return { label: "Core Task", icon: "⚡", bg: "bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/30" };
+  return { label: "Core Task", icon: "вљЎ", bg: "bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/30" };
 }
 
 function getCountdown(deadlineStr: string) {
   const diffMs = new Date(deadlineStr).getTime() - Date.now();
-  if (diffMs <= 0) return "🔴 Deadline passed · Submit to waive penalty";
+  if (diffMs <= 0) return "рџ”ґ Deadline passed В· Submit to waive penalty";
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffHours / 24);
   const remHours = diffHours % 24;
-  if (diffDays > 0) return `⏰ Due in ${diffDays}d ${remHours}h`;
+  if (diffDays > 0) return `вЏ° Due in ${diffDays}d ${remHours}h`;
   const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-  return `⏰ Due in ${diffHours}h ${diffMins}m`;
+  return `вЏ° Due in ${diffHours}h ${diffMins}m`;
 }
 
 export function formatEnglishLevel(level?: string | null): string {
@@ -143,7 +143,7 @@ export default function StudentDashboardPage() {
   if (error || !data) {
     return (
       <div className="card text-center p-8 space-y-4 max-w-lg mx-auto my-12 border border-zinc-200 dark:border-zinc-800">
-        <div className="text-4xl">⚠️</div>
+        <div className="text-4xl">вљ пёЏ</div>
         <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Boshqaruv panelini yuklab bo&apos;lmadi</h2>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {error || "Tarmoq yoki hisobingiz holatida vaqtinchalik uzilish yuz berdi. Qayta urinib ko'ring."}
@@ -209,7 +209,7 @@ export default function StudentDashboardPage() {
             <div className="space-y-1.5 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30">
-                  🎯 Today&apos;s Mission
+                  рџЋЇ Today&apos;s Mission
                 </span>
                 {urgentSkill && (
                   <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${urgentSkill.bg}`}>
@@ -227,7 +227,7 @@ export default function StudentDashboardPage() {
                 {urgentMission.title}
               </h3>
               <p className="text-xs text-zinc-600 dark:text-slate-300">
-                Earn <strong className="text-amber-700 dark:text-amber-300 font-semibold">+10 ⭐ Stars</strong> and <strong className="text-indigo-700 dark:text-indigo-300 font-semibold">+25 XP</strong> upon verified teacher grading.
+                Earn <strong className="text-amber-700 dark:text-amber-300 font-semibold">+10 в­ђ Stars</strong> and <strong className="text-indigo-700 dark:text-indigo-300 font-semibold">+25 XP</strong> upon verified teacher grading.
               </p>
             </div>
             {urgentMission.is_locked ? (
@@ -235,7 +235,7 @@ export default function StudentDashboardPage() {
                 type="button"
                 onClick={() =>
                   toast(urgentMission.lock_reason || "Complete previous assignments to unlock today's mission.", {
-                    icon: "🔒",
+                    icon: "рџ”’",
                   })
                 }
                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-semibold text-sm border border-zinc-200 dark:border-zinc-700 transition shrink-0 active:scale-95"
@@ -267,7 +267,7 @@ export default function StudentDashboardPage() {
             to="/student/assignments"
             className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200 underline whitespace-nowrap"
           >
-            View All Tasks →
+            View All Tasks в†’
           </Link>
         </div>
       )}
@@ -276,7 +276,7 @@ export default function StudentDashboardPage() {
       <div className="rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-950/30 dark:via-zinc-900/40 border border-amber-300/60 dark:border-amber-800/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 flex items-center justify-center text-lg shrink-0">
-            ⭐
+            в­ђ
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -284,7 +284,7 @@ export default function StudentDashboardPage() {
                 {feedbackSummary?.average_rating ? `${feedbackSummary.average_rating} / 5.0` : "4.9 / 5.0"}
               </span>
               <div className="flex items-center text-amber-400 text-xs">
-                {"★".repeat(Math.round(feedbackSummary?.average_rating || 5))}
+                {"в…".repeat(Math.round(feedbackSummary?.average_rating || 5))}
               </div>
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
                 ({feedbackSummary?.total_reviews ?? 0} reviews)
@@ -302,7 +302,7 @@ export default function StudentDashboardPage() {
           onClick={() => setFeedbackModalOpen(true)}
           className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 active:scale-95 text-white shadow-xs transition shrink-0 self-end sm:self-auto"
         >
-          <span>{feedbackSummary?.user_has_reviewed ? "Update Review" : "⭐ Review Platform"}</span>
+          <span>{feedbackSummary?.user_has_reviewed ? "Update Review" : "в­ђ Review Platform"}</span>
         </button>
       </div>
 
@@ -311,7 +311,7 @@ export default function StudentDashboardPage() {
         <div className="rounded-2xl bg-gradient-to-r from-sky-500/10 via-indigo-500/5 to-transparent dark:from-sky-950/40 dark:via-zinc-900/40 border border-sky-300/60 dark:border-sky-800/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-400 flex items-center justify-center text-lg shrink-0">
-              👨‍👩‍👧
+              рџ‘ЁвЂЌрџ‘©вЂЌрџ‘§
             </div>
             <div className="min-w-0">
               <span className="text-sm font-bold text-zinc-900 dark:text-white block">
@@ -327,7 +327,7 @@ export default function StudentDashboardPage() {
             onClick={() => navigate("/student/profile")}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[#2AABEE] hover:bg-[#229ED9] active:scale-95 text-white shadow-xs transition shrink-0 self-end sm:self-auto cursor-pointer"
           >
-            <span>Ulash &amp; QR Kod →</span>
+            <span>Ulash &amp; QR Kod в†’</span>
           </button>
         </div>
       )}
@@ -349,13 +349,20 @@ export default function StudentDashboardPage() {
               <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30">
                 {displayLevel}
               </span>
+              <Link
+                to="/student/chat"
+                className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 transition"
+              >
+                <span>🤖 Aura AI</span>
+                <span className="text-[9px] bg-purple-600 text-white px-1 rounded-sm">Active</span>
+              </Link>
             </div>
             <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
-              Keep going, {data.full_name?.split(" ")[0] || "Student"}! 💪
+              Keep going, {data.full_name?.split(" ")[0] || "Student"}! рџ’Є
             </h1>
             <p className="text-xs sm:text-sm text-zinc-600 dark:text-slate-300">
               Every lesson brings you closer to your goals. {data.group_name ? `Cohort: ${data.group_name}` : ""}
-              {data.teacher_name ? ` · Examiner: ${data.teacher_name}` : ""}
+              {data.teacher_name ? ` В· Examiner: ${data.teacher_name}` : ""}
             </p>
           </div>
 
@@ -389,13 +396,13 @@ export default function StudentDashboardPage() {
           <div className="w-full flex items-center justify-between">
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Activity Streak</span>
             <span className="text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-mono">
-              {hasFreePass ? "🛡 Pass Ready" : "Pass Used"}
+              {hasFreePass ? "рџ›Ў Pass Ready" : "Pass Used"}
             </span>
           </div>
 
           <div className="my-2 sm:my-3 flex flex-col items-center">
             <div className="flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/20 to-rose-500/20 text-2xl sm:text-3xl shadow-inner border border-amber-500/20">
-              🔥
+              рџ”Ґ
             </div>
             <h2 className="mt-1.5 sm:mt-2 text-xl sm:text-3xl font-extrabold font-mono text-zinc-900 dark:text-white tabular-nums tracking-tight">
               {streakVal} {streakVal === 1 ? "day" : "days"}
@@ -407,7 +414,7 @@ export default function StudentDashboardPage() {
             to="/student/assignments"
             className="w-full py-2 sm:py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs shadow-md shadow-amber-500/20 transition flex items-center justify-center gap-1.5 min-h-[44px]"
           >
-            <span>Keep it up! 🔥</span>
+            <span>Keep it up! рџ”Ґ</span>
           </Link>
         </div>
       </div>
@@ -416,28 +423,28 @@ export default function StudentDashboardPage() {
       <div className="grid grid-cols-4 gap-2 sm:gap-4 mt-3">
         {/* Stars */}
         <div className="flex flex-col items-center justify-center p-2 sm:p-3.5 rounded-xl bg-white dark:bg-[#161B22] border border-zinc-200/60 dark:border-zinc-800/60 text-center shadow-xs active:scale-95 transition">
-          <span className="text-sm sm:text-base mb-0.5">⭐</span>
+          <span className="text-sm sm:text-base mb-0.5">в­ђ</span>
           <span className="font-mono text-sm sm:text-lg font-bold text-zinc-900 dark:text-white tabular-nums">{data.total_stars}</span>
           <span className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400 leading-tight">Stars</span>
         </div>
 
         {/* Streak */}
         <div className="flex flex-col items-center justify-center p-2 sm:p-3.5 rounded-xl bg-white dark:bg-[#161B22] border border-zinc-200/60 dark:border-zinc-800/60 text-center shadow-xs active:scale-95 transition">
-          <span className="text-sm sm:text-base mb-0.5">⚡</span>
+          <span className="text-sm sm:text-base mb-0.5">вљЎ</span>
           <span className="font-mono text-sm sm:text-lg font-bold text-zinc-900 dark:text-white tabular-nums">{streakVal}</span>
           <span className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400 leading-tight">Streak</span>
         </div>
 
         {/* XP */}
         <div className="flex flex-col items-center justify-center p-2 sm:p-3.5 rounded-xl bg-white dark:bg-[#161B22] border border-zinc-200/60 dark:border-zinc-800/60 text-center shadow-xs active:scale-95 transition">
-          <span className="text-sm sm:text-base mb-0.5">🎯</span>
+          <span className="text-sm sm:text-base mb-0.5">рџЋЇ</span>
           <span className="font-mono text-sm sm:text-lg font-bold text-zinc-900 dark:text-white tabular-nums">{xpVal.toLocaleString()}</span>
           <span className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400 leading-tight">XP</span>
         </div>
 
         {/* Level */}
         <div className="flex flex-col items-center justify-center p-2 sm:p-3.5 rounded-xl bg-white dark:bg-[#161B22] border border-zinc-200/60 dark:border-zinc-800/60 text-center shadow-xs active:scale-95 transition">
-          <span className="text-sm sm:text-base mb-0.5">👑</span>
+          <span className="text-sm sm:text-base mb-0.5">рџ‘‘</span>
           <span className="font-mono text-sm sm:text-lg font-bold text-zinc-900 dark:text-white tabular-nums">Lv.{levelVal}</span>
           <span className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400 leading-tight truncate max-w-full">Level</span>
         </div>
@@ -450,15 +457,15 @@ export default function StudentDashboardPage() {
           <div className="card border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-zinc-900 dark:text-white flex items-center gap-2 tracking-tight">
-                <span>📝 Today&apos;s Assignments</span>
+                <span>рџ“ќ Today&apos;s Assignments</span>
                 <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400 tabular-nums font-mono">{data.upcoming_deadlines.length} active</span>
               </h2>
               <Link to="/student/assignments" className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">
-                View all →
+                View all в†’
               </Link>
             </div>
             {data.upcoming_deadlines.length === 0 ? (
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">No upcoming deadlines. 🎉</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">No upcoming deadlines. рџЋ‰</p>
             ) : (
               <ul className="divide-y divide-neutral-100 dark:divide-zinc-800/60">
                 {data.upcoming_deadlines.map((a) => {
@@ -490,14 +497,14 @@ export default function StudentDashboardPage() {
                       <div className="flex items-center justify-end sm:justify-start gap-2 shrink-0 self-end sm:self-center">
                         {a.submitted ? (
                           <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                            ✓ Submitted
+                            вњ“ Submitted
                           </span>
                         ) : a.is_locked ? (
                           <button
                             type="button"
                             onClick={() =>
                               toast(a.lock_reason || "Please complete the prerequisite assignment first.", {
-                                icon: "🔒",
+                                icon: "рџ”’",
                               })
                             }
                             className="btn-sm bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 font-semibold text-xs py-1.5 px-3 rounded-lg transition shadow-xs flex items-center gap-1.5 border border-zinc-200 dark:border-zinc-700"
@@ -511,7 +518,7 @@ export default function StudentDashboardPage() {
                             to="/student/assignments"
                             className="btn-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs py-1.5 px-3 rounded-lg transition shadow-xs active:scale-95"
                           >
-                            Start Task →
+                            Start Task в†’
                           </Link>
                         )}
                       </div>
@@ -537,7 +544,7 @@ export default function StudentDashboardPage() {
                     <span className="font-medium text-neutral-800 dark:text-neutral-200">{g.assignment_title}</span>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-neutral-900 dark:text-white tabular-nums font-mono">{g.score}/10</span>
-                      <span className="text-amber-500 text-xs">{"⭐".repeat(Math.min(5, Math.max(1, g.stars)))}</span>
+                      <span className="text-amber-500 text-xs">{"в­ђ".repeat(Math.min(5, Math.max(1, g.stars)))}</span>
                     </div>
                   </li>
                 ))}
@@ -549,7 +556,7 @@ export default function StudentDashboardPage() {
           {gamify && gamify.achievements.length > 0 && (
             <div className="card border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
               <h2 className="mb-3 text-base font-semibold text-neutral-900 dark:text-white flex items-center gap-2 tracking-tight">
-                <span>🏆 My Achievements</span>
+                <span>рџЏ† My Achievements</span>
                 <span className="text-xs bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-full font-bold tabular-nums font-mono">
                   {gamify.achievements.length}
                 </span>
@@ -575,10 +582,10 @@ export default function StudentDashboardPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-base font-semibold text-neutral-900 dark:text-white flex items-center gap-1.5 tracking-tight">
-                  <span>🏆 Group Leaderboard</span>
+                  <span>рџЏ† Group Leaderboard</span>
                 </h2>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                  {leaderboard?.group_name ? `${leaderboard.group_name} · ${leaderboard.week_key}` : "Weekly Performance"}
+                  {leaderboard?.group_name ? `${leaderboard.group_name} В· ${leaderboard.week_key}` : "Weekly Performance"}
                 </p>
               </div>
               {leaderboard?.current_student_rank && (
@@ -635,7 +642,7 @@ export default function StudentDashboardPage() {
                                 : "bg-neutral-100 dark:bg-zinc-800 text-neutral-600 dark:text-neutral-300"
                             }`}
                           >
-                            {rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : rank}
+                            {rank === 1 ? "рџҐ‡" : rank === 2 ? "рџҐ€" : rank === 3 ? "рџҐ‰" : rank}
                           </span>
                           <UserAvatar
                             src={entry.avatar_url}
@@ -648,7 +655,7 @@ export default function StudentDashboardPage() {
                         </div>
 
                         <div className="flex items-center gap-2 text-neutral-700 dark:text-neutral-300 font-medium tabular-nums font-mono">
-                          <span>⭐ {entry.weekly_stars}</span>
+                          <span>в­ђ {entry.weekly_stars}</span>
                           <span className="font-bold text-neutral-900 dark:text-white">{entry.weekly_xp} XP</span>
                         </div>
                       </div>
@@ -656,7 +663,7 @@ export default function StudentDashboardPage() {
                       {/* Performance row: Completion Rate % & Streak chip */}
                       <div className="flex items-center justify-between text-[11px] pt-1 border-t border-black/[0.04] dark:border-white/[0.06]">
                         <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium tabular-nums font-mono">
-                          🔥 {entry.streak} {entry.streak === 1 ? "day" : "days"} in a row
+                          рџ”Ґ {entry.streak} {entry.streak === 1 ? "day" : "days"} in a row
                         </span>
 
                         <span className="font-semibold text-neutral-800 dark:text-neutral-200 tabular-nums font-mono">
@@ -681,13 +688,13 @@ export default function StudentDashboardPage() {
           {/* Star History / Transactions */}
           {gamify && gamify.recent_transactions.length > 0 && (
             <div className="card border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
-              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white mb-3 tracking-tight">⭐ Star Activity</h3>
+              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white mb-3 tracking-tight">в­ђ Star Activity</h3>
               <ul className="divide-y divide-neutral-100 dark:divide-zinc-800/60 text-xs">
                 {gamify.recent_transactions.slice(0, 5).map((t) => (
                   <li key={t.id} className="py-2 flex items-center justify-between">
                     <span className="truncate max-w-[160px] text-neutral-700 dark:text-neutral-300">{t.description || t.reason}</span>
                     <span className={`font-bold tabular-nums font-mono ${t.amount >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                      {t.amount > 0 ? `+${t.amount}` : t.amount} ⭐
+                      {t.amount > 0 ? `+${t.amount}` : t.amount} в­ђ
                     </span>
                   </li>
                 ))}
