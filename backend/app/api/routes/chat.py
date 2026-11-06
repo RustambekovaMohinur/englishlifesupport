@@ -1,4 +1,4 @@
-import json
+﻿import json
 import logging
 import re
 import uuid
@@ -38,7 +38,7 @@ CRITICAL CORE RULES (STRICTLY ENFORCED):
      "I was created by Mohinur Rustambekova."
 3. TONE, LENGTH & CONVERSATIONAL FLOW:
    - Keep answers short, meaningful, direct, and natural (like a smart personal assistant and native English mentor).
-   - Answer directly first. Respond like a real person — engaging, helpful, and concise (typically 2 to 4 sentences).
+   - Answer directly first. Respond like a real person вЂ” engaging, helpful, and concise (typically 2 to 4 sentences).
    - No unnecessary word count stats, no robotic coaching headers, and no giant bullet walls for simple chat.
 4. GENTLE CORRECTIONS:
    - If the user makes a significant grammar or vocabulary mistake, gently share a natural native alternative at the very end of your response.
@@ -56,7 +56,7 @@ async def _get_student_profile(db: AsyncSession, user: User) -> StudentProfile |
     return result.scalar_one_or_none()
 
 
-# ─── 1-on-1 Private Messaging ────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ 1-on-1 Private Messaging в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 @router.get("/contacts", response_model=list[PeerChatContactOut], summary="List peer chat contacts")
 async def list_chat_contacts(
@@ -225,7 +225,7 @@ async def send_private_message(
     )
 
 
-# ─── AI Companion Chat ────────────────────────────────────────────────────────
+# в”Ђв”Ђв”Ђ AI Companion Chat в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 @router.get("/ai/history", response_model=list[AIChatMessageOut], summary="Get AI Companion chat history")
 async def get_ai_chat_history(
@@ -304,7 +304,7 @@ def generate_pedagogical_guidance(
     """
     Fallback response engine used when Gemini is offline or rate-limited.
     Matches common student requests (greetings, grammar questions, homework, vocab)
-    and returns natural, conversational replies — no formal headers, no word counts.
+    and returns natural, conversational replies вЂ” no formal headers, no word counts.
     """
     name = (student_name or "").split()[0] if student_name else "there"
     lower = user_text.lower()
@@ -318,48 +318,48 @@ def generate_pedagogical_guidance(
     ]
     if any(p in lower for p in essay_homework_patterns):
         return (
-            f"I'd love to help, {name} — but I can't write the essay for you directly. "
-            f"The real progress comes from your own words! 💪\n\n"
+            f"I'd love to help, {name} вЂ” but I can't write the essay for you directly. "
+            f"The real progress comes from your own words! рџ’Є\n\n"
             f"Here's what I *can* do: help you build a solid structure together. "
             f"A strong essay usually looks like this:\n\n"
-            f"1. **Introduction** — Hook + paraphrase the prompt + your thesis in 1 clear sentence.\n"
-            f"2. **Body 1** — Your strongest argument, with a real-world example.\n"
-            f"3. **Body 2** — A second reason or a counter-argument you can address.\n"
-            f"4. **Conclusion** — Restate your thesis in fresh words, no new ideas.\n\n"
+            f"1. **Introduction** вЂ” Hook + paraphrase the prompt + your thesis in 1 clear sentence.\n"
+            f"2. **Body 1** вЂ” Your strongest argument, with a real-world example.\n"
+            f"3. **Body 2** вЂ” A second reason or a counter-argument you can address.\n"
+            f"4. **Conclusion** вЂ” Restate your thesis in fresh words, no new ideas.\n\n"
             f"Start by writing your thesis sentence here and I'll give you feedback on it right away!"
         )
 
     # 2. COMMON GRAMMAR ERRORS
     if "have went" in lower or "has went" in lower:
         return (
-            f"Quick grammar note on that, {name}! After *have/has*, you need the past participle — so it's **'have gone'**, not *'have went'*.\n\n"
-            f"- ✅ *'I have gone to London.'* / *'I have been to London.'*\n"
-            f"- ✅ *'I went to London last year.'* (past simple — no 'have')\n\n"
+            f"Quick grammar note on that, {name}! After *have/has*, you need the past participle вЂ” so it's **'have gone'**, not *'have went'*.\n\n"
+            f"- вњ… *'I have gone to London.'* / *'I have been to London.'*\n"
+            f"- вњ… *'I went to London last year.'* (past simple вЂ” no 'have')\n\n"
             f"*Went* is past simple on its own; *gone* is the past participle for perfect tenses. "
             f"Want to try writing a sentence using *'have been to'*?"
         )
 
     if "didn't knew" in lower or "did not knew" in lower or "didn't saw" in lower:
         return (
-            f"Good catch to bring up, {name}! The rule here: when you use *did / didn't*, the verb after it stays in base form — no *-ed* or irregular past.\n\n"
-            f"- ❌ *'I didn't knew'* → ✅ *'I didn't **know**'*\n"
-            f"- ❌ *'She didn't saw'* → ✅ *'She didn't **see**'*\n\n"
+            f"Good catch to bring up, {name}! The rule here: when you use *did / didn't*, the verb after it stays in base form вЂ” no *-ed* or irregular past.\n\n"
+            f"- вќЊ *'I didn't knew'* в†’ вњ… *'I didn't **know**'*\n"
+            f"- вќЊ *'She didn't saw'* в†’ вњ… *'She didn't **see**'*\n\n"
             f"*Did* already carries the past meaning, so the main verb doesn't need to change. "
             f"Can you correct this one? *'We didn't went there yesterday.'*"
         )
 
     if "more better" in lower or "more easier" in lower:
         return (
-            f"Nice try, {name}! English comparatives can be tricky. Short adjectives use *-er* on their own — you don't add *more* on top:\n\n"
-            f"- ❌ *more better* → ✅ **better**\n"
-            f"- ❌ *more easier* → ✅ **easier**\n\n"
+            f"Nice try, {name}! English comparatives can be tricky. Short adjectives use *-er* on their own вЂ” you don't add *more* on top:\n\n"
+            f"- вќЊ *more better* в†’ вњ… **better**\n"
+            f"- вќЊ *more easier* в†’ вњ… **easier**\n\n"
             f"Use *more* only with longer adjectives: *more comfortable*, *more interesting*. "
             f"Try writing a comparison sentence and I'll check it for you!"
         )
 
     if any(k in lower for k in ["check this", "correct this", "is this correct", "xatomi", "to'g'rimi", "check my sentence", "check grammar"]):
         return (
-            f"Sure, paste the sentence and I'll look it over! 😊\n\n"
+            f"Sure, paste the sentence and I'll look it over! рџЉ\n\n"
             f"I'll flag any grammar issues and suggest a more natural phrasing if needed. "
             f"Just drop it here whenever you're ready."
         )
@@ -368,11 +368,11 @@ def generate_pedagogical_guidance(
     if "since" in lower and "for" in lower:
         return (
             f"Great question, {name}! Both *since* and *for* go with the present perfect, but they answer different things:\n\n"
-            f"- **for** = a duration → *for 3 years, for a long time*\n"
+            f"- **for** = a duration в†’ *for 3 years, for a long time*\n"
             f"  *'I have lived here **for** 3 years.'*\n"
-            f"- **since** = a starting point → *since 2021, since Monday*\n"
+            f"- **since** = a starting point в†’ *since 2021, since Monday*\n"
             f"  *'I have lived here **since** 2021.'*\n\n"
-            f"Quick quiz: *'They have been waiting _____ morning.'* — since or for?"
+            f"Quick quiz: *'They have been waiting _____ morning.'* вЂ” since or for?"
         )
 
     if "conditional" in lower or "if clause" in lower:
@@ -390,7 +390,7 @@ def generate_pedagogical_guidance(
             f"These two mix people up all the time! Here's the simple version:\n\n"
             f"- **Past simple** = finished time you know: *'I visited Bukhara in 2022.'*\n"
             f"- **Present perfect** = life experience or recent result (no specific time): *'I have visited Bukhara three times.'*\n\n"
-            f"Tell me one thing you did last year (past simple) and one thing you've achieved recently (present perfect) — I'll check them both!"
+            f"Tell me one thing you did last year (past simple) and one thing you've achieved recently (present perfect) вЂ” I'll check them both!"
         )
 
     # 4. VOCABULARY & IELTS TOPIC COLLOCATIONS
@@ -428,7 +428,7 @@ def generate_pedagogical_guidance(
         return (
             f"Here are some high-level collocations for **{topic_name}**, {name}:\n\n"
             f"{colloc_str}\n\n"
-            f"Pick one and write your own sentence — I'll give you instant feedback!"
+            f"Pick one and write your own sentence вЂ” I'll give you instant feedback!"
         )
 
     # 4.5. CREATOR / IDENTITY INQUIRIES
@@ -452,7 +452,7 @@ def generate_pedagogical_guidance(
     ]
     if any(p in lower for p in meta_patterns):
         return (
-            f"Fair point, {name}! I'm Aura — your English tutor here on English Life. "
+            f"Fair point, {name}! I'm Aura вЂ” your English tutor here on English Life. "
             f"My job is to help you improve naturally, not just hand you answers.\n\n"
             f"What would you like to do?\n"
             f"1. Just have a casual conversation in English\n"
@@ -471,14 +471,14 @@ def generate_pedagogical_guidance(
         if has_prior_history:
             return f"Hey {name}! Good to hear from you again. What would you like to work on?"
         return (
-            f"Hey {name}! I'm Aura, your English tutor on English Life. 👋\n\n"
-            f"We can chat in English, check your writing, go over grammar, or build up vocabulary — whatever you need. "
+            f"Hey {name}! I'm Aura, your English tutor on English Life. рџ‘‹\n\n"
+            f"We can chat in English, check your writing, go over grammar, or build up vocabulary вЂ” whatever you need. "
             f"What's on your mind today?"
         )
 
     if re.search(r"\b(how are you|how's it going|how are you doing)\b", lower):
         return (
-            f"I'm great, thanks for asking! 😊 How's your day going, {name}? "
+            f"I'm great, thanks for asking! рџЉ How's your day going, {name}? "
             f"Ready to practice some English?"
         )
 
@@ -554,8 +554,15 @@ async def chat_with_ai(
     }
 
     reply_text = ""
+    gemini_error_detail = ""
+
+    # Primary: Live Gemini AI API execution with automatic key rotation & backoff
     try:
-        resp, err = await execute_gemini_generate_content(payload=gemini_payload, timeout=20.0)
+        resp, err = await execute_gemini_generate_content(
+            payload=gemini_payload,
+            timeout=25.0,
+            max_backoff_retries=2,
+        )
         if resp and resp.status_code == 200:
             data = resp.json()
             candidates = data.get("candidates", [])
@@ -563,13 +570,16 @@ async def chat_with_ai(
                 parts = candidates[0].get("content", {}).get("parts", [])
                 if parts and parts[0].get("text"):
                     reply_text = parts[0]["text"].strip()
-        elif err:
-            logger.info("Gemini non-200 status or error: %s. Using pedagogical engine fallback.", err)
+        else:
+            gemini_error_detail = err or (f"HTTP {resp.status_code}" if resp else "Connection error")
+            logger.warning("Live Gemini API response unfulfilled: %s", gemini_error_detail)
     except Exception as ex:
-        logger.warning("Gemini invocation failed (%s). Using pedagogical engine fallback.", ex)
+        gemini_error_detail = str(ex)
+        logger.error("Live Gemini API call exception: %s", ex)
 
+    # If live Gemini succeeds, ensure response is clean
     if not reply_text:
-        # Context-rich dynamic pedagogical response
+        # Dynamic fallback engine: strictly conversational in English, zero repetitive static loops
         reply_text = generate_pedagogical_guidance(user_text, student_name=profile.full_name, history=history_rows)
 
     # Save assistant message
