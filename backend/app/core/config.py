@@ -172,7 +172,7 @@ class Settings(BaseSettings):
 
     # Telegram Bot
     TELEGRAM_BOT_TOKEN: str = ""
-    TELEGRAM_BOT_USERNAME: str = "EnglishLifeParentBot"
+    TELEGRAM_BOT_USERNAME: str = "EnglishLife_edu_bot"
     TELEGRAM_WEBHOOK_URL: str = ""
 
     # App

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Telegram Bot service for Parent Notifications and Automated Reporting.
 Zero-cost, lightweight integration using standard async HTTP requests.
 """
@@ -61,8 +61,8 @@ _CACHED_BOT_USERNAME: str | None = None
 # Persistent ReplyKeyboardMarkup for parents
 PARENT_KEYBOARD: dict[str, Any] = {
     "keyboard": [
-        [{"text": "📊 Farzandim ko'rsatkichlari"}],
-        [{"text": "ℹ️ Yordam"}],
+        [{"text": "рџ“Љ Farzandim ko'rsatkichlari"}],
+        [{"text": "в„№пёЏ Yordam"}],
     ],
     "resize_keyboard": True,
     "is_persistent": True,
@@ -71,8 +71,8 @@ PARENT_KEYBOARD: dict[str, Any] = {
 # Persistent ReplyKeyboardMarkup for students
 STUDENT_KEYBOARD: dict[str, Any] = {
     "keyboard": [
-        [{"text": "📊 Ko'rsatkichlarim"}],
-        [{"text": "ℹ️ Yordam"}],
+        [{"text": "рџ“Љ Ko'rsatkichlarim"}],
+        [{"text": "в„№пёЏ Yordam"}],
     ],
     "resize_keyboard": True,
     "is_persistent": True,
@@ -80,7 +80,7 @@ STUDENT_KEYBOARD: dict[str, Any] = {
 
 HELP_ONLY_KEYBOARD: dict[str, Any] = {
     "keyboard": [
-        [{"text": "ℹ️ Yordam"}],
+        [{"text": "в„№пёЏ Yordam"}],
     ],
     "resize_keyboard": True,
 }
@@ -105,7 +105,7 @@ async def get_bot_username() -> str:
     configured = (settings.TELEGRAM_BOT_USERNAME or os.getenv("TELEGRAM_BOT_USERNAME", "")).strip()
     token = get_telegram_bot_token()
     if not token:
-        _CACHED_BOT_USERNAME = configured or "EnglishLifeParentBot"
+        _CACHED_BOT_USERNAME = configured or "EnglishLife_edu_bot"
         return _CACHED_BOT_USERNAME
 
     try:
@@ -120,7 +120,7 @@ async def get_bot_username() -> str:
     except Exception as ex:
         logger.debug("Could not fetch bot username from Telegram API: %s", ex)
 
-    _CACHED_BOT_USERNAME = configured or "EnglishLifeParentBot"
+    _CACHED_BOT_USERNAME = configured or "EnglishLife_edu_bot"
     return _CACHED_BOT_USERNAME
 
 
@@ -227,8 +227,8 @@ def build_student_deep_link(bot_username: str, student_id: uuid.UUID | str) -> s
 async def notify_student_assignment(chat_id: int | str, assignment_title: str, due_date: datetime, is_update: bool = False) -> bool:
     """Send a Telegram message to a student about a new or updated assignment."""
     action = "Yangilangan" if is_update else "Yangi"
-    emoji = "✏️" if not is_update else "🔄"
-    text = f"{emoji} {action} topshiriq 📚:\n<b>{assignment_title}</b>\n⏰ Muddati: {due_date.strftime('%d.%m.%Y')}"
+    emoji = "вњЏпёЏ" if not is_update else "рџ”„"
+    text = f"{emoji} {action} topshiriq рџ“љ:\n<b>{assignment_title}</b>\nвЏ° Muddati: {due_date.strftime('%d.%m.%Y')}"
     return await send_telegram_message(chat_id=chat_id, text=text)
 
 
@@ -257,22 +257,22 @@ async def notify_parent_assignment(
     deadline_str = ""
     if due_date:
         try:
-            deadline_str = f"\n⏰ Muddati: {due_date.strftime('%d.%m.%Y, %H:%M') if hasattr(due_date, 'strftime') else str(due_date)}"
+            deadline_str = f"\nвЏ° Muddati: {due_date.strftime('%d.%m.%Y, %H:%M') if hasattr(due_date, 'strftime') else str(due_date)}"
         except Exception:
-            deadline_str = f"\n⏰ Muddati: {due_date}"
+            deadline_str = f"\nвЏ° Muddati: {due_date}"
 
     text = (
-        f"👨‍👩‍👧 <b>Farzandingiz [{student_name}] uchun yangi xabar</b>\n"
+        f"рџ‘ЁвЂЌрџ‘©вЂЌрџ‘§ <b>Farzandingiz [{student_name}] uchun yangi xabar</b>\n"
         f"Topshiriq: <b>{assignment_title}</b>"
         f"{deadline_str}\n\n"
-        "🔗 Platforma orqali topshiriqni kuzatishingiz mumkin:"
+        "рџ”— Platforma orqali topshiriqni kuzatishingiz mumkin:"
     )
     url = "https://englishlifesupport.vercel.app/student/parent-portal"
     reply_markup = {
         "inline_keyboard": [
             [
                 {
-                    "text": "Ota-ona portali 📱",
+                    "text": "Ota-ona portali рџ“±",
                     "url": url,
                 }
             ]
@@ -319,25 +319,25 @@ async def notify_group_assignment(
     # Handle single or multiple assignment titles for consolidated debounced notification
     titles_list = assignment_titles or ([assignment_title] if assignment_title else [])
     if len(titles_list) > 1:
-        titles_formatted = "\n" + "\n".join(f"• <b>{t}</b>" for t in titles_list)
+        titles_formatted = "\n" + "\n".join(f"вЂў <b>{t}</b>" for t in titles_list)
     elif titles_list:
         titles_formatted = f"<b>{titles_list[0]}</b>"
     else:
         titles_formatted = "Topshiriq"
 
     text = (
-        "📌 <b>Yangi topshiriqlar joylandi!</b>\n"
-        f"📚 Guruh: <b>{grp_display}</b>\n"
-        f"📝 Vazifalar: {titles_formatted}\n"
-        f"⏳ Muddat: <b>{deadline_str}</b>\n\n"
-        "👉 Saytga kirib topshiriqlarni bajaring!"
+        "рџ“Њ <b>Yangi topshiriqlar joylandi!</b>\n"
+        f"рџ“љ Guruh: <b>{grp_display}</b>\n"
+        f"рџ“ќ Vazifalar: {titles_formatted}\n"
+        f"вЏі Muddat: <b>{deadline_str}</b>\n\n"
+        "рџ‘‰ Saytga kirib topshiriqlarni bajaring!"
     )
     url = "https://englishlifesupport.vercel.app/student/assignments"
     reply_markup = {
         "inline_keyboard": [
             [
                 {
-                    "text": "Saytga o'tish 🚀",
+                    "text": "Saytga o'tish рџљЂ",
                     "url": url,
                 }
             ]
@@ -364,20 +364,20 @@ async def notify_group_wordlist(
         logger.debug("notify_group_wordlist called without valid chat_id")
         return False
 
-    header = "🔄 <b>Lug'at (Wordlist) yangilandi!</b>" if is_update else "📖 <b>Yangi lug'at (Wordlist) joylandi!</b>"
+    header = "рџ”„ <b>Lug'at (Wordlist) yangilandi!</b>" if is_update else "рџ“– <b>Yangi lug'at (Wordlist) joylandi!</b>"
     count_str = f"{total_words} ta" if total_words > 0 else "To'plam"
     text = (
         f"{header}\n\n"
-        f"📚 <b>Lug'at:</b> {wordlist_title}\n"
-        f"📝 <b>So'zlar soni:</b> {count_str}\n\n"
-        "🔗 Lug'atni yodlash va test topshirish uchun platformaga o'ting:"
+        f"рџ“љ <b>Lug'at:</b> {wordlist_title}\n"
+        f"рџ“ќ <b>So'zlar soni:</b> {count_str}\n\n"
+        "рџ”— Lug'atni yodlash va test topshirish uchun platformaga o'ting:"
     )
     url = "https://englishlifesupport.vercel.app/student/wordlists"
     reply_markup = {
         "inline_keyboard": [
             [
                 {
-                    "text": "Saytga o'tish 🚀",
+                    "text": "Saytga o'tish рџљЂ",
                     "url": url,
                 }
             ]
@@ -407,23 +407,23 @@ async def notify_parent_submission_graded(
         logger.debug("Skipping notify_parent_submission_graded because chat_id is a group ID: %s", clean_chat_id)
         return False
 
-    stars_str = f" · ⭐ +{stars} yulduz" if stars > 0 else ""
-    feedback_line = f"\n💬 <b>O'qituvchi izohi:</b> <i>{feedback}</i>\n" if feedback else ""
+    stars_str = f" В· в­ђ +{stars} yulduz" if stars > 0 else ""
+    feedback_line = f"\nрџ’¬ <b>O'qituvchi izohi:</b> <i>{feedback}</i>\n" if feedback else ""
 
     text = (
-        "📊 <b>Vazifa tekshirildi va baholandi!</b>\n\n"
+        "рџ“Љ <b>Vazifa tekshirildi va baholandi!</b>\n\n"
         f"Hurmatli ota-ona,\n"
         f"Farzandingiz <b>{student_name}</b>ning \"<b>{assignment_title}</b>\" vazifasi o'qituvchi tomonidan tekshirildi:\n\n"
-        f"• <b>Baho:</b> <b>{score}/10</b>{stars_str}\n"
+        f"вЂў <b>Baho:</b> <b>{score}/10</b>{stars_str}\n"
         f"{feedback_line}\n"
-        "🔗 Farzandingiz ko'rsatkichlarini kuzatish uchun platformaga o'ting:"
+        "рџ”— Farzandingiz ko'rsatkichlarini kuzatish uchun platformaga o'ting:"
     )
     url = "https://englishlifesupport.vercel.app/student/parent-portal"
     reply_markup = {
         "inline_keyboard": [
             [
                 {
-                    "text": "Farzandim ko'rsatkichlari 🚀",
+                    "text": "Farzandim ko'rsatkichlari рџљЂ",
                     "url": url,
                 }
             ]
@@ -512,9 +512,9 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
     Processes incoming Telegram Webhook / Update object.
     Handles:
     - /start <token_or_student_id> (Deep linking with confirmation)
-    - /status or "📊 Farzandim ko'rsatkichlari" (Summary of grades, attendance, stars)
+    - /status or "рџ“Љ Farzandim ko'rsatkichlari" (Summary of grades, attendance, stars)
     - /unlink (Detaches parent chat_id)
-    - /help or "ℹ️ Yordam" or plain /start (Instructions + ReplyKeyboardMarkup)
+    - /help or "в„№пёЏ Yordam" or plain /start (Instructions + ReplyKeyboardMarkup)
     """
 # 0. Handle my_chat_member updates for bot being added/promoted in a group
     my_chat_member = update.get("my_chat_member")
@@ -570,21 +570,21 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                 await db.commit()
                 await send_telegram_message(
                     chat_id=chat_id,
-                    text=f"✅ Guruh '<b>{group_obj.name}</b>' muvaffaqiyatli bog'landi!\nChat ID: <code>{chat_id}</code>",
+                    text=f"вњ… Guruh '<b>{group_obj.name}</b>' muvaffaqiyatli bog'landi!\nChat ID: <code>{chat_id}</code>",
                     reply_markup=REMOVE_KEYBOARD,
                 )
                 return {"ok": True}
             else:
                 await send_telegram_message(
                     chat_id=chat_id,
-                    text=f"❌ Guruh topilmadi: '<b>{group_identifier}</b>'.",
+                    text=f"вќЊ Guruh topilmadi: '<b>{group_identifier}</b>'.",
                     reply_markup=REMOVE_KEYBOARD,
                 )
                 return {"ok": True}
         else:
             await send_telegram_message(
                 chat_id=chat_id,
-                text="ℹ️ Guruh nomini yoki ID sini kiriting:\nMasalan: <code>/bind_group GuruhNomi</code>",
+                text="в„№пёЏ Guruh nomini yoki ID sini kiriting:\nMasalan: <code>/bind_group GuruhNomi</code>",
                 reply_markup=REMOVE_KEYBOARD,
             )
             return {"ok": True}
@@ -618,7 +618,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                         await db.commit()
                         await send_telegram_message(
                             chat_id=chat_id,
-                            text=f"✅ Hurmatli <b>{t_prof.full_name}</b>, Telegram hisobingiz o'qituvchi profilingizga muvaffaqiyatli bog'landi!",
+                            text=f"вњ… Hurmatli <b>{t_prof.full_name}</b>, Telegram hisobingiz o'qituvchi profilingizga muvaffaqiyatli bog'landi!",
                             reply_markup=REMOVE_KEYBOARD,
                         )
                         return {"ok": True, "action": "teacher_linked"}
@@ -638,10 +638,10 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                             await send_telegram_message(
                                 chat_id=chat_id,
                                 text=(
-                                    f"🔒 Hurmatli <b>{s_prof.full_name}</b>, shaxsiy o'quvchi Telegram boti "
+                                    f"рџ”’ Hurmatli <b>{s_prof.full_name}</b>, shaxsiy o'quvchi Telegram boti "
                                     f"faqat <b>Standard (19k)</b> yoki <b>Pro VIP (29k)</b> obunachilari uchun mo'ljallangan.\n\n"
                                     f"Ota-onangiz uchun bepul bildirishnomalarni esa LMS profilingizdagi "
-                                    f"<b>Ota-ona Telegram boti</b> orqali bepul ulashingiz mumkin! 🚀"
+                                    f"<b>Ota-ona Telegram boti</b> orqali bepul ulashingiz mumkin! рџљЂ"
                                 ),
                                 reply_markup=REMOVE_KEYBOARD,
                             )
@@ -652,8 +652,8 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                         await send_telegram_message(
                             chat_id=chat_id,
                             text=(
-                                f"✅ Hurmatli <b>{s_prof.full_name}</b>, shaxsiy Telegram hisobingiz muvaffaqiyatli bog'landi!\n\n"
-                                f"🌟 Rejangiz: <b>{s_prof.premium_plan.upper()}</b>\n"
+                                f"вњ… Hurmatli <b>{s_prof.full_name}</b>, shaxsiy Telegram hisobingiz muvaffaqiyatli bog'landi!\n\n"
+                                f"рџЊџ Rejangiz: <b>{s_prof.premium_plan.upper()}</b>\n"
                                 f"Endi dars jadvallari, vazifa eslatmalari va reytingingizni bot orqali bevosita kuzatishingiz mumkin."
                             ),
                             reply_markup=STUDENT_KEYBOARD,
@@ -693,7 +693,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                 await send_telegram_message(
                     chat_id=chat_id,
                     text=(
-                        "⚠️ <b>Talaba topilmadi</b>\n\n"
+                        "вљ пёЏ <b>Talaba topilmadi</b>\n\n"
                         "Ushbu havola bo'yicha talaba tizimdan topilmadi. Iltimos, o'quv markazidan "
                         "yoki farzandingiz profilidagi 'Telegram Botga Ulash' havolasini qaytadan oling."
                     ),
@@ -712,9 +712,9 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             confirmation_msg = (
                 f"Farzandingiz <b>{student.full_name}</b> muvaffaqiyatli biriktirildi! "
                 "Endi davomat va baholar sizga avtomatik yuboriladi.\n\n"
-                f"• Guruh: <b>{group_name}</b>\n"
-                f"• To'plangan Yulduzlar: ⭐ <b>{student.total_stars}</b> | ⚡ <b>{student.total_lightning}</b>\n\n"
-                "Quyidagi <b>📊 Farzandim ko'rsatkichlari</b> tugmasi orqali istalgan paytda "
+                f"вЂў Guruh: <b>{group_name}</b>\n"
+                f"вЂў To'plangan Yulduzlar: в­ђ <b>{student.total_stars}</b> | вљЎ <b>{student.total_lightning}</b>\n\n"
+                "Quyidagi <b>рџ“Љ Farzandim ko'rsatkichlari</b> tugmasi orqali istalgan paytda "
                 "baholar va topshiriqlarni tekshirishingiz mumkin."
             )
             await send_telegram_message(
@@ -817,24 +817,24 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
 
         await send_telegram_message(
             chat_id=chat_id,
-            text="✅ Barcha Telegram bog'lanishlaringiz uzildi! Yangidan bog'lanish uchun /start buyrug'ini bosing.",
+            text="вњ… Barcha Telegram bog'lanishlaringiz uzildi! Yangidan bog'lanish uchun /start buyrug'ini bosing.",
             reply_markup=REMOVE_KEYBOARD,
         )
         return {"ok": True, "action": "unlinked"}
 
-    # 3. Handle "ℹ️ Yordam" / /help
+    # 3. Handle "в„№пёЏ Yordam" / /help
     is_help_cmd = (
         text.startswith("/help")
-        or text == "ℹ️ Yordam"
+        or text == "в„№пёЏ Yordam"
         or text == "Yordam"
         or "yordam" in text.lower()
     )
     if is_help_cmd:
         help_text = (
-            "ℹ️ <b>English Life LMS Bot Yordam</b>\n\n"
-            "- /start — Akkauntni qayta bog'lash\n"
-            "- 📊 Ko'rsatkichlarim — Shaxsiy ball va vazifalaringizni ko'rish\n"
-            "- /unlink — Telegram profilini platformadan uzish"
+            "в„№пёЏ <b>English Life LMS Bot Yordam</b>\n\n"
+            "- /start вЂ” Akkauntni qayta bog'lash\n"
+            "- рџ“Љ Ko'rsatkichlarim вЂ” Shaxsiy ball va vazifalaringizni ko'rish\n"
+            "- /unlink вЂ” Telegram profilini platformadan uzish"
         )
         help_kb = REMOVE_KEYBOARD
         if user_role == "student":
@@ -849,17 +849,17 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
         )
         return {"ok": True, "action": "help_sent"}
 
-    # 4. Handle /status or button "📊 Farzandim ko'rsatkichlari" / "📊 Ko'rsatkichlarim"
+    # 4. Handle /status or button "рџ“Љ Farzandim ko'rsatkichlari" / "рџ“Љ Ko'rsatkichlarim"
     is_status_cmd = (
         text == "/status"
-        or text == "📊 Farzandim ko'rsatkichlari"
-        or text == "📊 Ko'rsatkichlarim"
+        or text == "рџ“Љ Farzandim ko'rsatkichlari"
+        or text == "рџ“Љ Ko'rsatkichlarim"
         or "farzandim" in text.lower()
         or "ko'rsatkich" in text.lower()
     )
     if is_status_cmd:
         target_student = student_record
-        is_student_view = (text == "📊 Ko'rsatkichlarim" or user_role == "student")
+        is_student_view = (text == "рџ“Љ Ko'rsatkichlarim" or user_role == "student")
 
         if is_student_view and not target_student and linked_students:
             target_student = linked_students[0]
@@ -875,10 +875,10 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             )
 
             lines = [
-                f"📊 <b>{target_student.full_name} — Shaxsiy ko'rsatkichlar</b>",
-                f"👥 Guruh: <b>{group_str}</b>",
-                f"⭐ Yulduzlar: <b>{stats['stars']}</b> | 🔥 Streak: <b>{stats['streak']} kun</b>",
-                f"⚡ XP: <b>{stats['xp']}</b> | ✅ Bajarilgan vazifalar: <b>{task_str} ({stats['progress_percent']}%)</b>\n",
+                f"рџ“Љ <b>{target_student.full_name} вЂ” Shaxsiy ko'rsatkichlar</b>",
+                f"рџ‘Ґ Guruh: <b>{group_str}</b>",
+                f"в­ђ Yulduzlar: <b>{stats['stars']}</b> | рџ”Ґ Streak: <b>{stats['streak']} kun</b>",
+                f"вљЎ XP: <b>{stats['xp']}</b> | вњ… Bajarilgan vazifalar: <b>{task_str} ({stats['progress_percent']}%)</b>\n",
             ]
             sub_stmt = (
                 select(Submission)
@@ -900,16 +900,16 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             sub_res = await db.execute(sub_stmt)
             recent_subs = sub_res.scalars().all()
             if recent_subs:
-                lines.append("📝 <b>So'nggi vazifalaringiz:</b>")
+                lines.append("рџ“ќ <b>So'nggi vazifalaringiz:</b>")
                 for sub in recent_subs:
                     as_title = sub.assignment.title if sub.assignment else "Vazifa"
                     sub_time = sub.submitted_at.strftime("%d.%m.%Y")
                     if sub.grade:
-                        lines.append(f"• {as_title}: ✅ <b>{sub.grade.score}/10</b> ({sub_time})")
+                        lines.append(f"вЂў {as_title}: вњ… <b>{sub.grade.score}/10</b> ({sub_time})")
                     else:
-                        lines.append(f"• {as_title}: ⏳ <b>Tekshirilmoqda</b> ({sub_time})")
+                        lines.append(f"вЂў {as_title}: вЏі <b>Tekshirilmoqda</b> ({sub_time})")
             else:
-                lines.append("📝 Hozircha topshirilgan vazifalar mavjud emas.")
+                lines.append("рџ“ќ Hozircha topshirilgan vazifalar mavjud emas.")
 
             await send_telegram_message(
                 chat_id=chat_id,
@@ -929,10 +929,10 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                 )
 
                 lines = [
-                    f"👨‍👩‍👧 <b>Farzandingiz [{s.full_name}] — O'qish ko'rsatkichlari</b>",
-                    f"👥 Guruh: <b>{group_str}</b>",
-                    f"⭐ Yulduzlar: <b>{stats['stars']}</b> | 🔥 Streak: <b>{stats['streak']} kun</b>",
-                    f"⚡ XP: <b>{stats['xp']}</b> | ✅ Bajarilgan vazifalar: <b>{task_str} ({stats['progress_percent']}%)</b>\n",
+                    f"рџ‘ЁвЂЌрџ‘©вЂЌрџ‘§ <b>Farzandingiz [{s.full_name}] вЂ” O'qish ko'rsatkichlari</b>",
+                    f"рџ‘Ґ Guruh: <b>{group_str}</b>",
+                    f"в­ђ Yulduzlar: <b>{stats['stars']}</b> | рџ”Ґ Streak: <b>{stats['streak']} kun</b>",
+                    f"вљЎ XP: <b>{stats['xp']}</b> | вњ… Bajarilgan vazifalar: <b>{task_str} ({stats['progress_percent']}%)</b>\n",
                 ]
 
                 sub_stmt = (
@@ -956,21 +956,21 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                 recent_subs = sub_res.scalars().all()
 
                 if recent_subs:
-                    lines.append("📝 <b>So'nggi vazifalar va baholar:</b>")
+                    lines.append("рџ“ќ <b>So'nggi vazifalar va baholar:</b>")
                     for sub in recent_subs:
                         as_title = sub.assignment.title if sub.assignment else "Vazifa"
                         sub_time = sub.submitted_at.strftime("%d.%m.%Y")
                         if sub.grade:
-                            grade_icon = "🌟" if sub.grade.score >= 8 else "✅"
-                            lines.append(f"• {as_title}: {grade_icon} <b>{sub.grade.score}/10</b> ({sub_time})")
+                            grade_icon = "рџЊџ" if sub.grade.score >= 8 else "вњ…"
+                            lines.append(f"вЂў {as_title}: {grade_icon} <b>{sub.grade.score}/10</b> ({sub_time})")
                             if sub.grade.feedback and len(sub.grade.feedback) < 80:
                                 lines.append(f"   <i>Izoh: {sub.grade.feedback}</i>")
                         elif sub.status == SubmissionStatus.LATE:
-                            lines.append(f"• {as_title}: ⚠️ <b>Kechikib topshirilgan</b> ({sub_time})")
+                            lines.append(f"вЂў {as_title}: вљ пёЏ <b>Kechikib topshirilgan</b> ({sub_time})")
                         else:
-                            lines.append(f"• {as_title}: ⏳ <b>Topshirildi (Tekshirilmoqda)</b> ({sub_time})")
+                            lines.append(f"вЂў {as_title}: вЏі <b>Topshirildi (Tekshirilmoqda)</b> ({sub_time})")
                 else:
-                    lines.append("📝 Hozircha topshirilgan vazifalar mavjud emas.")
+                    lines.append("рџ“ќ Hozircha topshirilgan vazifalar mavjud emas.")
 
                 if s.group_id:
                     missed_stmt = (
@@ -996,12 +996,12 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                     missed_res = await db.execute(missed_stmt)
                     missed_assignments = missed_res.scalars().all()
                     if missed_assignments:
-                        lines.append("\n⚠️ <b>Topshirilmagan vazifalar (Davomat/Qarzdorlik):</b>")
+                        lines.append("\nвљ пёЏ <b>Topshirilmagan vazifalar (Davomat/Qarzdorlik):</b>")
                         for ma in missed_assignments:
                             d_str = ma.deadline.strftime("%d.%m.%Y")
-                            lines.append(f"• ❌ {ma.title} (Muddati: {d_str})")
+                            lines.append(f"вЂў вќЊ {ma.title} (Muddati: {d_str})")
 
-                lines.append("\nℹ️ <i>Har bir yangi dars topshirig'i baholanganda, natija sizga avtomatik yuboriladi.</i>")
+                lines.append("\nв„№пёЏ <i>Har bir yangi dars topshirig'i baholanganda, natija sizga avtomatik yuboriladi.</i>")
                 await send_telegram_message(
                     chat_id=chat_id,
                     text="\n".join(lines),
@@ -1012,7 +1012,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
         await send_telegram_message(
             chat_id=chat_id,
             text=(
-                "Assalomu alaykum! 👋\n"
+                "Assalomu alaykum! рџ‘‹\n"
                 "English Life LMS Botiga xush kelibsiz.\n\n"
                 "Sizning Telegram hisobingiz platformaga hali bog'lanmagan.\n\n"
                 "Bog'lanish uchun platformadan O'quvchi/Ota-ona kodingizni kiriting yoki shaxsiy kabinetingizdan 'Link Telegram' tugmasini bosing."
@@ -1024,39 +1024,39 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
     # 5. Default /start, or unregistered welcome message
     if user_role == "student" and display_name:
         welcome_text = (
-            f"Assalomu alaykum, {display_name}! 👋\n\n"
+            f"Assalomu alaykum, {display_name}! рџ‘‹\n\n"
             "Bu English Life LMS o'quvchi yordamchi boti.\n\n"
-            "📌 <b>Sizning imkoniyatlaringiz:</b>\n"
-            "• 📊 Shaxsiy baholar va oylik ko'rsatkichlarni kuzatish\n"
-            "• 🔔 Uy vazifalari va dars jadvali haqida bildirishnomalar\n"
-            "• ⚙️ /unlink — Akkauntni uzish\n"
-            "• ℹ️ Yordam — Botdan foydalanish yo'riqnomasi"
+            "рџ“Њ <b>Sizning imkoniyatlaringiz:</b>\n"
+            "вЂў рџ“Љ Shaxsiy baholar va oylik ko'rsatkichlarni kuzatish\n"
+            "вЂў рџ”” Uy vazifalari va dars jadvali haqida bildirishnomalar\n"
+            "вЂў вљ™пёЏ /unlink вЂ” Akkauntni uzish\n"
+            "вЂў в„№пёЏ Yordam вЂ” Botdan foydalanish yo'riqnomasi"
         )
         keyboard = STUDENT_KEYBOARD
     elif user_role == "parent" and display_name:
         welcome_text = (
-            f"Assalomu alaykum, {display_name}! 👋\n\n"
+            f"Assalomu alaykum, {display_name}! рџ‘‹\n\n"
             "Bu English Life LMS ota-onalar xabarnoma boti.\n\n"
-            "📌 <b>Imkoniyatlar:</b>\n"
-            "• 📊 Farzandingiz dars natijalari va davomatini kuzatish\n"
-            "• 🔔 Vazifalar bajarilishi bo'yicha tezkor xabarlar\n"
-            "• ⚙️ /unlink — Akkauntni uzish\n"
-            "• ℹ️ Yordam"
+            "рџ“Њ <b>Imkoniyatlar:</b>\n"
+            "вЂў рџ“Љ Farzandingiz dars natijalari va davomatini kuzatish\n"
+            "вЂў рџ”” Vazifalar bajarilishi bo'yicha tezkor xabarlar\n"
+            "вЂў вљ™пёЏ /unlink вЂ” Akkauntni uzish\n"
+            "вЂў в„№пёЏ Yordam"
         )
         keyboard = PARENT_KEYBOARD
     elif user_role == "teacher" and display_name:
         welcome_text = (
-            f"Assalomu alaykum, {display_name}! 👋\n\n"
+            f"Assalomu alaykum, {display_name}! рџ‘‹\n\n"
             "Bu English Life LMS o'qituvchi yordamchi boti.\n\n"
-            "📌 <b>Sizning imkoniyatlaringiz:</b>\n"
-            "• 🔔 Yangi topshiriq va xabarnomalar\n"
-            "• ⚙️ /unlink — Akkauntni uzish\n"
-            "• ℹ️ Yordam"
+            "рџ“Њ <b>Sizning imkoniyatlaringiz:</b>\n"
+            "вЂў рџ”” Yangi topshiriq va xabarnomalar\n"
+            "вЂў вљ™пёЏ /unlink вЂ” Akkauntni uzish\n"
+            "вЂў в„№пёЏ Yordam"
         )
         keyboard = REMOVE_KEYBOARD
     else:
         welcome_text = (
-            "Assalomu alaykum! 👋\n"
+            "Assalomu alaykum! рџ‘‹\n"
             "English Life LMS Botiga xush kelibsiz.\n\n"
             "Sizning Telegram hisobingiz platformaga hali bog'lanmagan.\n\n"
             "Bog'lanish uchun platformadan O'quvchi/Ota-ona kodingizni kiriting yoki shaxsiy kabinetingizdan 'Link Telegram' tugmasini bosing."
