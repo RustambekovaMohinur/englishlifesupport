@@ -1,4 +1,4 @@
-import logging, asyncio
+﻿import logging, asyncio
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
@@ -210,8 +210,9 @@ def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, 
     )
 
 
-@router.get("", response_model=list[AssignmentOut], dependencies=[Depends(require_teacher)])
+@router.get("", response_model=list[AssignmentOut])
 async def list_assignments(
+    current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
     group_id: uuid.UUID | None = Query(default=None),
 ):
@@ -219,6 +220,12 @@ async def list_assignments(
         select(Assignment, Group.name)
         .options(selectinload(Assignment.images), selectinload(Assignment.comments))
         .join(Group, Assignment.group_id == Group.id)
+        .where(
+            or_(
+                Group.created_by == current_user.id,
+                and_(Group.created_by.is_(None), current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL),
+            )
+        )
     )
     if group_id:
         query = query.where(Assignment.group_id == group_id)
