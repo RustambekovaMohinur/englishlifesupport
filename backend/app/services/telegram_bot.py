@@ -438,7 +438,7 @@ async def notify_parent_submission_graded(
 
 
 async def _calculate_student_stats(db: AsyncSession, student: StudentProfile) -> dict[str, Any]:
-    """Calculates assignment counts, completion percentage, and stars synced with /students/me/stats."""
+    """Calculates assignment counts, completion percentage, real XP and stars synced with gamification models."""
     active_assign_ids = set()
     if student.group_id:
         group_asgn_res = await db.execute(
@@ -475,37 +475,58 @@ async def _calculate_student_stats(db: AsyncSession, student: StudentProfile) ->
     if total_assignments > 0 and completed_assignments > total_assignments:
         completed_assignments = total_assignments
 
+    pending_assignments = max(0, total_assignments - completed_assignments)
     progress_percent = round((completed_assignments / total_assignments) * 100, 1) if total_assignments > 0 else 0.0
 
-    stars_stmt = (
-        select(sa.func.coalesce(sa.func.sum(Grade.stars), 0))
-        .select_from(Grade)
-        .join(Submission)
-        .where(
-            sa.or_(
-                Submission.student_id == student.id,
-                Submission.student_id.in_(
-                    select(StudentProfile.id).where(StudentProfile.user_id == student.user_id)
-                ),
+    # 1. Total Stars
+    stars_val = getattr(student, "total_stars", 0) or 0
+    if not stars_val:
+        stars_stmt = (
+            select(sa.func.coalesce(sa.func.sum(Grade.stars), 0))
+            .select_from(Grade)
+            .join(Submission)
+            .where(
+                sa.or_(
+                    Submission.student_id == student.id,
+                    Submission.student_id.in_(
+                        select(StudentProfile.id).where(StudentProfile.user_id == student.user_id)
+                    ),
+                )
             )
         )
-    )
-    stars_res = await db.execute(stars_stmt)
-    aggregated_stars = stars_res.scalar_one()
+        stars_res = await db.execute(stars_stmt)
+        stars_val = stars_res.scalar_one() or 0
 
-    stars_val = getattr(student, "total_stars", 0) or aggregated_stars or 0
-    streak_val = getattr(student, "streak", 0) or 0
-    xp_val = getattr(student, "total_xp", 0) or getattr(student, "total_lightning", 0) or 0
+    # 2. Real XP from StudentXP
+    from app.models.gamification import StudentXP, StudentStreak
+    xp_val = 0
+    try:
+        xp_row = (await db.execute(select(StudentXP).where(StudentXP.student_id == student.id))).scalar_one_or_none()
+        if xp_row:
+            xp_val = xp_row.total_xp or 0
+        else:
+            xp_val = getattr(student, "total_lightning", 0) or 0
+    except Exception:
+        xp_val = getattr(student, "total_lightning", 0) or 0
+
+    # 3. Real Streak from StudentStreak
+    streak_val = 0
+    try:
+        strk_row = (await db.execute(select(StudentStreak).where(StudentStreak.student_id == student.id))).scalar_one_or_none()
+        if strk_row:
+            streak_val = strk_row.current_streak or 0
+    except Exception:
+        pass
 
     return {
         "total_assignments": total_assignments,
         "completed_assignments": completed_assignments,
+        "pending_assignments": pending_assignments,
         "progress_percent": progress_percent,
         "stars": stars_val,
         "streak": streak_val,
         "xp": xp_val,
     }
-
 
 async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
     """
@@ -696,12 +717,14 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
             await db.commit()
 
             group_name = student.group.name if student.group else "Biriktirilmagan"
+            stats = await _calculate_student_stats(db, student)
             confirmation_msg = (
                 f"✅ <b>Assalomu alaykum, {parent_name}!</b>\n\n"
                 f"Farzandingiz <b>{student.full_name}</b> profilingizga muvaffaqiyatli bog'landi. "
                 "Endi dars davomati, yangi uy vazifalari va baholar sizga avtomatik yetkaziladi.\n\n"
                 f"• Guruh: <b>{group_name}</b>\n"
-                f"• To'plangan Yulduzlar: ⭐ <b>{student.total_stars}</b> | ⚡ <b>{student.total_lightning}</b>\n\n"
+                f"• To'plangan Yulduzlar: ⭐ <b>{stats['stars']}</b> | ⚡ <b>{stats['xp']} XP</b>\n"
+                f"• Bajarilgan vazifalar: ✅ <b>{stats['completed_assignments']}/{stats['total_assignments']} ({stats['progress_percent']}%)</b>\n\n"
                 "Quyidagi <b>📊 Farzandim ko'rsatkichlari</b> tugmasi orqali istalgan vaqtda "
                 "barcha ko'rsatkichlarni tekshirib borishingiz mumkin."
             )
@@ -920,9 +943,43 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                     f"👨‍👩‍👧 <b>Farzandingiz [{s.full_name}] — O'qish ko'rsatkichlari</b>",
                     f"👥 Guruh: <b>{group_str}</b>",
                     f"⭐ Yulduzlar: <b>{stats['stars']}</b> | 🔥 Streak: <b>{stats['streak']} kun</b>",
-                    f"⚡ XP: <b>{stats['xp']}</b> | ✅ Bajarilgan vazifalar: <b>{task_str} ({stats['progress_percent']}%)</b>\n",
+                    f"⚡ XP: <b>{stats['xp']}</b> | ✅ Bajarilgan: <b>{task_str} ({stats['progress_percent']}%)</b>",
+                    f"⏳ Kutilayotgan vazifalar: <b>{stats['pending_assignments']} ta</b>\n",
                 ]
 
+                # 1. Upcoming active homework
+                if s.group_id:
+                    pending_stmt = (
+                        select(Assignment)
+                        .where(
+                            Assignment.group_id == s.group_id,
+                            Assignment.status == AssignmentStatus.PUBLISHED,
+                            Assignment.deadline >= utcnow(),
+                            ~Assignment.id.in_(
+                                select(Submission.assignment_id).where(
+                                    sa.or_(
+                                        Submission.student_id == s.id,
+                                        Submission.student_id.in_(
+                                            select(StudentProfile.id).where(StudentProfile.user_id == s.user_id)
+                                        ),
+                                    ),
+                                    Submission.is_archived.is_(False),
+                                )
+                            ),
+                        )
+                        .order_by(Assignment.deadline.asc())
+                        .limit(3)
+                    )
+                    pending_res = await db.execute(pending_stmt)
+                    pending_tasks = pending_res.scalars().all()
+                    if pending_tasks:
+                        lines.append("⏳ <b>Topshirish kerak bo'lgan vazifalar:</b>")
+                        for pt in pending_tasks:
+                            d_str = pt.deadline.strftime("%d.%m.%Y %H:%M")
+                            lines.append(f"• 📌 <b>{pt.title}</b> (Muddat: {d_str})")
+                        lines.append("")
+
+                # 2. Recent graded submissions
                 sub_stmt = (
                     select(Submission)
                     .options(
@@ -938,7 +995,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                         )
                     )
                     .order_by(Submission.submitted_at.desc())
-                    .limit(5)
+                    .limit(4)
                 )
                 sub_res = await db.execute(sub_stmt)
                 recent_subs = sub_res.scalars().all()
@@ -951,15 +1008,17 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                         if sub.grade:
                             grade_icon = "🌟" if sub.grade.score >= 8 else "✅"
                             lines.append(f"• {as_title}: {grade_icon} <b>{sub.grade.score}/10</b> ({sub_time})")
-                            if sub.grade.feedback and len(sub.grade.feedback) < 80:
+                            if sub.grade.feedback and len(sub.grade.feedback) < 100:
                                 lines.append(f"   <i>Izoh: {sub.grade.feedback}</i>")
                         elif sub.status == SubmissionStatus.LATE:
                             lines.append(f"• {as_title}: ⚠️ <b>Kechikib topshirilgan</b> ({sub_time})")
                         else:
                             lines.append(f"• {as_title}: ⏳ <b>Topshirildi (Tekshirilmoqda)</b> ({sub_time})")
+                    lines.append("")
                 else:
-                    lines.append("📝 Hozircha topshirilgan vazifalar mavjud emas.")
+                    lines.append("📝 Hozircha topshirilgan vazifalar mavjud emas.\n")
 
+                # 3. Overdue / Missed assignments
                 if s.group_id:
                     missed_stmt = (
                         select(Assignment)
@@ -974,7 +1033,8 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                                         Submission.student_id.in_(
                                             select(StudentProfile.id).where(StudentProfile.user_id == s.user_id)
                                         ),
-                                    )
+                                    ),
+                                    Submission.is_archived.is_(False),
                                 )
                             ),
                         )
@@ -984,12 +1044,13 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                     missed_res = await db.execute(missed_stmt)
                     missed_assignments = missed_res.scalars().all()
                     if missed_assignments:
-                        lines.append("\n⚠️ <b>Topshirilmagan vazifalar (Davomat/Qarzdorlik):</b>")
+                        lines.append("⚠️ <b>Muddati o'tgan vazifalar:</b>")
                         for ma in missed_assignments:
                             d_str = ma.deadline.strftime("%d.%m.%Y")
-                            lines.append(f"• ❌ {ma.title} (Muddati: {d_str})")
+                            lines.append(f"• ❌ <b>{ma.title}</b> (Muddat: {d_str})")
+                        lines.append("")
 
-                lines.append("\nℹ️ <i>Har bir yangi dars topshirig'i baholanganda, natija sizga avtomatik yuboriladi.</i>")
+                lines.append("ℹ️ <i>Har bir topshiriq baholanganda, natija sizga avtomatik yuboriladi.</i>")
                 await send_telegram_message(
                     chat_id=chat_id,
                     text="\n".join(lines),

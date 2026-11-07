@@ -449,18 +449,23 @@ export default function StudentProfilePage() {
           </div>
 
           {parentLink?.is_parent_linked ? (
-            <div className="p-4 rounded-xl bg-emerald-500/[0.06] dark:bg-emerald-500/[0.1] border border-emerald-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-transparent dark:from-emerald-950/40 dark:via-teal-950/20 dark:to-transparent border-2 border-emerald-400/60 dark:border-emerald-600/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
               <div className="space-y-1 text-xs">
-                <p className="font-semibold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
-                  <UserCheck className="w-4 h-4 text-emerald-600" />
-                  <span>Connected Parent: <strong>{parentLink.parent_name || `@${parentLink.parent_telegram_username}` || "Telegram User"}</strong></span>
-                  {parentLink.parent_telegram_username && (
-                    <span className="font-mono text-emerald-700 dark:text-emerald-400 font-normal">
-                      (@{parentLink.parent_telegram_username})
-                    </span>
-                  )}
-                </p>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">👨‍👩‍👧</span>
+                  <p className="font-bold text-emerald-950 dark:text-emerald-100 flex items-center gap-1.5">
+                    <span>Connected Parent: <strong>{parentLink.parent_name || `@${parentLink.parent_telegram_username}` || "Telegram User"}</strong></span>
+                    {parentLink.parent_telegram_username && (
+                      <span className="font-mono text-emerald-700 dark:text-emerald-300 font-normal">
+                        (@{parentLink.parent_telegram_username})
+                      </span>
+                    )}
+                  </p>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
+                    Active &amp; Linked ✅
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
                   {parentLink.parent_linked_at ? `Connected on: ${new Date(parentLink.parent_linked_at).toLocaleDateString()}` : "Automated digests active"}
                   {parentLink.last_parent_digest_sent_at && ` · Last report: ${new Date(parentLink.last_parent_digest_sent_at).toLocaleDateString()}`}
                 </p>
@@ -470,22 +475,25 @@ export default function StudentProfilePage() {
                 <button
                   type="button"
                   onClick={copyParentLink}
-                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition flex items-center gap-1.5 cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{isCopied ? "Copied" : "Invite Link"}</span>
+                  <span>{isCopied ? "Copied" : "Share Link"}</span>
                 </button>
               </div>
             </div>
           ) : (
-            <div className="p-4 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200/70 dark:border-indigo-800/50 space-y-3">
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-sky-500/15 via-[#2AABEE]/10 to-indigo-500/10 dark:from-sky-950/40 dark:via-blue-950/30 dark:to-indigo-950/20 border-2 border-sky-300/80 dark:border-sky-700/60 space-y-3.5 shadow-sm">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold text-indigo-950 dark:text-indigo-200">
-                    Connect your parents in one step:
-                  </p>
-                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl">
-                    Your parents simply open the link below and tap <strong>Start</strong> to link their account to your profile.
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">✈️</span>
+                    <p className="text-xs font-bold text-sky-950 dark:text-sky-100 uppercase tracking-wide">
+                      Connect your parents in one step:
+                    </p>
+                  </div>
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed max-w-xl">
+                    Your parents simply open the link below and tap <strong>Start</strong>. All stars, XP, homework deadlines, and grades are sent instantly to their Telegram!
                   </p>
                 </div>
 
