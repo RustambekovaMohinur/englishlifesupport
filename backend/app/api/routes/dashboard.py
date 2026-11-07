@@ -42,11 +42,11 @@ async def teacher_dashboard(
         from app.core.config import settings
         from app.models.wordlist import WordlistSet
 
-        is_bootstrap = (current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+        # Show groups owned by this teacher OR unowned (legacy/admin-created)
         teacher_groups_q = select(Group).where(
             or_(
                 Group.created_by == current_user.id,
-                and_(Group.created_by.is_(None), is_bootstrap),
+                Group.created_by.is_(None),  # legacy / admin-created groups visible to all teachers
             )
         )
         teacher_groups = (await db.execute(teacher_groups_q)).scalars().all()
@@ -134,7 +134,7 @@ async def teacher_dashboard(
             wl_q = select(func.count(WordlistSet.id)).where(
                 or_(
                     WordlistSet.created_by == current_user.id,
-                    and_(WordlistSet.created_by.is_(None), is_bootstrap),
+                    WordlistSet.created_by.is_(None),  # legacy / admin-created
                 )
             )
             wordlists_count = (await db.execute(wl_q)).scalar() or 0

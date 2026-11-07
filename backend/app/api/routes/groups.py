@@ -132,9 +132,10 @@ async def list_groups(
     Returns all groups for the teacher panel belonging to this teacher.
     Uses batched active deduplicated student counting across all groups.
     """
+    # Show groups owned by this teacher OR unowned (legacy/admin-created)
     teacher_filter = or_(
         Group.created_by == current_user.id,
-        and_(Group.created_by.is_(None), current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL),
+        Group.created_by.is_(None),  # legacy / admin-created groups visible to all teachers
     )
     query = select(Group).where(teacher_filter).order_by(Group.name)
     if not include_archived:
@@ -215,7 +216,7 @@ async def update_group(
     # Permission check
     is_owner = (
         group.created_by == current_user.id
-        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+        or group.created_by is None  # legacy / admin-created
     )
     if not is_owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
@@ -519,7 +520,7 @@ async def get_group_detail(
 
     is_owner = (
         group.created_by == current_user.id
-        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+        or group.created_by is None  # legacy / admin-created
     )
     if not is_owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this group")
@@ -547,7 +548,7 @@ async def publish_group_cycle(
 
     is_owner = (
         group.created_by == current_user.id
-        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+        or group.created_by is None  # legacy / admin-created
     )
     if not is_owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
@@ -636,7 +637,7 @@ async def start_new_homework_cycle(
 
     is_owner = (
         group.created_by == current_user.id
-        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+        or group.created_by is None  # legacy / admin-created
     )
     if not is_owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
@@ -671,7 +672,7 @@ async def update_group(
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
-    if group.created_by and group.created_by != current_user.id and current_user.email != settings.BOOTSTRAP_TEACHER_EMAIL:
+    if group.created_by and group.created_by != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this group")
 
     update_data = body.model_dump(exclude_unset=True)
@@ -716,7 +717,7 @@ async def delete_group(
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
-    if group.created_by and group.created_by != current_user.id and current_user.email != settings.BOOTSTRAP_TEACHER_EMAIL:
+    if group.created_by and group.created_by != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this group")
 
     await db.delete(group)

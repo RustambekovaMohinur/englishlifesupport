@@ -227,15 +227,24 @@ async def list_assignments(
             except (ValueError, TypeError):
                 valid_group_uuid = None
 
+        # Build teacher's visible group IDs: groups they own OR unowned (legacy/admin-created)
+        teacher_groups_subq = (
+            select(Group.id).where(
+                or_(
+                    Group.created_by == current_user.id,
+                    Group.created_by.is_(None),  # legacy / admin-created groups visible to all teachers
+                )
+            )
+        )
+
         query = (
             select(Assignment, Group.name)
             .options(selectinload(Assignment.images), selectinload(Assignment.comments))
             .join(Group, Assignment.group_id == Group.id)
             .where(
                 or_(
-                    Group.created_by == current_user.id,
+                    Assignment.group_id.in_(teacher_groups_subq),
                     Assignment.created_by == current_user.id,
-                    and_(Group.created_by.is_(None), current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL),
                 )
             )
         )

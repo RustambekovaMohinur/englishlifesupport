@@ -76,7 +76,7 @@ async def list_students(
     teacher_groups_subq = select(Group.id).where(
         or_(
             Group.created_by == current_user.id,
-            and_(Group.created_by.is_(None), current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL),
+            Group.created_by.is_(None),  # legacy / admin-created groups visible to all teachers
         )
     )
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
@@ -256,7 +256,7 @@ async def list_pending_students(
     teacher_groups_subq = select(Group.id).where(
         or_(
             Group.created_by == current_user.id,
-            and_(Group.created_by.is_(None), current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL),
+            Group.created_by.is_(None),  # legacy / admin-created groups visible to all teachers
         )
     )
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
@@ -374,7 +374,7 @@ async def approve_student(
     # Scoping check: student must belong to teacher's group
     is_authorized = group is not None and (
         group.created_by == current_user.id
-        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+        or group.created_by is None  # legacy / admin-created
     )
     if not is_authorized:
         raise HTTPException(
@@ -455,7 +455,7 @@ async def reject_student(
 
     is_authorized = group is not None and (
         group.created_by == current_user.id
-        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+        or group.created_by is None  # legacy / admin-created
     )
     if not is_authorized:
         raise HTTPException(
@@ -520,7 +520,7 @@ async def handle_student_approval(
 
     is_authorized = group is not None and (
         group.created_by == current_user.id
-        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+        or group.created_by is None  # legacy / admin-created
     )
     if not is_authorized:
         raise HTTPException(
@@ -742,7 +742,7 @@ async def get_student(
 
     # Scope check: if group belongs to another teacher, deny
     if profile.group and profile.group.created_by and profile.group.created_by != current_user.id:
-        if not (profile.group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL):
+        if profile.group.created_by is not None:  # only block if group is explicitly owned by someone else
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this student")
 
     return StudentOut(
@@ -793,7 +793,7 @@ async def get_student_history(
         if profile.user_id != current_user.id and profile.id != current_user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only view your own learning record")
     elif profile.group and profile.group.created_by and profile.group.created_by != current_user.id:
-        if not (profile.group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL):
+        if profile.group.created_by is not None:  # only block if group is explicitly owned by someone else
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this student")
 
     history_items: list[StudentHistoryItem] = []
@@ -1445,7 +1445,7 @@ async def reset_student_password(
 
     is_authorized = group is not None and (
         group.created_by == current_user.id
-        or (group.created_by is None and current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+        or group.created_by is None  # legacy / admin-created
     )
     if not is_authorized:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this student")
