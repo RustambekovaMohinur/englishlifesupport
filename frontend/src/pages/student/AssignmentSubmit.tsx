@@ -686,6 +686,15 @@ export default function StudentAssignmentSubmitPage() {
       } else if (status === 413) {
         errorMsg = "Uploaded file size exceeds the allowed limit. Please compress or select smaller files.";
       } else if (status === 403) {
+        if (
+          String(detail).includes("PAYMENT_REQUIRED") ||
+          String(detail).includes("Payment") ||
+          resData?.code === "PAYMENT_REQUIRED"
+        ) {
+          toast.error("Payment verification required. Redirecting to billing checkout...", { id: "payment-submit-gate", duration: 5000 });
+          navigate("/student/billing");
+          return;
+        }
         errorMsg = "You do not have permission to submit this assignment or the task is locked.";
       } else if (status === 409) {
         errorMsg = "This assignment has already been submitted or a conflict occurred.";

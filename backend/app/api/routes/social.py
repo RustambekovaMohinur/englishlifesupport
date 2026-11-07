@@ -486,6 +486,9 @@ async def join_study_group(
     if not profile:
         raise HTTPException(status_code=403, detail="Student profile required.")
 
+    from app.services.payment_service import enforce_student_payment
+    await enforce_student_payment(db, profile.id, action_desc="join active study cohorts")
+
     query = select(StudyGroup).options(selectinload(StudyGroup.members))
     if body.group_id:
         query = query.where(StudyGroup.id == body.group_id)

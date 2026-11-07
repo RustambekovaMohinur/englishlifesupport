@@ -152,7 +152,19 @@ export default function StudentAssignmentsPage() {
     setIsLoading(true);
     listMyAssignments()
       .then(setAssignments)
-      .catch(() => toast.error("Failed to load assignments"))
+      .catch((err: any) => {
+        if (
+          err?.response?.status === 403 &&
+          (err?.response?.data?.code === "PAYMENT_REQUIRED" ||
+            String(err?.response?.data?.detail).includes("PAYMENT_REQUIRED") ||
+            String(err?.response?.data?.detail).includes("Payment"))
+        ) {
+          toast.error("Payment verification required. Redirecting to billing checkout...", { id: "payment-gate" });
+          navigate("/student/billing");
+        } else {
+          toast.error("Failed to load assignments");
+        }
+      })
       .finally(() => setIsLoading(false));
   }
 

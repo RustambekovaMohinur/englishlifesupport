@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_admin
 from app.db.session import get_db
 from app.models.student import StudentProfile
 from app.models.user import User, UserRole
@@ -182,12 +182,10 @@ async def update_my_preferences(
 @router.post("/admin/set-plan", response_model=PremiumStatusOut, summary="Admin: assign premium plan")
 async def admin_set_premium_plan(
     body: SetPremiumPlanRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Teacher/Admin assigns a premium plan to a student."""
-    if current_user.role != UserRole.TEACHER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teachers only")
+    """Super Admin assigns a premium plan to a student."""
 
     if body.plan not in VALID_PLANS:
         raise HTTPException(status_code=400, detail=f"Invalid plan. Choose from: {VALID_PLANS}")

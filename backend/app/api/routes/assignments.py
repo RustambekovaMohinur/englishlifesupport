@@ -33,6 +33,7 @@ from app.schemas.assignment import (
     VocabWordItem,
 )
 from app.services.gamification_service import is_assignment_locked_for_student
+from app.services.payment_service import enforce_student_payment
 from app.utils.datetimes import as_utc, ensure_utc, utcnow
 from app.utils.files import (
     parse_vocab_csv,
@@ -833,6 +834,7 @@ async def list_my_assignments(
     profile: StudentProfile = Depends(get_current_student_profile),
     db: AsyncSession = Depends(get_db),
 ):
+    await enforce_student_payment(db, profile.id, action_desc="access active coursework")
     """
     Student-only: returns ACTIVE assignments for the student's own group.
     Active criteria:
@@ -878,6 +880,7 @@ async def list_past_deadline_assignments(
     profile: StudentProfile = Depends(get_current_student_profile),
     db: AsyncSession = Depends(get_db),
 ):
+    await enforce_student_payment(db, profile.id, action_desc="access past coursework")
     """
     Student-only: returns assignments belonging to the student's cohort where:
     now_utc() > assignment.deadline.
@@ -945,6 +948,7 @@ async def get_assignment(
         ).scalar_one_or_none()
         if student_profile is None or student_profile.group_id != assignment.group_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this assignment")
+        await enforce_student_payment(db, student_profile.id, action_desc="access this coursework assignment")
         if assignment.status != AssignmentStatus.PUBLISHED:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
 

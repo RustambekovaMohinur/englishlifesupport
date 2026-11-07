@@ -19,6 +19,7 @@ from app.models.file_blob import FileBlob
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.grade import Grade
 from app.services.storage import get_storage_service
+from app.services.payment_service import enforce_student_payment
 from app.models.student import StudentProfile
 from app.models.submission import (
     Submission,
@@ -338,6 +339,9 @@ async def submit_homework(
     if assignment.group_id != profile.group_id:
         # A student may only submit to assignments for their own group.
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This assignment is not for your group")
+
+    # Enforce strict payment verification gate (Click & Payme)
+    await enforce_student_payment(db, profile.id, action_desc="submit homework")
 
     now = ensure_utc(utcnow())
     is_late = ensure_utc(assignment.deadline) < now

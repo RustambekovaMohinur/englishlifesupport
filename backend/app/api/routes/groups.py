@@ -499,6 +499,9 @@ async def get_my_group_matrix(
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
+    from app.services.payment_service import enforce_student_payment
+    await enforce_student_payment(db, profile.id, action_desc="view cohort progress matrix")
+
     return await _build_group_detail_out(db, group)
 
 
