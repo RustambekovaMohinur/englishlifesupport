@@ -46,6 +46,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/assignments", tags=["assignments"])
 teacher_assignments_router = APIRouter(prefix="/teacher/assignments", tags=["assignments"])
+def _is_admin(user) -> bool:
+    """Check if user is the super-admin (synthetic admin2010 account)."""
+    return getattr(user, "username", None) == "admin2010"
 
 
 def _clean_telegram_chat_id(chat_id: Any) -> str:
@@ -53,7 +56,6 @@ def _clean_telegram_chat_id(chat_id: Any) -> str:
     if chat_id is None:
         return ""
     return str(chat_id).strip().strip("'\"")
-
 
 
 _pending_group_notifications: dict[str, dict[str, Any]] = {}
@@ -234,7 +236,7 @@ async def list_assignments(
             .options(selectinload(Assignment.images), selectinload(Assignment.comments))
             .join(Group, Assignment.group_id == Group.id)
         )
-        if current_user.role != UserRole.ADMIN:
+        if not _is_admin(current_user):
             query = query.where(
                 or_(Group.created_by == current_user.id, Assignment.created_by == current_user.id)
             )
@@ -538,7 +540,6 @@ async def create_assignment(
 
     asyncio.create_task(_notify_creation())
     return _assignment_to_out(reloaded, group_name, 0, vocab_words)
-
 
 
 async def _build_student_assignments(
@@ -1792,9 +1793,6 @@ async def toggle_like_assignment_comment(
     ).scalar_one()
 
     return _format_comment_out(refetched, current_user.id)
-
-
-
 
 
 @router.post("/{assignment_id}/notify-parents-missing", dependencies=[Depends(require_teacher)])

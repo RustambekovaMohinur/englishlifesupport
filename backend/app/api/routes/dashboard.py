@@ -1,7 +1,6 @@
 import logging
 import traceback
 from fastapi import HTTPException
-
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends
@@ -31,6 +30,9 @@ from app.services.gamification_service import calculate_level, get_or_create_mon
 from app.utils.datetimes import as_utc, utcnow
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+def _is_admin(user) -> bool:
+    """Check if user is the super-admin (synthetic admin2010 account)."""
+    return getattr(user, "username", None) == "admin2010"
 
 
 @router.get("/teacher", response_model=TeacherDashboard)
@@ -44,7 +46,7 @@ async def teacher_dashboard(
 
         # Teachers see only their own groups; admin sees all
         teacher_groups_q = select(Group)
-        if current_user.role != UserRole.ADMIN:
+        if not _is_admin(current_user):
             teacher_groups_q = teacher_groups_q.where(Group.created_by == current_user.id)
         teacher_groups = (await db.execute(teacher_groups_q)).scalars().all()
         group_ids = [g.id for g in teacher_groups if g.is_active]

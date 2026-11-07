@@ -47,6 +47,9 @@ from app.models.refresh_token import RefreshToken
 router = APIRouter(prefix="/students", tags=["students"])
 teacher_students_router = APIRouter(prefix="/teacher/students", tags=["students"])
 logger = logging.getLogger(__name__)
+def _is_admin(user) -> bool:
+    """Check if user is the super-admin (synthetic admin2010 account)."""
+    return getattr(user, "username", None) == "admin2010"
 
 
 class StudentResetPasswordRequest(BaseModel):
@@ -56,7 +59,6 @@ class StudentResetPasswordRequest(BaseModel):
 class StudentResetPasswordResponse(BaseModel):
     success: bool = True
     message: str = "Password reset successfully."
-
 
 
 @router.get("", response_model=PaginatedStudents)
@@ -74,7 +76,7 @@ async def list_students(
     Correctly scopes students to groups created by this teacher if created_by is populated.
     """
     teacher_groups_subq = select(Group.id)
-    if current_user.role != UserRole.ADMIN:
+    if not _is_admin(current_user):
         teacher_groups_subq = teacher_groups_subq.where(Group.created_by == current_user.id)
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
 
@@ -97,7 +99,7 @@ async def list_students(
     ).outerjoin(Group, StudentProfile.group_id == Group.id)
 
     if group_id:
-        if current_user.role != UserRole.ADMIN and group_id not in teacher_group_ids:
+        if not _is_admin(current_user) and group_id not in teacher_group_ids:
             return PaginatedStudents(items=[], total=0, page=page, page_size=page_size)
         query = query.where(StudentProfile.group_id == group_id)
     elif teacher_group_ids:
@@ -251,7 +253,7 @@ async def list_pending_students(
 ):
     """Returns paginated pending student registration requests for groups belonging to this teacher."""
     teacher_groups_subq = select(Group.id)
-    if current_user.role != UserRole.ADMIN:
+    if not _is_admin(current_user):
         teacher_groups_subq = teacher_groups_subq.where(Group.created_by == current_user.id)
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
 
@@ -1405,7 +1407,6 @@ async def delete_student(student_id: uuid.UUID, db: AsyncSession = Depends(get_d
         )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
 
 
 @router.post("/{student_id}/reset-password", response_model=StudentResetPasswordResponse, dependencies=[Depends(require_teacher)])

