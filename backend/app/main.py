@@ -275,13 +275,23 @@ async def bootstrap_teacher_account(max_retries: int = 5, retry_delay: float = 2
     for attempt in range(1, max_retries + 1):
         try:
             async with AsyncSessionLocal() as db:
-                existing = await db.execute(select(User).where(User.role == UserRole.TEACHER))
+                # Look up by email (not role) to avoid clobbering other teachers
+                existing = await db.execute(
+                    select(User).where(User.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+                )
                 teacher = existing.scalars().first()
                 if teacher is not None:
-                    teacher.email = settings.BOOTSTRAP_TEACHER_EMAIL
+                    # Ensure correct role and credentials
+                    teacher.role = UserRole.TEACHER
                     if not teacher.username:
                         teacher.username = "teacher"
                     teacher.password_hash = hash_password(settings.BOOTSTRAP_TEACHER_PASSWORD)
+                    # Ensure TeacherProfile exists
+                    tp = (await db.execute(
+                        select(TeacherProfile).where(TeacherProfile.user_id == teacher.id)
+                    )).scalars().first()
+                    if tp is None:
+                        db.add(TeacherProfile(user_id=teacher.id, full_name=settings.BOOTSTRAP_TEACHER_NAME))
                     await db.commit()
                     logger.info("Teacher account verified: %s", settings.BOOTSTRAP_TEACHER_EMAIL)
                     return
