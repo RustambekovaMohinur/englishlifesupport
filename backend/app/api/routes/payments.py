@@ -29,7 +29,6 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 
 PRICING_UZS = {
     "standard": 19000,
-    "pro_vip": 29000,
 }
 
 PLAN_PERMISSIONS = {
@@ -38,12 +37,6 @@ PLAN_PERMISSIONS = {
         "can_private_chat": True,
         "can_create_groups": False,
         "badge": "⭐",
-    },
-    "pro_vip": {
-        "can_write_notes": True,
-        "can_private_chat": True,
-        "can_create_groups": True,
-        "badge": "👑",
     },
 }
 
@@ -82,8 +75,8 @@ async def create_payment_order(
     SECURITY NOTICE: No credit card details (PAN/CVV) are ever accepted or stored.
     """
     plan = body.plan.lower().strip()
-    if plan not in PRICING_UZS:
-        raise HTTPException(status_code=400, detail="Invalid plan. Choose 'standard' or 'pro_vip'.")
+    if plan != "standard":
+        plan = "standard" 
 
     profile = (
         await db.execute(

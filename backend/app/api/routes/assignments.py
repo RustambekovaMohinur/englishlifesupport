@@ -228,12 +228,16 @@ async def list_assignments(
             except (ValueError, TypeError):
                 valid_group_uuid = None
 
-        # All authenticated teachers can view all assignments across all groups
+        # Isolated teacher assignments query: teachers only view assignments for their own cohorts
         query = (
             select(Assignment, Group.name)
             .options(selectinload(Assignment.images), selectinload(Assignment.comments))
             .join(Group, Assignment.group_id == Group.id)
         )
+        if current_user.role != UserRole.ADMIN:
+            query = query.where(
+                or_(Group.created_by == current_user.id, Assignment.created_by == current_user.id)
+            )
         if valid_group_uuid:
             query = query.where(Assignment.group_id == valid_group_uuid)
 

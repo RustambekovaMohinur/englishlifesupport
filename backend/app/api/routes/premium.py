@@ -27,26 +27,23 @@ router = APIRouter(prefix="/premium", tags=["premium"])
 
 # ---------- Schemas ----------
 
-VALID_PLANS = {"free", "standard", "pro_vip"}
+VALID_PLANS = {"free", "standard"}
 VALID_BADGES = {None, "", "👑", "⭐", "🕊️", "🔥", "💎"}
 VALID_THEMES = {"default", "light", "dark", "cyber_purple", "neon_pink", "emerald_green", "golden_sunset"}
 
 PLAN_PERMISSIONS = {
     "free":     {"can_write_notes": False, "can_private_chat": False, "can_create_groups": False},
     "standard": {"can_write_notes": True,  "can_private_chat": True,  "can_create_groups": False},
-    "pro_vip":  {"can_write_notes": True,  "can_private_chat": True,  "can_create_groups": True},
 }
 
 PLAN_THEMES = {
     "free":     ["default", "light", "dark"],
     "standard": ["default", "light", "dark", "cyber_purple", "neon_pink", "emerald_green", "golden_sunset"],
-    "pro_vip":  ["default", "light", "dark", "cyber_purple", "neon_pink", "emerald_green", "golden_sunset"],
 }
 
 PLAN_BADGES = {
     "free":     [],
     "standard": ["⭐"],
-    "pro_vip":  ["👑", "🔥", "💎", "⭐", "🕊️"],
 }
 
 

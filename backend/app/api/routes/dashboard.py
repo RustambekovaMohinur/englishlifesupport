@@ -42,8 +42,10 @@ async def teacher_dashboard(
         from app.core.config import settings
         from app.models.wordlist import WordlistSet
 
-        # All authenticated teachers see all groups
+        # Teachers see only their own groups; admin sees all
         teacher_groups_q = select(Group)
+        if current_user.role != UserRole.ADMIN:
+            teacher_groups_q = teacher_groups_q.where(Group.created_by == current_user.id)
         teacher_groups = (await db.execute(teacher_groups_q)).scalars().all()
         group_ids = [g.id for g in teacher_groups if g.is_active]
         all_group_ids = [g.id for g in teacher_groups]
@@ -194,9 +196,18 @@ async def student_dashboard(
                         else str(group.english_level)
                     )
 
-        # Single-teacher system: show the (only) teacher's name.
-        teacher = (await db.execute(select(TeacherProfile).limit(1))).scalar_one_or_none()
-        teacher_name = teacher.full_name if teacher else "Teacher"
+                # Teacher isolation: show the student's assigned group teacher name
+        teacher_name = "Teacher"
+        if group and group.created_by:
+            t_prof_res = (
+                await db.execute(select(TeacherProfile).where(TeacherProfile.user_id == group.created_by))
+            ).scalar_one_or_none()
+            if t_prof_res and t_prof_res.full_name:
+                teacher_name = t_prof_res.full_name
+        if teacher_name == "Teacher":
+            fallback_teacher = (await db.execute(select(TeacherProfile).limit(1))).scalar_one_or_none()
+            if fallback_teacher and fallback_teacher.full_name:
+                teacher_name = fallback_teacher.full_name
 
         # Gamification stats with safe defaults
         streak_val = 0

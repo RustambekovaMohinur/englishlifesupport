@@ -73,10 +73,9 @@ async def list_students(
     """Teacher-only. Server-side paginated/searchable/filterable list.
     Correctly scopes students to groups created by this teacher if created_by is populated.
     """
-    teacher_groups_subq = select(Group.id).where(
-        # All authenticated teachers see all groups
-        Group.id.isnot(None)
-    )
+    teacher_groups_subq = select(Group.id)
+    if current_user.role != UserRole.ADMIN:
+        teacher_groups_subq = teacher_groups_subq.where(Group.created_by == current_user.id)
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
 
     if not teacher_group_ids:
@@ -98,11 +97,11 @@ async def list_students(
     ).outerjoin(Group, StudentProfile.group_id == Group.id)
 
     if group_id:
-        if group_id not in teacher_group_ids:
+        if current_user.role != UserRole.ADMIN and group_id not in teacher_group_ids:
             return PaginatedStudents(items=[], total=0, page=page, page_size=page_size)
         query = query.where(StudentProfile.group_id == group_id)
     elif teacher_group_ids:
-        query = query.where(or_(StudentProfile.group_id.in_(teacher_group_ids), StudentProfile.group_id.is_(None)))
+        query = query.where(StudentProfile.group_id.in_(teacher_group_ids))
 
     if search:
         like = f"%{search.strip()}%"
@@ -251,10 +250,9 @@ async def list_pending_students(
     page_size: int = Query(default=20, ge=1, le=100),
 ):
     """Returns paginated pending student registration requests for groups belonging to this teacher."""
-    teacher_groups_subq = select(Group.id).where(
-        # All authenticated teachers see all groups
-        Group.id.isnot(None)
-    )
+    teacher_groups_subq = select(Group.id)
+    if current_user.role != UserRole.ADMIN:
+        teacher_groups_subq = teacher_groups_subq.where(Group.created_by == current_user.id)
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
 
     if not teacher_group_ids:

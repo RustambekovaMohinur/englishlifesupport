@@ -30,7 +30,7 @@ import {
 
 /* ──────────────── Direct Gateway Payment Modal ──────────────── */
 interface PaymentModalProps {
-  plan: "standard" | "pro_vip";
+  plan: "standard";
   amountUzs: number;
   onClose: () => void;
   onSuccess: () => Promise<void>;
@@ -75,7 +75,7 @@ const DirectPaymentModal: FC<PaymentModalProps> = ({
     }
   };
 
-  const planTitle = plan === "pro_vip" ? "Pro VIP" : "Standard";
+  const planTitle = "Standard";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -212,7 +212,7 @@ export default function BillingPage() {
 
   // Direct Payment modal state
   const [paymentModal, setPaymentModal] = useState<{
-    plan: "standard" | "pro_vip";
+    plan: "standard";
     amountUzs: number;
   } | null>(null);
 
@@ -237,11 +237,10 @@ export default function BillingPage() {
     loadData();
   }, []);
 
-  const handleOpenSubscribe = (plan: "standard" | "pro_vip") => {
-    const amountUzs = plan === "pro_vip" ? 29000 : 19000;
+  const handleOpenSubscribe = () => {
     setPaymentModal({
-      plan,
-      amountUzs,
+      plan: "standard",
+      amountUzs: 19000,
     });
   };
 
@@ -312,11 +311,10 @@ export default function BillingPage() {
         </div>
       </div>
 
-      {/* Pricing Tier Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Standard Plan */}
+      {/* Pricing Tier - Single Standard 19,000 UZS Plan */}
+      <div className="max-w-xl mx-auto w-full">
         <div
-          className={`card flex flex-col justify-between p-6 border-2 transition-all ${
+          className={`card flex flex-col justify-between p-6 sm:p-8 border-2 transition-all ${
             currentPlan === "standard"
               ? "border-blue-500 ring-2 ring-blue-500/20 shadow-md"
               : "border-zinc-200 dark:border-zinc-800 hover:border-blue-500/40"
@@ -329,7 +327,7 @@ export default function BillingPage() {
                   Standard Learner
                 </span>
                 <h3 className="text-xl font-bold text-zinc-900 dark:text-white mt-1 flex items-center gap-1.5">
-                  <span>Standard</span>
+                  <span>Standard Plan</span>
                   <Star size={16} className="text-amber-500 fill-amber-500" />
                 </h3>
               </div>
@@ -369,105 +367,20 @@ export default function BillingPage() {
 
           <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800">
             <button
-              onClick={() => handleOpenSubscribe("standard")}
-              disabled={currentPlan === "standard" || currentPlan === "pro_vip"}
-              className={`w-full py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+              onClick={() => handleOpenSubscribe()}
+              disabled={currentPlan === "standard"}
+              className={`w-full py-3.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
                 currentPlan === "standard"
                   ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
-                  : currentPlan === "pro_vip"
-                  ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
-                  : "btn-primary shadow-md shadow-blue-500/20"
+                  : "btn-primary shadow-md shadow-blue-500/20 text-sm"
               }`}
             >
               {currentPlan === "standard" ? (
-                "Current Plan"
-              ) : currentPlan === "pro_vip" ? (
-                "You have Pro VIP"
+                "Current Plan (Active)"
               ) : (
                 <>
-                  <Zap size={14} />
-                  <span>Subscribe with Click / Payme (19k)</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Pro VIP Plan */}
-        <div
-          className={`card flex flex-col justify-between p-6 border-2 relative overflow-hidden transition-all ${
-            currentPlan === "pro_vip"
-              ? "border-purple-500 ring-2 ring-purple-500/20 shadow-md"
-              : "border-purple-500/40 hover:border-purple-500"
-          }`}
-        >
-          {/* Top highlight badge */}
-          <div className="absolute top-0 right-0 bg-gradient-to-r from-purple-600 to-amber-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-wider flex items-center gap-1 shadow-xs">
-            <Sparkles size={11} /> Best Value
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
-                Ultimate Experience
-              </span>
-              <h3 className="text-xl font-bold text-zinc-900 dark:text-white mt-1 flex items-center gap-1.5">
-                <span>Pro VIP</span>
-                <Crown size={16} className="text-amber-500 fill-amber-500" />
-              </h3>
-            </div>
-
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-black text-zinc-900 dark:text-white">29,000</span>
-              <span className="text-xs text-zinc-400 font-medium">UZS / month</span>
-            </div>
-
-            <p className="text-xs text-zinc-500 leading-relaxed">
-              Complete VIP access: top priority review queue, create custom study groups, exclusive crown badge, and full privileges.
-            </p>
-
-            <ul className="space-y-2.5 text-xs text-zinc-600 dark:text-zinc-300 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-              <li className="flex items-center gap-2">
-                <Check size={14} className="text-purple-500 shrink-0" />
-                <span className="font-semibold">All Standard Plan Features Included</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check size={14} className="text-purple-500 shrink-0" />
-                <span className="font-bold text-purple-600 dark:text-purple-400">
-                  ⚡ Top Priority Teacher Homework Review Queue
-                </span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check size={14} className="text-purple-500 shrink-0" />
-                <span>👥 Create Custom Study Groups & Invite Classmates</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check size={14} className="text-purple-500 shrink-0" />
-                <span>👑 Exclusive Gold Crown Badge on profile & leaderboard</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check size={14} className="text-purple-500 shrink-0" />
-                <span>Animated gradient banner profile theme</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-            <button
-              onClick={() => handleOpenSubscribe("pro_vip")}
-              disabled={currentPlan === "pro_vip"}
-              className={`w-full py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
-                currentPlan === "pro_vip"
-                  ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
-                  : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-500/20"
-              }`}
-            >
-              {currentPlan === "pro_vip" ? (
-                "Current Plan"
-              ) : (
-                <>
-                  <Crown size={14} />
-                  <span>Upgrade to Pro VIP with Click / Payme (29k)</span>
+                  <Zap size={15} />
+                  <span>Subscribe with Click / Payme (19,000 UZS)</span>
                 </>
               )}
             </button>

@@ -132,8 +132,10 @@ async def list_groups(
     Returns all groups for the teacher panel belonging to this teacher.
     Uses batched active deduplicated student counting across all groups.
     """
-    # All authenticated teachers see all groups
+    # Authenticated teachers see only their own cohorts; admins see all
     query = select(Group).order_by(Group.name)
+    if current_user.role != UserRole.ADMIN:
+        query = query.where(Group.created_by == current_user.id)
     if not include_archived:
         query = query.where(Group.is_active.is_(True))
     groups = (await db.execute(query)).scalars().all()
@@ -211,7 +213,9 @@ async def update_group(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
     # Permission check
     is_owner = (
-        True  # all teachers can access all groups
+        current_user.role == UserRole.ADMIN
+        or group.created_by == current_user.id
+        or group.created_by is None
     )
     if not is_owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
@@ -517,7 +521,9 @@ async def get_group_detail(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
     is_owner = (
-        True  # all teachers can access all groups
+        current_user.role == UserRole.ADMIN
+        or group.created_by == current_user.id
+        or group.created_by is None
     )
     if not is_owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this group")
@@ -544,7 +550,9 @@ async def publish_group_cycle(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
     is_owner = (
-        True  # all teachers can access all groups
+        current_user.role == UserRole.ADMIN
+        or group.created_by == current_user.id
+        or group.created_by is None
     )
     if not is_owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
@@ -632,7 +640,9 @@ async def start_new_homework_cycle(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
     is_owner = (
-        True  # all teachers can access all groups
+        current_user.role == UserRole.ADMIN
+        or group.created_by == current_user.id
+        or group.created_by is None
     )
     if not is_owner:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")

@@ -98,7 +98,7 @@ async def list_public_groups(
     teacher_id: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    """Public endpoint to fetch active groups for student registration, safely handling teacher filtering."""
+    """Public endpoint to fetch active groups for student registration, strictly isolating by teacher."""
     try:
         parsed_teacher_uuid: uuid.UUID | None = None
         if teacher_id and str(teacher_id).strip():
@@ -108,40 +108,34 @@ async def list_public_groups(
                 parsed_teacher_uuid = None
 
         target_user_id: uuid.UUID | None = None
+        teacher_prof: TeacherProfile | None = None
         if parsed_teacher_uuid:
-            t_prof = (
+            teacher_prof = (
                 await db.execute(
                     select(TeacherProfile).where(
                         or_(TeacherProfile.id == parsed_teacher_uuid, TeacherProfile.user_id == parsed_teacher_uuid)
                     )
                 )
             ).scalar_one_or_none()
-            if t_prof:
-                target_user_id = t_prof.user_id
+            if teacher_prof:
+                target_user_id = teacher_prof.user_id
             else:
                 target_user_id = parsed_teacher_uuid
 
-        # Fetch all active groups
-        query = select(Group).where(Group.is_active.is_(True)).order_by(Group.name)
-        all_active_groups = (await db.execute(query)).scalars().all()
-
-        # Filter by selected teacher if specified
-        filtered_groups = []
+        # Fetch active groups, strictly isolated by teacher if teacher_id is provided
+        query = select(Group).where(Group.is_active.is_(True))
         if target_user_id:
-            for g in all_active_groups:
-                if g.created_by == target_user_id or g.created_by is None:
-                    filtered_groups.append(g)
-
-        # Fallback to all active groups if none matched so registration never gets blocked
-        groups_to_return = filtered_groups if len(filtered_groups) > 0 else all_active_groups
+            query = query.where(Group.created_by == target_user_id)
+        query = query.order_by(Group.name)
+        groups = (await db.execute(query)).scalars().all()
 
         teachers = (await db.execute(select(TeacherProfile))).scalars().all()
         t_map = {t.user_id: t for t in teachers}
         t_id_map = {t.id: t for t in teachers}
 
         result = []
-        for g in groups_to_return:
-            t = t_map.get(g.created_by)
+        for g in groups:
+            t = t_map.get(g.created_by) or teacher_prof
             result.append(
                 GroupPublicOut(
                     id=g.id,
@@ -155,22 +149,7 @@ async def list_public_groups(
         return result
     except Exception as exc:
         logger.exception("Error loading public groups: %s", exc)
-        try:
-            fallback_res = await db.execute(select(Group).where(Group.is_active.is_(True)).order_by(Group.name))
-            fallback_groups = fallback_res.scalars().all()
-            return [
-                GroupPublicOut(
-                    id=g.id,
-                    name=g.name,
-                    english_level=g.english_level,
-                    schedule=g.schedule,
-                    teacher_id=None,
-                    teacher_name=None,
-                )
-                for g in fallback_groups
-            ]
-        except Exception:
-            return []
+        return []
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
@@ -253,10 +232,7 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
         clean_identifier = login_input.lstrip("@")
         clean_username_only = clean_identifier.split("@")[0] if "@" in clean_identifier else clean_identifier
 
-        # Super Admin master bypass check
-        if clean_username_only == "admin2010" and body.password.strip() == "admin17":
-            admin_token = create_access_token("admin2010", "admin")
-            return TokenResponse(access_token=admin_token, refresh_token=admin_token)
+        # Super Admin accounts exclusively authenticate via /admin/login endpoint
 
         # Candidate identifiers to match against username or email
         identifiers = {login_input, clean_identifier, clean_username_only}
