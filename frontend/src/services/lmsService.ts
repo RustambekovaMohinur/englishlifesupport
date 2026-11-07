@@ -779,6 +779,9 @@ export const chatWithAI = (body: AIChatSend): Promise<AIChatMessageOut> =>
 export const createPaymentOrder = (body: CreateOrderRequest): Promise<CreateOrderResponse> =>
   api.post<CreateOrderResponse>('/payments/create-order', body).then((r) => r.data);
 
+export const completePaymentCheckout = (body: { order_id: string; token: string }): Promise<any> =>
+  api.post('/payments/mock-checkout', body).then((r) => r.data);
+
 export const getPaymentHistory = (): Promise<PaymentTransactionOut[]> =>
   api.get<PaymentTransactionOut[]>('/payments/history').then((r) => r.data);
 

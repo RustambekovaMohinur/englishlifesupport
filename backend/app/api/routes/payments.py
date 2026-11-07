@@ -121,7 +121,17 @@ async def create_payment_order(
     db.add(tx)
     await db.commit()
 
-    checkout_url = f"/student/billing?order={order_id}&provider={body.provider}"
+    # Generate official gateway payment URL
+    prov = body.provider.lower().strip()
+    if prov == "click":
+        checkout_url = f"https://my.click.uz/services/pay?service_id=32541&merchant_id=24150&amount={amount}&transaction_param={order_id}&return_url=/student/billing"
+    elif prov == "payme":
+        import base64
+        payme_params = f"m=65e123456789;ac.order_id={order_id};a={amount * 100}"
+        b64_data = base64.b64encode(payme_params.encode()).decode()
+        checkout_url = f"https://checkout.paycom.uz/{b64_data}"
+    else:
+        checkout_url = f"/student/billing?order={order_id}&provider={prov}"
 
     return CreateOrderResponse(
         order_id=order_id,
