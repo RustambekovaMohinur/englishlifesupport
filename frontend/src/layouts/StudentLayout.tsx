@@ -38,7 +38,7 @@ const sidebarNavItems = [
   { to: "/student/results", label: "My Results", icon: Trophy, hasBadge: false },
   { to: "/student/progress", label: "My Progress", icon: Flame, hasBadge: false },
   { to: "/student/billing", label: "Premium Plans", icon: CreditCard, hasBadge: false },
-  { to: "/student/chat", label: "Chat & AI Coach", icon: MessageSquare, hasBadge: false },
+  { to: "/student/chat", label: "Messages", icon: MessageSquare, hasBadge: false },
   { to: "/student/social", label: "Community & Notes", icon: Users, hasBadge: false },
   { to: "/student/profile", label: "Profile", icon: User, hasBadge: false },
 ];

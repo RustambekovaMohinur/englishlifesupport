@@ -633,20 +633,7 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                     res_s = await db.execute(select(StudentProfile).where(StudentProfile.id == s_uuid))
                     s_prof = res_s.scalar_one_or_none()
                     if s_prof:
-                        is_paid = bool(s_prof.is_premium or (s_prof.premium_plan in ("standard", "pro_vip")))
-                        if not is_paid:
-                            await send_telegram_message(
-                                chat_id=chat_id,
-                                text=(
-                                    f"🔒 Hurmatli <b>{s_prof.full_name}</b>, shaxsiy o'quvchi Telegram boti "
-                                    f"faqat <b>Standard (19k)</b> yoki <b>Pro VIP (29k)</b> obunachilari uchun mo'ljallangan.\n\n"
-                                    f"Ota-onangiz uchun bepul bildirishnomalarni esa LMS profilingizdagi "
-                                    f"<b>Ota-ona Telegram boti</b> orqali bepul ulashingiz mumkin! 🚀"
-                                ),
-                                reply_markup=REMOVE_KEYBOARD,
-                            )
-                            return {"ok": False, "reason": "student_bot_paid_only"}
-
+                        # Platform Policy: All students (including Free tier) can freely link Telegram
                         s_prof.phone = str(chat_id)
                         await db.commit()
                         await send_telegram_message(

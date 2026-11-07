@@ -67,20 +67,24 @@ async def list_chat_contacts(
     if not profile:
         raise HTTPException(status_code=403, detail="Student profile required.")
 
-    # Find peers who have an active paid plan (Standard / Pro VIP)
-    peers_query = (
-        select(StudentProfile)
-        .options(selectinload(StudentProfile.user))
-        .where(
-            StudentProfile.id != profile.id,
-            or_(
-                StudentProfile.premium_plan.in_(["standard", "pro_vip"]),
-                StudentProfile.is_premium.is_(True),
-            ),
-            StudentProfile.premium_plan != "free",
+    # Classmates in the student's cohort or active peer directory
+    if profile.group_id:
+        peers_query = (
+            select(StudentProfile)
+            .options(selectinload(StudentProfile.user))
+            .where(
+                StudentProfile.id != profile.id,
+                StudentProfile.group_id == profile.group_id,
+            )
+            .limit(50)
         )
-        .limit(50)
-    )
+    else:
+        peers_query = (
+            select(StudentProfile)
+            .options(selectinload(StudentProfile.user))
+            .where(StudentProfile.id != profile.id)
+            .limit(50)
+        )
     peers = (await db.execute(peers_query)).scalars().all()
 
     contacts = []
@@ -128,12 +132,8 @@ async def get_peer_messages(
     if not profile:
         raise HTTPException(status_code=403, detail="Student profile required.")
 
-    # Permissions check
-    if not (profile.can_private_chat or profile.is_premium or current_user.role == UserRole.TEACHER):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Private messaging requires Standard (19k) or Pro VIP (29k) plan.",
-        )
+    # All students have free access to peer messaging
+    pass
 
     # Fetch messages between current student and peer
     query = (
@@ -185,12 +185,8 @@ async def send_private_message(
     if not profile:
         raise HTTPException(status_code=403, detail="Student profile required.")
 
-    # Permissions check: sender must be premium or teacher
-    if not (profile.can_private_chat or profile.is_premium or current_user.role == UserRole.TEACHER):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Private messaging requires Standard or Pro VIP plan.",
-        )
+    # All students have free access to peer messaging
+    pass
 
     # Check recipient exists
     recipient = (
@@ -498,104 +494,21 @@ def generate_pedagogical_guidance(
 
 
 
-@router.post("/ai", response_model=AIChatMessageOut, summary="Chat with AI Learning Companion (Safe)")
+@router.post("/ai", response_model=AIChatMessageOut, summary="Chat with AI Learning Companion (Disabled)")
 async def chat_with_ai(
     body: AIChatSend,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    profile = await _get_student_profile(db, current_user)
-    if not profile:
-        raise HTTPException(status_code=403, detail="Student profile required.")
-
-    # Permissions check: Premium users (Standard / Pro VIP) or Teacher
-    is_teacher = current_user.role == UserRole.TEACHER
-    can_ai = is_teacher or profile.is_premium or profile.can_private_chat
-    if not can_ai:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="AI Companion requires Standard (19k) or Pro VIP (29k) plan.",
-        )
-
-    user_text = body.message.strip()
-
-    # Save user message
-    user_msg = AIChatMessage(
-        id=uuid.uuid4(),
-        student_id=profile.id,
-        role="user",
-        content=user_text,
-    )
-    db.add(user_msg)
-    await db.commit()
-
-    # Fetch last 8 messages for context
-    history_rows = (
-        await db.execute(
-            select(AIChatMessage)
-            .where(AIChatMessage.student_id == profile.id)
-            .order_by(AIChatMessage.created_at.desc())
-            .limit(8)
-        )
-    ).scalars().all()
-    history_rows.reverse()
-
-    contents = format_gemini_multiturn_contents(history_rows, user_text)
-
-    gemini_payload = {
-        "system_instruction": {
-            "parts": [{"text": AI_COMPANION_SYSTEM_PROMPT}]
-        },
-        "contents": contents,
-        "generationConfig": {
-            "temperature": 0.7,
-            "maxOutputTokens": 600,
-        },
-    }
-
-    reply_text = ""
-    gemini_error_detail = ""
-
-    # Primary: Live Gemini AI API execution with automatic key rotation & backoff
-    try:
-        resp, err = await execute_gemini_generate_content(
-            payload=gemini_payload,
-            timeout=25.0,
-            max_backoff_retries=2,
-        )
-        if resp and resp.status_code == 200:
-            data = resp.json()
-            candidates = data.get("candidates", [])
-            if candidates:
-                parts = candidates[0].get("content", {}).get("parts", [])
-                if parts and parts[0].get("text"):
-                    reply_text = parts[0]["text"].strip()
-        else:
-            gemini_error_detail = err or (f"HTTP {resp.status_code}" if resp else "Connection error")
-            logger.warning("Live Gemini API response unfulfilled: %s", gemini_error_detail)
-    except Exception as ex:
-        gemini_error_detail = str(ex)
-        logger.error("Live Gemini API call exception: %s", ex)
-
-    # If live Gemini succeeds, ensure response is clean
-    if not reply_text:
-        # Dynamic fallback engine: strictly conversational in English, zero repetitive static loops
-        reply_text = generate_pedagogical_guidance(user_text, student_name=profile.full_name, history=history_rows)
-
-    # Save assistant message
-    ai_msg = AIChatMessage(
-        id=uuid.uuid4(),
-        student_id=profile.id,
-        role="assistant",
-        content=reply_text.strip(),
-    )
-    db.add(ai_msg)
-    await db.commit()
-
-    return AIChatMessageOut(
-        id=ai_msg.id,
-        role="assistant",
-        content=ai_msg.content,
-        created_at=ai_msg.created_at,
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="AI Chat has been disabled. Please use peer and instructor messaging.",
     )
 
+
+@router.get("/ai/history", response_model=list[AIChatMessageOut], summary="Get AI chat history (Disabled)")
+async def get_ai_chat_history(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return []

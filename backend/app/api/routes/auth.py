@@ -95,48 +95,82 @@ async def list_public_teachers(db: AsyncSession = Depends(get_db)):
 
 @router.get("/groups/public", response_model=list[GroupPublicOut])
 async def list_public_groups(
-    teacher_id: uuid.UUID | None = Query(default=None),
+    teacher_id: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    """Public endpoint to fetch active groups for student registration, optionally filtered by teacher."""
-    query = select(Group).where(Group.is_active.is_(True)).order_by(Group.name)
-    if teacher_id:
-        t_prof = (
-            await db.execute(
-                select(TeacherProfile).where(
-                    or_(TeacherProfile.id == teacher_id, TeacherProfile.user_id == teacher_id)
+    """Public endpoint to fetch active groups for student registration, safely handling teacher filtering."""
+    try:
+        parsed_teacher_uuid: uuid.UUID | None = None
+        if teacher_id and str(teacher_id).strip():
+            try:
+                parsed_teacher_uuid = uuid.UUID(str(teacher_id).strip())
+            except Exception:
+                parsed_teacher_uuid = None
+
+        target_user_id: uuid.UUID | None = None
+        if parsed_teacher_uuid:
+            t_prof = (
+                await db.execute(
+                    select(TeacherProfile).where(
+                        or_(TeacherProfile.id == parsed_teacher_uuid, TeacherProfile.user_id == parsed_teacher_uuid)
+                    )
+                )
+            ).scalar_one_or_none()
+            if t_prof:
+                target_user_id = t_prof.user_id
+            else:
+                target_user_id = parsed_teacher_uuid
+
+        # Fetch all active groups
+        query = select(Group).where(Group.is_active.is_(True)).order_by(Group.name)
+        all_active_groups = (await db.execute(query)).scalars().all()
+
+        # Filter by selected teacher if specified
+        filtered_groups = []
+        if target_user_id:
+            for g in all_active_groups:
+                if g.created_by == target_user_id or g.created_by is None:
+                    filtered_groups.append(g)
+
+        # Fallback to all active groups if none matched so registration never gets blocked
+        groups_to_return = filtered_groups if len(filtered_groups) > 0 else all_active_groups
+
+        teachers = (await db.execute(select(TeacherProfile))).scalars().all()
+        t_map = {t.user_id: t for t in teachers}
+        t_id_map = {t.id: t for t in teachers}
+
+        result = []
+        for g in groups_to_return:
+            t = t_map.get(g.created_by)
+            result.append(
+                GroupPublicOut(
+                    id=g.id,
+                    name=g.name,
+                    english_level=g.english_level,
+                    schedule=g.schedule,
+                    teacher_id=t.id if t else (parsed_teacher_uuid if parsed_teacher_uuid in t_id_map else None),
+                    teacher_name=t.full_name if t else None,
                 )
             )
-        ).scalar_one_or_none()
-        if t_prof:
-            query = query.where(
-                or_(
-                    Group.created_by == t_prof.user_id,
-                    and_(Group.created_by.is_(None), t_prof.user_id == (await db.execute(select(User.id).where(User.email == settings.BOOTSTRAP_TEACHER_EMAIL))).scalar_one_or_none()),
+        return result
+    except Exception as exc:
+        logger.exception("Error loading public groups: %s", exc)
+        try:
+            fallback_res = await db.execute(select(Group).where(Group.is_active.is_(True)).order_by(Group.name))
+            fallback_groups = fallback_res.scalars().all()
+            return [
+                GroupPublicOut(
+                    id=g.id,
+                    name=g.name,
+                    english_level=g.english_level,
+                    schedule=g.schedule,
+                    teacher_id=None,
+                    teacher_name=None,
                 )
-            )
-        else:
-            query = query.where(Group.created_by == teacher_id)
-
-    groups = (await db.execute(query)).scalars().all()
-
-    teachers = (await db.execute(select(TeacherProfile))).scalars().all()
-    t_map = {t.user_id: t for t in teachers}
-
-    result = []
-    for g in groups:
-        t = t_map.get(g.created_by)
-        result.append(
-            GroupPublicOut(
-                id=g.id,
-                name=g.name,
-                english_level=g.english_level,
-                schedule=g.schedule,
-                teacher_id=t.id if t else None,
-                teacher_name=t.full_name if t else None,
-            )
-        )
-    return result
+                for g in fallback_groups
+            ]
+        except Exception:
+            return []
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)

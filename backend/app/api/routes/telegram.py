@@ -147,7 +147,7 @@ async def get_student_link_info(
         bot_username=bot_user,
         telegram_link=link,
         is_student_linked=is_linked,
-        can_link_student=is_paid,
+        can_link_student=True,  # All students (including Free) can link Telegram
         premium_plan=profile.premium_plan or "free",
         student_telegram_chat_id=profile.phone if is_linked else None,
     )

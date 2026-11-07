@@ -283,7 +283,7 @@ export default function BillingPage() {
           <span>Premium Plans & Billing</span>
         </h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Upgrade your learning experience with custom themes, public revision notes, 1-on-1 peer chats, and AI coaching.
+          All coursework, homework submissions, stars, XP, AI evaluation, and Telegram bot linking are 100% Free! Upgrades provide optional priority homework review queue and VIP badges.
         </p>
       </div>
 
@@ -358,7 +358,7 @@ export default function BillingPage() {
             </div>
 
             <p className="text-xs text-zinc-500 leading-relaxed">
-              Ideal for dedicated students who want premium themes, social revision notes, and safe AI coaching.
+              Ideal for dedicated students who want priority homework review queue, premium themes, and star badges.
             </p>
 
             <ul className="space-y-2.5 text-xs text-zinc-600 dark:text-zinc-300 pt-2 border-t border-zinc-100 dark:border-zinc-800">
@@ -380,7 +380,7 @@ export default function BillingPage() {
               </li>
               <li className="flex items-center gap-2">
                 <Check size={14} className="text-blue-500 shrink-0" />
-                <span>🤖 Aura AI Learning Companion (error corrections & guidance)</span>
+                <span>⚡ Priority Homework Checking Queue</span>
               </li>
             </ul>
           </div>
@@ -467,7 +467,7 @@ export default function BillingPage() {
               </li>
               <li className="flex items-center gap-2">
                 <Check size={14} className="text-purple-500 shrink-0" />
-                <span>Priority AI Companion response speed</span>
+                <span>⚡ Top Priority Teacher Homework Review Queue</span>
               </li>
             </ul>
           </div>

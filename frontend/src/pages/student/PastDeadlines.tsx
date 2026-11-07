@@ -74,19 +74,7 @@ export default function PastDeadlinesPage() {
     setIsLoading(true);
     listPastDeadlineAssignments()
       .then(setAssignments)
-      .catch((err: any) => {
-        if (
-          err?.response?.status === 403 &&
-          (err?.response?.data?.code === "PAYMENT_REQUIRED" ||
-            String(err?.response?.data?.detail).includes("PAYMENT_REQUIRED") ||
-            String(err?.response?.data?.detail).includes("Payment"))
-        ) {
-          toast.error("Payment verification required. Redirecting to billing checkout...", { id: "payment-gate" });
-          navigate("/student/billing");
-        } else {
-          toast.error("Failed to load past deadline assignments");
-        }
-      })
+      .catch(() => toast.error("Failed to load past deadline assignments"))
       .finally(() => setIsLoading(false));
   }
 
