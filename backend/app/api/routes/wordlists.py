@@ -712,6 +712,9 @@ async def list_wordlist_sets(
             query = query.where(WordlistSet.group_id.is_(None))
     elif group_id:
         query = query.where(WordlistSet.group_id == group_id)
+    elif current_user.role == UserRole.TEACHER:
+        # Teachers see only their own wordlists (clean slate for new teachers)
+        query = query.where(WordlistSet.created_by == current_user.id)
 
     res = await db.execute(query)
     wordlist_sets = res.unique().scalars().all()
