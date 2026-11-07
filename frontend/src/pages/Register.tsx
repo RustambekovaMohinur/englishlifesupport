@@ -60,6 +60,8 @@ export default function RegisterPage() {
   }, [teacherId]);
 
   const selectedGroup = groups.find((g) => g.id === groupId);
+  const selectedTeacher = teachers.find((t) => t.id === teacherId);
+  const teacherDisplayName = selectedTeacher?.full_name || "Your Teacher / Examiner";
 
   function handleTelegramChange(val: string) {
     // Keep user's input, ensure format is clean
@@ -138,7 +140,7 @@ export default function RegisterPage() {
             </div>
           </div>
           <p className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
-            Your registration has been submitted. Your instructor <strong className="text-zinc-900 dark:text-white">Asadbek Khasanov</strong> must approve your enrollment before you can access the Candidate Portal.
+            Your registration has been submitted. Your instructor <strong className="text-zinc-900 dark:text-white">{teacherDisplayName}</strong> must approve your enrollment before you can access the Candidate Portal.
           </p>
           <div className="rounded-xl bg-zinc-50 dark:bg-zinc-900/60 p-4 text-xs text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 text-left space-y-1.5">
             <p className="flex justify-between">
@@ -179,7 +181,7 @@ export default function RegisterPage() {
           <div className="flex items-center gap-3">
             <Logo className="h-10 w-10 text-base" />
             <div>
-              <p className="text-sm font-bold tracking-tight text-white">Asadbek Khasanov</p>
+              <p className="text-sm font-bold tracking-tight text-white">{teacherDisplayName}</p>
               <p className="text-xs text-indigo-300 font-medium">Candidate Enrollment</p>
             </div>
           </div>

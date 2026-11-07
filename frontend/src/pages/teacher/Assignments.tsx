@@ -728,17 +728,24 @@ export default function AssignmentsPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* 3. Primary Homework Document File */}
+              {/* 3. Primary Homework Image Attachment */}
               <div className="space-y-1.5">
-                <label className="label">📁 Homework Document Attachment (PDF, DOCX, TXT)</label>
+                <label className="label">🖼️ Primary Homework Image (JPEG, PNG, WebP)</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="file"
-                    accept=".pdf,.doc,.docx,.txt"
+                    accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
                     className="input text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-50 dark:file:bg-brand-950 file:text-brand-700 dark:file:text-brand-300"
                     onChange={(e) => {
                       e.stopPropagation();
-                      setPrimaryDocFile(e.target.files?.[0] ?? null);
+                      const f = e.target.files?.[0] ?? null;
+                      if (f && !f.type.startsWith("image/") && !/\.(jpe?g|png|webp)$/i.test(f.name)) {
+                        toast.error("Only image formats (JPEG, PNG, WebP) are allowed. Documents are blocked.");
+                        e.target.value = "";
+                        setPrimaryDocFile(null);
+                        return;
+                      }
+                      setPrimaryDocFile(f);
                     }}
                   />
                   {primaryDocFile && (
@@ -916,7 +923,7 @@ export default function AssignmentsPage() {
                     {(task.type === "reading" || task.type === "writing") && (
                       <div className="space-y-3">
                         <div className="flex gap-2">
-                          {(["text", "link", "image", "file"] as SubType[]).map((sub) => (
+                          {(["text", "link", "image"] as SubType[]).map((sub) => (
                             <button
                               key={sub}
                               type="button"
@@ -1043,7 +1050,7 @@ export default function AssignmentsPage() {
                     {task.type === "vocabulary" && (
                       <div className="space-y-3">
                         <div className="flex flex-wrap gap-2">
-                          {(["text", "link", "image", "file", "csv"] as SubType[]).map((sub) => (
+                          {(["text", "link", "image", "csv"] as SubType[]).map((sub) => (
                             <button
                               key={sub}
                               type="button"

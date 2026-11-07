@@ -208,6 +208,8 @@ export const deleteAssignment = (id: string) =>
   });
 export const getAssignment = (id: string) =>
   cachedGet<AssignmentForStudent>(`/assignments/${id}`);
+export const getAssignmentFresh = (id: string) =>
+  api.get<AssignmentForStudent>(`/assignments/${id}`).then((r) => r.data);
 export const listMyAssignments = () => cachedGet<AssignmentForStudent[]>("/assignments/mine");
 export const listPastDeadlineAssignments = () =>
   cachedGet<AssignmentForStudent[]>("/assignments/past-deadlines");
@@ -342,7 +344,13 @@ export const submitHomework = (
   return api.post<SubmissionOut>("/submissions", formData, {
     timeout: 120000, // 2 full minutes for slow mobile connections
     headers: { "Content-Type": undefined },
-  }).then((r) => r.data);
+  }).then((r) => {
+    apiCache.invalidate("/submissions");
+    apiCache.invalidate("/assignments");
+    apiCache.invalidate("/dashboard");
+    apiCache.invalidate("/gamification");
+    return r.data;
+  });
 };
 
 export const evaluateSubmissionAI = async (submissionId: string): Promise<SubmissionOut> => {

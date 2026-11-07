@@ -53,6 +53,7 @@ import {
   recordVocabPractice,
   getSubmission,
   getSubmissionFresh,
+  getAssignmentFresh,
   triggerAIEvaluation,
 } from "@/services/lmsService";
 import { AssignmentForStudent, SubmissionOut } from "@/types";
@@ -364,9 +365,9 @@ export default function StudentAssignmentSubmitPage() {
     setIsLoading(true);
     try {
       let found: AssignmentForStudent | null = null;
-      // 1. Direct fetch via single assignment endpoint
+      // 1. Direct fetch via single assignment endpoint (fresh bypass cache)
       try {
-        found = await getAssignment(assignmentId);
+        found = await getAssignmentFresh(assignmentId);
       } catch (err) {
         console.warn("Direct getAssignment call failed, checking assignment pools:", err);
       }
@@ -387,7 +388,7 @@ export default function StudentAssignmentSubmitPage() {
         setActiveTab(skill.defaultTab);
 
         if (found.submission_id) {
-          getSubmission(found.submission_id)
+          getSubmissionFresh(found.submission_id)
             .then(setExistingSubmission)
             .catch(() => {});
         }
@@ -407,9 +408,9 @@ export default function StudentAssignmentSubmitPage() {
 
   // Handle files added (drag-drop, file picker, camera capture, clipboard paste)
   async function handleFilesAdded(incomingFiles: File[]) {
-    const allowedDocExts = /\.(pdf|docx?|txt)$/i;
     const allowedImgExts = /\.(png|jpe?g|webp|heic)$/i;
     const allowedAudioExts = /\.(mp3|wav|m4a|ogg|webm)$/i;
+    const blockedDocExts = /\.(pdf|docx?|txt|zip|rar|7z|rtf|csv|xlsx?|pptx?)$/i;
 
     const newImages: File[] = [];
     let newDoc: File | null = null;
@@ -420,12 +421,15 @@ export default function StudentAssignmentSubmitPage() {
         toast.error(`"${f.name}" is too large (maximum 25 MB).`);
         continue;
       }
+      if (blockedDocExts.test(f.name)) {
+        toast.error(`"${f.name}" cannot be uploaded. Documents are not allowed. Only image formats (JPEG, PNG, WebP) are accepted for homework.`);
+        continue;
+      }
       const isImg = f.type.startsWith("image/") || allowedImgExts.test(f.name);
       const isAudio = f.type.startsWith("audio/") || allowedAudioExts.test(f.name);
-      const isDoc = allowedDocExts.test(f.name);
 
-      if (!isImg && !isDoc && !isAudio) {
-        toast.error(`"${f.name}" format is not supported. Please upload PDF, DOCX, PNG, JPG, or audio files.`);
+      if (!isImg && !isAudio) {
+        toast.error(`"${f.name}" format is not supported. Please upload image files (JPEG, PNG, WebP) only.`);
         continue;
       }
 
@@ -433,8 +437,6 @@ export default function StudentAssignmentSubmitPage() {
         newAudio = f;
       } else if (isImg) {
         newImages.push(f);
-      } else {
-        newDoc = f;
       }
     }
 
@@ -447,10 +449,7 @@ export default function StudentAssignmentSubmitPage() {
       }
     }
 
-    if (newDoc) {
-      setDocFile(newDoc);
-      toast.success(`Attached document: ${newDoc.name}`);
-    }
+
 
     if (newImages.length > 0) {
       setIsCompressingImages(true);
@@ -1236,10 +1235,10 @@ export default function StudentAssignmentSubmitPage() {
                     <div>
                       <h3 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
                         <UploadCloud className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                        Upload Photos & Documents
+                        Upload Photos (Image Only)
                       </h3>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                        Upload up to 10 photos or PDF/Word document
+                        Upload up to 10 photos (JPEG, PNG, WebP)
                       </p>
                     </div>
                     <span className="text-xs font-mono font-semibold text-zinc-400 dark:text-zinc-500">
@@ -1247,11 +1246,11 @@ export default function StudentAssignmentSubmitPage() {
                     </span>
                   </div>
 
-                  {/* Hidden File Inputs */}
+                  {/* Hidden File Inputs (Strictly Image-Only) */}
                   <input
                     ref={imageInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
                     multiple
                     className="hidden"
                     onChange={(e) => {
@@ -1264,7 +1263,7 @@ export default function StudentAssignmentSubmitPage() {
                     ref={dropzoneInputRef}
                     type="file"
                     multiple
-                    accept=".pdf,.doc,.docx,.txt,image/*"
+                    accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
                     className="hidden"
                     onChange={(e) => {
                       const files = Array.from(e.target.files || []);
@@ -1300,26 +1299,18 @@ export default function StudentAssignmentSubmitPage() {
                       Click to upload or drag and drop files here
                     </p>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 mb-4">
-                      PNG, JPG, PDF, DOCX · Auto-compression · Paste from clipboard: <kbd className="px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded text-xs font-mono font-bold">Ctrl+V</kbd>
+                      JPEG, PNG, WEBP (Image only) · Auto-compression · Paste from clipboard: <kbd className="px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded text-xs font-mono font-bold">Ctrl+V</kbd>
                     </p>
 
-                    {/* Direct Action Buttons: Photo & Document Picker */}
+                    {/* Direct Action Buttons: Photo Picker (Image Only) */}
                     <div className="flex flex-wrap items-center justify-center gap-2.5">
                       <button
                         type="button"
                         onClick={() => imageInputRef.current?.click()}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition active:scale-95 cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition active:scale-95 cursor-pointer"
                       >
                         <Camera className="w-4 h-4" />
                         <span>Add Photos (Camera / Gallery)</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => dropzoneInputRef.current?.click()}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 shadow-xs transition active:scale-95 cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4 text-indigo-500" />
-                        <span>Choose Document (PDF/DOC)</span>
                       </button>
                     </div>
                   </div>
@@ -1775,6 +1766,11 @@ export default function StudentAssignmentSubmitPage() {
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Compressing images...</span>
+                  </>
+                ) : existingSubmission ? (
+                  <>
+                    <span>Resubmit / Update Homework</span>
+                    <span className="text-base">🔄</span>
                   </>
                 ) : isPastDeadline ? (
                   <>

@@ -3,6 +3,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -394,6 +395,37 @@ async def submit_homework(
             detail="Maximum 10 images allowed per submission",
         )
 
+    ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+    ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp"}
+    ALLOWED_AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".webm", ".aac"}
+    ALLOWED_AUDIO_MIMES = {
+        "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav",
+        "audio/m4a", "audio/x-m4a", "audio/mp4", "audio/webm",
+        "audio/ogg", "audio/aac",
+    }
+
+    # Strict Image-Only validation for image attachments (block documents/archives)
+    for img in valid_images:
+        ext = Path(img.filename or "").suffix.lower()
+        mime = (img.content_type or "").lower()
+        if ext not in ALLOWED_IMAGE_EXTS and mime not in ALLOWED_IMAGE_MIMES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Faqat rasm formatidagi fayllar qabul qilinadi (JPEG, PNG, WebP). '{img.filename}' qabul qilinmaydi.",
+            )
+
+    # Validate primary_file (if provided): must be strictly image or voice audio, NEVER document/archive!
+    if primary_file is not None:
+        p_ext = Path(primary_file.filename or "").suffix.lower()
+        p_mime = (primary_file.content_type or "").lower()
+        is_p_img = p_ext in ALLOWED_IMAGE_EXTS or p_mime in ALLOWED_IMAGE_MIMES
+        is_p_audio = p_ext in ALLOWED_AUDIO_EXTS or p_mime in ALLOWED_AUDIO_MIMES or "audio" in p_mime
+        if not is_p_img and not is_p_audio:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Hujjat yoki arxiv fayllarni yuklash taqiqlangan ('{primary_file.filename}'). Faqat rasm (JPEG, PNG, WebP) yoki ovozli xabar qabul qilinadi.",
+            )
+
     direct_storage_url = (storage_url or file_url or voice_url or "").strip() or None
 
     if not raw_text and not primary_file and not valid_images and not direct_storage_url:
@@ -460,6 +492,12 @@ async def submit_homework(
     elif primary_res is not None:
         file_path, file_original_name, file_content_type, file_size, backend_used = primary_res
         await record_file_blob(db, file_path, file_size, file_content_type, file_original_name, storage_backend=backend_used)
+    elif image_results:
+        # If new images are submitted, clear old primary file reference so old doc doesn't linger
+        file_path = None
+        file_original_name = None
+        file_content_type = None
+        file_size = None
 
     is_late = ensure_utc(assignment.deadline) < now
     submission_status = SubmissionStatus.LATE if is_late else SubmissionStatus.SUBMITTED
