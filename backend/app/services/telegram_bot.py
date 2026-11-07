@@ -710,12 +710,13 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
 
             group_name = student.group.name if student.group else "Biriktirilmagan"
             confirmation_msg = (
-                f"Farzandingiz <b>{student.full_name}</b> muvaffaqiyatli biriktirildi! "
-                "Endi davomat va baholar sizga avtomatik yuboriladi.\n\n"
+                f"✅ <b>Assalomu alaykum, {parent_name}!</b>\n\n"
+                f"Farzandingiz <b>{student.full_name}</b> profilingizga muvaffaqiyatli bog'landi. "
+                "Endi dars davomati, yangi uy vazifalari va baholar sizga avtomatik yetkaziladi.\n\n"
                 f"• Guruh: <b>{group_name}</b>\n"
                 f"• To'plangan Yulduzlar: ⭐ <b>{student.total_stars}</b> | ⚡ <b>{student.total_lightning}</b>\n\n"
-                "Quyidagi <b>📊 Farzandim ko'rsatkichlari</b> tugmasi orqali istalgan paytda "
-                "baholar va topshiriqlarni tekshirishingiz mumkin."
+                "Quyidagi <b>📊 Farzandim ko'rsatkichlari</b> tugmasi orqali istalgan vaqtda "
+                "barcha ko'rsatkichlarni tekshirib borishingiz mumkin."
             )
             await send_telegram_message(
                 chat_id=chat_id,

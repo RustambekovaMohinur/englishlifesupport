@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_teacher_profile, require_teacher
+from app.api.deps import get_current_teacher_profile, require_teacher, require_admin, get_current_user
 from app.core.security import hash_password, verify_password
 from app.db.session import get_db
 from app.models.refresh_token import RefreshToken
@@ -17,7 +17,7 @@ from app.models.user import UserRole, ApprovalStatus
 from app.utils.password_policy import validate_password_policy
 from app.api.routes.auth import _issue_tokens
 
-router = APIRouter(prefix="/teachers", tags=["teachers"], dependencies=[Depends(require_teacher)])
+router = APIRouter(prefix="/teachers", tags=["teachers"])
 
 
 @router.get("/me", response_model=TeacherProfileOut)
@@ -172,7 +172,7 @@ async def change_teacher_password(
 
 @router.get("", response_model=list[TeacherProfileOut], summary="[Admin/Teacher] List all teachers")
 async def list_all_teachers(
-    current_user: User = Depends(require_teacher),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Lists all teachers registered in the LMS."""
@@ -204,7 +204,7 @@ async def list_all_teachers(
 @router.post("", response_model=TeacherProfileOut, status_code=status.HTTP_201_CREATED, summary="[Admin] Add new teacher with real name & credentials")
 async def create_new_teacher(
     body: CreateTeacherRequest,
-    current_user: User = Depends(require_teacher),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """

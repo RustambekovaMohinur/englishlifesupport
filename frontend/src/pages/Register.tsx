@@ -4,7 +4,7 @@ import toast from "react-hot-toast";
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
-import { fetchPublicGroups, GroupPublic } from "@/services/authService";
+import { fetchPublicGroups, fetchPublicTeachers, GroupPublic, TeacherPublic } from "@/services/authService";
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -15,22 +15,49 @@ export default function RegisterPage() {
   const [telegram, setTelegram] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [teacherId, setTeacherId] = useState("");
+  const [teachers, setTeachers] = useState<TeacherPublic[]>([]);
+  const [isLoadingTeachers, setIsLoadingTeachers] = useState(true);
   const [groupId, setGroupId] = useState("");
   const [groups, setGroups] = useState<GroupPublic[]>([]);
-  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmittedPending, setIsSubmittedPending] = useState(false);
 
+  // Load teachers list on mount
   useEffect(() => {
-    fetchPublicGroups()
+    fetchPublicTeachers()
+      .then((data) => {
+        setTeachers(data);
+        if (data.length > 0) {
+          setTeacherId(data[0].id);
+        }
+      })
+      .catch(() => toast.error("Failed to load teachers list"))
+      .finally(() => setIsLoadingTeachers(false));
+  }, []);
+
+  // When teacherId changes, fetch that teacher's active groups
+  useEffect(() => {
+    if (!teacherId) {
+      setGroups([]);
+      setGroupId("");
+      return;
+    }
+    setIsLoadingGroups(true);
+    fetchPublicGroups(teacherId)
       .then((data) => {
         setGroups(data);
-        if (data.length > 0) setGroupId(data[0].id);
+        if (data.length > 0) {
+          setGroupId(data[0].id);
+        } else {
+          setGroupId("");
+        }
       })
-      .catch(() => toast.error("Failed to load available groups"))
+      .catch(() => toast.error("Failed to load cohorts for selected teacher"))
       .finally(() => setIsLoadingGroups(false));
-  }, []);
+  }, [teacherId]);
 
   const selectedGroup = groups.find((g) => g.id === groupId);
 
@@ -212,7 +239,7 @@ export default function RegisterPage() {
             <div className="flex items-center gap-2.5">
               <Logo className="h-8 w-8 text-sm" />
               <div>
-                <p className="text-xs font-bold text-zinc-900 dark:text-white">Asadbek Khasanov</p>
+                <p className="text-xs font-bold text-zinc-900 dark:text-white">English Life Academy</p>
                 <p className="text-[10px] text-zinc-500 dark:text-zinc-400">Student Registration</p>
               </div>
             </div>
@@ -352,7 +379,35 @@ export default function RegisterPage() {
 
             <div>
               <label className="label text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                Select Class Group *
+                Select Teacher / Examiner *
+              </label>
+              <select
+                required
+                disabled={isLoadingTeachers || isSubmitting}
+                className="input text-sm"
+                value={teacherId}
+                onChange={(e) => setTeacherId(e.target.value)}
+              >
+                {isLoadingTeachers ? (
+                  <option value="">Loading teachers...</option>
+                ) : teachers.length === 0 ? (
+                  <option value="">No teachers available</option>
+                ) : (
+                  teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.full_name}
+                    </option>
+                  ))
+                )}
+              </select>
+              <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                Choose your official instructor to view their active cohorts
+              </p>
+            </div>
+
+            <div>
+              <label className="label text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                Select Class Group / Cohort *
               </label>
               <select
                 required
@@ -362,9 +417,9 @@ export default function RegisterPage() {
                 onChange={(e) => setGroupId(e.target.value)}
               >
                 {isLoadingGroups ? (
-                  <option value="">Loading groups...</option>
+                  <option value="">Loading cohorts for selected teacher...</option>
                 ) : groups.length === 0 ? (
-                  <option value="">No active groups available</option>
+                  <option value="">No active cohorts for this teacher</option>
                 ) : (
                   groups.map((g) => (
                     <option key={g.id} value={g.id}>

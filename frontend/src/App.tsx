@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import { PageLoadingFallback } from "@/components/common/PageLoadingFallback";
 
 // Eager layouts for instant shell rendering
@@ -23,7 +24,8 @@ const SubmissionsPage = lazy(() => import("@/pages/teacher/Submissions"));
 const TeacherProfilePage = lazy(() => import("@/pages/teacher/Profile"));
 const TeacherWordlistsPage = lazy(() => import("@/pages/teacher/Wordlists"));
 const TeacherCurriculumPage = lazy(() => import("@/pages/teacher/Curriculum"));
-const AdminTeachersPage = lazy(() => import("@/pages/teacher/AdminTeachers"));
+const AdminLoginPage = lazy(() => import("@/pages/admin/Login"));
+const AdminTeachersPortalPage = lazy(() => import("@/pages/admin/Teachers"));
 
 // Lazy-loaded student pages
 const StudentDashboardPage = lazy(() => import("@/pages/student/Dashboard"));
@@ -58,6 +60,13 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
 
+          {/* Dedicated Master Super Admin Portal (admin2010 / admin17) */}
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route element={<AdminProtectedRoute />}>
+            <Route path="/admin" element={<Navigate to="/admin/teachers" replace />} />
+            <Route path="/admin/teachers" element={<AdminTeachersPortalPage />} />
+          </Route>
+
           <Route element={<ProtectedRoute allowedRole="teacher" />}>
             <Route path="/teacher" element={<TeacherLayout />}>
               <Route index element={<TeacherDashboardPage />} />
@@ -66,7 +75,6 @@ export default function App() {
               <Route path="groups/:groupId" element={<GroupDetailPage />} />
               <Route path="assignments" element={<AssignmentsPage />} />
               <Route path="curriculum" element={<TeacherCurriculumPage />} />
-              <Route path="admin/teachers" element={<AdminTeachersPage />} />
               <Route path="wordlists" element={<TeacherWordlistsPage />} />
               <Route path="submissions" element={<SubmissionsPage />} />
               <Route path="profile" element={<TeacherProfilePage />} />

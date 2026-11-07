@@ -27,7 +27,6 @@ const sidebarNavItems = [
   { to: "/teacher/curriculum", label: "Curriculum", icon: Calendar },
   { to: "/teacher/wordlists", label: "Wordlists", icon: BookOpen },
   { to: "/teacher/submissions", label: "Submissions", icon: CheckSquare },
-  { to: "/teacher/admin/teachers", label: "Admin & Teachers", icon: Shield },
   { to: "/teacher/profile", label: "Profile", icon: User },
 ];
 
@@ -38,7 +37,6 @@ const bottomNavItems = [
   { to: "/teacher/curriculum", label: "Curriculum", icon: Calendar },
   { to: "/teacher/wordlists", label: "Words", icon: BookOpen },
   { to: "/teacher/submissions", label: "Review", icon: CheckSquare },
-  { to: "/teacher/admin/teachers", label: "Admin & Teachers", icon: Shield },
   { to: "/teacher/profile", label: "Profile", icon: User },
 ];
 

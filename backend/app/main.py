@@ -276,7 +276,7 @@ async def bootstrap_teacher_account(max_retries: int = 5, retry_delay: float = 2
         try:
             async with AsyncSessionLocal() as db:
                 existing = await db.execute(select(User).where(User.role == UserRole.TEACHER))
-                teacher = existing.scalar_one_or_none()
+                teacher = existing.scalars().first()
                 if teacher is not None:
                     teacher.email = settings.BOOTSTRAP_TEACHER_EMAIL
                     if not teacher.username:

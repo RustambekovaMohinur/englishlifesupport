@@ -50,6 +50,18 @@ async def get_current_user(
     if user_id is None:
         raise CREDENTIALS_EXCEPTION
 
+    # Master Super Admin virtual identity
+    if payload.get("role") == "admin" or user_id == "admin2010":
+        return User(
+            id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+            email="admin2010@englishlife.uz",
+            username="admin2010",
+            password_hash="",
+            role=UserRole.TEACHER,
+            is_active=True,
+            approval_status=ApprovalStatus.APPROVED,
+        )
+
     try:
         user_uuid = uuid.UUID(user_id)
     except ValueError:
@@ -75,6 +87,15 @@ async def get_current_user(
             )
 
     return user
+
+
+async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.username != "admin2010" and getattr(current_user, "role", None) != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "ADMIN_REQUIRED", "message": "Super Admin access required."},
+        )
+    return current_user
 
 
 async def require_teacher(current_user: User = Depends(get_current_user)) -> User:

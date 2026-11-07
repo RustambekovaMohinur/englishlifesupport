@@ -3,6 +3,7 @@ import { CurrentUser } from "@/types";
 import { tokenStorage } from "@/services/api";
 import * as authService from "@/services/authService";
 import { getMyUnifiedProfile } from "@/services/lmsService";
+import { apiCache } from "@/services/apiCache";
 
 interface AuthContextValue {
   user: CurrentUser | null;
@@ -145,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("el_access_token");
       localStorage.removeItem("el_refresh_token");
       sessionStorage.clear();
+      apiCache.invalidate();
       setUser(null);
     }
   };

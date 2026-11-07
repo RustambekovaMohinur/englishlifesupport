@@ -181,14 +181,31 @@ export const removeMyAvatar = () => api.delete<UserProfileOut>("/profile/me/avat
 
 // --- Assignments ---
 export const listAssignments = (group_id?: string) =>
-  cachedGet<AssignmentOut[]>("/assignments", { group_id });
+  cachedGet<AssignmentOut[]>("/assignments", group_id ? { group_id } : undefined);
 export const createAssignment = (formData: FormData) =>
-  api.post<AssignmentOut>("/assignments", formData, { timeout: 120000 }).then((r) => r.data);
+  api.post<AssignmentOut>("/assignments", formData, { timeout: 120000 }).then((r) => {
+    apiCache.invalidate("/assignments");
+    apiCache.invalidate("/dashboard");
+    return r.data;
+  });
 export const updateAssignmentInPlace = (id: string, formData: FormData) =>
-  api.put<AssignmentOut>(`/assignments/${id}`, formData, { timeout: 120000 }).then((r) => r.data);
+  api.put<AssignmentOut>(`/assignments/${id}`, formData, { timeout: 120000 }).then((r) => {
+    apiCache.invalidate("/assignments");
+    apiCache.invalidate("/dashboard");
+    return r.data;
+  });
 export const updateAssignment = (id: string, body: Partial<{ title: string; description: string; deadline: string; group_id: string; status: string }>) =>
-  api.patch<AssignmentOut>(`/assignments/${id}`, body).then((r) => r.data);
-export const deleteAssignment = (id: string) => api.delete(`/assignments/${id}`);
+  api.patch<AssignmentOut>(`/assignments/${id}`, body).then((r) => {
+    apiCache.invalidate("/assignments");
+    apiCache.invalidate("/dashboard");
+    return r.data;
+  });
+export const deleteAssignment = (id: string) =>
+  api.delete(`/assignments/${id}`).then((r) => {
+    apiCache.invalidate("/assignments");
+    apiCache.invalidate("/dashboard");
+    return r.data;
+  });
 export const getAssignment = (id: string) =>
   cachedGet<AssignmentForStudent>(`/assignments/${id}`);
 export const listMyAssignments = () => cachedGet<AssignmentForStudent[]>("/assignments/mine");

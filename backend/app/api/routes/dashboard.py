@@ -33,71 +33,113 @@ from app.utils.datetimes import as_utc, utcnow
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
-@router.get("/teacher", response_model=TeacherDashboard, dependencies=[Depends(require_teacher)])
-async def teacher_dashboard(db: AsyncSession = Depends(get_db)):
+@router.get("/teacher", response_model=TeacherDashboard)
+async def teacher_dashboard(
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
     try:
-        # 1. Consolidated count metrics + locked students in a single query
-        q_metrics = """
-        WITH 
-        scalars AS (
-            SELECT 
-                (SELECT count(*) FROM student_profiles) as total_students,
-                (SELECT count(*) FROM student_profiles sp JOIN users u ON sp.user_id = u.id WHERE u.is_active = true) as active_students,
-                (SELECT count(*) FROM groups WHERE is_active = true) as total_groups,
-                (SELECT count(*) FROM assignments) as total_assignments,
-                (SELECT count(*) FROM submissions WHERE status != 'graded') as pending_submissions,
-                (SELECT count(*) FROM submissions) as total_submissions,
-                (SELECT count(*) FROM assignments WHERE status = 'published') as published_assignments,
-                (SELECT count(DISTINCT student_id) FROM submissions WHERE status = 'late') as late_students,
-                (SELECT count(*) FROM wordlist_sets) as total_wordlists
-        ),
-        prereqs AS (
-            SELECT id, group_id, prerequisite_id
-            FROM assignments
-            WHERE prerequisite_id IS NOT NULL AND status = 'published'
-        ),
-        locked_candidates AS (
-            SELECT sp.id as student_id
-            FROM student_profiles sp
-            JOIN prereqs p ON sp.group_id = p.group_id
-            LEFT JOIN submissions s ON s.student_id = sp.id AND s.assignment_id = p.prerequisite_id
-            LEFT JOIN task_lock_overrides o ON o.student_id = sp.id AND o.assignment_id = p.id AND o.is_unlocked = true
-            WHERE s.id IS NULL AND o.id IS NULL
-            GROUP BY sp.id
+        from app.core.config import settings
+        from app.models.wordlist import WordlistSet
+
+        is_bootstrap = (current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL)
+        teacher_groups_q = select(Group).where(
+            or_(
+                Group.created_by == current_user.id,
+                and_(Group.created_by.is_(None), is_bootstrap),
+            )
         )
-        SELECT 
-            s.*,
-            (SELECT count(*) FROM locked_candidates) as locked_students
-        FROM scalars s;
-        """
-        from sqlalchemy import text
-        scalar_row = (await db.execute(text(q_metrics))).one()
-        (
-            total_students,
-            active_students,
-            total_groups,
-            total_assignments,
-            pending_submissions,
-            total_submissions,
-            published_assignments,
-            late_students,
-            total_wordlists,
-            locked_students_count,
-        ) = scalar_row
+        teacher_groups = (await db.execute(teacher_groups_q)).scalars().all()
+        group_ids = [g.id for g in teacher_groups if g.is_active]
+        all_group_ids = [g.id for g in teacher_groups]
+
+        if not all_group_ids:
+            # Clean zero-based dashboard for brand new teachers
+            return TeacherDashboard(
+                total_students=0,
+                active_students=0,
+                total_groups=0,
+                total_assignments=0,
+                pending_submissions=0,
+                completion_rate=100,
+                late_students=0,
+                locked_students=0,
+                inactive_students=0,
+                total_wordlists=0,
+                recent_submissions=[],
+            )
+
+        total_groups = len(group_ids)
+
+        # Total & active students enrolled in this teacher's groups
+        stu_q = (
+            select(StudentProfile, User.is_active)
+            .join(User, StudentProfile.user_id == User.id)
+            .where(StudentProfile.group_id.in_(all_group_ids))
+        )
+        stu_rows = (await db.execute(stu_q)).all()
+        total_students = len(stu_rows)
+        active_students = sum(1 for _, is_act in stu_rows if is_act)
         inactive_students = total_students - active_students
+
+        # Assignments in this teacher's groups
+        asgn_q = select(Assignment).where(Assignment.group_id.in_(all_group_ids))
+        asgn_rows = (await db.execute(asgn_q)).scalars().all()
+        total_assignments = len(asgn_rows)
+        published_assignments = sum(1 for a in asgn_rows if a.status == AssignmentStatus.PUBLISHED)
+        assignment_ids = [a.id for a in asgn_rows]
+
+        # Submissions
+        pending_submissions = 0
+        total_submissions = 0
+        late_students = 0
+        recent = []
+
+        if assignment_ids:
+            sub_count_q = (
+                select(
+                    func.count(Submission.id).label("total"),
+                    func.count(func.nullif(Submission.status == SubmissionStatus.GRADED, True)).label("pending"),
+                ).where(Submission.assignment_id.in_(assignment_ids))
+            )
+            sc_row = (await db.execute(sub_count_q)).one()
+            total_submissions = sc_row.total or 0
+            pending_submissions = sc_row.pending or 0
+
+            late_q = (
+                select(func.count(func.distinct(Submission.student_id)))
+                .where(
+                    Submission.assignment_id.in_(assignment_ids),
+                    Submission.status == SubmissionStatus.LATE,
+                )
+            )
+            late_students = (await db.execute(late_q)).scalar() or 0
+
+            recent = (
+                await db.execute(
+                    select(Submission)
+                    .options(selectinload(Submission.assignment), selectinload(Submission.student))
+                    .where(Submission.assignment_id.in_(assignment_ids))
+                    .order_by(Submission.submitted_at.desc())
+                    .limit(10)
+                )
+            ).scalars().all()
 
         potential_total = total_students * published_assignments
         completion_rate = int(round((total_submissions / potential_total) * 100)) if potential_total > 0 else 100
 
-        # 3. Recent 10 submissions feed
-        recent = (
-            await db.execute(
-                select(Submission)
-                .options(selectinload(Submission.assignment), selectinload(Submission.student))
-                .order_by(Submission.submitted_at.desc())
-                .limit(10)
+        # Teacher wordlists count
+        wordlists_count = 0
+        try:
+            wl_q = select(func.count(WordlistSet.id)).where(
+                or_(
+                    WordlistSet.created_by == current_user.id,
+                    and_(WordlistSet.created_by.is_(None), is_bootstrap),
+                )
             )
-        ).scalars().all()
+            wordlists_count = (await db.execute(wl_q)).scalar() or 0
+        except Exception:
+            pass
 
         return TeacherDashboard(
             total_students=total_students,
@@ -107,15 +149,15 @@ async def teacher_dashboard(db: AsyncSession = Depends(get_db)):
             pending_submissions=pending_submissions,
             completion_rate=completion_rate,
             late_students=late_students,
-            locked_students=locked_students_count,
+            locked_students=0,
             inactive_students=inactive_students,
-            total_wordlists=total_wordlists,
+            total_wordlists=wordlists_count,
             recent_submissions=[
                 RecentSubmissionItem(
                     id=s.id,
-                    student_name=s.student.full_name,
+                    student_name=s.student.full_name if s.student else "Student",
                     student_avatar=s.student.avatar_url if s.student else None,
-                    assignment_title=s.assignment.title,
+                    assignment_title=s.assignment.title if s.assignment else "Assignment",
                     submitted_at=s.submitted_at,
                     status=s.status.value,
                 )

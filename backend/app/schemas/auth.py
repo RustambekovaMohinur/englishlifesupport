@@ -50,14 +50,30 @@ class RegisterRequest(BaseModel):
         return v
 
 
+class TeacherPublicOut(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    full_name: str
+    avatar_url: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class GroupPublicOut(BaseModel):
     """Public group info exposed to unauthenticated users during registration."""
     id: uuid.UUID
     name: str
     english_level: EnglishLevel
     schedule: str | None
+    teacher_id: uuid.UUID | None = None
+    teacher_name: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
 
 
 class LoginRequest(BaseModel):

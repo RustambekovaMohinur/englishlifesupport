@@ -1,11 +1,25 @@
 import { api, tokenStorage } from "./api";
 import { CurrentUser } from "@/types";
 
+export interface TeacherPublic {
+  id: string;
+  user_id: string;
+  full_name: string;
+  avatar_url: string | null;
+}
+
 export interface GroupPublic {
   id: string;
   name: string;
   english_level: string;
   schedule: string | null;
+  teacher_id?: string | null;
+  teacher_name?: string | null;
+}
+
+export async function fetchPublicTeachers(): Promise<TeacherPublic[]> {
+  const { data } = await api.get("/auth/teachers/public");
+  return data;
 }
 
 export async function login(username: string, password: string) {
@@ -52,9 +66,9 @@ export async function register(
   return data;
 }
 
-export async function fetchPublicGroups(): Promise<GroupPublic[]> {
-  // Use relative path – axios baseURL is already /api/v1
-  const { data } = await api.get("/auth/groups/public");
+export async function fetchPublicGroups(teacherId?: string): Promise<GroupPublic[]> {
+  const params = teacherId ? { teacher_id: teacherId } : undefined;
+  const { data } = await api.get("/auth/groups/public", { params });
   return data;
 }
 

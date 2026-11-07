@@ -211,11 +211,21 @@ def _assignment_to_out(assignment: Assignment, group_name: str, sub_count: int, 
 
 
 @router.get("", response_model=list[AssignmentOut])
+@router.get("/", response_model=list[AssignmentOut], include_in_schema=False)
+@teacher_assignments_router.get("", response_model=list[AssignmentOut])
+@teacher_assignments_router.get("/", response_model=list[AssignmentOut], include_in_schema=False)
 async def list_assignments(
     current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
-    group_id: uuid.UUID | None = Query(default=None),
+    group_id: str | None = Query(default=None),
 ):
+    valid_group_uuid: uuid.UUID | None = None
+    if group_id and group_id.strip():
+        try:
+            valid_group_uuid = uuid.UUID(group_id.strip())
+        except (ValueError, TypeError):
+            valid_group_uuid = None
+
     query = (
         select(Assignment, Group.name)
         .options(selectinload(Assignment.images), selectinload(Assignment.comments))
@@ -223,18 +233,25 @@ async def list_assignments(
         .where(
             or_(
                 Group.created_by == current_user.id,
+                Assignment.created_by == current_user.id,
                 and_(Group.created_by.is_(None), current_user.email == settings.BOOTSTRAP_TEACHER_EMAIL),
             )
         )
     )
-    if group_id:
-        query = query.where(Assignment.group_id == group_id)
+    if valid_group_uuid:
+        query = query.where(Assignment.group_id == valid_group_uuid)
+
     query = query.order_by(Assignment.deadline.desc())
     rows = (await db.execute(query)).all()
 
     asgn_ids = [a.id for a, _ in rows]
+
     notif_counts: dict[uuid.UUID, int] = {}
+    sub_counts: dict[uuid.UUID, int] = {}
+    vocab_map: dict[uuid.UUID, list] = {}
+
     if asgn_ids:
+        # Batch fetch notification counts
         nc_res = await db.execute(
             select(ParentHomeworkNotification.assignment_id, func.count(ParentHomeworkNotification.id))
             .where(ParentHomeworkNotification.assignment_id.in_(asgn_ids))
@@ -242,29 +259,34 @@ async def list_assignments(
         )
         notif_counts = dict(nc_res.all())
 
-    result = []
-    for assignment, group_name in rows:
-        sub_count = (
-            await db.execute(
-                select(func.count()).select_from(Submission).where(Submission.assignment_id == assignment.id)
-            )
-        ).scalar_one()
+        # Batch fetch submission counts (eliminates N+1 query overhead)
+        sc_res = await db.execute(
+            select(Submission.assignment_id, func.count(Submission.id))
+            .where(Submission.assignment_id.in_(asgn_ids))
+            .group_by(Submission.assignment_id)
+        )
+        sub_counts = dict(sc_res.all())
 
-        # Fetch vocabulary words if linked
-        vocab_words = []
-        vocab_assoc = (
-            await db.execute(
-                select(VocabularyAssignment)
-                .options(selectinload(VocabularyAssignment.words))
-                .where(VocabularyAssignment.assignment_id == assignment.id)
-            )
-        ).scalar_one_or_none()
-        if vocab_assoc:
-            vocab_words = vocab_assoc.words
+        # Batch fetch vocabulary associations
+        va_res = await db.execute(
+            select(VocabularyAssignment)
+            .options(selectinload(VocabularyAssignment.words))
+            .where(VocabularyAssignment.assignment_id.in_(asgn_ids))
+        )
+        for va in va_res.scalars().all():
+            vocab_map[va.assignment_id] = va.words or []
 
-        result.append(_assignment_to_out(assignment, group_name, sub_count, vocab_words, parent_notifs_count=notif_counts.get(assignment.id, 0)))
+    result = [
+        _assignment_to_out(
+            assignment,
+            group_name,
+            sub_counts.get(assignment.id, 0),
+            vocab_map.get(assignment.id, []),
+            parent_notifs_count=notif_counts.get(assignment.id, 0),
+        )
+        for assignment, group_name in rows
+    ]
     return result
-
 
 @router.post("", response_model=AssignmentOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_teacher)])
 @router.post("/", response_model=AssignmentOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_teacher)], include_in_schema=False)
