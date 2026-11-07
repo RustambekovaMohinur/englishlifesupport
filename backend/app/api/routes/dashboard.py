@@ -42,13 +42,8 @@ async def teacher_dashboard(
         from app.core.config import settings
         from app.models.wordlist import WordlistSet
 
-        # Show groups owned by this teacher OR unowned (legacy/admin-created)
-        teacher_groups_q = select(Group).where(
-            or_(
-                Group.created_by == current_user.id,
-                Group.created_by.is_(None),  # legacy / admin-created groups visible to all teachers
-            )
-        )
+        # All authenticated teachers see all groups
+        teacher_groups_q = select(Group)
         teacher_groups = (await db.execute(teacher_groups_q)).scalars().all()
         group_ids = [g.id for g in teacher_groups if g.is_active]
         all_group_ids = [g.id for g in teacher_groups]
@@ -132,10 +127,8 @@ async def teacher_dashboard(
         wordlists_count = 0
         try:
             wl_q = select(func.count(WordlistSet.id)).where(
-                or_(
-                    WordlistSet.created_by == current_user.id,
-                    WordlistSet.created_by.is_(None),  # legacy / admin-created
-                )
+                # All teachers see all wordlists
+                WordlistSet.id.isnot(None)  # no tenant filter
             )
             wordlists_count = (await db.execute(wl_q)).scalar() or 0
         except Exception:
