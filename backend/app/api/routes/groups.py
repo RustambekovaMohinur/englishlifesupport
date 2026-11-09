@@ -38,6 +38,26 @@ def _is_admin(user) -> bool:
     return getattr(user, "username", None) == "admin2010"
 
 
+def _teacher_group_filter(current_user):
+    """
+    Returns a SQLAlchemy filter clause for groups belonging to a teacher.
+    Matches groups where:
+      - created_by == current teacher's user_id, OR
+      - created_by is NULL (orphaned groups), OR
+      - created_by == admin synthetic UUID (admin-created groups)
+    """
+    import uuid as _uuid
+    from app.models.group import Group
+    from sqlalchemy import or_
+    _ADMIN_ID = _uuid.UUID("00000000-0000-0000-0000-000000000001")
+    return or_(
+        Group.created_by == current_user.id,
+        Group.created_by.is_(None),
+        Group.created_by == _ADMIN_ID,
+    )
+
+
+
 async def get_active_student_counts(db: AsyncSession, group_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
     """
     Computes deduplicated active student counts across groups.
@@ -138,7 +158,7 @@ async def list_groups(
     # Authenticated teachers see only their own cohorts; admins see all
     query = select(Group).order_by(Group.name)
     if not _is_admin(current_user):
-        query = query.where(Group.created_by == current_user.id)
+        query = query.where(_teacher_group_filter(current_user))
     if not include_archived:
         query = query.where(Group.is_active.is_(True))
     groups = (await db.execute(query)).scalars().all()

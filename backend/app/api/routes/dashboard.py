@@ -35,6 +35,26 @@ def _is_admin(user) -> bool:
     return getattr(user, "username", None) == "admin2010"
 
 
+def _teacher_group_filter(current_user):
+    """
+    Returns a SQLAlchemy filter clause for groups belonging to a teacher.
+    Matches groups where:
+      - created_by == current teacher's user_id, OR
+      - created_by is NULL (orphaned groups), OR
+      - created_by == admin synthetic UUID (admin-created groups)
+    """
+    import uuid as _uuid
+    from app.models.group import Group
+    from sqlalchemy import or_
+    _ADMIN_ID = _uuid.UUID("00000000-0000-0000-0000-000000000001")
+    return or_(
+        Group.created_by == current_user.id,
+        Group.created_by.is_(None),
+        Group.created_by == _ADMIN_ID,
+    )
+
+
+
 @router.get("/teacher", response_model=TeacherDashboard)
 async def teacher_dashboard(
     current_user: User = Depends(require_teacher),
@@ -47,7 +67,7 @@ async def teacher_dashboard(
         # Teachers see only their own groups; admin sees all
         teacher_groups_q = select(Group)
         if not _is_admin(current_user):
-            teacher_groups_q = teacher_groups_q.where(Group.created_by == current_user.id)
+            teacher_groups_q = teacher_groups_q.where(_teacher_group_filter(current_user))
         teacher_groups = (await db.execute(teacher_groups_q)).scalars().all()
         group_ids = [g.id for g in teacher_groups if g.is_active]
         all_group_ids = [g.id for g in teacher_groups]

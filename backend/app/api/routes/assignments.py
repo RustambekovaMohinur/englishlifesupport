@@ -51,6 +51,26 @@ def _is_admin(user) -> bool:
     return getattr(user, "username", None) == "admin2010"
 
 
+def _teacher_group_filter(current_user):
+    """
+    Returns a SQLAlchemy filter clause for groups belonging to a teacher.
+    Matches groups where:
+      - created_by == current teacher's user_id, OR
+      - created_by is NULL (orphaned groups), OR
+      - created_by == admin synthetic UUID (admin-created groups)
+    """
+    import uuid as _uuid
+    from app.models.group import Group
+    from sqlalchemy import or_
+    _ADMIN_ID = _uuid.UUID("00000000-0000-0000-0000-000000000001")
+    return or_(
+        Group.created_by == current_user.id,
+        Group.created_by.is_(None),
+        Group.created_by == _ADMIN_ID,
+    )
+
+
+
 def _clean_telegram_chat_id(chat_id: Any) -> str:
     """Safely normalizes and casts 64-bit group / channel IDs (e.g., -100...) to string."""
     if chat_id is None:
@@ -238,7 +258,7 @@ async def list_assignments(
         )
         if not _is_admin(current_user):
             query = query.where(
-                or_(Group.created_by == current_user.id, Assignment.created_by == current_user.id)
+                or_(_teacher_group_filter(current_user), Assignment.created_by == current_user.id)
             )
         if valid_group_uuid:
             query = query.where(Assignment.group_id == valid_group_uuid)

@@ -52,6 +52,26 @@ def _is_admin(user) -> bool:
     return getattr(user, "username", None) == "admin2010"
 
 
+def _teacher_group_filter(current_user):
+    """
+    Returns a SQLAlchemy filter clause for groups belonging to a teacher.
+    Matches groups where:
+      - created_by == current teacher's user_id, OR
+      - created_by is NULL (orphaned groups), OR
+      - created_by == admin synthetic UUID (admin-created groups)
+    """
+    import uuid as _uuid
+    from app.models.group import Group
+    from sqlalchemy import or_
+    _ADMIN_ID = _uuid.UUID("00000000-0000-0000-0000-000000000001")
+    return or_(
+        Group.created_by == current_user.id,
+        Group.created_by.is_(None),
+        Group.created_by == _ADMIN_ID,
+    )
+
+
+
 class StudentResetPasswordRequest(BaseModel):
     new_password: str = Field(min_length=6, max_length=128)
 
@@ -77,7 +97,7 @@ async def list_students(
     """
     teacher_groups_subq = select(Group.id)
     if not _is_admin(current_user):
-        teacher_groups_subq = teacher_groups_subq.where(Group.created_by == current_user.id)
+        teacher_groups_subq = teacher_groups_subq.where(_teacher_group_filter(current_user))
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
 
     if not teacher_group_ids:
@@ -254,7 +274,7 @@ async def list_pending_students(
     """Returns paginated pending student registration requests for groups belonging to this teacher."""
     teacher_groups_subq = select(Group.id)
     if not _is_admin(current_user):
-        teacher_groups_subq = teacher_groups_subq.where(Group.created_by == current_user.id)
+        teacher_groups_subq = teacher_groups_subq.where(_teacher_group_filter(current_user))
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
 
     if not teacher_group_ids:
