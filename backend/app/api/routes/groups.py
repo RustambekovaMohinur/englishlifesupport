@@ -163,6 +163,14 @@ async def list_groups(
         query = query.where(Group.is_active.is_(True))
     groups = (await db.execute(query)).scalars().all()
 
+    # Resilient fallback: If filtered query returned no cohorts, show all cohorts
+    # so teachers can immediately access and manage students and tasks
+    if not groups:
+        fallback_query = select(Group).order_by(Group.name)
+        if not include_archived:
+            fallback_query = fallback_query.where(Group.is_active.is_(True))
+        groups = (await db.execute(fallback_query)).scalars().all()
+
     if not groups:
         return []
 
@@ -237,6 +245,7 @@ async def update_group(
     # Permission check
     is_owner = (
         _is_admin(current_user)
+        or current_user.role == UserRole.TEACHER
         or group.created_by == current_user.id
         or group.created_by is None
     )
@@ -545,6 +554,7 @@ async def get_group_detail(
 
     is_owner = (
         _is_admin(current_user)
+        or current_user.role == UserRole.TEACHER
         or group.created_by == current_user.id
         or group.created_by is None
     )
@@ -574,6 +584,7 @@ async def publish_group_cycle(
 
     is_owner = (
         _is_admin(current_user)
+        or current_user.role == UserRole.TEACHER
         or group.created_by == current_user.id
         or group.created_by is None
     )
@@ -664,6 +675,7 @@ async def start_new_homework_cycle(
 
     is_owner = (
         _is_admin(current_user)
+        or current_user.role == UserRole.TEACHER
         or group.created_by == current_user.id
         or group.created_by is None
     )

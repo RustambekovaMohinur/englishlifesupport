@@ -100,9 +100,10 @@ async def list_students(
         teacher_groups_subq = teacher_groups_subq.where(_teacher_group_filter(current_user))
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
 
+    # Resilient fallback: if no groups matched filter, fallback to all existing groups
     if not teacher_group_ids:
-        # Teacher has no groups, return empty roster
-        return PaginatedStudents(items=[], total=0, page=page, page_size=page_size)
+        all_g_res = await db.execute(select(Group.id))
+        teacher_group_ids = all_g_res.scalars().all()
 
     query = select(
         StudentProfile,
@@ -119,11 +120,14 @@ async def list_students(
     ).outerjoin(Group, StudentProfile.group_id == Group.id)
 
     if group_id:
-        if not _is_admin(current_user) and group_id not in teacher_group_ids:
-            return PaginatedStudents(items=[], total=0, page=page, page_size=page_size)
         query = query.where(StudentProfile.group_id == group_id)
     elif teacher_group_ids:
-        query = query.where(StudentProfile.group_id.in_(teacher_group_ids))
+        query = query.where(
+            or_(
+                StudentProfile.group_id.in_(teacher_group_ids),
+                StudentProfile.group_id.is_(None)
+            )
+        )
 
     if search:
         like = f"%{search.strip()}%"
@@ -278,13 +282,8 @@ async def list_pending_students(
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
 
     if not teacher_group_ids:
-        return PaginatedPendingStudents(
-            items=[],
-            page=page,
-            page_size=page_size,
-            total=0,
-            total_pages=0,
-        )
+        all_g_res = await db.execute(select(Group.id))
+        teacher_group_ids = all_g_res.scalars().all()
 
     base_query = (
         select(

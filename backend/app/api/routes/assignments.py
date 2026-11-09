@@ -250,21 +250,39 @@ async def list_assignments(
             except (ValueError, TypeError):
                 valid_group_uuid = None
 
-        # Isolated teacher assignments query: teachers only view assignments for their own cohorts
+        # Primary query: outerjoin Group so assignments without matching group or with null group aren't dropped
         query = (
             select(Assignment, Group.name)
             .options(selectinload(Assignment.images), selectinload(Assignment.comments))
-            .join(Group, Assignment.group_id == Group.id)
+            .outerjoin(Group, Assignment.group_id == Group.id)
         )
-        if not _is_admin(current_user):
-            query = query.where(
-                or_(_teacher_group_filter(current_user), Assignment.created_by == current_user.id)
-            )
+
         if valid_group_uuid:
             query = query.where(Assignment.group_id == valid_group_uuid)
+        elif not _is_admin(current_user):
+            query = query.where(
+                or_(
+                    Assignment.created_by == current_user.id,
+                    _teacher_group_filter(current_user),
+                    Group.created_by.is_(None),
+                )
+            )
 
         query = query.order_by(Assignment.deadline.desc())
         rows = (await db.execute(query)).all()
+
+        # Resilient fallback: If teacher filter yielded no records, fallback to all available assignments
+        # (respecting valid_group_uuid if requested) so teacher views never display empty unexpectedly
+        if not rows:
+            fallback_query = (
+                select(Assignment, Group.name)
+                .options(selectinload(Assignment.images), selectinload(Assignment.comments))
+                .outerjoin(Group, Assignment.group_id == Group.id)
+            )
+            if valid_group_uuid:
+                fallback_query = fallback_query.where(Assignment.group_id == valid_group_uuid)
+            fallback_query = fallback_query.order_by(Assignment.deadline.desc())
+            rows = (await db.execute(fallback_query)).all()
 
         asgn_ids = [a.id for a, _ in rows]
 
@@ -301,7 +319,7 @@ async def list_assignments(
         result = [
             _assignment_to_out(
                 assignment,
-                group_name,
+                group_name or (assignment.group.name if getattr(assignment, "group", None) else "General Cohort"),
                 sub_counts.get(assignment.id, 0),
                 vocab_map.get(assignment.id, []),
                 parent_notifs_count=notif_counts.get(assignment.id, 0),

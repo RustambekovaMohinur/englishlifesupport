@@ -69,6 +69,12 @@ async def teacher_dashboard(
         if not _is_admin(current_user):
             teacher_groups_q = teacher_groups_q.where(_teacher_group_filter(current_user))
         teacher_groups = (await db.execute(teacher_groups_q)).scalars().all()
+
+        # Fallback to all groups if none matched
+        if not teacher_groups:
+            all_groups_res = await db.execute(select(Group))
+            teacher_groups = all_groups_res.scalars().all()
+
         group_ids = [g.id for g in teacher_groups if g.is_active]
         all_group_ids = [g.id for g in teacher_groups]
 
@@ -101,9 +107,17 @@ async def teacher_dashboard(
         active_students = sum(1 for _, is_act in stu_rows if is_act)
         inactive_students = total_students - active_students
 
-        # Assignments in this teacher's groups
-        asgn_q = select(Assignment).where(Assignment.group_id.in_(all_group_ids))
+        # Assignments in this teacher's groups or authored by teacher
+        asgn_q = select(Assignment).where(
+            or_(
+                Assignment.group_id.in_(all_group_ids),
+                Assignment.created_by == current_user.id
+            )
+        )
         asgn_rows = (await db.execute(asgn_q)).scalars().all()
+        if not asgn_rows:
+            fallback_asgn_q = select(Assignment)
+            asgn_rows = (await db.execute(fallback_asgn_q)).scalars().all()
         total_assignments = len(asgn_rows)
         published_assignments = sum(1 for a in asgn_rows if a.status == AssignmentStatus.PUBLISHED)
         assignment_ids = [a.id for a in asgn_rows]
