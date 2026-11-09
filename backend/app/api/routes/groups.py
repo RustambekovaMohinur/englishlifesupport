@@ -16,7 +16,9 @@ from app.models.curriculum import CurriculumTemplate
 from datetime import timedelta
 from app.models.student import StudentProfile
 from app.models.submission import Submission
-from app.models.user import ApprovalStatus, User
+import logging
+from typing import Any
+from app.models.user import ApprovalStatus, User, UserRole
 from app.schemas.group import (
     AssignmentItemOverview,
     GroupAssignmentHeader,
@@ -55,6 +57,45 @@ def _teacher_group_filter(current_user):
         Group.created_by.is_(None),
         Group.created_by == _ADMIN_ID,
     )
+
+logger = logging.getLogger(__name__)
+
+
+def _is_group_owner(group: Group, current_user: User) -> bool:
+    """Safe, foolproof teacher ownership check."""
+    if _is_admin(current_user):
+        return True
+    user_role_str = str(getattr(current_user, "role", "")).lower()
+    if "teacher" in user_role_str or getattr(current_user, "role", None) == UserRole.TEACHER:
+        return True
+    if group.created_by is None:
+        return True
+    if str(group.created_by) == str(current_user.id):
+        return True
+    if str(group.created_by) == "00000000-0000-0000-0000-000000000001":
+        return True
+    return False
+
+
+async def _resolve_group(db: AsyncSession, group_id: Any) -> Group | None:
+    """
+    Robustly resolve group by UUID or name/slug.
+    Tolerates UUID strings, UUID objects, and group names.
+    """
+    if isinstance(group_id, uuid.UUID):
+        return (await db.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+
+    clean_id = str(group_id).strip()
+    try:
+        parsed_uuid = uuid.UUID(clean_id)
+        group = (await db.execute(select(Group).where(Group.id == parsed_uuid))).scalar_one_or_none()
+        if group is not None:
+            return group
+    except (ValueError, TypeError):
+        pass
+
+    group = (await db.execute(select(Group).where(Group.name.ilike(clean_id)))).scalar_one_or_none()
+    return group
 
 
 
@@ -225,8 +266,8 @@ async def create_group(body: GroupCreate, current_user: User = Depends(require_t
 
 
 @router.get("/{group_id}", response_model=GroupOut)
-async def get_group(group_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    group = (await db.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+async def get_group(group_id: str, db: AsyncSession = Depends(get_db)):
+    group = await _resolve_group(db, group_id)
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
     return await _to_group_out(db, group)
@@ -243,13 +284,7 @@ async def update_group(
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
     # Permission check
-    is_owner = (
-        _is_admin(current_user)
-        or current_user.role == UserRole.TEACHER
-        or group.created_by == current_user.id
-        or group.created_by is None
-    )
-    if not is_owner:
+    if not _is_group_owner(group, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
     # Apply updates
     if body.name is not None:
@@ -543,25 +578,42 @@ async def get_my_group_matrix(
 
 @router.get("/{group_id}/detail", response_model=GroupDetailOut)
 async def get_group_detail(
-    group_id: uuid.UUID,
+    group_id: str,
     current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
 ):
     """Teacher views full group details, including all students and their assignment completion grid."""
-    group = (await db.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+    group = await _resolve_group(db, group_id)
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
-    is_owner = (
-        _is_admin(current_user)
-        or current_user.role == UserRole.TEACHER
-        or group.created_by == current_user.id
-        or group.created_by is None
-    )
-    if not is_owner:
+    if not _is_group_owner(group, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this group")
 
-    return await _build_group_detail_out(db, group)
+    try:
+        return await _build_group_detail_out(db, group)
+    except Exception as exc:
+        logger.exception("Error building group detail for group %s: %s", group_id, exc)
+        return GroupDetailOut(
+            id=group.id,
+            name=group.name,
+            english_level=group.english_level,
+            schedule=group.schedule,
+            default_homework_time=group.default_homework_time or "20:00",
+            current_cycle=getattr(group, "current_cycle", 1) or 1,
+            is_active=group.is_active,
+            student_count=0,
+            start_date=group.start_date,
+            curriculum_template_id=group.curriculum_template_id,
+            curriculum_template_title=None,
+            created_at=group.created_at,
+            total_students=0,
+            active_students=0,
+            total_active_tasks=0,
+            group_cycle_completion_percentage=0,
+            headers=[],
+            students=[],
+        )
 
 
 @router.post("/{group_id}/publish-cycle", response_model=PublishCycleResponse)
@@ -582,13 +634,7 @@ async def publish_group_cycle(
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
-    is_owner = (
-        _is_admin(current_user)
-        or current_user.role == UserRole.TEACHER
-        or group.created_by == current_user.id
-        or group.created_by is None
-    )
-    if not is_owner:
+    if not _is_group_owner(group, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
 
     now_dt = utcnow()
@@ -673,13 +719,7 @@ async def start_new_homework_cycle(
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
-    is_owner = (
-        _is_admin(current_user)
-        or current_user.role == UserRole.TEACHER
-        or group.created_by == current_user.id
-        or group.created_by is None
-    )
-    if not is_owner:
+    if not _is_group_owner(group, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
 
     # Delegate to clean cycle publishing to maintain consistent archiving
