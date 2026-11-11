@@ -1,3 +1,4 @@
+from typing import Any
 import re
 import uuid
 from datetime import datetime
@@ -12,18 +13,8 @@ class GroupCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     english_level: EnglishLevel
     schedule: str | None = Field(default=None, max_length=255)
-    telegram_group_chat_id: str | None = Field(default=None, max_length=32)
-    start_date: datetime | None = None
-    curriculum_template_id: uuid.UUID | None = None
-
-
-class GroupUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=2, max_length=120)
-    english_level: EnglishLevel | None = None
-    schedule: str | None = Field(default=None, max_length=255)
-    default_homework_time: str | None = Field(default=None, max_length=10)
-    is_active: bool | None = None
-    telegram_group_chat_id: str | None = Field(default=None, max_length=32)
+    default_homework_time: str | None = Field(default="20:00", max_length=10)
+    telegram_group_chat_id: str | None = Field(default=None, max_length=64)
     start_date: datetime | None = None
     curriculum_template_id: uuid.UUID | None = None
 
@@ -34,15 +25,57 @@ class GroupUpdate(BaseModel):
             raise ValueError("Invalid time format. Must be HH:MM (00:00 to 23:59)")
         return v
 
+    @field_validator("curriculum_template_id", mode="before")
+    @classmethod
+    def parse_tpl_id(cls, v: Any) -> uuid.UUID | None:
+        if v is None or v == "" or str(v).strip() in ("", "null", "none"):
+            return None
+        if isinstance(v, uuid.UUID):
+            return v
+        try:
+            return uuid.UUID(str(v).strip())
+        except Exception:
+            raise ValueError("Invalid curriculum_template_id UUID format")
+
+
+class GroupUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    english_level: EnglishLevel | None = None
+    schedule: str | None = Field(default=None, max_length=255)
+    default_homework_time: str | None = Field(default=None, max_length=10)
+    is_active: bool | None = None
+    telegram_group_chat_id: str | None = Field(default=None, max_length=64)
+    start_date: datetime | None = None
+    curriculum_template_id: uuid.UUID | None = None
+
+    @field_validator("default_homework_time")
+    @classmethod
+    def validate_time(cls, v: str | None) -> str | None:
+        if v is not None and not TIME_REGEX.match(v):
+            raise ValueError("Invalid time format. Must be HH:MM (00:00 to 23:59)")
+        return v
+
+    @field_validator("curriculum_template_id", mode="before")
+    @classmethod
+    def parse_tpl_id(cls, v: Any) -> uuid.UUID | None:
+        if v is None or v == "" or str(v).strip() in ("", "null", "none"):
+            return None
+        if isinstance(v, uuid.UUID):
+            return v
+        try:
+            return uuid.UUID(str(v).strip())
+        except Exception:
+            raise ValueError("Invalid curriculum_template_id UUID format")
+
 
 class GroupOut(BaseModel):
     id: uuid.UUID
     name: str
     english_level: EnglishLevel
-    schedule: str | None
+    schedule: str | None = None
     default_homework_time: str | None = "20:00"
     current_cycle: int = 1
-    is_active: bool
+    is_active: bool = True
     telegram_group_chat_id: str | None = None
     student_count: int = 0
     start_date: datetime | None = None

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class StudentGroupBrief(BaseModel):
@@ -30,7 +30,6 @@ class StudentOut(BaseModel):
     total_lightning: int = 0
     group: StudentGroupBrief | None = None
     created_at: datetime
-    parent_phone: str | None = None
     parent_phone: str | None = None
     parent_telegram_chat_id: str | None = None
     parent_telegram_id: str | None = None
@@ -78,7 +77,6 @@ class StudentListItem(BaseModel):
     cycle_total_tasks: int = 0
     group: StudentGroupBrief | None = None
     parent_phone: str | None = None
-    parent_phone: str | None = None
     parent_telegram_chat_id: str | None = None
     parent_telegram_id: str | None = None
     parent_telegram_username: str | None = None
@@ -99,6 +97,18 @@ class StudentUpdate(BaseModel):
     parent_telegram_id: str | None = Field(default=None, max_length=64)
     parent_telegram_chat_id: str | None = Field(default=None, max_length=64)
     parent_name: str | None = Field(default=None, max_length=255)
+
+    @field_validator("group_id", mode="before")
+    @classmethod
+    def parse_group_id(cls, v: Any) -> uuid.UUID | None:
+        if v is None or v == "" or str(v).strip() in ("", "null", "none"):
+            return None
+        if isinstance(v, uuid.UUID):
+            return v
+        try:
+            return uuid.UUID(str(v).strip())
+        except Exception:
+            raise ValueError("Invalid group_id UUID format")
     is_premium: bool | None = None
     premium_plan: str | None = Field(default=None, max_length=32)
     premium_expires_at: datetime | None = None
@@ -115,6 +125,18 @@ class StudentStatusUpdate(BaseModel):
 
 class StudentPlacementUpdate(BaseModel):
     group_id: uuid.UUID | None = None
+
+    @field_validator("group_id", mode="before")
+    @classmethod
+    def parse_group_id(cls, v: Any) -> uuid.UUID | None:
+        if v is None or v == "" or str(v).strip() in ("", "null", "none"):
+            return None
+        if isinstance(v, uuid.UUID):
+            return v
+        try:
+            return uuid.UUID(str(v).strip())
+        except Exception:
+            raise ValueError("Invalid group_id UUID format")
 
 
 
@@ -272,7 +294,6 @@ class StudentHistoryOut(BaseModel):
     mastered_vocabulary_sets: int = 0
     parent_phone: str | None = None
     parent_phone: str | None = None
-    parent_phone: str | None = None
     parent_telegram_chat_id: str | None = None
     parent_telegram_id: str | None = None
     parent_telegram_username: str | None = None
@@ -287,7 +308,6 @@ class ParentLinkInfo(BaseModel):
     bot_username: str
     telegram_link: str
     is_parent_linked: bool = False
-    parent_phone: str | None = None
     parent_phone: str | None = None
     parent_telegram_chat_id: str | None = None
     parent_telegram_id: str | None = None

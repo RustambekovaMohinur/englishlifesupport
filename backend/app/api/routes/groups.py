@@ -178,6 +178,7 @@ async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
         default_homework_time=group.default_homework_time or "20:00",
         current_cycle=getattr(group, "current_cycle", 1) or 1,
         is_active=group.is_active,
+        telegram_group_chat_id=getattr(group, "telegram_group_chat_id", None),
         student_count=counts_map.get(group.id, 0),
         start_date=group.start_date,
         curriculum_template_id=group.curriculum_template_id,
@@ -234,6 +235,7 @@ async def list_groups(
             default_homework_time=g.default_homework_time or "20:00",
             current_cycle=getattr(g, "current_cycle", 1) or 1,
             is_active=g.is_active,
+            telegram_group_chat_id=getattr(g, "telegram_group_chat_id", None),
             student_count=counts_map.get(g.id, 0),
             start_date=g.start_date,
             curriculum_template_id=g.curriculum_template_id,
@@ -246,11 +248,13 @@ async def list_groups(
 
 @router.post("", response_model=GroupOut, status_code=status.HTTP_201_CREATED)
 async def create_group(body: GroupCreate, current_user: User = Depends(require_teacher), db: AsyncSession = Depends(get_db)):
+    clean_tg_id = (body.telegram_group_chat_id.strip() if body.telegram_group_chat_id else None)
     group = Group(
         name=body.name,
         english_level=body.english_level,
         schedule=body.schedule,
-        default_homework_time=body.default_homework_time or "20:00",
+        default_homework_time=getattr(body, "default_homework_time", None) or "20:00",
+        telegram_group_chat_id=clean_tg_id,
         start_date=body.start_date,
         curriculum_template_id=body.curriculum_template_id,
         created_by=current_user.id,
@@ -274,13 +278,13 @@ async def get_group(group_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.patch("/{group_id}", response_model=GroupOut)
 async def update_group(
-    group_id: uuid.UUID,
+    group_id: str,
     body: GroupUpdate,
     current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
 ):
     """Partially update a group, including telegram_group_chat_id."""
-    group = (await db.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+    group = await _resolve_group(db, group_id)
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
     # Permission check
@@ -297,7 +301,12 @@ async def update_group(
         group.default_homework_time = body.default_homework_time
     if body.is_active is not None:
         group.is_active = body.is_active
-    # telegram_group_chat_id update removed – column does not exist
+    if body.telegram_group_chat_id is not None:
+        group.telegram_group_chat_id = body.telegram_group_chat_id.strip() or None
+    if body.start_date is not None:
+        group.start_date = body.start_date
+    if body.curriculum_template_id is not None:
+        group.curriculum_template_id = body.curriculum_template_id
     await db.commit()
     await db.refresh(group)
     return await _to_group_out(db, group)
@@ -788,12 +797,12 @@ async def update_group(
 
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_group(
-    group_id: uuid.UUID,
+    group_id: str,
     current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
 ):
     """Permanently deletes the group safely."""
-    group = (await db.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+    group = await _resolve_group(db, group_id)
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 

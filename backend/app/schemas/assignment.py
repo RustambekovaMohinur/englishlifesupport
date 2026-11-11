@@ -1,7 +1,8 @@
+from typing import Any
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.assignment import AssignmentStatus
 
@@ -27,6 +28,18 @@ class AssignmentCreate(BaseModel):
     unlock_at: datetime | None = None
     day_offset: int | None = None
 
+    @field_validator("prerequisite_id", mode="before")
+    @classmethod
+    def parse_prereq_id(cls, v: Any) -> uuid.UUID | None:
+        if v is None or v == "" or str(v).strip() in ("", "null", "none"):
+            return None
+        if isinstance(v, uuid.UUID):
+            return v
+        try:
+            return uuid.UUID(str(v).strip())
+        except Exception:
+            raise ValueError("Invalid prerequisite_id UUID format")
+
 
 class AssignmentUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=2, max_length=255)
@@ -39,6 +52,18 @@ class AssignmentUpdate(BaseModel):
     prerequisite_id: uuid.UUID | None = None
     unlock_at: datetime | None = None
     day_offset: int | None = None
+
+    @field_validator("prerequisite_id", "group_id", mode="before")
+    @classmethod
+    def parse_optional_uuids(cls, v: Any) -> uuid.UUID | None:
+        if v is None or v == "" or str(v).strip() in ("", "null", "none"):
+            return None
+        if isinstance(v, uuid.UUID):
+            return v
+        try:
+            return uuid.UUID(str(v).strip())
+        except Exception:
+            raise ValueError("Invalid UUID format")
 
 
 class AssignmentImageOut(BaseModel):
