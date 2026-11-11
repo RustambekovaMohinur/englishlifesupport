@@ -14,7 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy import select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
@@ -317,6 +317,70 @@ async def bootstrap_teacher_account(max_retries: int = 5, retry_delay: float = 2
                 logger.exception("Could not bootstrap teacher account after %d attempts: %s", max_retries, exc)
 
 
+async def bootstrap_admin_account(max_retries: int = 5, retry_delay: float = 2.0):
+    """
+    Ensures master Super Admin account (admin2010 / admin17) exists in the database
+    with associated TeacherProfile.
+    """
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with AsyncSessionLocal() as db:
+                from app.models.user import ApprovalStatus, User, UserRole
+                from app.models.teacher import TeacherProfile
+
+                existing = await db.execute(
+                    select(User).where(
+                        or_(
+                            func.lower(User.username) == "admin2010",
+                            func.lower(User.email) == "admin2010@englishlife.uz",
+                        )
+                    )
+                )
+                admin_user = existing.scalars().first()
+                if admin_user is not None:
+                    admin_user.role = UserRole.TEACHER
+                    admin_user.is_active = True
+                    admin_user.approval_status = ApprovalStatus.APPROVED
+                    admin_user.password_hash = hash_password("admin17")
+                    tp = (await db.execute(
+                        select(TeacherProfile).where(TeacherProfile.user_id == admin_user.id)
+                    )).scalars().first()
+                    if tp is None:
+                        db.add(TeacherProfile(user_id=admin_user.id, full_name="Super Admin"))
+                    await db.commit()
+                    logger.info("Admin account verified: admin2010")
+                    return
+
+                import uuid
+                admin_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+                existing_uuid = (await db.execute(select(User).where(User.id == admin_id))).scalar_one_or_none()
+                if existing_uuid:
+                    admin_id = uuid.uuid4()
+
+                admin_user = User(
+                    id=admin_id,
+                    username="admin2010",
+                    email="admin2010@englishlife.uz",
+                    password_hash=hash_password("admin17"),
+                    role=UserRole.TEACHER,
+                    is_active=True,
+                    approval_status=ApprovalStatus.APPROVED,
+                )
+                db.add(admin_user)
+                await db.flush()
+
+                db.add(TeacherProfile(user_id=admin_user.id, full_name="Super Admin"))
+                await db.commit()
+                logger.info("Bootstrapped initial admin account: admin2010")
+                return
+        except Exception as exc:
+            logger.warning("Attempt %d/%d to bootstrap admin account: %s", attempt, max_retries, exc)
+            if attempt < max_retries:
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.exception("Could not bootstrap admin account after %d attempts: %s", max_retries, exc)
+
+
 async def _run_startup_tasks():
     """Executes DB table verification, migrations, and teacher bootstrap in the background without blocking HTTP serving."""
     # 1. Ensure wordlist and other metadata tables exist safely without blocking
@@ -475,6 +539,14 @@ async def _run_startup_tasks():
         logger.warning("bootstrap_teacher_account timed out; server continuing startup.")
     except Exception as exc:
         logger.exception("Error during bootstrap_teacher_account execution: %s", exc)
+
+    # 3b. Bootstrap master admin account
+    try:
+        await asyncio.wait_for(bootstrap_admin_account(max_retries=3, retry_delay=1.0), timeout=10.0)
+    except asyncio.TimeoutError:
+        logger.warning("bootstrap_admin_account timed out; server continuing startup.")
+    except Exception as exc:
+        logger.exception("Error during bootstrap_admin_account execution: %s", exc)
 
     # 4. Auto-register Telegram Bot webhook on server startup (guarded by timeout)
     try:

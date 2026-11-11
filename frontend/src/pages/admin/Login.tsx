@@ -25,7 +25,11 @@ export default function AdminLoginPage() {
       });
 
       if (res.data?.access_token) {
-        tokenStorage.setAccess(res.data.access_token);
+        if (res.data?.refresh_token) {
+          tokenStorage.setTokens(res.data.access_token, res.data.refresh_token);
+        } else {
+          tokenStorage.setAccess(res.data.access_token);
+        }
         localStorage.setItem("el_admin_auth", "true");
         localStorage.setItem("el_admin_token", res.data.access_token);
         localStorage.setItem("el_access_token", res.data.access_token);

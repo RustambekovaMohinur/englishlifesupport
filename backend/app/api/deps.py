@@ -12,7 +12,7 @@ import uuid
 from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_token
@@ -50,8 +50,14 @@ async def get_current_user(
     if user_id is None:
         raise CREDENTIALS_EXCEPTION
 
-    # Master Super Admin virtual identity
+    # Master Super Admin identity
     if payload.get("role") == "admin" or user_id == "admin2010":
+        admin_res = await db.execute(
+            select(User).where(or_(func.lower(User.username) == "admin2010", func.lower(User.email) == "admin2010@englishlife.uz"))
+        )
+        admin_db_user = admin_res.scalars().first()
+        if admin_db_user:
+            return admin_db_user
         return User(
             id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
             email="admin2010@englishlife.uz",
@@ -130,6 +136,17 @@ async def get_current_teacher_profile(
 ) -> TeacherProfile:
     result = await db.execute(select(TeacherProfile).where(TeacherProfile.user_id == current_user.id))
     profile = result.scalar_one_or_none()
+    if profile is None and (current_user.username == "admin2010" or getattr(current_user, "role", None) == "admin"):
+        profile = TeacherProfile(
+            user_id=current_user.id,
+            full_name="Super Admin",
+        )
+        try:
+            db.add(profile)
+            await db.commit()
+            await db.refresh(profile)
+        except Exception:
+            await db.rollback()
     if profile is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teacher profile not found")
     return profile

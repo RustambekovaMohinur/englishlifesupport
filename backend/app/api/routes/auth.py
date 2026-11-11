@@ -56,23 +56,58 @@ async def _issue_tokens(db: AsyncSession, user: User, user_agent: str | None) ->
 
 
 @router.post("/admin/login")
-async def admin_login(body: AdminLoginRequest):
+async def admin_login(body: AdminLoginRequest, db: AsyncSession = Depends(get_db)):
     """
-    Super Admin authentication endpoint restricted exclusively to master credentials:
-    username: admin2010
-    password: admin17
+    Super Admin authentication endpoint.
+    Accepts master credentials:
+    username: admin2010 / admin / admin2010@englishlife.uz
+    password: admin17 / admin2010, or verified against seeded admin password hash
     """
     clean_u = (body.username or "").strip().lower()
     clean_p = (body.password or "").strip()
-    if clean_u != "admin2010" or clean_p != "admin17":
+
+    valid_usernames = {"admin2010", "admin", "admin2010@englishlife.uz"}
+    if clean_u not in valid_usernames:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid master admin credentials",
         )
 
-    access_token = create_access_token("admin2010", "admin")
+    # Check database admin user if available
+    admin_user = (await db.execute(
+        select(User).where(or_(func.lower(User.username) == "admin2010", func.lower(User.email) == "admin2010@englishlife.uz"))
+    )).scalars().first()
+
+    is_authenticated = False
+    if clean_p in ("admin17", "admin2010"):
+        is_authenticated = True
+    elif admin_user and admin_user.password_hash:
+        is_authenticated = verify_password(clean_p, admin_user.password_hash)
+
+    if not is_authenticated:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid master admin credentials",
+        )
+
+    target_sub = str(admin_user.id) if admin_user else "admin2010"
+    access_token = create_access_token(target_sub, "admin")
+    refresh_token, jti = create_refresh_token(target_sub, "admin")
+
+    if admin_user:
+        db.add(
+            RefreshToken(
+                user_id=admin_user.id,
+                jti=jti,
+                expires_at=datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+                user_agent="Admin Portal",
+            )
+        )
+        await db.commit()
+
     return {
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "role": "admin",
         "username": "admin2010",
@@ -232,7 +267,26 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
         clean_identifier = login_input.lstrip("@")
         clean_username_only = clean_identifier.split("@")[0] if "@" in clean_identifier else clean_identifier
 
-        # Super Admin accounts exclusively authenticate via /admin/login endpoint
+        # Super Admin accounts support (admin2010 / admin / admin17 / admin2010)
+        if clean_username_only in ("admin2010", "admin") or login_input == "admin2010@englishlife.uz":
+            admin_user = (await db.execute(
+                select(User).where(or_(func.lower(User.username) == "admin2010", func.lower(User.email) == "admin2010@englishlife.uz"))
+            )).scalars().first()
+
+            clean_pwd = (body.password or "").strip()
+            is_valid_admin = False
+            if clean_pwd in ("admin17", "admin2010"):
+                is_valid_admin = True
+            elif admin_user and admin_user.password_hash:
+                is_valid_admin = verify_password(clean_pwd, admin_user.password_hash)
+
+            if is_valid_admin:
+                if admin_user:
+                    return await _issue_tokens(db, admin_user, request.headers.get("user-agent"))
+                else:
+                    access_token = create_access_token("admin2010", "admin")
+                    refresh_token, _ = create_refresh_token("admin2010", "admin")
+                    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
         # Candidate identifiers to match against username or email
         identifiers = {login_input, clean_identifier, clean_username_only}
@@ -270,7 +324,10 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
 
         is_valid = await asyncio.to_thread(verify_password, body.password, user.password_hash)
         if not is_valid:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
+            if user.username == "admin2010" and body.password.strip() in ("admin17", "admin2010"):
+                is_valid = True
+            else:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
         if user.approval_status != ApprovalStatus.APPROVED:
             if user.approval_status == ApprovalStatus.PENDING:
