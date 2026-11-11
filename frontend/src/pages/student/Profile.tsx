@@ -21,6 +21,7 @@ import { Bot, Check, Copy, ExternalLink, KeyRound, LogOut, QrCode, Send, ShieldC
 import { getFileUrl } from "@/services/api";
 import { useAuth } from "@/hooks/useAuth";
 import { ParentLinkInfo, PremiumStatusOut, StudentLinkInfo, UserProfileOut } from "@/types";
+import { fetchPublicGroups, GroupPublic } from "@/services/authService";
 
 export default function StudentProfilePage() {
   const { logout, updateUser } = useAuth();
@@ -44,6 +45,9 @@ export default function StudentProfilePage() {
   const [username, setUsername] = useState("");
   const [telegram, setTelegram] = useState("");
   const [bio, setBio] = useState("");
+  const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [availableGroups, setAvailableGroups] = useState<GroupPublic[]>([]);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Password change state
@@ -67,6 +71,7 @@ export default function StudentProfilePage() {
         setUsername(data.username || "");
         setTelegram(data.telegram_username || data.phone || "");
         setBio(data.bio || "");
+        setSelectedGroupId(data.group_id || "");
       })
       .catch(() => toast.error("Failed to load profile details"))
       .finally(() => setIsLoading(false));
@@ -191,15 +196,17 @@ export default function StudentProfilePage() {
         username: username.trim() || undefined,
         telegram_username: telegram.trim(),
         bio: bio.trim(),
+        group_id: selectedGroupId || undefined,
       });
       setProfile(updated);
+      setSelectedGroupId(updated.group_id || "");
       updateUser({
         username: updated.username,
         full_name: updated.full_name,
         first_name: updated.first_name,
       });
       setIsEditing(false);
-      toast.success("Profile updated successfully!");
+      toast.success("Profile and assigned cohort updated successfully!");
     } catch (err: any) {
       toast.error(err?.response?.data?.detail ?? "Failed to update profile");
     } finally {
@@ -340,7 +347,20 @@ export default function StudentProfilePage() {
                 setUsername(profile.username || "");
                 setTelegram(profile.telegram_username || profile.phone || "");
                 setBio(profile.bio || "");
+                setSelectedGroupId(profile.group_id || "");
                 setIsEditing(true);
+
+                setIsLoadingGroups(true);
+                fetchPublicGroups(profile.teacher_id || undefined)
+                  .then((groups) => {
+                    if ((!groups || groups.length === 0) && profile.teacher_id) {
+                      return fetchPublicGroups();
+                    }
+                    return groups;
+                  })
+                  .then((groups) => setAvailableGroups(groups || []))
+                  .catch(() => {})
+                  .finally(() => setIsLoadingGroups(false));
               }}
               className="btn-primary text-xs"
             >
@@ -369,7 +389,16 @@ export default function StudentProfilePage() {
           </div>
           <div className="flex justify-between py-2.5">
             <span className="text-zinc-500 dark:text-zinc-400">Assigned Cohort / Group</span>
-            <span className="font-medium text-zinc-800 dark:text-zinc-200">{profile.group_name || "—"}</span>
+            <div className="text-right">
+              <span className="font-semibold text-zinc-800 dark:text-zinc-200 block">
+                {profile.group_name || "— No cohort assigned"}
+              </span>
+              {profile.teacher_name && (
+                <span className="text-xs text-brand-600 dark:text-brand-400 block font-medium">
+                  Teacher: {profile.teacher_name}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex justify-between py-2.5">
             <span className="text-zinc-500 dark:text-zinc-400">English Proficiency Level</span>
@@ -668,6 +697,33 @@ export default function StudentProfilePage() {
                   onChange={(e) => setTelegram(e.target.value)}
                   placeholder="@username or +998..."
                 />
+              </div>
+
+              <div>
+                <label className="label flex items-center justify-between">
+                  <span>Assigned Cohort / Group</span>
+                  {isLoadingGroups && (
+                    <span className="text-xs text-brand-600 dark:text-brand-400 font-normal animate-pulse">
+                      Loading cohorts...
+                    </span>
+                  )}
+                </label>
+                <select
+                  className="input"
+                  value={selectedGroupId}
+                  onChange={(e) => setSelectedGroupId(e.target.value)}
+                  disabled={isLoadingGroups}
+                >
+                  <option value="">-- Select Your Cohort / Group --</option>
+                  {availableGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} ({g.english_level?.replace("_", " ")}{g.teacher_name ? ` • Teacher: ${g.teacher_name}` : ""}{g.schedule ? ` • ${g.schedule}` : ""})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
+                  Selecting your assigned group immediately enrolls you in your teacher's class roster, unlocks class tasks, and activates pre-class Telegram reminder notifications.
+                </p>
               </div>
 
               <div>

@@ -338,8 +338,11 @@ export interface UserProfileOut {
   bio: string | null;
   avatar_url: string | null;
   stats: Record<string, any>;
+  group_id?: string | null;
   group_name?: string | null;
   english_level?: string | null;
+  teacher_id?: string | null;
+  teacher_name?: string | null;
   approval_status?: string | null;
 }
 
@@ -351,6 +354,7 @@ export interface UserProfileUpdate {
   telegram_username?: string;
   phone?: string;
   bio?: string;
+  group_id?: string | null;
 }
 
 

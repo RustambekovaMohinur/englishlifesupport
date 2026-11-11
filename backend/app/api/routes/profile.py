@@ -117,6 +117,19 @@ async def get_my_profile(
 
         first_name, last_name = _split_full_name(profile.full_name)
         stats = await _get_student_stats(db, profile)
+
+        teacher_id = None
+        teacher_name = None
+        if profile.group and profile.group.created_by:
+            t_prof = (
+                await db.execute(
+                    select(TeacherProfile).where(TeacherProfile.user_id == profile.group.created_by)
+                )
+            ).scalar_one_or_none()
+            if t_prof:
+                teacher_id = t_prof.id
+                teacher_name = t_prof.full_name
+
         return UserProfileOut(
             id=profile.id,
             user_id=current_user.id,
@@ -131,8 +144,11 @@ async def get_my_profile(
             bio=profile.bio,
             avatar_url=profile.avatar_url,
             stats=stats,
+            group_id=profile.group_id,
             group_name=profile.group.name if profile.group else None,
             english_level=profile.group.english_level.value if profile.group and hasattr(profile.group.english_level, "value") else (str(profile.group.english_level) if profile.group and profile.group.english_level else None),
+            teacher_id=teacher_id,
+            teacher_name=teacher_name,
             approval_status=current_user.approval_status.value if hasattr(current_user.approval_status, "value") else str(current_user.approval_status),
             total_stars=getattr(profile, "total_stars", 0),
             total_lightning=getattr(profile, "total_lightning", 0),
@@ -221,6 +237,38 @@ async def update_my_profile(
                 raw = f"@{raw}"
             profile.phone = raw or None
 
+        # Update assigned cohort / group_id if provided
+        if body.group_id is not None:
+            # Verify the target group exists
+            target_group = (
+                await db.execute(select(Group).where(Group.id == body.group_id))
+            ).scalar_one_or_none()
+            if not target_group:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Selected cohort not found",
+                )
+            # Permission check: student may only move to a group belonging to the same teacher
+            # The teacher is identified by the creator (created_by) of the current group.
+            current_teacher_id = profile.group.created_by if profile.group else None
+            if not _is_admin(current_user) and target_group.created_by != current_teacher_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You cannot assign the student to a cohort of a different teacher",
+                )
+            profile.group_id = target_group.id
+            profile.group = target_group
+            target_group = (
+                await db.execute(select(Group).where(Group.id == body.group_id))
+            ).scalar_one_or_none()
+            if not target_group:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Tanlangan guruh topilmadi (Selected cohort not found)",
+                )
+            profile.group_id = target_group.id
+            profile.group = target_group
+
         # Update bio
         if body.bio is not None:
             profile.bio = body.bio.strip() or None
@@ -236,11 +284,24 @@ async def update_my_profile(
             profile.parent_telegram_chat_id = body.parent_telegram_chat_id.strip() or None
 
         await db.commit()
-        await db.refresh(profile)
+        await db.refresh(profile, attribute_names=["group"])
         await db.refresh(current_user)
 
         first_name, last_name = _split_full_name(profile.full_name)
         stats = await _get_student_stats(db, profile)
+
+        teacher_id = None
+        teacher_name = None
+        if profile.group and profile.group.created_by:
+            t_prof = (
+                await db.execute(
+                    select(TeacherProfile).where(TeacherProfile.user_id == profile.group.created_by)
+                )
+            ).scalar_one_or_none()
+            if t_prof:
+                teacher_id = t_prof.id
+                teacher_name = t_prof.full_name
+
         return UserProfileOut(
             id=profile.id,
             user_id=current_user.id,
@@ -255,8 +316,11 @@ async def update_my_profile(
             bio=profile.bio,
             avatar_url=profile.avatar_url,
             stats=stats,
+            group_id=profile.group_id,
             group_name=profile.group.name if profile.group else None,
             english_level=profile.group.english_level.value if profile.group and hasattr(profile.group.english_level, "value") else (str(profile.group.english_level) if profile.group and profile.group.english_level else None),
+            teacher_id=teacher_id,
+            teacher_name=teacher_name,
             approval_status=current_user.approval_status.value if hasattr(current_user.approval_status, "value") else str(current_user.approval_status),
             total_stars=getattr(profile, "total_stars", 0),
             total_lightning=getattr(profile, "total_lightning", 0),

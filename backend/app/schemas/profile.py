@@ -1,6 +1,6 @@
 import uuid
 from typing import Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class UserProfileOut(BaseModel):
@@ -17,8 +17,11 @@ class UserProfileOut(BaseModel):
     bio: str | None = None
     avatar_url: str | None = None
     stats: dict[str, Any] = Field(default_factory=dict)
+    group_id: uuid.UUID | None = None
     group_name: str | None = None
     english_level: str | None = None
+    teacher_id: uuid.UUID | None = None
+    teacher_name: str | None = None
     approval_status: str | None = None
     total_stars: int = 0
     total_lightning: int = 0
@@ -36,10 +39,23 @@ class UserProfileUpdate(BaseModel):
     telegram_username: str | None = Field(default=None, max_length=64)
     phone: str | None = Field(default=None, max_length=64)
     bio: str | None = Field(default=None, max_length=2000)
+    group_id: uuid.UUID | None = None
     parent_phone: str | None = Field(default=None, max_length=64)
     parent_telegram_id: str | None = Field(default=None, max_length=64)
     parent_telegram_chat_id: str | None = Field(default=None, max_length=64)
     parent_name: str | None = Field(default=None, max_length=255)
+
+    @field_validator("group_id", mode="before")
+    @classmethod
+    def parse_group_id(cls, v: Any) -> uuid.UUID | None:
+        if v is None or v == "" or str(v).strip() in ("", "null", "none"):
+            return None
+        if isinstance(v, uuid.UUID):
+            return v
+        try:
+            return uuid.UUID(str(v).strip())
+        except Exception:
+            raise ValueError("Invalid group_id UUID format")
 
 
 class ChangePasswordRequest(BaseModel):

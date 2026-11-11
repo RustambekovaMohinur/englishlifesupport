@@ -667,6 +667,7 @@ async def get_my_stats(
 
 
 @router.patch("/me", response_model=StudentOut)
+@router.put("/me", response_model=StudentOut)
 async def update_my_student_profile(
     body: StudentUpdate,
     profile: StudentProfile = Depends(get_current_student_profile),
@@ -679,7 +680,19 @@ async def update_my_student_profile(
     )
     full_profile = result.scalar_one()
 
-    # Students cannot change their own group or active status
+    # Update assigned cohort / group_id if provided
+    if body.group_id is not None:
+        target_group = (
+            await db.execute(select(Group).where(Group.id == body.group_id))
+        ).scalar_one_or_none()
+        if not target_group:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tanlangan guruh topilmadi (Selected cohort not found)",
+            )
+        full_profile.group_id = target_group.id
+        full_profile.group = target_group
+
     if body.full_name is not None:
         full_profile.full_name = body.full_name
     if body.phone is not None:
