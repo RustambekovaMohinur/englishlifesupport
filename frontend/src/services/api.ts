@@ -206,15 +206,18 @@ export async function fetchAuthenticatedBlobUrl(fileUrl: string): Promise<string
     const disp = typeof headers?.["content-disposition"] === "string" ? headers["content-disposition"] : "";
     const lower = (fileUrl + " " + disp).toLowerCase();
     if (!deducedType) {
-      if (lower.includes(".m4a") || lower.includes(".mp4")) deducedType = "audio/mp4";
-      else if (lower.includes(".webm")) deducedType = "audio/webm";
-      else if (lower.includes(".mp3")) deducedType = "audio/mpeg";
-      else if (lower.includes(".wav")) deducedType = "audio/wav";
-      else if (lower.includes(".ogg")) deducedType = "audio/ogg";
+      if (lower.includes(".pdf")) deducedType = "application/pdf";
       else if (lower.includes(".jpg") || lower.includes(".jpeg")) deducedType = "image/jpeg";
       else if (lower.includes(".png")) deducedType = "image/png";
       else if (lower.includes(".webp")) deducedType = "image/webp";
-      else if (lower.includes("audio") || fileUrl.includes("/file")) deducedType = "audio/mp4";
+      else if (lower.includes(".gif")) deducedType = "image/gif";
+      else if (lower.includes(".svg")) deducedType = "image/svg+xml";
+      else if (lower.includes(".m4a") || lower.includes(".mp4")) deducedType = "audio/mp4";
+      else if (lower.includes(".webm")) deducedType = "audio/webm";
+      else if (lower.includes(".mp3")) deducedType = "audio/mpeg";
+      else if (lower.includes(".wav")) deducedType = "audio/wav";
+      else if (lower.includes(".ogg") || lower.includes(".oga")) deducedType = "audio/ogg";
+      else if (lower.includes("audio") || lower.includes("voice")) deducedType = "audio/webm";
     }
     if (deducedType) {
       blob = new Blob([data], { type: deducedType });

@@ -143,24 +143,46 @@ def _detect_audio_mime_type(filename: str = "", default_mime: str = "") -> str:
         return "audio/aac"
     if fn.endswith(".flac") or "flac" in dm:
         return "audio/flac"
+    if fn.endswith(".opus") or "opus" in dm:
+        return "audio/opus"
+    if fn.endswith(".3gp") or "3gp" in dm:
+        return "audio/3gpp"
+    if "audio" in dm:
+        return default_mime
     return default_mime or "application/octet-stream"
 
 
 def _detect_file_mime_type(filename: str = "", default_mime: str = "") -> str:
     fn = (filename or "").lower()
-    if fn.endswith(".jpg") or fn.endswith(".jpeg"):
+    dm = (default_mime or "").lower()
+    if fn.endswith(".jpg") or fn.endswith(".jpeg") or "jpeg" in dm or "jpg" in dm:
         return "image/jpeg"
-    if fn.endswith(".png"):
+    if fn.endswith(".png") or "png" in dm:
         return "image/png"
-    if fn.endswith(".webp"):
+    if fn.endswith(".webp") or "webp" in dm:
         return "image/webp"
-    if fn.endswith(".gif"):
+    if fn.endswith(".gif") or "gif" in dm:
         return "image/gif"
-    if fn.endswith(".svg"):
+    if fn.endswith(".svg") or "svg" in dm:
         return "image/svg+xml"
-    if fn.endswith(".pdf"):
+    if fn.endswith(".bmp") or "bmp" in dm:
+        return "image/bmp"
+    if fn.endswith(".pdf") or "pdf" in dm:
         return "application/pdf"
-    return _detect_audio_mime_type(filename, default_mime)
+    if fn.endswith(".txt") or "text/plain" in dm:
+        return "text/plain"
+    if fn.endswith(".docx"):
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    if fn.endswith(".doc"):
+        return "application/msword"
+    if fn.endswith(".pptx"):
+        return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    if fn.endswith(".xlsx"):
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    audio_type = _detect_audio_mime_type(filename, default_mime)
+    if audio_type != "application/octet-stream":
+        return audio_type
+    return default_mime or "application/octet-stream"
 
 
 def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = None) -> SubmissionOut:
@@ -418,36 +440,69 @@ async def submit_homework(
             detail="Maximum 10 images allowed per submission",
         )
 
-    ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
-    ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp"}
-    ALLOWED_AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".webm", ".aac"}
+    ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".bmp"}
+    ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml", "image/bmp"}
+    ALLOWED_AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".webm", ".aac", ".flac", ".opus", ".oga", ".weba", ".3gp"}
     ALLOWED_AUDIO_MIMES = {
         "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav",
         "audio/m4a", "audio/x-m4a", "audio/mp4", "audio/webm",
-        "audio/ogg", "audio/aac",
+        "audio/ogg", "audio/aac", "audio/flac", "audio/opus",
+        "audio/3gpp", "video/webm", "video/mp4",
+    }
+    ALLOWED_DOC_EXTS = {".pdf", ".docx", ".doc", ".txt", ".rtf", ".odt", ".pptx", ".ppt", ".xlsx", ".xls", ".csv"}
+    ALLOWED_DOC_MIMES = {
+        "application/pdf", "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/plain", "application/rtf", "application/vnd.oasis.opendocument.text",
+        "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "text/csv", "application/csv",
     }
 
-    # Strict Image-Only validation for image attachments (block documents/archives)
+    # Image attachments validation
     for img in valid_images:
         ext = Path(img.filename or "").suffix.lower()
-        mime = (img.content_type or "").lower()
+        mime = (img.content_type or "").split(";")[0].strip().lower()
         if ext not in ALLOWED_IMAGE_EXTS and mime not in ALLOWED_IMAGE_MIMES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Faqat rasm formatidagi fayllar qabul qilinadi (JPEG, PNG, WebP). '{img.filename}' qabul qilinmaydi.",
             )
 
-    # Validate primary_file (if provided): must be strictly image or voice audio, NEVER document/archive!
+    # Validate primary_file (if provided): can be image, voice audio, or document (PDF/DOCX)
     if primary_file is not None:
+        p_name = (primary_file.filename or "").lower()
         p_ext = Path(primary_file.filename or "").suffix.lower()
-        p_mime = (primary_file.content_type or "").lower()
-        is_p_img = p_ext in ALLOWED_IMAGE_EXTS or p_mime in ALLOWED_IMAGE_MIMES
-        is_p_audio = p_ext in ALLOWED_AUDIO_EXTS or p_mime in ALLOWED_AUDIO_MIMES or "audio" in p_mime
-        if not is_p_img and not is_p_audio:
+        p_mime = (primary_file.content_type or "").split(";")[0].strip().lower()
+
+        is_p_img = p_ext in ALLOWED_IMAGE_EXTS or p_mime in ALLOWED_IMAGE_MIMES or p_mime.startswith("image/")
+        is_p_audio = (
+            p_ext in ALLOWED_AUDIO_EXTS
+            or p_mime in ALLOWED_AUDIO_MIMES
+            or p_mime.startswith("audio/")
+            or "voice" in p_name
+            or "audio" in p_name
+            or p_name == "blob"
+            or "recording" in p_name
+        )
+        is_p_doc = p_ext in ALLOWED_DOC_EXTS or p_mime in ALLOWED_DOC_MIMES or p_mime.startswith("text/") or "document" in p_mime or "pdf" in p_mime
+
+        if not is_p_img and not is_p_audio and not is_p_doc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Hujjat yoki arxiv fayllarni yuklash taqiqlangan ('{primary_file.filename}'). Faqat rasm (JPEG, PNG, WebP) yoki ovozli xabar qabul qilinadi.",
+                detail=f"Fayl formati qabul qilinmaydi ('{primary_file.filename}'). Faqat rasm (JPEG, PNG, WebP), audio (MP3, WAV, WebM) yoki hujjatlar (PDF, DOCX) qabul qilinadi.",
             )
+
+        # Normalize filename if it is "blob" or empty
+        now_ts = int(utcnow().timestamp())
+        if not primary_file.filename or primary_file.filename.lower() in ("blob", "audio", "recording", "voice"):
+            if is_p_audio:
+                ext = ".webm" if "webm" in p_mime else (".m4a" if "mp4" in p_mime or "m4a" in p_mime else ".mp3")
+                primary_file.filename = f"voice_recording_{now_ts}{ext}"
+            elif is_p_img:
+                primary_file.filename = f"homework_image_{now_ts}.jpg"
+            elif is_p_doc:
+                primary_file.filename = f"homework_document_{now_ts}.pdf"
 
     direct_storage_url = (storage_url or file_url or voice_url or "").strip() or None
 
@@ -1143,24 +1198,20 @@ async def download_submission_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This submission has no file")
 
     test_name = f"{submission.file_original_name or ''} {submission.file_path or ''}"
-    media_type = _detect_audio_mime_type(
+    media_type = _detect_file_mime_type(
         filename=test_name,
         default_mime=submission.file_content_type or "",
     )
     if not media_type or media_type == "application/octet-stream":
-        fn_lower = test_name.lower()
-        if ".m4a" in fn_lower or ".mp4" in fn_lower:
-            media_type = "audio/mp4"
-        elif ".webm" in fn_lower:
-            media_type = "audio/webm"
-        elif ".mp3" in fn_lower:
-            media_type = "audio/mpeg"
-        elif ".wav" in fn_lower:
-            media_type = "audio/wav"
-        elif ".ogg" in fn_lower:
-            media_type = "audio/ogg"
-        else:
-            media_type = "audio/mp4"
+        media_type = submission.file_content_type or "application/octet-stream"
+
+    is_previewable = (
+        media_type.startswith("image/")
+        or media_type.startswith("audio/")
+        or media_type == "application/pdf"
+    )
+    disposition = "inline" if is_previewable else "attachment"
+    fname = submission.file_original_name or "submission"
 
     if submission.file_path.startswith("http://") or submission.file_path.startswith("https://"):
         return RedirectResponse(
@@ -1198,7 +1249,8 @@ async def download_submission_file(
     return FileResponse(
         path=absolute_path,
         media_type=media_type,
-        filename=submission.file_original_name or "submission",
+        filename=fname,
+        content_disposition_type=disposition,
         headers={
             "Accept-Ranges": "bytes",
             "Access-Control-Allow-Origin": "*",

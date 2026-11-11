@@ -408,9 +408,10 @@ export default function StudentAssignmentSubmitPage() {
 
   // Handle files added (drag-drop, file picker, camera capture, clipboard paste)
   async function handleFilesAdded(incomingFiles: File[]) {
-    const allowedImgExts = /\.(png|jpe?g|webp|heic)$/i;
-    const allowedAudioExts = /\.(mp3|wav|m4a|ogg|webm)$/i;
-    const blockedDocExts = /\.(pdf|docx?|txt|zip|rar|7z|rtf|csv|xlsx?|pptx?)$/i;
+    const allowedImgExts = /\.(png|jpe?g|webp|heic|gif|bmp|svg)$/i;
+    const allowedAudioExts = /\.(mp3|wav|m4a|ogg|webm|aac|flac|opus|3gp)$/i;
+    const allowedDocExts = /\.(pdf|docx?|txt|rtf|odt|pptx?|xlsx?)$/i;
+    const blockedExts = /\.(exe|bat|cmd|msi|scr|ps1|sh|vbs|pif|com|reg|jar|py|rb|php|js)$/i;
 
     const newImages: File[] = [];
     let newDoc: File | null = null;
@@ -421,22 +422,23 @@ export default function StudentAssignmentSubmitPage() {
         toast.error(`"${f.name}" is too large (maximum 25 MB).`);
         continue;
       }
-      if (blockedDocExts.test(f.name)) {
-        toast.error(`"${f.name}" cannot be uploaded. Documents are not allowed. Only image formats (JPEG, PNG, WebP) are accepted for homework.`);
+      if (blockedExts.test(f.name)) {
+        toast.error(`"${f.name}" cannot be uploaded for security reasons.`);
         continue;
       }
       const isImg = f.type.startsWith("image/") || allowedImgExts.test(f.name);
-      const isAudio = f.type.startsWith("audio/") || allowedAudioExts.test(f.name);
-
-      if (!isImg && !isAudio) {
-        toast.error(`"${f.name}" format is not supported. Please upload image files (JPEG, PNG, WebP) only.`);
-        continue;
-      }
+      const isAudio = f.type.startsWith("audio/") || allowedAudioExts.test(f.name) || f.name.toLowerCase().includes("voice_recording");
+      const isDoc = allowedDocExts.test(f.name) || f.type.includes("pdf") || f.type.includes("word") || f.type.includes("document");
 
       if (isAudio) {
         newAudio = f;
+      } else if (isDoc) {
+        newDoc = f;
       } else if (isImg) {
         newImages.push(f);
+      } else {
+        toast.error(`"${f.name}" format is not supported. Please upload images, audio, or PDF/document files.`);
+        continue;
       }
     }
 
@@ -447,6 +449,11 @@ export default function StudentAssignmentSubmitPage() {
         setVoiceFile(newAudio);
         toast.success(`Attached audio file: ${newAudio.name}`);
       }
+    }
+
+    if (newDoc) {
+      setDocFile(newDoc);
+      toast.success(`Attached document: ${newDoc.name}`);
     }
 
 

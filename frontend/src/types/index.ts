@@ -602,11 +602,14 @@ export interface SubmissionOut {
   id: string;
   assignment_id: string;
   assignment_title: string;
+  assignment_type?: string | null;
   student_id: string;
   student_name: string;
   text_answer: string | null;
   file_url: string | null;
   file_original_name: string | null;
+  file_content_type?: string | null;
+  file_size_bytes?: number | null;
   images?: SubmissionImageOut[];
   attachments?: SubmissionImageOut[];
   status: "submitted" | "late" | "graded";

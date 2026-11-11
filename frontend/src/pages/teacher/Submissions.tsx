@@ -41,6 +41,7 @@ import { AIWritingEvaluation, Group, SubmissionCommentOut, SubmissionCorrectionO
 import StudentDetailModal from "@/components/StudentDetailModal";
 import DuplicateCompareModal from "@/components/DuplicateCompareModal";
 import { AISpeakingExaminerCard } from "@/components/AISpeakingExaminerCard";
+import { getAuthenticatedImageUrl } from "@/services/api";
 
 const PAGE_SIZE = 15;
 
@@ -153,11 +154,28 @@ export default function SubmissionsPage() {
                       <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">
                         <div className="flex flex-col gap-1 items-start">
                           <span className="font-medium text-zinc-900 dark:text-white">{s.assignment_title}</span>
-                          {s.vocab_attempt && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 font-mono">
-                              📖 New Words: {s.vocab_attempt.percentage}%
-                            </span>
-                          )}
+                          <div className="flex flex-wrap items-center gap-1">
+                            {((s.images && s.images.length > 0) || (s.attachments && s.attachments.length > 0) || (s.file_original_name && /\.(png|jpe?g|webp|gif)$/i.test(s.file_original_name))) && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                🖼️ {((s.images || s.attachments || []).length || 1)} photo(s)
+                              </span>
+                            )}
+                            {(s.audio_transcript || (s.file_original_name && /\.(mp3|wav|ogg|webm|m4a)$/i.test(s.file_original_name)) || s.assignment_type?.toLowerCase().includes("speak")) && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                🎙️ Audio
+                              </span>
+                            )}
+                            {(s.file_original_name && /\.pdf$/i.test(s.file_original_name)) && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                📄 PDF
+                              </span>
+                            )}
+                            {s.vocab_attempt && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 font-mono">
+                                📖 Vocab: {s.vocab_attempt.percentage}%
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
 
@@ -276,6 +294,7 @@ function GradeModal({
   const [feedback, setFeedback] = useState("");
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isEvaluatingAI, setIsEvaluatingAI] = useState(false);
   const [isApprovingAI, setIsApprovingAI] = useState(false);
@@ -326,6 +345,75 @@ function GradeModal({
       return null;
     }
   }, [currentSub?.ai_evaluation_json]);
+
+  const allImages = useMemo(() => {
+    if (!currentSub) return [];
+    const list: Array<{ id?: string; url: string; file_url?: string; original_name?: string }> = [];
+    const existing = (currentSub.images && currentSub.images.length > 0)
+      ? currentSub.images
+      : (currentSub.attachments || []);
+
+    existing.forEach((img, idx) => {
+      list.push({
+        id: img.id || `img-${idx}`,
+        url: img.url || img.file_url || `/api/submissions/${currentSub.id}/files/${img.id}`,
+        file_url: img.file_url || img.url,
+        original_name: img.original_name || `Notebook Page ${idx + 1}`,
+      });
+    });
+
+    if (currentSub.file_url) {
+      const isImg = (
+        /\.(jpe?g|png|webp|gif|svg|bmp)$/i.test(currentSub.file_original_name || currentSub.file_url) ||
+        Boolean(currentSub.file_content_type && currentSub.file_content_type.startsWith("image/"))
+      );
+      if (isImg) {
+        const fileFullUrl = currentSub.file_url.startsWith("http")
+          ? currentSub.file_url
+          : `/api/submissions/${currentSub.id}/file`;
+        const alreadyInList = list.some((item) => (item.file_url && item.file_url === currentSub.file_url) || item.url === fileFullUrl);
+        if (!alreadyInList) {
+          list.unshift({
+            id: "primary-file-image",
+            url: fileFullUrl,
+            file_url: currentSub.file_url,
+            original_name: currentSub.file_original_name || "Uploaded Homework Image",
+          });
+        }
+      }
+    }
+    return list;
+  }, [currentSub]);
+
+  const isAudioFile = useMemo(() => {
+    if (!currentSub?.file_url) return false;
+    const name = (currentSub.file_original_name || "").toLowerCase();
+    const url = currentSub.file_url.toLowerCase();
+    const mime = (currentSub.file_content_type || "").toLowerCase();
+    return (
+      /\.(mp3|wav|ogg|webm|m4a|aac|flac|opus|3gp)$/i.test(name || url) ||
+      mime.startsWith("audio/") ||
+      name.includes("voice") ||
+      name.includes("audio") ||
+      name === "blob" ||
+      (currentSub.assignment_type ? currentSub.assignment_type.toLowerCase().includes("speak") : false) ||
+      (currentSub.assignment_type ? currentSub.assignment_type.toLowerCase().includes("voice") : false) ||
+      Boolean(currentSub.audio_transcript)
+    );
+  }, [currentSub]);
+
+  const isPdfFile = useMemo(() => {
+    if (!currentSub?.file_url) return false;
+    const name = (currentSub.file_original_name || "").toLowerCase();
+    const mime = (currentSub.file_content_type || "").toLowerCase();
+    return /\.pdf$/i.test(name) || mime === "application/pdf" || currentSub.file_url.toLowerCase().endsWith(".pdf");
+  }, [currentSub]);
+
+  const isOtherDoc = useMemo(() => {
+    if (!currentSub?.file_url) return false;
+    const isImg = /\.(jpe?g|png|webp|gif|svg|bmp)$/i.test(currentSub.file_original_name || currentSub.file_url);
+    return !isImg && !isAudioFile && !isPdfFile;
+  }, [currentSub, isAudioFile, isPdfFile]);
 
   if (!submission || !currentSub) return null;
 
@@ -835,58 +923,222 @@ function GradeModal({
           </div>
         )}
 
-        {/* Attached images from student */}
-        {((currentSub.images && currentSub.images.length > 0) || (currentSub.attachments && currentSub.attachments.length > 0)) && (
-          <div className="space-y-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 bg-zinc-50/50 dark:bg-zinc-900/50">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
-                📸 Notebook Photos & Images ({(currentSub.images || currentSub.attachments || []).length})
-              </span>
-              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Click to enlarge</span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
-              {(currentSub.images && currentSub.images.length > 0 ? currentSub.images : currentSub.attachments || []).map((img, idx) => (
-                <div
-                  key={img.id || idx}
+        {/* 1. Attached Images: Interactive High-Res Inline Preview & Gallery */}
+        {allImages.length > 0 && (
+          <div className="space-y-3 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50/70 dark:bg-zinc-900/60 shadow-xs">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                  📸 Notebook & Homework Photos ({allImages.length})
+                </span>
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 font-medium">
+                  Inline Preview Active
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
                   onClick={() => {
-                    setLightboxIndex(idx);
+                    setLightboxIndex(activeImageIndex);
                     setLightboxOpen(true);
                   }}
-                  className="group relative cursor-pointer overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 aspect-square hover:shadow-md transition-shadow"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 bg-white dark:bg-zinc-800 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-2xs hover:shadow-xs transition"
                 >
-                  <AuthenticatedImage
-                    url={img.url || img.file_url || `/api/submissions/${currentSub.id}/files/${img.id}`}
-                    alt={img.original_name || `Notebook scan ${idx + 1}`}
-                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <span className="text-[11px] font-semibold text-white bg-black/60 px-1.5 py-0.5 rounded">
-                      🔍 View
-                    </span>
+                  🔍 Open Fullscreen Lightbox
+                </button>
+              </div>
+            </div>
+
+            {/* Active High-Res Inline Preview Screen */}
+            <div className="relative rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-950/5 dark:bg-black/40 flex flex-col items-center justify-center min-h-[300px] max-h-[560px] p-2">
+              <div
+                className="relative max-h-[530px] w-full flex items-center justify-center cursor-zoom-in"
+                onClick={() => {
+                  setLightboxIndex(activeImageIndex);
+                  setLightboxOpen(true);
+                }}
+                title="Click to view full screen"
+              >
+                <AuthenticatedImage
+                  url={allImages[activeImageIndex]?.url || ""}
+                  alt={allImages[activeImageIndex]?.original_name || `Page ${activeImageIndex + 1}`}
+                  className="max-h-[510px] w-auto max-w-full object-contain rounded-lg shadow-sm"
+                />
+              </div>
+
+              {/* Navigation overlays if multiple images */}
+              {allImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveImageIndex((prev) => (prev > 0 ? prev - 1 : allImages.length - 1));
+                    }}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs transition shadow-md min-w-[36px] min-h-[36px] flex items-center justify-center text-lg font-bold"
+                    title="Previous page"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveImageIndex((prev) => (prev < allImages.length - 1 ? prev + 1 : 0));
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs transition shadow-md min-w-[36px] min-h-[36px] flex items-center justify-center text-lg font-bold"
+                    title="Next page"
+                  >
+                    ›
+                  </button>
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-black/70 text-white text-[11px] font-mono backdrop-blur-xs shadow">
+                    {activeImageIndex + 1} / {allImages.length} • {allImages[activeImageIndex]?.original_name}
                   </div>
-                </div>
-              ))}
+                </>
+              )}
+            </div>
+
+            {/* Thumbnail selector gallery if multiple images */}
+            {allImages.length > 1 && (
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 pt-1">
+                {allImages.map((img, idx) => (
+                  <button
+                    type="button"
+                    key={img.id || idx}
+                    onClick={() => setActiveImageIndex(idx)}
+                    className={`relative overflow-hidden rounded-lg aspect-square border-2 transition-all ${
+                      idx === activeImageIndex
+                        ? "border-brand-500 ring-2 ring-brand-500/30 scale-102 shadow-sm"
+                        : "border-zinc-200 dark:border-zinc-800 opacity-70 hover:opacity-100"
+                    }`}
+                  >
+                    <AuthenticatedImage
+                      url={img.url}
+                      alt={img.original_name || `Thumb ${idx + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] text-center font-mono py-0.5">
+                      P.{idx + 1}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 2. PDF Document Inline Preview */}
+        {isPdfFile && currentSub.file_url && (
+          <div className="space-y-3 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50/70 dark:bg-zinc-900/60 shadow-xs">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                  📄 PDF Homework Document
+                </span>
+                <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400">
+                  {currentSub.file_original_name || "document.pdf"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <FileDownloadButton
+                  url={currentSub.file_url}
+                  filename={currentSub.file_original_name}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 bg-white dark:bg-zinc-800 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-2xs hover:shadow-xs transition"
+                >
+                  📥 Download PDF
+                </FileDownloadButton>
+                <a
+                  href={getAuthenticatedImageUrl(currentSub.file_url)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 bg-white dark:bg-zinc-800 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-2xs hover:shadow-xs transition"
+                >
+                  ↗️ Open in Tab
+                </a>
+              </div>
+            </div>
+
+            {/* Embedded Inline PDF Viewer */}
+            <div className="w-full h-[500px] rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white shadow-inner">
+              <iframe
+                src={getAuthenticatedImageUrl(currentSub.file_url)}
+                className="w-full h-full border-0"
+                title={currentSub.file_original_name || "PDF Document"}
+              />
             </div>
           </div>
         )}
 
-        {/* Attached file & audio */}
-        {currentSub.file_url && (
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Attached File / Audio Recording</p>
-            <FileDownloadButton
-              url={currentSub.file_url}
-              filename={currentSub.file_original_name}
-              className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline inline-block mb-1"
-            >
-              📎 {currentSub.file_original_name ?? "Download Attached File"}
-            </FileDownloadButton>
-            {currentSub.file_original_name && /\.(mp3|wav|ogg|webm|m4a)$/i.test(currentSub.file_original_name) && (
-              <div className="mt-2 p-2 bg-purple-50 dark:bg-purple-950/40 rounded-lg border border-purple-200 dark:border-purple-800">
-                <p className="text-xs font-semibold text-purple-900 dark:text-purple-300 mb-1">🎙️ Student Live Voice Recording</p>
-                <AuthenticatedAudio url={currentSub.file_url} className="w-full h-9" />
+        {/* 3. Speaking / Audio Submission Player */}
+        {isAudioFile && currentSub.file_url && (
+          <div className="space-y-3 rounded-xl border border-purple-200 dark:border-purple-800/80 p-4 bg-gradient-to-br from-purple-50/70 via-indigo-50/40 to-purple-50/30 dark:from-purple-950/40 dark:via-indigo-950/20 dark:to-purple-950/30 shadow-xs">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                  🎙️ Student Voice & Speaking Recording
+                </span>
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 font-medium">
+                  HQ Audio Ready
+                </span>
+              </div>
+              <FileDownloadButton
+                url={currentSub.file_url}
+                filename={currentSub.file_original_name || "voice_recording.webm"}
+                className="inline-flex items-center gap-1 text-xs font-medium text-purple-700 dark:text-purple-300 hover:text-purple-900 bg-white/80 dark:bg-purple-900/40 px-2.5 py-1 rounded-lg border border-purple-200 dark:border-purple-700/60 shadow-2xs hover:shadow-xs transition"
+              >
+                📥 Download Audio ({currentSub.file_original_name || "recording"})
+              </FileDownloadButton>
+            </div>
+
+            {/* Audio Player */}
+            <div className="p-3 bg-white/90 dark:bg-zinc-900/90 rounded-xl border border-purple-100 dark:border-purple-800/50 shadow-xs">
+              <AuthenticatedAudio url={currentSub.file_url} className="w-full" />
+            </div>
+
+            {/* Audio Transcript if present */}
+            {currentSub.audio_transcript && (
+              <div className="p-3 bg-white/70 dark:bg-zinc-900/70 rounded-xl border border-purple-100 dark:border-purple-800/40 text-xs text-zinc-800 dark:text-zinc-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-purple-900 dark:text-purple-300 text-[11px] uppercase tracking-wide">
+                    Speech-to-Text Transcription:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(currentSub.audio_transcript || "");
+                      toast.success("Transcript copied!");
+                    }}
+                    className="text-[10px] text-purple-600 dark:text-purple-400 hover:underline"
+                  >
+                    Copy Text
+                  </button>
+                </div>
+                <p className="leading-relaxed whitespace-pre-wrap italic text-zinc-700 dark:text-zinc-300">
+                  "{currentSub.audio_transcript}"
+                </p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* 4. Other Document Attachment (Word, Excel, etc.) */}
+        {isOtherDoc && currentSub.file_url && (
+          <div className="space-y-2 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 bg-zinc-50/50 dark:bg-zinc-900/50">
+            <p className="text-xs font-semibold uppercase text-zinc-700 dark:text-zinc-300 tracking-wider">
+              📎 Attached Homework Document
+            </p>
+            <div className="flex items-center justify-between bg-white dark:bg-zinc-800 p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
+              <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">
+                {currentSub.file_original_name || "Attached Homework File"}
+              </span>
+              <FileDownloadButton
+                url={currentSub.file_url}
+                filename={currentSub.file_original_name}
+                className="btn-secondary text-xs py-1 px-3"
+              >
+                📥 Download
+              </FileDownloadButton>
+            </div>
           </div>
         )}
 
@@ -1087,8 +1339,8 @@ function GradeModal({
 
       <ImageLightbox
         isOpen={lightboxOpen}
-        images={((currentSub.images && currentSub.images.length > 0 ? currentSub.images : currentSub.attachments) || []).map((img, idx) => ({
-          url: img.url || img.file_url || `/api/submissions/${currentSub.id}/files/${img.id}`,
+        images={allImages.map((img, idx) => ({
+          url: img.url,
           name: img.original_name || `Scan ${idx + 1}`,
         }))}
         initialIndex={lightboxIndex}

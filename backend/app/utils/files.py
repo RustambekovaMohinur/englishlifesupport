@@ -112,14 +112,33 @@ def _get_safe_extension(file: UploadFile, default_ext: str = ".bin") -> str:
     Blocks known malicious executable extensions, but permits any valid document/media file.
     """
     _assert_safe_extension(file.filename or "")
-    content_type = file.content_type or ""
-    extension = ALLOWED_CONTENT_TYPES.get(content_type)
+    raw_ct = (file.content_type or "").lower()
+    base_ct = raw_ct.split(";")[0].strip()
+    extension = ALLOWED_CONTENT_TYPES.get(base_ct)
     if extension:
         return extension
 
     orig_ext = Path(file.filename or "").suffix.lower()
     if orig_ext and orig_ext not in BLOCKED_EXTENSIONS:
         return orig_ext
+
+    # Deduce extension from content type if filename lacks extension (e.g. browser blob recordings)
+    if "webm" in base_ct:
+        return ".webm"
+    if "ogg" in base_ct:
+        return ".ogg"
+    if "mp4" in base_ct or "m4a" in base_ct or "aac" in base_ct:
+        return ".m4a"
+    if "wav" in base_ct:
+        return ".wav"
+    if "mpeg" in base_ct or "mp3" in base_ct or "audio" in base_ct:
+        return ".mp3"
+    if "png" in base_ct:
+        return ".png"
+    if "jpeg" in base_ct or "jpg" in base_ct:
+        return ".jpg"
+    if "pdf" in base_ct:
+        return ".pdf"
 
     return default_ext
 
