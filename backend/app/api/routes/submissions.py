@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status, BackgroundTasks
 from fastapi.responses import FileResponse, RedirectResponse
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -17,6 +17,7 @@ from app.api.deps import get_current_student_profile, get_current_user, require_
 from app.db.session import get_db
 from app.models.file_blob import FileBlob
 from app.models.assignment import Assignment, AssignmentStatus
+from app.models.group import Group
 from app.models.grade import Grade
 from app.services.storage import get_storage_service
 from app.services.payment_service import enforce_student_payment
@@ -810,90 +811,155 @@ async def list_submissions(
     page_sz = page_size if isinstance(page_size, int) else int(getattr(page_size, "default", 20))
     as_list_val = bool(as_list if isinstance(as_list, bool) else getattr(as_list, "default", False))
 
-    if not _is_admin(current_user):
-        teacher_groups_subq = select(Group.id).where(Group.created_by == current_user.id)
-        teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
-        teacher_asgn_subq = select(Assignment.id).where(Assignment.created_by == current_user.id)
-        teacher_asgn_ids = (await db.execute(teacher_asgn_subq)).scalars().all()
-        # Clean blank slate: teachers with no cohorts or assignments have 0 submissions
-        if not teacher_group_ids and not teacher_asgn_ids:
-            if as_list_val:
-                return []
-            return PaginatedSubmissions(items=[], total=0, page=page_num, page_size=page_sz)
+    empty_response = [] if as_list_val else {
+        "items": [],
+        "total": 0,
+        "page": page_num,
+        "page_size": page_sz,
+    }
 
-    query = (
-        select(Submission)
-        .options(
-            selectinload(Submission.grade),
-            selectinload(Submission.assignment),
-            selectinload(Submission.student),
-            selectinload(Submission.corrections),
-            selectinload(Submission.comments),
-            selectinload(Submission.images),
-            selectinload(Submission.ai_feedback),
-            selectinload(Submission.duplicate_of).selectinload(Submission.student),
-        )
-        .join(Assignment, Submission.assignment_id == Assignment.id)
-        .outerjoin(Group, Assignment.group_id == Group.id)
-    )
-    if not _is_admin(current_user):
-        query = query.where(
-            or_(
-                Assignment.created_by == current_user.id,
-                Group.created_by == current_user.id,
+    try:
+        # Check if the current teacher's cohort list or assignment IDs list is empty
+        if not _is_admin(current_user):
+            teacher_groups_subq = select(Group.id).where(Group.created_by == current_user.id)
+            teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
+            teacher_asgn_subq = select(Assignment.id).where(Assignment.created_by == current_user.id)
+            teacher_asgn_ids = (await db.execute(teacher_asgn_subq)).scalars().all()
+
+            # Clean blank slate: teachers with no cohorts and no assignments have zero submissions
+            if not teacher_group_ids and not teacher_asgn_ids:
+                return empty_response
+
+        # Safely extract and validate optional query parameters
+        status_filter_val: str | None = None
+        if isinstance(status_filter, str) and status_filter.strip():
+            status_filter_val = status_filter.strip().lower()
+
+        group_id_val: uuid.UUID | None = None
+        if isinstance(group_id, uuid.UUID):
+            group_id_val = group_id
+        elif isinstance(group_id, str) and group_id.strip():
+            try:
+                group_id_val = uuid.UUID(group_id.strip())
+            except (ValueError, TypeError):
+                group_id_val = None
+
+        sid_val: uuid.UUID | None = None
+        if isinstance(student_id, uuid.UUID):
+            sid_val = student_id
+        elif isinstance(student_id, str) and student_id.strip():
+            try:
+                sid_val = uuid.UUID(student_id.strip())
+            except (ValueError, TypeError):
+                sid_val = None
+
+        is_suspicious_val: bool | None = is_suspicious if isinstance(is_suspicious, bool) else None
+
+        # Build filter criteria
+        base_filters = []
+        if not _is_admin(current_user):
+            base_filters.append(
+                or_(
+                    Assignment.created_by == current_user.id,
+                    Group.created_by == current_user.id,
+                )
             )
+        if group_id_val:
+            base_filters.append(Assignment.group_id == group_id_val)
+        if sid_val:
+            base_filters.append(Submission.student_id == sid_val)
+        if status_filter_val:
+            if status_filter_val in ["suspicious", "flagged"]:
+                base_filters.append(Submission.is_suspicious.is_(True))
+            else:
+                base_filters.append(Submission.status == status_filter_val)
+        elif is_suspicious_val is True:
+            base_filters.append(Submission.is_suspicious.is_(True))
+
+        # Direct safe count query (avoiding subquery over eager-loaded relationships)
+        count_stmt = (
+            select(func.count(Submission.id))
+            .join(Assignment, Submission.assignment_id == Assignment.id)
+            .outerjoin(Group, Assignment.group_id == Group.id)
         )
-    if group_id:
-        query = query.where(Assignment.group_id == group_id)
-    if student_id:
-        query = query.where(Submission.student_id == student_id)
-    if status_filter:
-        if status_filter in ["suspicious", "flagged"]:
-            query = query.where(Submission.is_suspicious.is_(True))
-        else:
-            query = query.where(Submission.status == status_filter)
-    elif is_suspicious is True:
-        query = query.where(Submission.is_suspicious.is_(True))
+        if base_filters:
+            count_stmt = count_stmt.where(and_(*base_filters))
 
-    count_query = select(func.count()).select_from(query.subquery())
-    total = (await db.execute(count_query)).scalar_one()
+        count_res = await db.execute(count_stmt)
+        total = count_res.scalar() or 0
 
-    query = query.order_by(Submission.submitted_at.desc()).offset((page_num - 1) * page_sz).limit(page_sz)
-    submissions = (await db.execute(query)).scalars().all()
+        # Fast path if no submissions exist
+        if total == 0:
+            return empty_response
 
-    va_map = {}
-    if submissions:
-        assign_ids = list({s.assignment_id for s in submissions})
-        st_ids = list({s.student_id for s in submissions})
-        va_res = await db.execute(
-            select(VocabularyAssignment.assignment_id, VocabularyAttempt)
-            .join(VocabularyAssignment, VocabularyAttempt.vocabulary_assignment_id == VocabularyAssignment.id)
-            .where(
-                VocabularyAssignment.assignment_id.in_(assign_ids),
-                VocabularyAttempt.student_id.in_(st_ids),
+        # Fetch paginated rows with required eager-loaded relations
+        query = (
+            select(Submission)
+            .options(
+                selectinload(Submission.grade),
+                selectinload(Submission.assignment),
+                selectinload(Submission.student),
+                selectinload(Submission.corrections),
+                selectinload(Submission.comments),
+                selectinload(Submission.images),
+                selectinload(Submission.ai_feedback),
+                selectinload(Submission.duplicate_of).selectinload(Submission.student),
             )
+            .join(Assignment, Submission.assignment_id == Assignment.id)
+            .outerjoin(Group, Assignment.group_id == Group.id)
         )
-        for a_id, va in va_res.all():
-            va_map[(a_id, va.student_id)] = VocabAttemptOut(
-                percentage=va.percentage,
-                best_percentage=getattr(va, "best_percentage", va.percentage) or va.percentage,
-                attempt_count=getattr(va, "attempt_count", 1) or 1,
-                correct_answers=va.correct_answers,
-                total_questions=va.total_questions,
-                is_completed=va.is_completed,
-                completed_at=va.completed_at,
-            )
+        if base_filters:
+            query = query.where(and_(*base_filters))
 
-    items = [_submission_to_out(s, vocab_attempt=va_map.get((s.assignment_id, s.student_id))) for s in submissions]
-    if as_list_val:
-        return items
+        query = (
+            query.order_by(Submission.submitted_at.desc(), Submission.id.desc())
+            .offset((page_num - 1) * page_sz)
+            .limit(page_sz)
+        )
+        submissions = (await db.execute(query)).scalars().all()
 
-    return PaginatedSubmissions(
-        items=items,
-        total=total,
-        page=page_num,
-        page_size=page_sz,
-    )
+        if not submissions:
+            return empty_response
+
+        va_map = {}
+        try:
+            assign_ids = list({s.assignment_id for s in submissions if s.assignment_id})
+            st_ids = list({s.student_id for s in submissions if s.student_id})
+            if assign_ids and st_ids:
+                va_res = await db.execute(
+                    select(VocabularyAssignment.assignment_id, VocabularyAttempt)
+                    .join(VocabularyAssignment, VocabularyAttempt.vocabulary_assignment_id == VocabularyAssignment.id)
+                    .where(
+                        VocabularyAssignment.assignment_id.in_(assign_ids),
+                        VocabularyAttempt.student_id.in_(st_ids),
+                    )
+                )
+                for a_id, va in va_res.all():
+                    va_map[(a_id, va.student_id)] = VocabAttemptOut(
+                        percentage=va.percentage or 0,
+                        best_percentage=getattr(va, "best_percentage", va.percentage) or va.percentage or 0,
+                        attempt_count=getattr(va, "attempt_count", 1) or 1,
+                        correct_answers=va.correct_answers or 0,
+                        total_questions=va.total_questions or 0,
+                        is_completed=bool(va.is_completed),
+                        completed_at=va.completed_at,
+                    )
+        except Exception as va_ex:
+            logger.warning("Could not map vocab attempts: %s", va_ex)
+
+        items = [_submission_to_out(s, vocab_attempt=va_map.get((s.assignment_id, s.student_id))) for s in submissions]
+        if as_list_val:
+            return items
+
+        return {
+            "items": items,
+            "total": total,
+            "page": page_num,
+            "page_size": page_sz,
+        }
+    except Exception as exc:
+        logger.exception("Error in list_submissions: %s", exc)
+        return empty_response
 
 
 @router.get("/mine", response_model=list[SubmissionOut])
