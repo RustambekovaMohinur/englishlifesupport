@@ -32,6 +32,12 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 users_avatar_router = APIRouter(prefix="/users", tags=["users"])
 v1_profile_router = APIRouter(prefix="/profile", tags=["profile"])
 
+def _is_admin(user) -> bool:
+    """Check if the given user is the super‑admin.
+    Supports legacy username check and role "admin".
+    """
+    return getattr(user, "username", None) == "admin2010" or getattr(user, "role", None) == "admin"
+
 
 def _split_full_name(full_name: str) -> tuple[str, str]:
     parts = (full_name or "").strip().split(maxsplit=1)
