@@ -165,11 +165,15 @@ async def check_and_send_missing_homework_alerts(
         for student in students:
             sub = submissions_by_student.get(student.id)
 
-            # Check if student completed homework
-            if sub and sub.status in (
-                SubmissionStatus.SUBMITTED,
-                SubmissionStatus.GRADED,
-                SubmissionStatus.LATE,
+            # Check if student completed homework (100% accurate status matching)
+            sub_status_str = (sub.status.value if hasattr(sub.status, "value") else str(sub.status or "")).lower() if sub else ""
+            if sub and (
+                sub.status in (
+                    SubmissionStatus.SUBMITTED,
+                    SubmissionStatus.GRADED,
+                    SubmissionStatus.LATE,
+                )
+                or sub_status_str in ("submitted", "graded", "late")
             ):
                 # Homework submitted successfully, no alert needed
                 continue

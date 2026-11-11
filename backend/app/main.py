@@ -424,6 +424,17 @@ async def _run_startup_tasks():
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS verification_code_matched BOOLEAN"))
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS tampering_detected BOOLEAN NOT NULL DEFAULT FALSE"))
                         await conn.execute(sa.text("ALTER TABLE groups ADD COLUMN IF NOT EXISTS telegram_group_chat_id VARCHAR(64)"))
+                        # Ensure PostgreSQL english_level enum has CEFR and IELTS values
+                        for val in [
+                            "a1", "a2", "b1", "b2", "c1", "c2",
+                            "cefr_a1", "cefr_a2", "cefr_b1", "cefr_b2", "cefr_c1", "cefr_c2",
+                            "ielts", "ielts_foundation", "ielts_graduation",
+                            "ielts_5_5", "ielts_6_0", "ielts_6_5", "ielts_7_0", "ielts_7_5_plus",
+                        ]:
+                            try:
+                                await conn.execute(sa.text(f"ALTER TYPE english_level ADD VALUE IF NOT EXISTS '{val}'"))
+                            except Exception:
+                                pass
                     else:
                         res = await conn.execute(sa.text("PRAGMA table_info(wordlist_sets)"))
                         cols = [r[1] for r in res.fetchall()]
@@ -580,5 +591,7 @@ async def startup_event():
     asyncio.create_task(start_parent_reporter_loop())
     from app.services.notifications import start_missing_homework_notification_loop
     asyncio.create_task(start_missing_homework_notification_loop())
+    from app.services.class_reminder_scheduler import start_class_reminder_loop
+    asyncio.create_task(start_class_reminder_loop())
 
 

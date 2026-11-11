@@ -16,6 +16,28 @@ class EnglishLevel(str, enum.Enum):
     INTERMEDIATE = "intermediate"
     UPPER_INTERMEDIATE = "upper_intermediate"
     ADVANCED = "advanced"
+    # CEFR Levels
+    A1 = "a1"
+    A2 = "a2"
+    B1 = "b1"
+    B2 = "b2"
+    C1 = "c1"
+    C2 = "c2"
+    CEFR_A1 = "cefr_a1"
+    CEFR_A2 = "cefr_a2"
+    CEFR_B1 = "cefr_b1"
+    CEFR_B2 = "cefr_b2"
+    CEFR_C1 = "cefr_c1"
+    CEFR_C2 = "cefr_c2"
+    # IELTS Levels
+    IELTS = "ielts"
+    IELTS_FOUNDATION = "ielts_foundation"
+    IELTS_GRADUATION = "ielts_graduation"
+    IELTS_5_5 = "ielts_5_5"
+    IELTS_6_0 = "ielts_6_0"
+    IELTS_6_5 = "ielts_6_5"
+    IELTS_7_0 = "ielts_7_0"
+    IELTS_7_5_PLUS = "ielts_7_5_plus"
 
 
 class Group(UUIDPKMixin, TimestampMixin, Base):

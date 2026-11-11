@@ -14,14 +14,40 @@ import {
 } from "@/services/lmsService";
 import { Group, GroupDetailOut, StudentHistoryOut, CurriculumTemplate } from "@/types";
 
-const LEVELS = [
-  "beginner",
-  "elementary",
-  "pre_intermediate",
-  "intermediate",
-  "upper_intermediate",
-  "advanced",
+export const LEVEL_OPTIONS = [
+  // General English
+  { value: "beginner", label: "Beginner" },
+  { value: "elementary", label: "Elementary" },
+  { value: "pre_intermediate", label: "Pre-Intermediate" },
+  { value: "intermediate", label: "Intermediate" },
+  { value: "upper_intermediate", label: "Upper-Intermediate" },
+  { value: "advanced", label: "Advanced" },
+  // CEFR Framework
+  { value: "a1", label: "CEFR A1" },
+  { value: "a2", label: "CEFR A2" },
+  { value: "b1", label: "CEFR B1" },
+  { value: "b2", label: "CEFR B2" },
+  { value: "c1", label: "CEFR C1" },
+  { value: "c2", label: "CEFR C2" },
+  // IELTS
+  { value: "ielts", label: "IELTS Standard" },
+  { value: "ielts_foundation", label: "IELTS Foundation" },
+  { value: "ielts_graduation", label: "IELTS Graduation" },
+  { value: "ielts_5_5", label: "IELTS 5.5" },
+  { value: "ielts_6_0", label: "IELTS 6.0" },
+  { value: "ielts_6_5", label: "IELTS 6.5" },
+  { value: "ielts_7_0", label: "IELTS 7.0" },
+  { value: "ielts_7_5_plus", label: "IELTS 7.5+" },
 ];
+
+export const LEVELS = LEVEL_OPTIONS.map((o) => o.value);
+
+export function formatLevelLabel(lvl: string | null | undefined): string {
+  if (!lvl) return "-";
+  const found = LEVEL_OPTIONS.find((o) => o.value === lvl.toLowerCase());
+  if (found) return found.label;
+  return lvl.replace(/_/g, " ");
+}
 
 export default function GroupsPage() {
   const navigate = useNavigate();
@@ -133,7 +159,7 @@ export default function GroupsPage() {
                     </h3>
                     <div className="mt-1">
                       <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60">
-                        {g.english_level.replace("_", " ")}
+                        {formatLevelLabel(g.english_level)}
                       </span>
                     </div>
                   </div>
@@ -193,7 +219,7 @@ export default function GroupsPage() {
                 <span>📚 {groupDetail?.name ?? "Group"} Overview</span>
                 {groupDetail && (
                   <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60">
-                    {groupDetail.english_level.replace("_", " ")}
+                    {formatLevelLabel(groupDetail.english_level)}
                   </span>
                 )}
               </h2>
@@ -334,7 +360,7 @@ export default function GroupsPage() {
                 <div className="flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400 mt-1 flex-wrap">
                   <span className="flex items-center gap-1">Telegram: <TelegramLink username={studentHistory.telegram_username} /></span>
                   <span>Group: <strong className="text-brand-600 dark:text-brand-400">{studentHistory.group_name || "—"}</strong></span>
-                  <span>Level: <strong className="capitalize text-zinc-700 dark:text-zinc-300">{studentHistory.level?.replace("_", " ") || "—"}</strong></span>
+                  <span>Level: <strong className="capitalize text-zinc-700 dark:text-zinc-300">{formatLevelLabel(studentHistory.level)}</strong></span>
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1">
@@ -492,11 +518,11 @@ function GroupModal({
           <input required className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Elementary A1" />
         </div>
         <div>
-          <label className="label">English level</label>
+          <label className="label">English level (General, CEFR, IELTS)</label>
           <select className="input" value={level} onChange={(e) => setLevel(e.target.value)}>
-            {LEVELS.map((l) => (
-              <option key={l} value={l}>
-                {l.replace("_", " ")}
+            {LEVEL_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
               </option>
             ))}
           </select>

@@ -41,6 +41,34 @@ def format_english_level(level: Any) -> str:
         return "Pre-Intermediate"
     if lower in ("upper intermediate", "upper-intermediate"):
         return "Upper-Intermediate"
+    if lower in ("a1", "cefr a1"):
+        return "CEFR A1"
+    if lower in ("a2", "cefr a2"):
+        return "CEFR A2"
+    if lower in ("b1", "cefr b1"):
+        return "CEFR B1"
+    if lower in ("b2", "cefr b2"):
+        return "CEFR B2"
+    if lower in ("c1", "cefr c1"):
+        return "CEFR C1"
+    if lower in ("c2", "cefr c2"):
+        return "CEFR C2"
+    if lower == "ielts":
+        return "IELTS"
+    if lower == "ielts foundation":
+        return "IELTS Foundation"
+    if lower == "ielts graduation":
+        return "IELTS Graduation"
+    if lower in ("ielts 5 5", "ielts 5.5"):
+        return "IELTS 5.5"
+    if lower in ("ielts 6 0", "ielts 6.0"):
+        return "IELTS 6.0"
+    if lower in ("ielts 6 5", "ielts 6.5"):
+        return "IELTS 6.5"
+    if lower in ("ielts 7 0", "ielts 7.0"):
+        return "IELTS 7.0"
+    if lower in ("ielts 7 5 plus", "ielts 7.5+"):
+        return "IELTS 7.5+"
     return val.title()
 
 
@@ -439,31 +467,25 @@ async def _calculate_student_stats(db: AsyncSession, student: StudentProfile) ->
         )
         active_assign_ids = set(group_asgn_res.scalars().all())
 
-    if not active_assign_ids:
-        all_published_res = await db.execute(
-            select(Assignment.id).where(Assignment.status == AssignmentStatus.PUBLISHED)
-        )
-        active_assign_ids = set(all_published_res.scalars().all())
-
     total_assignments = len(active_assign_ids)
+    completed_assignments = 0
 
-    st_sub_query = (
-        select(sa.func.count(sa.func.distinct(Submission.assignment_id)))
-        .join(StudentProfile, Submission.student_id == StudentProfile.id)
-        .where(
-            sa.or_(
-                Submission.student_id == student.id,
-                StudentProfile.user_id == student.user_id,
-            ),
-            Submission.is_archived.is_(False),
-        )
-    )
     if active_assign_ids:
-        st_sub_query = st_sub_query.where(Submission.assignment_id.in_(active_assign_ids))
-
-    completed_assignments = (await db.execute(st_sub_query)).scalar() or 0
-    if total_assignments > 0 and completed_assignments > total_assignments:
-        completed_assignments = total_assignments
+        st_sub_query = (
+            select(sa.func.count(sa.func.distinct(Submission.assignment_id)))
+            .join(StudentProfile, Submission.student_id == StudentProfile.id)
+            .where(
+                sa.or_(
+                    Submission.student_id == student.id,
+                    StudentProfile.user_id == student.user_id,
+                ),
+                Submission.assignment_id.in_(active_assign_ids),
+                Submission.is_archived.is_(False),
+            )
+        )
+        completed_assignments = (await db.execute(st_sub_query)).scalar() or 0
+        if completed_assignments > total_assignments:
+            completed_assignments = total_assignments
 
     pending_assignments = max(0, total_assignments - completed_assignments)
     progress_percent = round((completed_assignments / total_assignments) * 100, 1) if total_assignments > 0 else 0.0
@@ -837,39 +859,61 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                 f"⏳ Kutilayotgan vazifalar: <b>{stats['pending_assignments']} ta</b>\n",
             ]
 
-            # A. Upcoming active homework
+            # A. Upcoming active homework & Overdue tasks
             if s.group_id:
-                pending_stmt = (
+                now_val = utcnow()
+                unsubmitted_subq = select(Submission.assignment_id).where(
+                    sa.or_(
+                        Submission.student_id == s.id,
+                        Submission.student_id.in_(
+                            select(StudentProfile.id).where(StudentProfile.user_id == s.user_id)
+                        ),
+                    ),
+                    Submission.is_archived.is_(False),
+                )
+                # 1. Upcoming active homework
+                upcoming_stmt = (
                     select(Assignment)
                     .where(
                         Assignment.group_id == s.group_id,
                         Assignment.status == AssignmentStatus.PUBLISHED,
-                        Assignment.deadline >= utcnow(),
-                        ~Assignment.id.in_(
-                            select(Submission.assignment_id).where(
-                                sa.or_(
-                                    Submission.student_id == s.id,
-                                    Submission.student_id.in_(
-                                        select(StudentProfile.id).where(StudentProfile.user_id == s.user_id)
-                                    ),
-                                ),
-                                Submission.is_archived.is_(False),
-                            )
-                        ),
+                        Assignment.deadline >= now_val,
+                        ~Assignment.id.in_(unsubmitted_subq),
                     )
                     .order_by(Assignment.deadline.asc())
                     .limit(3)
                 )
-                pending_res = await db.execute(pending_stmt)
-                pending_tasks = pending_res.scalars().all()
-                if pending_tasks:
-                    lines.append("⏳ <b>Topshirish kerak bo'lgan vazifalar:</b>")
-                    for pt in pending_tasks:
+                upcoming_tasks = (await db.execute(upcoming_stmt)).scalars().all()
+
+                # 2. Overdue unsubmitted tasks
+                overdue_stmt = (
+                    select(Assignment)
+                    .where(
+                        Assignment.group_id == s.group_id,
+                        Assignment.status == AssignmentStatus.PUBLISHED,
+                        Assignment.deadline < now_val,
+                        ~Assignment.id.in_(unsubmitted_subq),
+                    )
+                    .order_by(Assignment.deadline.desc())
+                    .limit(3)
+                )
+                overdue_tasks = (await db.execute(overdue_stmt)).scalars().all()
+
+                if upcoming_tasks:
+                    lines.append("⏳ <b>Topshirish kutilayotgan vazifalar:</b>")
+                    for pt in upcoming_tasks:
                         d_str = pt.deadline.strftime("%d.%m.%Y %H:%M")
                         lines.append(f"• 📌 <b>{pt.title}</b> (Muddat: {d_str})")
                     lines.append("")
 
-            # B. Recent graded submissions
+                if overdue_tasks:
+                    lines.append("🚨 <b>Topshirilmagan / Muddati o'tgan vazifalar:</b>")
+                    for ot in overdue_tasks:
+                        d_str = ot.deadline.strftime("%d.%m.%Y %H:%M")
+                        lines.append(f"• ❌ <b>{ot.title}</b> (Muddati: {d_str})")
+                    lines.append("")
+
+            # B. Recent graded and submitted homework
             sub_stmt = (
                 select(Submission)
                 .options(
@@ -882,10 +926,11 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                         Submission.student_id.in_(
                             select(StudentProfile.id).where(StudentProfile.user_id == s.user_id)
                         ),
-                    )
+                    ),
+                    Submission.is_archived.is_(False),
                 )
                 .order_by(Submission.submitted_at.desc())
-                .limit(4)
+                .limit(5)
             )
             sub_res = await db.execute(sub_stmt)
             recent_subs = sub_res.scalars().all()
@@ -895,13 +940,17 @@ async def handle_telegram_update(update: dict[str, Any], db: AsyncSession) -> di
                 for sub in recent_subs:
                     as_title = sub.assignment.title if sub.assignment else "Vazifa"
                     sub_time = sub.submitted_at.strftime("%d.%m.%Y")
-                    if sub.grade:
+                    sub_status_str = (sub.status.value if hasattr(sub.status, "value") else str(sub.status or "")).lower()
+                    if sub.grade and sub.grade.score is not None:
                         grade_icon = "🌟" if sub.grade.score >= 8 else "✅"
-                        lines.append(f"• {as_title}: {grade_icon} <b>{sub.grade.score}/10</b> ({sub_time})")
+                        late_tag = " <i>(Kechikib topshirilgan)</i>" if sub_status_str == "late" else ""
+                        lines.append(f"• {as_title}: {grade_icon} <b>{sub.grade.score}/10</b>{late_tag} ({sub_time})")
                         if sub.grade.feedback and len(sub.grade.feedback) < 100:
                             lines.append(f"   <i>Izoh: {sub.grade.feedback}</i>")
-                    elif sub.status == SubmissionStatus.LATE:
-                        lines.append(f"• {as_title}: ⚠️ <b>Kechikib topshirilgan</b> ({sub_time})")
+                    elif sub_status_str == "graded":
+                        lines.append(f"• {as_title}: ✅ <b>Baholangan</b> ({sub_time})")
+                    elif sub_status_str == "late":
+                        lines.append(f"• {as_title}: ⚠️ <b>Kechikib topshirilgan (Tekshirilmoqda)</b> ({sub_time})")
                     else:
                         lines.append(f"• {as_title}: ⏳ <b>Topshirildi (Tekshirilmoqda)</b> ({sub_time})")
                 lines.append("")

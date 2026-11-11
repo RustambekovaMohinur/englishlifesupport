@@ -793,8 +793,8 @@ async def submit_homework(
     return _submission_to_out(sub)
 
 
-@router.get("", response_model=PaginatedSubmissions)
-@router.get("/", response_model=PaginatedSubmissions)
+@router.get("", response_model=PaginatedSubmissions | list[SubmissionOut])
+@router.get("/", response_model=PaginatedSubmissions | list[SubmissionOut])
 async def list_submissions(
     current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
@@ -804,7 +804,23 @@ async def list_submissions(
     is_suspicious: bool | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    as_list: bool = Query(default=False, description="Return raw list instead of paginated object"),
 ):
+    page_num = page if isinstance(page, int) else int(getattr(page, "default", 1))
+    page_sz = page_size if isinstance(page_size, int) else int(getattr(page_size, "default", 20))
+    as_list_val = bool(as_list if isinstance(as_list, bool) else getattr(as_list, "default", False))
+
+    if not _is_admin(current_user):
+        teacher_groups_subq = select(Group.id).where(Group.created_by == current_user.id)
+        teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
+        teacher_asgn_subq = select(Assignment.id).where(Assignment.created_by == current_user.id)
+        teacher_asgn_ids = (await db.execute(teacher_asgn_subq)).scalars().all()
+        # Clean blank slate: teachers with no cohorts or assignments have 0 submissions
+        if not teacher_group_ids and not teacher_asgn_ids:
+            if as_list_val:
+                return []
+            return PaginatedSubmissions(items=[], total=0, page=page_num, page_size=page_sz)
+
     query = (
         select(Submission)
         .options(
@@ -842,7 +858,7 @@ async def list_submissions(
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar_one()
 
-    query = query.order_by(Submission.submitted_at.desc()).offset((page - 1) * page_size).limit(page_size)
+    query = query.order_by(Submission.submitted_at.desc()).offset((page_num - 1) * page_sz).limit(page_sz)
     submissions = (await db.execute(query)).scalars().all()
 
     va_map = {}
@@ -868,11 +884,15 @@ async def list_submissions(
                 completed_at=va.completed_at,
             )
 
+    items = [_submission_to_out(s, vocab_attempt=va_map.get((s.assignment_id, s.student_id))) for s in submissions]
+    if as_list_val:
+        return items
+
     return PaginatedSubmissions(
-        items=[_submission_to_out(s, vocab_attempt=va_map.get((s.assignment_id, s.student_id))) for s in submissions],
+        items=items,
         total=total,
-        page=page,
-        page_size=page_size,
+        page=page_num,
+        page_size=page_sz,
     )
 
 

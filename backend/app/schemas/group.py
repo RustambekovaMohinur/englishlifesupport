@@ -18,6 +18,53 @@ class GroupCreate(BaseModel):
     start_date: datetime | None = None
     curriculum_template_id: uuid.UUID | None = None
 
+    @field_validator("english_level", mode="before")
+    @classmethod
+    def parse_english_level(cls, v: Any) -> Any:
+        if isinstance(v, EnglishLevel):
+            return v
+        if isinstance(v, str):
+            clean = v.strip().lower().replace("-", "_").replace(" ", "_")
+            mapping = {
+                "pre_intermediate": EnglishLevel.PRE_INTERMEDIATE,
+                "upper_intermediate": EnglishLevel.UPPER_INTERMEDIATE,
+                "elementary": EnglishLevel.ELEMENTARY,
+                "beginner": EnglishLevel.BEGINNER,
+                "intermediate": EnglishLevel.INTERMEDIATE,
+                "advanced": EnglishLevel.ADVANCED,
+                "a1": EnglishLevel.A1,
+                "a2": EnglishLevel.A2,
+                "b1": EnglishLevel.B1,
+                "b2": EnglishLevel.B2,
+                "c1": EnglishLevel.C1,
+                "c2": EnglishLevel.C2,
+                "cefr_a1": EnglishLevel.CEFR_A1,
+                "cefr_a2": EnglishLevel.CEFR_A2,
+                "cefr_b1": EnglishLevel.CEFR_B1,
+                "cefr_b2": EnglishLevel.CEFR_B2,
+                "cefr_c1": EnglishLevel.CEFR_C1,
+                "cefr_c2": EnglishLevel.CEFR_C2,
+                "ielts": EnglishLevel.IELTS,
+                "ielts_foundation": EnglishLevel.IELTS_FOUNDATION,
+                "ielts_graduation": EnglishLevel.IELTS_GRADUATION,
+                "ielts_5.5": EnglishLevel.IELTS_5_5,
+                "ielts_5_5": EnglishLevel.IELTS_5_5,
+                "ielts_6.0": EnglishLevel.IELTS_6_0,
+                "ielts_6_0": EnglishLevel.IELTS_6_0,
+                "ielts_6.5": EnglishLevel.IELTS_6_5,
+                "ielts_6_5": EnglishLevel.IELTS_6_5,
+                "ielts_7.0": EnglishLevel.IELTS_7_0,
+                "ielts_7_0": EnglishLevel.IELTS_7_0,
+                "ielts_7.5+": EnglishLevel.IELTS_7_5_PLUS,
+                "ielts_7_5_plus": EnglishLevel.IELTS_7_5_PLUS,
+            }
+            if clean in mapping:
+                return mapping[clean]
+            for member in EnglishLevel:
+                if member.value == clean or member.name.lower() == clean:
+                    return member
+        return v
+
     @field_validator("default_homework_time")
     @classmethod
     def validate_time(cls, v: str | None) -> str | None:
@@ -47,6 +94,55 @@ class GroupUpdate(BaseModel):
     telegram_group_chat_id: str | None = Field(default=None, max_length=64)
     start_date: datetime | None = None
     curriculum_template_id: uuid.UUID | None = None
+
+    @field_validator("english_level", mode="before")
+    @classmethod
+    def parse_english_level(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, EnglishLevel):
+            return v
+        if isinstance(v, str):
+            clean = v.strip().lower().replace("-", "_").replace(" ", "_")
+            mapping = {
+                "pre_intermediate": EnglishLevel.PRE_INTERMEDIATE,
+                "upper_intermediate": EnglishLevel.UPPER_INTERMEDIATE,
+                "elementary": EnglishLevel.ELEMENTARY,
+                "beginner": EnglishLevel.BEGINNER,
+                "intermediate": EnglishLevel.INTERMEDIATE,
+                "advanced": EnglishLevel.ADVANCED,
+                "a1": EnglishLevel.A1,
+                "a2": EnglishLevel.A2,
+                "b1": EnglishLevel.B1,
+                "b2": EnglishLevel.B2,
+                "c1": EnglishLevel.C1,
+                "c2": EnglishLevel.C2,
+                "cefr_a1": EnglishLevel.CEFR_A1,
+                "cefr_a2": EnglishLevel.CEFR_A2,
+                "cefr_b1": EnglishLevel.CEFR_B1,
+                "cefr_b2": EnglishLevel.CEFR_B2,
+                "cefr_c1": EnglishLevel.CEFR_C1,
+                "cefr_c2": EnglishLevel.CEFR_C2,
+                "ielts": EnglishLevel.IELTS,
+                "ielts_foundation": EnglishLevel.IELTS_FOUNDATION,
+                "ielts_graduation": EnglishLevel.IELTS_GRADUATION,
+                "ielts_5.5": EnglishLevel.IELTS_5_5,
+                "ielts_5_5": EnglishLevel.IELTS_5_5,
+                "ielts_6.0": EnglishLevel.IELTS_6_0,
+                "ielts_6_0": EnglishLevel.IELTS_6_0,
+                "ielts_6.5": EnglishLevel.IELTS_6_5,
+                "ielts_6_5": EnglishLevel.IELTS_6_5,
+                "ielts_7.0": EnglishLevel.IELTS_7_0,
+                "ielts_7_0": EnglishLevel.IELTS_7_0,
+                "ielts_7.5+": EnglishLevel.IELTS_7_5_PLUS,
+                "ielts_7_5_plus": EnglishLevel.IELTS_7_5_PLUS,
+            }
+            if clean in mapping:
+                return mapping[clean]
+            for member in EnglishLevel:
+                if member.value == clean or member.name.lower() == clean:
+                    return member
+        return v
 
     @field_validator("default_homework_time")
     @classmethod

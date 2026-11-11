@@ -50,8 +50,9 @@ def format_parent_digest(
     vocab_score = vocab_attempt.score if vocab_attempt else None
 
     has_sub = submission is not None
-    is_graded = has_sub and (submission.grade is not None or submission.status == SubmissionStatus.GRADED)
-    is_late = has_sub and submission.status == SubmissionStatus.LATE
+    sub_status_str = (submission.status.value if hasattr(submission.status, "value") else str(submission.status or "")).lower() if has_sub else ""
+    is_graded = has_sub and (submission.grade is not None or sub_status_str == "graded" or submission.status == SubmissionStatus.GRADED)
+    is_late = has_sub and (sub_status_str == "late" or submission.status == SubmissionStatus.LATE)
     score_val = submission.grade.score if (submission and submission.grade) else None
 
     # Determine Tier
