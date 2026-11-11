@@ -48,27 +48,15 @@ router = APIRouter(prefix="/students", tags=["students"])
 teacher_students_router = APIRouter(prefix="/teacher/students", tags=["students"])
 logger = logging.getLogger(__name__)
 def _is_admin(user) -> bool:
-    """Check if user is the super-admin (synthetic admin2010 account)."""
-    return getattr(user, "username", None) == "admin2010"
+    """Check if user is the super-admin."""
+    return getattr(user, "username", None) == "admin2010" or getattr(user, "role", None) == "admin"
 
 
 def _teacher_group_filter(current_user):
     """
-    Returns a SQLAlchemy filter clause for groups belonging to a teacher.
-    Matches groups where:
-      - created_by == current teacher's user_id, OR
-      - created_by is NULL (orphaned groups), OR
-      - created_by == admin synthetic UUID (admin-created groups)
+    Returns a SQLAlchemy filter clause for groups strictly belonging to a teacher.
     """
-    import uuid as _uuid
-    from app.models.group import Group
-    from sqlalchemy import or_
-    _ADMIN_ID = _uuid.UUID("00000000-0000-0000-0000-000000000001")
-    return or_(
-        Group.created_by == current_user.id,
-        Group.created_by.is_(None),
-        Group.created_by == _ADMIN_ID,
-    )
+    return Group.created_by == current_user.id
 
 
 
@@ -97,13 +85,19 @@ async def list_students(
     """
     teacher_groups_subq = select(Group.id)
     if not _is_admin(current_user):
-        teacher_groups_subq = teacher_groups_subq.where(_teacher_group_filter(current_user))
+        teacher_groups_subq = teacher_groups_subq.where(Group.created_by == current_user.id)
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
 
-    # Resilient fallback: if no groups matched filter, fallback to all existing groups
-    if not teacher_group_ids:
-        all_g_res = await db.execute(select(Group.id))
-        teacher_group_ids = all_g_res.scalars().all()
+    page_num = page if isinstance(page, int) else int(getattr(page, "default", 1))
+    page_sz = page_size if isinstance(page_size, int) else int(getattr(page_size, "default", 500))
+    group_id_val = group_id if not hasattr(group_id, "default") else group_id.default
+    search_val = search if not hasattr(search, "default") else search.default
+    is_active_val = is_active if not hasattr(is_active, "default") else is_active.default
+    approval_status_val = approval_status if not hasattr(approval_status, "default") else approval_status.default
+
+    # If teacher has no cohorts and is not admin, they have 0 students (clean blank slate)
+    if not _is_admin(current_user) and not teacher_group_ids:
+        return PaginatedStudents(items=[], total=0, page=page_num, page_size=page_sz)
 
     query = select(
         StudentProfile,
@@ -119,26 +113,23 @@ async def list_students(
         User, StudentProfile.user_id == User.id
     ).outerjoin(Group, StudentProfile.group_id == Group.id)
 
-    if group_id:
-        query = query.where(StudentProfile.group_id == group_id)
-    elif teacher_group_ids:
-        query = query.where(
-            or_(
-                StudentProfile.group_id.in_(teacher_group_ids),
-                StudentProfile.group_id.is_(None)
-            )
-        )
+    if group_id_val:
+        if not _is_admin(current_user) and group_id_val not in teacher_group_ids:
+            return PaginatedStudents(items=[], total=0, page=page_num, page_size=page_sz)
+        query = query.where(StudentProfile.group_id == group_id_val)
+    elif not _is_admin(current_user):
+        query = query.where(StudentProfile.group_id.in_(teacher_group_ids))
 
-    if search:
-        like = f"%{search.strip()}%"
+    if search_val:
+        like = f"%{search_val.strip()}%"
         query = query.where(or_(
             StudentProfile.full_name.ilike(like),
             User.email.ilike(like),
             User.username.ilike(like),
         ))
 
-    if approval_status is not None and approval_status.strip():
-        appr_val = approval_status.strip().lower()
+    if approval_status_val is not None and str(approval_status_val).strip():
+        appr_val = str(approval_status_val).strip().lower()
         if appr_val == "all":
             pass
         elif appr_val == "approved":
@@ -148,20 +139,20 @@ async def list_students(
         elif appr_val == "rejected":
             query = query.where(User.approval_status == ApprovalStatus.REJECTED)
         else:
-            query = query.where(User.approval_status == approval_status)
+            query = query.where(User.approval_status == approval_status_val)
     else:
         # Default for normal student roster: only approved (or legacy NULL) students
         query = query.where(or_(User.approval_status == ApprovalStatus.APPROVED, User.approval_status.is_(None)))
 
-    if is_active is not None:
-        query = query.where(User.is_active == is_active)
-    elif approval_status is None or (isinstance(approval_status, str) and approval_status.strip().lower() == "approved"):
+    if is_active_val is not None:
+        query = query.where(User.is_active == is_active_val)
+    elif approval_status_val is None or (isinstance(approval_status_val, str) and approval_status_val.strip().lower() == "approved"):
         query = query.where(User.is_active == True)
 
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar_one()
 
-    query = query.order_by(StudentProfile.full_name).offset((page - 1) * page_size).limit(page_size)
+    query = query.order_by(StudentProfile.full_name).offset((page_num - 1) * page_sz).limit(page_sz)
     rows = (await db.execute(query)).all()
 
     # Calculate active assignment counts and completed submissions for the fetched students
@@ -265,7 +256,7 @@ async def list_students(
                 is_parent_linked=bool(profile.parent_telegram_chat_id),
             )
         )
-    return PaginatedStudents(items=items, total=total, page=page, page_size=page_size)
+    return PaginatedStudents(items=items, total=total, page=page_num, page_size=page_sz)
 
 
 @router.get("/pending", response_model=PaginatedPendingStudents)
@@ -276,14 +267,16 @@ async def list_pending_students(
     page_size: int = Query(default=20, ge=1, le=100),
 ):
     """Returns paginated pending student registration requests for groups belonging to this teacher."""
+    page_num = page if isinstance(page, int) else int(getattr(page, "default", 1))
+    page_sz = page_size if isinstance(page_size, int) else int(getattr(page_size, "default", 20))
+
     teacher_groups_subq = select(Group.id)
     if not _is_admin(current_user):
-        teacher_groups_subq = teacher_groups_subq.where(_teacher_group_filter(current_user))
+        teacher_groups_subq = teacher_groups_subq.where(Group.created_by == current_user.id)
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
 
-    if not teacher_group_ids:
-        all_g_res = await db.execute(select(Group.id))
-        teacher_group_ids = all_g_res.scalars().all()
+    if not _is_admin(current_user) and not teacher_group_ids:
+        return PaginatedPendingStudents(items=[], total=0, page=page_num, page_size=page_sz)
 
     base_query = (
         select(
@@ -308,13 +301,13 @@ async def list_pending_students(
     count_query = select(func.count()).select_from(base_query.subquery())
     total = (await db.execute(count_query)).scalar_one()
 
-    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+    total_pages = (total + page_sz - 1) // page_sz if total > 0 else 0
 
-    if total == 0 or page > total_pages:
+    if total == 0 or page_num > total_pages:
         return PaginatedPendingStudents(
             items=[],
-            page=page,
-            page_size=page_size,
+            page=page_num,
+            page_size=page_sz,
             total=total,
             total_pages=total_pages,
         )
@@ -322,8 +315,8 @@ async def list_pending_students(
     query = (
         base_query
         .order_by(User.created_at.desc(), User.id.asc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        .offset((page_num - 1) * page_sz)
+        .limit(page_sz)
     )
     rows = (await db.execute(query)).all()
 
@@ -351,8 +344,8 @@ async def list_pending_students(
 
     return PaginatedPendingStudents(
         items=items,
-        page=page,
-        page_size=page_size,
+        page=page_num,
+        page_size=page_sz,
         total=total,
         total_pages=total_pages,
     )
@@ -386,10 +379,8 @@ async def approve_student(
             detail={"code": "INVALID_APPROVAL_STATE", "message": "Student cannot be approved from the current state."},
         )
 
-    # Scoping check: student must belong to teacher's group
-    is_authorized = group is not None and (
-        True  # all teachers can access all groups
-    )
+    # Scoping check: student must belong to teacher's group (or admin)
+    is_authorized = _is_admin(current_user) or (group is not None and group.created_by == current_user.id)
     if not is_authorized:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -467,9 +458,7 @@ async def reject_student(
             detail={"code": "INVALID_APPROVAL_STATE", "message": "Student cannot be rejected from the current state."},
         )
 
-    is_authorized = group is not None and (
-        True  # all teachers can access all groups
-    )
+    is_authorized = _is_admin(current_user) or (group is not None and group.created_by == current_user.id)
     if not is_authorized:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -531,9 +520,7 @@ async def handle_student_approval(
 
     profile, user, group = row
 
-    is_authorized = group is not None and (
-        True  # all teachers can access all groups
-    )
+    is_authorized = _is_admin(current_user) or (group is not None and group.created_by == current_user.id)
     if not is_authorized:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1454,9 +1441,7 @@ async def reset_student_password(
 
     profile, user, group = row
 
-    is_authorized = group is not None and (
-        True  # all teachers can access all groups
-    )
+    is_authorized = _is_admin(current_user) or (group is not None and group.created_by == current_user.id)
     if not is_authorized:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this student")
 

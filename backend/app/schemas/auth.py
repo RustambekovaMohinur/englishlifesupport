@@ -104,7 +104,7 @@ class CurrentUser(BaseModel):
     id: uuid.UUID
     email: str
     username: str = ""
-    role: UserRole
+    role: str
     is_active: bool
 
     model_config = {"from_attributes": True}

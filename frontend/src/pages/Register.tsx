@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/ui";
@@ -9,6 +9,9 @@ import { fetchPublicGroups, fetchPublicTeachers, GroupPublic, TeacherPublic } fr
 export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const urlTeacherId = searchParams.get("teacher_id") || searchParams.get("teacherId");
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
@@ -25,18 +28,27 @@ export default function RegisterPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmittedPending, setIsSubmittedPending] = useState(false);
 
-  // Load teachers list on mount
+  // Load teachers list on mount and handle invite link teacher_id
   useEffect(() => {
     fetchPublicTeachers()
       .then((data) => {
         setTeachers(data);
         if (data.length > 0) {
+          if (urlTeacherId) {
+            const matched = data.find(
+              (t) => t.id === urlTeacherId || t.user_id === urlTeacherId
+            );
+            if (matched) {
+              setTeacherId(matched.id);
+              return;
+            }
+          }
           setTeacherId(data[0].id);
         }
       })
       .catch(() => toast.error("Failed to load teachers list"))
       .finally(() => setIsLoadingTeachers(false));
-  }, []);
+  }, [urlTeacherId]);
 
   // When teacherId changes, fetch that teacher's active groups
   useEffect(() => {

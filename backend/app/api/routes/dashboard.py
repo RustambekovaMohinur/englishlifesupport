@@ -31,27 +31,15 @@ from app.utils.datetimes import as_utc, utcnow
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 def _is_admin(user) -> bool:
-    """Check if user is the super-admin (synthetic admin2010 account)."""
-    return getattr(user, "username", None) == "admin2010"
+    """Check if user is the super-admin."""
+    return getattr(user, "username", None) == "admin2010" or getattr(user, "role", None) == "admin"
 
 
 def _teacher_group_filter(current_user):
     """
-    Returns a SQLAlchemy filter clause for groups belonging to a teacher.
-    Matches groups where:
-      - created_by == current teacher's user_id, OR
-      - created_by is NULL (orphaned groups), OR
-      - created_by == admin synthetic UUID (admin-created groups)
+    Returns a SQLAlchemy filter clause for groups strictly belonging to a teacher.
     """
-    import uuid as _uuid
-    from app.models.group import Group
-    from sqlalchemy import or_
-    _ADMIN_ID = _uuid.UUID("00000000-0000-0000-0000-000000000001")
-    return or_(
-        Group.created_by == current_user.id,
-        Group.created_by.is_(None),
-        Group.created_by == _ADMIN_ID,
-    )
+    return Group.created_by == current_user.id
 
 
 
@@ -64,22 +52,17 @@ async def teacher_dashboard(
         from app.core.config import settings
         from app.models.wordlist import WordlistSet
 
-        # Teachers see only their own groups; admin sees all
+        # Teachers see strictly only their own cohorts; admin sees all
         teacher_groups_q = select(Group)
         if not _is_admin(current_user):
-            teacher_groups_q = teacher_groups_q.where(_teacher_group_filter(current_user))
+            teacher_groups_q = teacher_groups_q.where(Group.created_by == current_user.id)
         teacher_groups = (await db.execute(teacher_groups_q)).scalars().all()
-
-        # Fallback to all groups if none matched
-        if not teacher_groups:
-            all_groups_res = await db.execute(select(Group))
-            teacher_groups = all_groups_res.scalars().all()
 
         group_ids = [g.id for g in teacher_groups if g.is_active]
         all_group_ids = [g.id for g in teacher_groups]
 
         if not all_group_ids:
-            # Clean zero-based dashboard for brand new teachers
+            # Clean zero-based dashboard for brand new teachers (blank slate)
             return TeacherDashboard(
                 total_students=0,
                 active_students=0,
@@ -115,9 +98,6 @@ async def teacher_dashboard(
             )
         )
         asgn_rows = (await db.execute(asgn_q)).scalars().all()
-        if not asgn_rows:
-            fallback_asgn_q = select(Assignment)
-            asgn_rows = (await db.execute(fallback_asgn_q)).scalars().all()
         total_assignments = len(asgn_rows)
         published_assignments = sum(1 for a in asgn_rows if a.status == AssignmentStatus.PUBLISHED)
         assignment_ids = [a.id for a in asgn_rows]

@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import delete, func, inspect as sa_inspect, select, update
+from sqlalchemy import delete, func, inspect as sa_inspect, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.base import NO_VALUE
@@ -47,27 +47,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/assignments", tags=["assignments"])
 teacher_assignments_router = APIRouter(prefix="/teacher/assignments", tags=["assignments"])
 def _is_admin(user) -> bool:
-    """Check if user is the super-admin (synthetic admin2010 account)."""
-    return getattr(user, "username", None) == "admin2010"
+    """Check if user is the super-admin."""
+    return getattr(user, "username", None) == "admin2010" or getattr(user, "role", None) == "admin"
 
 
 def _teacher_group_filter(current_user):
     """
-    Returns a SQLAlchemy filter clause for groups belonging to a teacher.
-    Matches groups where:
-      - created_by == current teacher's user_id, OR
-      - created_by is NULL (orphaned groups), OR
-      - created_by == admin synthetic UUID (admin-created groups)
+    Returns a SQLAlchemy filter clause for groups strictly belonging to a teacher.
     """
-    import uuid as _uuid
-    from app.models.group import Group
-    from sqlalchemy import or_
-    _ADMIN_ID = _uuid.UUID("00000000-0000-0000-0000-000000000001")
-    return or_(
-        Group.created_by == current_user.id,
-        Group.created_by.is_(None),
-        Group.created_by == _ADMIN_ID,
-    )
+    return Group.created_by == current_user.id
 
 
 
@@ -244,9 +232,10 @@ async def list_assignments(
 ):
     try:
         valid_group_uuid: uuid.UUID | None = None
-        if group_id and group_id.strip():
+        gid_str = group_id if isinstance(group_id, str) else (group_id.default if hasattr(group_id, "default") and isinstance(group_id.default, str) else None)
+        if gid_str and gid_str.strip():
             try:
-                valid_group_uuid = uuid.UUID(group_id.strip())
+                valid_group_uuid = uuid.UUID(gid_str.strip())
             except (ValueError, TypeError):
                 valid_group_uuid = None
 
@@ -258,31 +247,25 @@ async def list_assignments(
         )
 
         if valid_group_uuid:
+            if not _is_admin(current_user):
+                # Verify teacher owns this group
+                grp_owner = (await db.execute(select(Group.id).where(Group.id == valid_group_uuid, Group.created_by == current_user.id))).scalar_one_or_none()
+                if not grp_owner:
+                    return []
             query = query.where(Assignment.group_id == valid_group_uuid)
         elif not _is_admin(current_user):
             query = query.where(
                 or_(
                     Assignment.created_by == current_user.id,
-                    _teacher_group_filter(current_user),
-                    Group.created_by.is_(None),
+                    Group.created_by == current_user.id,
                 )
             )
 
         query = query.order_by(Assignment.deadline.desc())
         rows = (await db.execute(query)).all()
 
-        # Resilient fallback: If teacher filter yielded no records, fallback to all available assignments
-        # (respecting valid_group_uuid if requested) so teacher views never display empty unexpectedly
         if not rows:
-            fallback_query = (
-                select(Assignment, Group.name)
-                .options(selectinload(Assignment.images), selectinload(Assignment.comments))
-                .outerjoin(Group, Assignment.group_id == Group.id)
-            )
-            if valid_group_uuid:
-                fallback_query = fallback_query.where(Assignment.group_id == valid_group_uuid)
-            fallback_query = fallback_query.order_by(Assignment.deadline.desc())
-            rows = (await db.execute(fallback_query)).all()
+            return []
 
         asgn_ids = [a.id for a, _ in rows]
 

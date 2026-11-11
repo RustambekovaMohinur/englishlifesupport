@@ -34,7 +34,7 @@ export default function AdminLoginPage() {
         localStorage.setItem("el_admin_token", res.data.access_token);
         localStorage.setItem("el_access_token", res.data.access_token);
         toast.success("Welcome, Super Admin!");
-        navigate("/admin/teachers");
+        navigate("/admin/dashboard");
       }
     } catch (err: any) {
       const detail = err?.response?.data?.detail || "Invalid master admin credentials.";

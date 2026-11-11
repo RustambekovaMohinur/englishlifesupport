@@ -116,12 +116,16 @@ async def admin_login(body: AdminLoginRequest, db: AsyncSession = Depends(get_db
 
 
 @router.get("/teachers/public", response_model=list[TeacherPublicOut])
+@router.get("/public/teachers", response_model=list[TeacherPublicOut])
 async def list_public_teachers(db: AsyncSession = Depends(get_db)):
     """Public endpoint to fetch active teachers for student registration."""
     query = (
         select(TeacherProfile)
         .join(User, TeacherProfile.user_id == User.id)
-        .where(User.is_active.is_(True))
+        .where(
+            User.is_active.is_(True),
+            func.lower(User.username) != "admin2010",
+        )
         .order_by(TeacherProfile.full_name.asc())
     )
     teachers = (await db.execute(query)).scalars().all()
@@ -412,4 +416,11 @@ async def logout(body: dict, db: AsyncSession = Depends(get_db)):
 
 @router.get("/me", response_model=CurrentUser)
 async def me(current_user: User = Depends(get_current_user)):
-    return current_user
+    role_val = "admin" if (current_user.username == "admin2010" or getattr(current_user, "role", None) == "admin") else (current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role))
+    return CurrentUser(
+        id=current_user.id,
+        email=current_user.email,
+        username=current_user.username or "",
+        role=role_val,
+        is_active=current_user.is_active,
+    )

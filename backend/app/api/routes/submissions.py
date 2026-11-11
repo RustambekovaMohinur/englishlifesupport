@@ -69,14 +69,32 @@ from app.utils.files import (
 router = APIRouter(prefix="/submissions", tags=["submissions"])
 
 
+def _is_admin(user) -> bool:
+    return getattr(user, "username", None) == "admin2010" or getattr(user, "role", None) == "admin"
+
+
 async def _authorize_submission_access(submission: Submission, current_user: User, db: AsyncSession) -> None:
     """
-    A teacher or admin may access any submission.
-    A student may only access their own - verified by joining through student_profiles.user_id.
+    Super Admin may access any submission.
+    A teacher may only access submissions belonging to their assignments or cohorts.
+    A student may only access their own.
     """
-    user_role_str = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
-    if user_role_str in ["teacher", "admin", "superadmin"] or current_user.role == UserRole.TEACHER:
+    if _is_admin(current_user):
         return
+
+    if current_user.role == UserRole.TEACHER:
+        assign = (await db.execute(select(Assignment).where(Assignment.id == submission.assignment_id))).scalar_one_or_none()
+        if assign:
+            if assign.created_by == current_user.id:
+                return
+            if assign.group_id:
+                grp = (await db.execute(select(Group).where(Group.id == assign.group_id))).scalar_one_or_none()
+                if grp and grp.created_by == current_user.id:
+                    return
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view submissions for another teacher's cohort.",
+        )
 
     result = await db.execute(select(StudentProfile).where(StudentProfile.id == submission.student_id))
     student = result.scalar_one_or_none()
@@ -775,9 +793,10 @@ async def submit_homework(
     return _submission_to_out(sub)
 
 
-@router.get("", response_model=PaginatedSubmissions, dependencies=[Depends(require_teacher)])
-@router.get("/", response_model=PaginatedSubmissions, dependencies=[Depends(require_teacher)])
+@router.get("", response_model=PaginatedSubmissions)
+@router.get("/", response_model=PaginatedSubmissions)
 async def list_submissions(
+    current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
     group_id: uuid.UUID | None = Query(default=None),
     student_id: uuid.UUID | None = Query(default=None),
@@ -799,7 +818,15 @@ async def list_submissions(
             selectinload(Submission.duplicate_of).selectinload(Submission.student),
         )
         .join(Assignment, Submission.assignment_id == Assignment.id)
+        .outerjoin(Group, Assignment.group_id == Group.id)
     )
+    if not _is_admin(current_user):
+        query = query.where(
+            or_(
+                Assignment.created_by == current_user.id,
+                Group.created_by == current_user.id,
+            )
+        )
     if group_id:
         query = query.where(Assignment.group_id == group_id)
     if student_id:

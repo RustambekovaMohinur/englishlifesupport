@@ -25,6 +25,7 @@ const TeacherProfilePage = lazy(() => import("@/pages/teacher/Profile"));
 const TeacherWordlistsPage = lazy(() => import("@/pages/teacher/Wordlists"));
 const TeacherCurriculumPage = lazy(() => import("@/pages/teacher/Curriculum"));
 const AdminLoginPage = lazy(() => import("@/pages/admin/Login"));
+const AdminDashboardPage = lazy(() => import("@/pages/admin/Dashboard"));
 const AdminTeachersPortalPage = lazy(() => import("@/pages/admin/Teachers"));
 
 // Lazy-loaded student pages
@@ -46,6 +47,9 @@ function RootRedirect() {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.username === "admin2010" || user.role === "admin") {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
   return <Navigate to={user.role === "teacher" ? "/teacher" : "/student"} replace />;
 }
 
@@ -63,7 +67,8 @@ export default function App() {
           {/* Dedicated Master Super Admin Portal (admin2010 / admin17) */}
           <Route path="/admin/login" element={<AdminLoginPage />} />
           <Route element={<AdminProtectedRoute />}>
-            <Route path="/admin" element={<Navigate to="/admin/teachers" replace />} />
+            <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
             <Route path="/admin/teachers" element={<AdminTeachersPortalPage />} />
           </Route>
 

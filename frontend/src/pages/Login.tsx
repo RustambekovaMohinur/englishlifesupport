@@ -6,6 +6,7 @@ import { Logo, Modal, ThemeToggle } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { AxiosError } from "axios";
 import { FaInstagram, FaTelegramPlane } from "react-icons/fa";
+import { tokenStorage } from "@/services/api";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -23,7 +24,13 @@ export default function LoginPage() {
     setIsSubmitting(true);
     try {
       const user = await login(username, password);
-      navigate(user.role === "teacher" ? "/teacher" : "/student");
+      if (user.username === "admin2010" || user.role === "admin") {
+        localStorage.setItem("el_admin_auth", "true");
+        localStorage.setItem("el_admin_token", tokenStorage.getAccess() || "");
+        navigate("/admin/dashboard");
+      } else {
+        navigate(user.role === "teacher" ? "/teacher" : "/student");
+      }
     } catch (err) {
       if (err instanceof AxiosError) {
         if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {

@@ -142,6 +142,13 @@ export default function AdminTeachersPortalPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Link
+              to="/admin/dashboard"
+              className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition"
+            >
+              <span>← Command Center</span>
+            </Link>
+
             <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-zinc-300 bg-zinc-800/80 px-3 py-1.5 rounded-lg border border-zinc-700/60 font-mono">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               <span>admin2010</span>

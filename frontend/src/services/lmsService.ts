@@ -807,6 +807,42 @@ export interface TeacherItemOut {
   bio?: string | null;
   avatar_url?: string | null;
   created_at: string;
+  is_active?: boolean;
+  group_count?: number;
+  student_count?: number;
+}
+
+export interface PlatformStatsOut {
+  total_teachers: number;
+  total_students: number;
+  active_students: number;
+  pending_approvals: number;
+  total_groups: number;
+  total_assignments: number;
+  total_submissions: number;
+  teachers_breakdown: Array<{
+    id: string;
+    user_id: string;
+    full_name: string;
+    username: string;
+    email: string;
+    is_active: boolean;
+    group_count: number;
+    student_count: number;
+  }>;
+}
+
+export interface PendingApprovalItem {
+  id: string;
+  user_id: string;
+  role: string;
+  full_name: string;
+  username: string;
+  email: string;
+  phone?: string | null;
+  group_name?: string | null;
+  teacher_name?: string | null;
+  created_at: string;
 }
 
 export const listAllTeachers = (): Promise<TeacherItemOut[]> =>
@@ -814,3 +850,21 @@ export const listAllTeachers = (): Promise<TeacherItemOut[]> =>
 
 export const createTeacherAccount = (body: CreateTeacherPayload): Promise<TeacherItemOut> =>
   api.post<TeacherItemOut>('/teachers', body).then((r) => r.data);
+
+export const getPlatformStats = (): Promise<PlatformStatsOut> =>
+  api.get<PlatformStatsOut>('/teachers/platform-stats').then((r) => r.data);
+
+export const getPendingApprovals = (): Promise<PendingApprovalItem[]> =>
+  api.get<PendingApprovalItem[]>('/teachers/pending-approvals').then((r) => r.data);
+
+export const approveUserRequest = (userId: string): Promise<{ success: boolean; message: string }> =>
+  api.post(`/teachers/approvals/${userId}/approve`).then((r) => r.data);
+
+export const rejectUserRequest = (userId: string): Promise<{ success: boolean; message: string }> =>
+  api.post(`/teachers/approvals/${userId}/reject`).then((r) => r.data);
+
+export const resetTeacherPassword = (teacherId: string, newPassword: string): Promise<{ message: string }> =>
+  api.post(`/teachers/${teacherId}/reset-password`, { new_password: newPassword }).then((r) => r.data);
+
+export const toggleTeacherStatus = (teacherId: string, isActive: boolean): Promise<{ message: string }> =>
+  api.patch(`/teachers/${teacherId}/status`, { is_active: isActive }).then((r) => r.data);

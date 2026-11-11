@@ -36,45 +36,24 @@ from collections import defaultdict
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 def _is_admin(user) -> bool:
-    """Check if user is the super-admin (synthetic admin2010 account)."""
-    return getattr(user, "username", None) == "admin2010"
+    """Check if user is the super-admin."""
+    return getattr(user, "username", None) == "admin2010" or getattr(user, "role", None) == "admin"
 
 
 def _teacher_group_filter(current_user):
     """
-    Returns a SQLAlchemy filter clause for groups belonging to a teacher.
-    Matches groups where:
-      - created_by == current teacher's user_id, OR
-      - created_by is NULL (orphaned groups), OR
-      - created_by == admin synthetic UUID (admin-created groups)
+    Returns a SQLAlchemy filter clause for groups strictly belonging to a teacher.
     """
-    import uuid as _uuid
-    from app.models.group import Group
-    from sqlalchemy import or_
-    _ADMIN_ID = _uuid.UUID("00000000-0000-0000-0000-000000000001")
-    return or_(
-        Group.created_by == current_user.id,
-        Group.created_by.is_(None),
-        Group.created_by == _ADMIN_ID,
-    )
+    return Group.created_by == current_user.id
 
 logger = logging.getLogger(__name__)
 
 
 def _is_group_owner(group: Group, current_user: User) -> bool:
-    """Safe, foolproof teacher ownership check."""
+    """Strict teacher ownership check for multi-tenant isolation."""
     if _is_admin(current_user):
         return True
-    user_role_str = str(getattr(current_user, "role", "")).lower()
-    if "teacher" in user_role_str or getattr(current_user, "role", None) == UserRole.TEACHER:
-        return True
-    if group.created_by is None:
-        return True
-    if str(group.created_by) == str(current_user.id):
-        return True
-    if str(group.created_by) == "00000000-0000-0000-0000-000000000001":
-        return True
-    return False
+    return group.created_by == current_user.id
 
 
 async def _resolve_group(db: AsyncSession, group_id: Any) -> Group | None:
@@ -197,21 +176,13 @@ async def list_groups(
     Returns all groups for the teacher panel belonging to this teacher.
     Uses batched active deduplicated student counting across all groups.
     """
-    # Authenticated teachers see only their own cohorts; admins see all
+    # Authenticated teachers see strictly only their own cohorts; admins see all
     query = select(Group).order_by(Group.name)
     if not _is_admin(current_user):
-        query = query.where(_teacher_group_filter(current_user))
+        query = query.where(Group.created_by == current_user.id)
     if not include_archived:
         query = query.where(Group.is_active.is_(True))
     groups = (await db.execute(query)).scalars().all()
-
-    # Resilient fallback: If filtered query returned no cohorts, show all cohorts
-    # so teachers can immediately access and manage students and tasks
-    if not groups:
-        fallback_query = select(Group).order_by(Group.name)
-        if not include_archived:
-            fallback_query = fallback_query.where(Group.is_active.is_(True))
-        groups = (await db.execute(fallback_query)).scalars().all()
 
     if not groups:
         return []
@@ -270,10 +241,16 @@ async def create_group(body: GroupCreate, current_user: User = Depends(require_t
 
 
 @router.get("/{group_id}", response_model=GroupOut)
-async def get_group(group_id: str, db: AsyncSession = Depends(get_db)):
+async def get_group(
+    group_id: str,
+    current_user: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
     group = await _resolve_group(db, group_id)
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+    if not _is_group_owner(group, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to view this group")
     return await _to_group_out(db, group)
 
 @router.patch("/{group_id}", response_model=GroupOut)
