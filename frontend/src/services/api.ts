@@ -25,7 +25,7 @@ function resolveApiBaseUrl(): { rawUrl: string; baseUrl: string } {
   const envUrl = (
     import.meta.env?.VITE_API_BASE_URL ||
     import.meta.env?.VITE_API_URL ||
-    "https://englishlifesupport-s3dp.onrender.com"
+    "https://englishlifesupport-4ojx.onrender.com"
   ).trim().replace(/\/+$/, "");
 
   let baseUrl: string;
