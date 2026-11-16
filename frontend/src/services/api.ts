@@ -21,9 +21,35 @@ export const tokenStorage = {
   },
 };
 
-export const API_URL = "https://englishlifesupport-s3dp.onrender.com";
-export const RAW_API_URL = "https://englishlifesupport-s3dp.onrender.com";
-export const API_BASE_URL = "https://englishlifesupport-s3dp.onrender.com/api/v1";
+function resolveApiBaseUrl(): { rawUrl: string; baseUrl: string } {
+  const envUrl = (
+    import.meta.env?.VITE_API_BASE_URL ||
+    import.meta.env?.VITE_API_URL ||
+    "https://englishlifesupport-s3dp.onrender.com"
+  ).trim().replace(/\/+$/, "");
+
+  let baseUrl: string;
+  let rawUrl: string;
+
+  if (envUrl.endsWith("/api/v1")) {
+    baseUrl = envUrl;
+    rawUrl = envUrl.replace(/\/api\/v1$/, "");
+  } else if (envUrl.endsWith("/api")) {
+    baseUrl = `${envUrl}/v1`;
+    rawUrl = envUrl.replace(/\/api$/, "");
+  } else {
+    baseUrl = `${envUrl}/api/v1`;
+    rawUrl = envUrl;
+  }
+
+  return { rawUrl, baseUrl };
+}
+
+const { rawUrl: RESOLVED_RAW_URL, baseUrl: RESOLVED_API_BASE_URL } = resolveApiBaseUrl();
+
+export const API_URL = RESOLVED_RAW_URL;
+export const RAW_API_URL = RESOLVED_RAW_URL;
+export const API_BASE_URL = RESOLVED_API_BASE_URL;
 
 console.log("BASE_URL:", API_BASE_URL);
 
@@ -34,6 +60,54 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  // Guarantee that baseURL is always set to API_BASE_URL for relative requests
+  if (!config.baseURL || config.baseURL === "/") {
+    config.baseURL = API_BASE_URL;
+  }
+
+  // Normalize absolute URLs that point to /login on the server root
+  if (config.url && (config.url.startsWith("http://") || config.url.startsWith("https://"))) {
+    try {
+      const parsed = new URL(config.url);
+      if (parsed.pathname === "/login") {
+        parsed.pathname = "/api/v1/auth/login";
+        config.url = parsed.toString();
+      } else if (parsed.pathname === "/api/login") {
+        parsed.pathname = "/api/v1/auth/login";
+        config.url = parsed.toString();
+      }
+    } catch {
+      // ignore URL parsing errors for non-standard schemes
+    }
+  }
+
+  // Normalize login/register endpoints so they correctly target /auth/login rather than root /login
+  if (config.url) {
+    if (
+      config.url === "/login" ||
+      config.url === "login" ||
+      config.url === "/api/v1/login" ||
+      config.url === "/api/login"
+    ) {
+      config.url = "/auth/login";
+    } else if (
+      config.url.endsWith("/login") &&
+      !config.url.endsWith("/auth/login") &&
+      !config.url.includes("/admin/login")
+    ) {
+      config.url = config.url.replace(/\/login$/, "/auth/login");
+    }
+
+    if (
+      config.url === "/register" ||
+      config.url === "register" ||
+      config.url === "/api/v1/register" ||
+      config.url === "/api/register"
+    ) {
+      config.url = "/auth/register";
+    }
+  }
+
   // Ensure token is attached for all non-public routes
   const isPublicAuthRoute = config.url && (
     config.url.endsWith("/auth/login") ||
