@@ -164,7 +164,7 @@ class PaginatedPendingStudents(BaseModel):
     page: int
     page_size: int
     total: int
-    total_pages: int
+    total_pages: int = 0
 
 
 class ApprovedStudentData(BaseModel):

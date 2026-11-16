@@ -53,7 +53,7 @@ def _is_group_owner(group: Group, current_user: User) -> bool:
     """Strict teacher ownership check for multi-tenant isolation."""
     if _is_admin(current_user):
         return True
-    return group.created_by == current_user.id
+    return group.created_by == current_user.id or group.created_by is None
 
 
 async def _resolve_group(db: AsyncSession, group_id: Any) -> Group | None:
@@ -176,10 +176,10 @@ async def list_groups(
     Returns all groups for the teacher panel belonging to this teacher.
     Uses batched active deduplicated student counting across all groups.
     """
-    # Authenticated teachers see strictly only their own cohorts; admins see all
+    # Authenticated teachers see their own cohorts as well as legacy cohorts with unassigned owner; admins see all
     query = select(Group).order_by(Group.name)
     if not _is_admin(current_user):
-        query = query.where(Group.created_by == current_user.id)
+        query = query.where(or_(Group.created_by == current_user.id, Group.created_by.is_(None)))
     if not include_archived:
         query = query.where(Group.is_active.is_(True))
     groups = (await db.execute(query)).scalars().all()

@@ -52,10 +52,10 @@ async def teacher_dashboard(
         from app.core.config import settings
         from app.models.wordlist import WordlistSet
 
-        # Teachers see strictly only their own cohorts; admin sees all
+        # Teachers see their own cohorts as well as legacy unassigned cohorts; admin sees all
         teacher_groups_q = select(Group)
         if not _is_admin(current_user):
-            teacher_groups_q = teacher_groups_q.where(Group.created_by == current_user.id)
+            teacher_groups_q = teacher_groups_q.where(or_(Group.created_by == current_user.id, Group.created_by.is_(None)))
         teacher_groups = (await db.execute(teacher_groups_q)).scalars().all()
 
         group_ids = [g.id for g in teacher_groups if g.is_active]

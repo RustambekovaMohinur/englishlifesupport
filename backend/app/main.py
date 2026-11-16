@@ -102,15 +102,9 @@ app.add_middleware(
 
 # ---------- Automated Vocabulary Recovery on Startup ----------
 async def _recover_orphan_vocab() -> None:
-    """Fix VocabularyAssignment rows missing a group_id using their linked Assignment.
-    Runs once at container startup when the production ASYNC_DATABASE_URL is set.
-    """
+    """Fix VocabularyAssignment rows missing a group_id using their linked Assignment."""
     try:
-        # Create async engine using production URL (fallback to SQLite for local testing)
-        db_url = settings.ASYNC_DATABASE_URL or "sqlite+aiosqlite:///./test.db"
-        engine = create_async_engine(db_url, echo=False)
-        async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        async with async_session() as session:
+        async with AsyncSessionLocal() as session:
             stmt = select(VocabularyAssignment).where(VocabularyAssignment.group_id == None, VocabularyAssignment.assignment_id != None)
             result = await session.execute(stmt)
             vocab_assignments = result.scalars().all()

@@ -55,8 +55,9 @@ def _is_admin(user) -> bool:
 def _teacher_group_filter(current_user):
     """
     Returns a SQLAlchemy filter clause for groups strictly belonging to a teacher.
+    Also matches legacy groups where created_by is NULL so records are never lost.
     """
-    return Group.created_by == current_user.id
+    return or_(Group.created_by == current_user.id, Group.created_by.is_(None))
 
 
 
@@ -85,7 +86,7 @@ async def list_students(
     """
     teacher_groups_subq = select(Group.id)
     if not _is_admin(current_user):
-        teacher_groups_subq = teacher_groups_subq.where(Group.created_by == current_user.id)
+        teacher_groups_subq = teacher_groups_subq.where(_teacher_group_filter(current_user))
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
 
     page_num = page if isinstance(page, int) else int(getattr(page, "default", 1))
@@ -272,11 +273,11 @@ async def list_pending_students(
 
     teacher_groups_subq = select(Group.id)
     if not _is_admin(current_user):
-        teacher_groups_subq = teacher_groups_subq.where(Group.created_by == current_user.id)
+        teacher_groups_subq = teacher_groups_subq.where(_teacher_group_filter(current_user))
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
 
     if not _is_admin(current_user) and not teacher_group_ids:
-        return PaginatedPendingStudents(items=[], total=0, page=page_num, page_size=page_sz)
+        return PaginatedPendingStudents(items=[], total=0, page=page_num, page_size=page_sz, total_pages=0)
 
     base_query = (
         select(
@@ -379,8 +380,8 @@ async def approve_student(
             detail={"code": "INVALID_APPROVAL_STATE", "message": "Student cannot be approved from the current state."},
         )
 
-    # Scoping check: student must belong to teacher's group (or admin)
-    is_authorized = _is_admin(current_user) or (group is not None and group.created_by == current_user.id)
+    # Scoping check: student must belong to teacher's group (or admin, or legacy group without owner)
+    is_authorized = _is_admin(current_user) or (group is not None and (group.created_by == current_user.id or group.created_by is None))
     if not is_authorized:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

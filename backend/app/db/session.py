@@ -76,6 +76,10 @@ def _build_async_engine_url(raw_url: str) -> tuple[URL, dict]:
     passed via ``connect_args``.
     """
     global _IS_NEON
+    if not raw_url or raw_url.startswith("sqlite"):
+        from sqlalchemy.engine import make_url
+        return make_url(raw_url or "sqlite+aiosqlite:///./english_life.db"), {}
+
     parsed = urllib.parse.urlparse(raw_url)
     query_params = urllib.parse.parse_qs(parsed.query)
 
