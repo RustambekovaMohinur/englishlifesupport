@@ -88,6 +88,16 @@ app = FastAPI(
     docs_url="/api/docs" if settings.ENVIRONMENT != "production" else None,
     redoc_url=None,
 )
+
+# CORS middleware configured at app initialization to allow all origins including Vercel
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins including Vercel frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 # vocab_recovery router moved later
 
 # ---------- Automated Vocabulary Recovery on Startup ----------
@@ -267,16 +277,6 @@ async def api_v1_compatibility_middleware(request: Request, call_next):
 
 # Add preflight short-circuit middleware
 app.add_middleware(PreflightOptionsMiddleware)
-
-# Add CORSMiddleware LAST so it wraps outermost and executes FIRST on incoming requests
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
 
 app.state.limiter = limiter
 
