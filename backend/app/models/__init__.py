@@ -5,6 +5,7 @@ from app.models.chat import (  # noqa: F401
     PrivateMessage,
     AIChatMessage,
 )
+from app.models.file_blob import FileBlob  # noqa: F401
 from app.models.social import (  # noqa: F401
     PublicNote,
     NoteLike,
@@ -107,4 +108,5 @@ __all__ = [
     "NoteLike",
     "StudyGroup",
     "StudyGroupMember",
+    "FileBlob",
 ]

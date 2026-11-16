@@ -254,14 +254,22 @@ async def update_my_profile(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Selected cohort not found",
                 )
-            # Permission check: student may only move to a group belonging to the same teacher
-            # The teacher is identified by the creator (created_by) of the current group.
-            current_teacher_id = profile.group.created_by if profile.group else None
-            if not _is_admin(current_user) and target_group.created_by != current_teacher_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You cannot assign the student to a cohort of a different teacher",
-                )
+            # Permission check: allow any active cohort if the student has no current group.
+            if profile.group is None:
+                # Optional: ensure the target group is active
+                if hasattr(target_group, "is_active") and not target_group.is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Selected cohort is not active",
+                    )
+            else:
+                # Student already assigned – enforce same‑teacher ownership unless admin.
+                current_teacher_id = profile.group.created_by
+                if not _is_admin(current_user) and target_group.created_by != current_teacher_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You cannot assign the student to a cohort of a different teacher",
+                    )
             profile.group_id = target_group.id
             profile.group = target_group
             target_group = (

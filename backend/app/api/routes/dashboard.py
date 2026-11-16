@@ -1,5 +1,5 @@
 import logging
-import traceback
+from datetime import datetime, timezone
 from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
@@ -199,6 +199,7 @@ async def student_dashboard(
 ):
     try:
         group_name = None
+        group = None
         teacher_name = None
         english_level = "Beginner"
         if profile.group_id:

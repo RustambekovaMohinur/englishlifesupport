@@ -18,17 +18,65 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-from app.models.vocabulary import VocabularyAssignment
-from app.models.assignment import Assignment
+from app.db.base_class import Base
+from app.db.session import AsyncSessionLocal, engine
+
+# Explicitly import all database models to register them with Base.metadata before any DDL or create_all executes
+import app.models  # noqa: F401
+from app.models import (  # noqa: F401
+    Achievement,
+    AIChatMessage,
+    Assignment,
+    AssignmentComment,
+    AssignmentImage,
+    CurriculumItem,
+    CurriculumTemplate,
+    EnglishLevel,
+    FeedbackLike,
+    FeedbackReply,
+    FileBlob,
+    FreePass,
+    Grade,
+    Group,
+    NoteLike,
+    ParentHomeworkNotification,
+    PaymentTransaction,
+    PlatformFeedback,
+    PrivateMessage,
+    PublicNote,
+    RefreshToken,
+    StarTransaction,
+    StarTransactionReason,
+    StudentOfTheWeek,
+    StudentProfile,
+    StudentStreak,
+    StudentXP,
+    StudyGroup,
+    StudyGroupMember,
+    Submission,
+    SubmissionAIFeedback,
+    SubmissionComment,
+    SubmissionCorrection,
+    SubmissionStatus,
+    TaskLockOverride,
+    TeacherProfile,
+    User,
+    UserRole,
+    VocabularyAnswer,
+    VocabularyAssignment,
+    VocabularyAttempt,
+    VocabularyWord,
+    WordlistItem,
+    WordlistQuizAttempt,
+    WordlistSet,
+    XPTransaction,
+)
 
 from app.api.routes import payments, chat, assignments, auth, curriculum, dashboard, feedback, gamification, groups, premium, profile, social, storage, students, submissions, teachers, telegram, wordlists
 from app.api.routes.vocab_recovery import router as vocab_recovery_router
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.security import hash_password
-from app.db.session import AsyncSessionLocal
-from app.models.teacher import TeacherProfile
-from app.models.user import User, UserRole
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("english_life")
@@ -73,8 +121,15 @@ async def _recover_orphan_vocab() -> None:
         logger.error(f"Startup vocab recovery skipped: {e}")
 
 @app.on_event("startup")
-async def startup_recovery() -> None:
+async def create_tables() -> None:
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("[startup] Ensured all DB tables exist via Base.metadata.create_all")
+    except Exception as e:
+        logger.error(f"[startup] Base.metadata.create_all error: {e}")
     await _recover_orphan_vocab()
+
 
 # End of automated recovery hook
 
