@@ -125,6 +125,81 @@ async def _recover_orphan_vocab() -> None:
     except Exception as e:
         logger.error(f"Startup vocab recovery skipped: {e}")
 
+
+async def _relink_groups_to_bootstrap_teacher() -> None:
+    """
+    Idempotent startup migration: ensures all groups and assignments whose
+    created_by references an old or missing user UUID are re-linked to the
+    current bootstrap teacher (teacher@englishlife.uz).
+
+    This fixes the case where Render provisions a fresh DB (new user UUIDs)
+    but the data was originally created under different UUIDs in another DB.
+
+    Safe to run on every restart — only updates rows where created_by does
+    NOT point to a currently-existing user.
+    """
+    try:
+        async with AsyncSessionLocal() as session:
+            bootstrap_email = settings.BOOTSTRAP_TEACHER_EMAIL
+            if not bootstrap_email:
+                return
+
+            # Find the bootstrap teacher user in THIS database
+            teacher_row = (await session.execute(
+                select(User).where(User.email == bootstrap_email)
+            )).scalar_one_or_none()
+            if not teacher_row:
+                logger.warning(f"[startup] Bootstrap teacher {bootstrap_email!r} not found — skipping group re-link")
+                return
+
+            teacher_user_id = teacher_row.id
+            logger.info(f"[startup] Bootstrap teacher user.id = {teacher_user_id}")
+
+            # Find all users that actually exist
+            existing_user_ids = set(
+                r for (r,) in (await session.execute(select(User.id))).all()
+            )
+
+            # Groups whose created_by points to a non-existent user (or is NULL)
+            all_groups = (await session.execute(select(Group))).scalars().all()
+            groups_to_fix = [
+                g for g in all_groups
+                if g.created_by is None or g.created_by not in existing_user_ids
+            ]
+            if groups_to_fix:
+                group_ids_to_fix = [g.id for g in groups_to_fix]
+                await session.execute(
+                    update(Group)
+                    .where(Group.id.in_(group_ids_to_fix))
+                    .values(created_by=teacher_user_id)
+                )
+                logger.info(f"[startup] Re-linked {len(groups_to_fix)} groups to teacher {teacher_user_id}")
+
+            # Assignments whose created_by points to a non-existent user
+            all_assignments = (await session.execute(select(Assignment))).scalars().all()
+            assignments_to_fix = [
+                a for a in all_assignments
+                if a.created_by is None or a.created_by not in existing_user_ids
+            ]
+            if assignments_to_fix:
+                assignment_ids_to_fix = [a.id for a in assignments_to_fix]
+                await session.execute(
+                    update(Assignment)
+                    .where(Assignment.id.in_(assignment_ids_to_fix))
+                    .values(created_by=teacher_user_id)
+                )
+                logger.info(f"[startup] Re-linked {len(assignments_to_fix)} assignments to teacher {teacher_user_id}")
+
+            if groups_to_fix or assignments_to_fix:
+                await session.commit()
+                logger.info("[startup] Group/assignment re-link committed successfully")
+            else:
+                logger.info("[startup] All groups/assignments already correctly linked — no changes needed")
+
+    except Exception as e:
+        logger.error(f"[startup] Group re-link migration skipped: {e}", exc_info=True)
+
+
 @app.on_event("startup")
 async def create_tables() -> None:
     try:
@@ -134,6 +209,7 @@ async def create_tables() -> None:
     except Exception as e:
         logger.error(f"[startup] Base.metadata.create_all error: {e}")
     await _recover_orphan_vocab()
+    await _relink_groups_to_bootstrap_teacher()
 
 
 # End of automated recovery hook
