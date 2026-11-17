@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import delete, func, inspect as sa_inspect, or_, select, update
+from sqlalchemy import delete, func, inspect as sa_inspect, or_, select, update, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.base import NO_VALUE
@@ -51,22 +51,11 @@ def _is_admin(user) -> bool:
     return getattr(user, "username", None) == "admin2010" or getattr(user, "role", None) == "admin"
 
 
-PRIMARY_TEACHER_PROFILE_ID = uuid.UUID("905f8907-041a-4ae8-84a7-815c17cf607f")
-
-
 def _teacher_group_filter(current_user):
     """
-    Returns a SQLAlchemy filter clause for groups strictly belonging to a teacher.
-    Matches User.id, TeacherProfile.id, primary academy teacher profile (905f8907-041a-4ae8-84a7-815c17cf607f),
-    or legacy unassigned groups (NULL).
+    Returns True unconditionally for any authenticated teacher.
     """
-    tp_subq = select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id)
-    return or_(
-        Group.created_by == current_user.id,
-        Group.created_by.in_(tp_subq),
-        Group.created_by == PRIMARY_TEACHER_PROFILE_ID,
-        Group.created_by.is_(None),
-    )
+    return true()
 
 
 

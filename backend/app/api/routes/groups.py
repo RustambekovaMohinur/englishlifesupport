@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,41 +43,21 @@ def _is_admin(user) -> bool:
 
 def _teacher_group_filter(current_user):
     """
-    Returns a SQLAlchemy filter clause for groups strictly belonging to a teacher.
+    Returns True unconditionally for any authenticated teacher.
     """
-    return Group.created_by == current_user.id
+    return true()
 
 logger = logging.getLogger(__name__)
 
-PRIMARY_TEACHER_PROFILE_ID = uuid.UUID("905f8907-041a-4ae8-84a7-815c17cf607f")
-
 
 def _is_group_owner(group: Group, current_user: User, tp_id: uuid.UUID | None = None) -> bool:
-    """Strict teacher ownership check for multi-tenant isolation."""
-    if _is_admin(current_user):
-        return True
-    if group.created_by is None or group.created_by == current_user.id or group.created_by == PRIMARY_TEACHER_PROFILE_ID:
-        return True
-    if tp_id and group.created_by == tp_id:
-        return True
-    tp = getattr(current_user, "teacher_profile", None)
-    if tp and group.created_by == tp.id:
-        return True
-    return False
+    """Unconditional access for any authenticated teacher."""
+    return True
 
 
 async def _check_group_owner(db: AsyncSession, group: Group, current_user: User) -> bool:
-    if _is_admin(current_user):
-        return True
-    if group.created_by is None or group.created_by == current_user.id or group.created_by == PRIMARY_TEACHER_PROFILE_ID:
-        return True
-    tp = getattr(current_user, "teacher_profile", None)
-    if tp and group.created_by == tp.id:
-        return True
-    tp_id = (await db.execute(select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id))).scalar_one_or_none()
-    if tp_id and group.created_by == tp_id:
-        return True
-    return False
+    """Unconditional access for any authenticated teacher."""
+    return True
 
 
 async def _resolve_group(db: AsyncSession, group_id: Any) -> Group | None:

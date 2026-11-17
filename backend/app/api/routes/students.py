@@ -2,7 +2,7 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -53,38 +53,16 @@ def _is_admin(user) -> bool:
     return getattr(user, "username", None) == "admin2010" or getattr(user, "role", None) == "admin"
 
 
-PRIMARY_TEACHER_PROFILE_ID = uuid.UUID("905f8907-041a-4ae8-84a7-815c17cf607f")
-
-
 def _teacher_group_filter(current_user):
     """
-    Returns a SQLAlchemy filter clause for groups strictly belonging to a teacher.
-    Matches User.id, TeacherProfile.id, primary academy teacher profile (905f8907-041a-4ae8-84a7-815c17cf607f),
-    or legacy unassigned groups (NULL).
+    Returns True unconditionally for any authenticated teacher.
     """
-    tp_subq = select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id)
-    return or_(
-        Group.created_by == current_user.id,
-        Group.created_by.in_(tp_subq),
-        Group.created_by == PRIMARY_TEACHER_PROFILE_ID,
-        Group.created_by.is_(None),
-    )
+    return true()
 
 
 async def _check_group_authorized(db: AsyncSession, group: Group | None, current_user: User) -> bool:
-    if _is_admin(current_user):
-        return True
-    if group is None:
-        return False
-    if group.created_by is None or group.created_by == current_user.id or group.created_by == PRIMARY_TEACHER_PROFILE_ID:
-        return True
-    tp = getattr(current_user, "teacher_profile", None)
-    if tp and group.created_by == tp.id:
-        return True
-    tp_id = (await db.execute(select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id))).scalar_one_or_none()
-    if tp_id and group.created_by == tp_id:
-        return True
-    return False
+    """Unconditional access for any authenticated teacher."""
+    return True
 
 
 

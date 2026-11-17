@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status, BackgroundTasks
 from fastapi.responses import FileResponse, RedirectResponse
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -75,43 +75,20 @@ def _is_admin(user) -> bool:
     return getattr(user, "username", None) == "admin2010" or getattr(user, "role", None) == "admin"
 
 
-PRIMARY_TEACHER_PROFILE_ID = uuid.UUID("905f8907-041a-4ae8-84a7-815c17cf607f")
-
-
 def _teacher_group_filter(current_user: User):
-    tp_subq = select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id)
-    return or_(
-        Group.created_by == current_user.id,
-        Group.created_by.in_(tp_subq),
-        Group.created_by == PRIMARY_TEACHER_PROFILE_ID,
-        Group.created_by.is_(None),
-    )
+    """
+    Returns True unconditionally for any authenticated teacher.
+    """
+    return true()
 
 
 async def _authorize_submission_access(submission: Submission, current_user: User, db: AsyncSession) -> None:
     """
-    Super Admin may access any submission.
-    A teacher may only access submissions belonging to their assignments or cohorts.
+    Super Admin and teachers may access any submission across all cohorts.
     A student may only access their own.
     """
-    if _is_admin(current_user):
+    if _is_admin(current_user) or current_user.role == UserRole.TEACHER:
         return
-
-    if current_user.role == UserRole.TEACHER:
-        assign = (await db.execute(select(Assignment).where(Assignment.id == submission.assignment_id))).scalar_one_or_none()
-        if assign:
-            if assign.created_by == current_user.id:
-                return
-            if assign.group_id:
-                grp = (await db.execute(select(Group).where(Group.id == assign.group_id))).scalar_one_or_none()
-                if grp:
-                    tp_id = (await db.execute(select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id))).scalar_one_or_none()
-                    if grp.created_by is None or grp.created_by == current_user.id or grp.created_by == PRIMARY_TEACHER_PROFILE_ID or (tp_id and grp.created_by == tp_id):
-                        return
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to view submissions for another teacher's cohort.",
-        )
 
     result = await db.execute(select(StudentProfile).where(StudentProfile.id == submission.student_id))
     student = result.scalar_one_or_none()
