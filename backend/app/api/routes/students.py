@@ -13,6 +13,7 @@ from app.utils.datetimes import as_utc, utcnow
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.group import Group
 from app.models.student import StudentProfile
+from app.models.teacher import TeacherProfile
 from app.models.submission import Submission
 from app.models.user import ApprovalStatus, User, UserRole
 from app.models.vocabulary import VocabularyAssignment, VocabularyAttempt
@@ -55,9 +56,30 @@ def _is_admin(user) -> bool:
 def _teacher_group_filter(current_user):
     """
     Returns a SQLAlchemy filter clause for groups strictly belonging to a teacher.
-    Also matches legacy groups where created_by is NULL so records are never lost.
+    Matches either User.id, TeacherProfile.id, or legacy unassigned groups (NULL).
     """
-    return or_(Group.created_by == current_user.id, Group.created_by.is_(None))
+    tp_subq = select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id)
+    return or_(
+        Group.created_by == current_user.id,
+        Group.created_by.in_(tp_subq),
+        Group.created_by.is_(None),
+    )
+
+
+async def _check_group_authorized(db: AsyncSession, group: Group | None, current_user: User) -> bool:
+    if _is_admin(current_user):
+        return True
+    if group is None:
+        return False
+    if group.created_by is None or group.created_by == current_user.id:
+        return True
+    tp = getattr(current_user, "teacher_profile", None)
+    if tp and group.created_by == tp.id:
+        return True
+    tp_id = (await db.execute(select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id))).scalar_one_or_none()
+    if tp_id and group.created_by == tp_id:
+        return True
+    return False
 
 
 
@@ -381,7 +403,7 @@ async def approve_student(
         )
 
     # Scoping check: student must belong to teacher's group (or admin, or legacy group without owner)
-    is_authorized = _is_admin(current_user) or (group is not None and (group.created_by == current_user.id or group.created_by is None))
+    is_authorized = await _check_group_authorized(db, group, current_user)
     if not is_authorized:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -459,7 +481,7 @@ async def reject_student(
             detail={"code": "INVALID_APPROVAL_STATE", "message": "Student cannot be rejected from the current state."},
         )
 
-    is_authorized = _is_admin(current_user) or (group is not None and group.created_by == current_user.id)
+    is_authorized = await _check_group_authorized(db, group, current_user)
     if not is_authorized:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -521,7 +543,7 @@ async def handle_student_approval(
 
     profile, user, group = row
 
-    is_authorized = _is_admin(current_user) or (group is not None and group.created_by == current_user.id)
+    is_authorized = await _check_group_authorized(db, group, current_user)
     if not is_authorized:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1455,7 +1477,7 @@ async def reset_student_password(
 
     profile, user, group = row
 
-    is_authorized = _is_admin(current_user) or (group is not None and group.created_by == current_user.id)
+    is_authorized = await _check_group_authorized(db, group, current_user)
     if not is_authorized:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this student")
 

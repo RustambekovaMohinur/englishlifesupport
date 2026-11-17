@@ -104,8 +104,9 @@ export default function TeacherDashboardPage() {
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
 
   useEffect(() => {
-    // 1. Load teacher dashboard metrics
-    getTeacherDashboard()
+    // 1. Load teacher dashboard metrics (all cohorts or filtered by selectedGroupId)
+    setIsLoading(true);
+    getTeacherDashboard(selectedGroupId || undefined)
       .then((data: any) => {
         console.log('Dashboard API response:', data);
         const unpacked = data?.data?.stats ?? data?.data ?? data?.stats ?? data;
@@ -116,12 +117,14 @@ export default function TeacherDashboardPage() {
         setError("Could not load dashboard data.");
       })
       .finally(() => setIsLoading(false));
+  }, [selectedGroupId]);
 
+  useEffect(() => {
     // 2. Load groups independently so dropdown and group controls render without waiting for dashboard metrics
     listGroups()
       .then((res) => {
         setGroups(res);
-        if (res.length > 0) setSelectedGroupId(res[0].id);
+        // Retain "All groups" by default ("") instead of hardcoding to res[0].id
       })
       .catch(() => {})
       .finally(() => setIsLoadingGroups(false));
@@ -140,7 +143,7 @@ export default function TeacherDashboardPage() {
       await approveStudent(st.id);
       toast.success(`Approved ${st.first_name || st.username}!`);
       loadPendingList(pendingPage);
-      getTeacherDashboard()
+      getTeacherDashboard(selectedGroupId || undefined)
         .then((data: any) => {
           const unpacked = data?.data?.stats ?? data?.data ?? data?.stats ?? data;
           setData(unpacked);
@@ -170,18 +173,24 @@ export default function TeacherDashboardPage() {
   const [groupStudents, setGroupStudents] = useState<StudentListItem[]>([]);
 
   useEffect(() => {
-    if (!selectedGroupId) return;
-    setReportLoading(true);
     setSotwStudentId("");
+    if (selectedGroupId) {
+      setReportLoading(true);
+      getTeacherGroupReport(selectedGroupId)
+        .then((rep) => setGroupReport(rep))
+        .catch(() => setGroupReport(null))
+        .finally(() => setReportLoading(false));
 
-    getTeacherGroupReport(selectedGroupId)
-      .then((rep) => setGroupReport(rep))
-      .catch(() => setGroupReport(null))
-      .finally(() => setReportLoading(false));
-
-    listStudents({ group_id: selectedGroupId, page_size: 100 })
-      .then((res) => setGroupStudents(res.items || []))
-      .catch(() => setGroupStudents([]));
+      listStudents({ group_id: selectedGroupId, page_size: 100 })
+        .then((res) => setGroupStudents(res.items || []))
+        .catch(() => setGroupStudents([]));
+    } else {
+      setReportLoading(false);
+      setGroupReport(null);
+      listStudents({ page_size: 100 })
+        .then((res) => setGroupStudents(res.items || []))
+        .catch(() => setGroupStudents([]));
+    }
   }, [selectedGroupId]);
 
   async function handleUnlockStudent(studentId: string, studentName: string) {
@@ -255,6 +264,49 @@ export default function TeacherDashboardPage() {
       </div>
 
       {error && <EmptyState title="Something went wrong" description={error} />}
+
+      {/* Cohort Quick-Switcher Bar */}
+      {groups.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setSelectedGroupId("")}
+            className={`shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              selectedGroupId === ""
+                ? "bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-500/20"
+                : "bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-750"
+            }`}
+          >
+            All Groups ({groups.reduce((acc, g) => acc + (g.student_count || 0), 0)})
+          </button>
+          {groups.map((g) => {
+            const isSelected = selectedGroupId === g.id;
+            return (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => setSelectedGroupId(g.id)}
+                className={`shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  isSelected
+                    ? "bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-500/20"
+                    : "bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-750"
+                }`}
+              >
+                <span>{g.name}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                    isSelected
+                      ? "bg-white/25 text-white"
+                      : "bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                  }`}
+                >
+                  {g.student_count ?? 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {isLoading ? (
         <LoadingRows rows={4} />
@@ -347,18 +399,21 @@ export default function TeacherDashboardPage() {
                   value={selectedGroupId}
                   onChange={(e) => setSelectedGroupId(e.target.value)}
                   disabled={isLoadingGroups || groups.length === 0}
-                  className="input text-xs py-1.5 px-3 max-w-[200px]"
+                  className="input text-xs py-1.5 px-3 max-w-[240px]"
                 >
                   {isLoadingGroups ? (
                     <option value="">Loading groups...</option>
                   ) : groups.length === 0 ? (
                     <option value="">No active groups</option>
                   ) : (
-                    groups.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.name}
-                      </option>
-                    ))
+                    <>
+                      <option value="">All groups (All {groups.length} Cohorts)</option>
+                      {groups.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.name} ({g.student_count ?? 0} students)
+                        </option>
+                      ))}
+                    </>
                   )}
                 </select>
               </div>
@@ -540,7 +595,50 @@ export default function TeacherDashboardPage() {
                   </Modal>
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-indigo-50/50 via-slate-50 to-white dark:from-zinc-900/60 dark:via-zinc-900 dark:to-zinc-850 border border-indigo-100/80 dark:border-zinc-800 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                      <GraduationCap className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <span>Academy Cohorts Overview (All {groups.length} Groups)</span>
+                    </h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Currently viewing aggregated academy data across all {groups.reduce((acc, g) => acc + (g.student_count || 0), 0)} students. Select any cohort below to manage locked students, view weekly completion, and award Student of the Week.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                  {groups.map((grp) => (
+                    <div
+                      key={grp.id}
+                      onClick={() => setSelectedGroupId(grp.id)}
+                      className="cursor-pointer group p-3.5 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/90 dark:border-zinc-700/80 hover:border-indigo-400 dark:hover:border-indigo-500/80 transition-all shadow-2xs hover:shadow-sm flex items-center justify-between"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-xs sm:text-sm text-zinc-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                            {grp.name}
+                          </p>
+                          {grp.english_level && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 uppercase">
+                              {grp.english_level}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-mono">
+                          {grp.student_count ?? 0} students enrolled
+                        </p>
+                      </div>
+                      <span className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold shrink-0 group-hover:translate-x-0.5 transition-transform">
+                        Manage →
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Pending Students Approvals Section */}

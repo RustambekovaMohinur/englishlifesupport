@@ -68,7 +68,8 @@ export const cachedGet = <T>(
 };
 
 // --- Dashboard ---
-export const getTeacherDashboard = () => cachedGet<TeacherDashboard>("/dashboard/teacher");
+export const getTeacherDashboard = (group_id?: string) =>
+  cachedGet<TeacherDashboard>("/dashboard/teacher", group_id ? { group_id } : undefined);
 export const getStudentDashboard = () => cachedGet<StudentDashboard>("/dashboard/student");
 
 // --- Students (teacher) ---

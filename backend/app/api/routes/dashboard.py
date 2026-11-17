@@ -38,13 +38,20 @@ def _is_admin(user) -> bool:
 def _teacher_group_filter(current_user):
     """
     Returns a SQLAlchemy filter clause for groups strictly belonging to a teacher.
+    Matches either User.id, TeacherProfile.id, or legacy unassigned groups (NULL).
     """
-    return Group.created_by == current_user.id
+    tp_subq = select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id)
+    return or_(
+        Group.created_by == current_user.id,
+        Group.created_by.in_(tp_subq),
+        Group.created_by.is_(None),
+    )
 
 
 
 @router.get("/teacher", response_model=TeacherDashboard)
 async def teacher_dashboard(
+    group_id: uuid.UUID | None = Query(default=None, description="Optional cohort filter"),
     current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
 ):
@@ -60,6 +67,11 @@ async def teacher_dashboard(
             if tp_id:
                 t_clauses.append(Group.created_by == tp_id)
             teacher_groups_q = teacher_groups_q.where(or_(*t_clauses))
+
+        # Filter by specific group if requested
+        if group_id:
+            teacher_groups_q = teacher_groups_q.where(Group.id == group_id)
+
         teacher_groups = (await db.execute(teacher_groups_q)).scalars().all()
 
         group_ids = [g.id for g in teacher_groups if g.is_active]

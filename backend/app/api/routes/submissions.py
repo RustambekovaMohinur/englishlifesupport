@@ -21,6 +21,7 @@ from app.models.group import Group
 from app.models.grade import Grade
 from app.services.storage import get_storage_service
 from app.services.payment_service import enforce_student_payment
+from app.models.teacher import TeacherProfile
 from app.models.student import StudentProfile
 from app.models.submission import (
     Submission,
@@ -74,6 +75,15 @@ def _is_admin(user) -> bool:
     return getattr(user, "username", None) == "admin2010" or getattr(user, "role", None) == "admin"
 
 
+def _teacher_group_filter(current_user: User):
+    tp_subq = select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id)
+    return or_(
+        Group.created_by == current_user.id,
+        Group.created_by.in_(tp_subq),
+        Group.created_by.is_(None),
+    )
+
+
 async def _authorize_submission_access(submission: Submission, current_user: User, db: AsyncSession) -> None:
     """
     Super Admin may access any submission.
@@ -90,8 +100,10 @@ async def _authorize_submission_access(submission: Submission, current_user: Use
                 return
             if assign.group_id:
                 grp = (await db.execute(select(Group).where(Group.id == assign.group_id))).scalar_one_or_none()
-                if grp and grp.created_by == current_user.id:
-                    return
+                if grp:
+                    tp_id = (await db.execute(select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id))).scalar_one_or_none()
+                    if grp.created_by is None or grp.created_by == current_user.id or (tp_id and grp.created_by == tp_id):
+                        return
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to view submissions for another teacher's cohort.",
@@ -876,7 +888,7 @@ async def list_submissions(
     try:
         # Check if the current teacher's cohort list or assignment IDs list is empty
         if not _is_admin(current_user):
-            teacher_groups_subq = select(Group.id).where(Group.created_by == current_user.id)
+            teacher_groups_subq = select(Group.id).where(_teacher_group_filter(current_user))
             teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
             teacher_asgn_subq = select(Assignment.id).where(Assignment.created_by == current_user.id)
             teacher_asgn_ids = (await db.execute(teacher_asgn_subq)).scalars().all()
@@ -916,7 +928,7 @@ async def list_submissions(
             base_filters.append(
                 or_(
                     Assignment.created_by == current_user.id,
-                    Group.created_by == current_user.id,
+                    _teacher_group_filter(current_user),
                 )
             )
         if group_id_val:

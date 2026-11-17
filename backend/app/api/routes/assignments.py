@@ -54,8 +54,14 @@ def _is_admin(user) -> bool:
 def _teacher_group_filter(current_user):
     """
     Returns a SQLAlchemy filter clause for groups strictly belonging to a teacher.
+    Matches either User.id, TeacherProfile.id, or legacy unassigned groups (NULL).
     """
-    return Group.created_by == current_user.id
+    tp_subq = select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id)
+    return or_(
+        Group.created_by == current_user.id,
+        Group.created_by.in_(tp_subq),
+        Group.created_by.is_(None),
+    )
 
 
 
@@ -249,7 +255,7 @@ async def list_assignments(
         if valid_group_uuid:
             if not _is_admin(current_user):
                 # Verify teacher owns this group
-                grp_owner = (await db.execute(select(Group.id).where(Group.id == valid_group_uuid, Group.created_by == current_user.id))).scalar_one_or_none()
+                grp_owner = (await db.execute(select(Group.id).where(Group.id == valid_group_uuid, _teacher_group_filter(current_user)))).scalar_one_or_none()
                 if not grp_owner:
                     return []
             query = query.where(Assignment.group_id == valid_group_uuid)
@@ -257,7 +263,7 @@ async def list_assignments(
             query = query.where(
                 or_(
                     Assignment.created_by == current_user.id,
-                    Group.created_by == current_user.id,
+                    _teacher_group_filter(current_user),
                 )
             )
 
