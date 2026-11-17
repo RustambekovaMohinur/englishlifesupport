@@ -400,7 +400,21 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-    if (error.response?.status !== 401 || originalRequest._retry || originalRequest.url?.includes("/auth/")) {
+    // Skip retry for: non-401 errors, already-retried requests, or the
+    // token-issuing endpoints themselves (login / logout / refresh).
+    // NOTE: /auth/me IS a protected endpoint and must be retried with the
+    // refresh token, so we do NOT skip it here.
+    const skipUrl = originalRequest.url ?? "";
+    const isTokenEndpoint = (
+      skipUrl.endsWith("/auth/login") ||
+      skipUrl.endsWith("/login") ||
+      skipUrl.endsWith("/auth/logout") ||
+      skipUrl.endsWith("/logout") ||
+      skipUrl.endsWith("/auth/refresh") ||
+      skipUrl.endsWith("/auth/register") ||
+      skipUrl.endsWith("/register")
+    );
+    if (error.response?.status !== 401 || originalRequest._retry || isTokenEndpoint) {
       return Promise.reject(error);
     }
 

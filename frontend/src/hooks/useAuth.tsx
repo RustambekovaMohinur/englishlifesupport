@@ -66,7 +66,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(pending);
         return pending;
       }
-      return null;
+      // For transient errors (network, 500, cold-start), preserve the existing
+      // user state rather than dropping it. Only a 401 means the token is gone.
+      if (err?.response?.status === 401) {
+        tokenStorage.clear();
+        setUser(null);
+        return null;
+      }
+      // Return current cached user state if available
+      return user ?? null;
     }
   };
 
@@ -87,9 +95,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               is_active: false,
               approval_status: "pending",
             });
-          } else {
+          } else if (err?.response?.status === 401) {
+            // Token is definitively invalid/expired and the refresh interceptor
+            // already failed — clear storage and let the user log in again.
             tokenStorage.clear();
           }
+          // For all other errors (network timeout, 500, Render cold-start, etc.)
+          // keep the token intact; the user is still authenticated, the server
+          // just had a transient hiccup. The response interceptor will retry with
+          // the refresh token when the next protected request is made.
         }
       }
       setIsLoading(false);
