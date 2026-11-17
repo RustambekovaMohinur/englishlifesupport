@@ -164,7 +164,12 @@ async def list_public_groups(
         # Fetch active groups, strictly isolated by teacher if teacher_id is provided
         query = select(Group).where(Group.is_active.is_(True))
         if target_user_id:
-            query = query.where(Group.created_by == target_user_id)
+            query = query.where(
+                or_(
+                    Group.created_by == target_user_id,
+                    Group.created_by == parsed_teacher_uuid,
+                )
+            )
         query = query.order_by(Group.name)
         groups = (await db.execute(query)).scalars().all()
 
@@ -174,15 +179,19 @@ async def list_public_groups(
 
         result = []
         for g in groups:
-            t = t_map.get(g.created_by) or teacher_prof
+            t = t_map.get(g.created_by) or t_id_map.get(g.created_by) or teacher_prof
+            t_id = t.id if t else (parsed_teacher_uuid if parsed_teacher_uuid in t_id_map else None)
+            t_name = t.full_name if t else None
             result.append(
                 GroupPublicOut(
                     id=g.id,
                     name=g.name,
                     english_level=g.english_level,
                     schedule=g.schedule,
-                    teacher_id=t.id if t else (parsed_teacher_uuid if parsed_teacher_uuid in t_id_map else None),
-                    teacher_name=t.full_name if t else None,
+                    teacher_id=t_id,
+                    teacher_name=t_name,
+                    created_by=g.created_by,
+                    student_count=0,
                 )
             )
         return result

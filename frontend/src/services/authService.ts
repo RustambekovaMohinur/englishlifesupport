@@ -15,6 +15,8 @@ export interface GroupPublic {
   schedule: string | null;
   teacher_id?: string | null;
   teacher_name?: string | null;
+  created_by?: string | null;
+  student_count?: number;
 }
 
 export async function fetchPublicTeachers(): Promise<TeacherPublic[]> {

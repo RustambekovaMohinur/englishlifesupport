@@ -178,6 +178,8 @@ class GroupOut(BaseModel):
     curriculum_template_id: uuid.UUID | None = None
     curriculum_template_title: str | None = None
     created_at: datetime
+    created_by: uuid.UUID | None = None
+    teacher_id: uuid.UUID | None = None
 
     model_config = {"from_attributes": True}
 
@@ -248,6 +250,8 @@ class GroupDetailOut(BaseModel):
     curriculum_template_title: str | None = None
     assignments: list[GroupAssignmentHeader] = []
     students: list[GroupStudentDetail] = []
+    created_by: uuid.UUID | None = None
+    teacher_id: uuid.UUID | None = None
 
     model_config = {"from_attributes": True}
 

@@ -15,6 +15,7 @@ from app.models.group import Group
 from app.models.curriculum import CurriculumTemplate
 from datetime import timedelta
 from app.models.student import StudentProfile
+from app.models.teacher import TeacherProfile
 from app.models.submission import Submission
 import logging
 from typing import Any
@@ -49,11 +50,32 @@ def _teacher_group_filter(current_user):
 logger = logging.getLogger(__name__)
 
 
-def _is_group_owner(group: Group, current_user: User) -> bool:
+def _is_group_owner(group: Group, current_user: User, tp_id: uuid.UUID | None = None) -> bool:
     """Strict teacher ownership check for multi-tenant isolation."""
     if _is_admin(current_user):
         return True
-    return group.created_by == current_user.id or group.created_by is None
+    if group.created_by is None or group.created_by == current_user.id:
+        return True
+    if tp_id and group.created_by == tp_id:
+        return True
+    tp = getattr(current_user, "teacher_profile", None)
+    if tp and group.created_by == tp.id:
+        return True
+    return False
+
+
+async def _check_group_owner(db: AsyncSession, group: Group, current_user: User) -> bool:
+    if _is_admin(current_user):
+        return True
+    if group.created_by is None or group.created_by == current_user.id:
+        return True
+    tp = getattr(current_user, "teacher_profile", None)
+    if tp and group.created_by == tp.id:
+        return True
+    tp_id = (await db.execute(select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id))).scalar_one_or_none()
+    if tp_id and group.created_by == tp_id:
+        return True
+    return False
 
 
 async def _resolve_group(db: AsyncSession, group_id: Any) -> Group | None:
@@ -106,8 +128,8 @@ async def get_active_student_counts(db: AsyncSession, group_ids: list[uuid.UUID]
         .join(User, StudentProfile.user_id == User.id)
         .where(
             StudentProfile.group_id.in_(group_ids),
-            or_(User.approval_status == ApprovalStatus.APPROVED, User.approval_status.is_(None)),
-            User.is_active.is_(True),
+            or_(User.approval_status != ApprovalStatus.REJECTED, User.approval_status.is_(None)),
+            or_(User.is_active.is_(True), User.is_active.is_(None)),
         )
     )
     res = await db.execute(subquery)
@@ -149,6 +171,15 @@ async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
         tpl = (await db.execute(select(CurriculumTemplate.title).where(CurriculumTemplate.id == group.curriculum_template_id))).scalar_one_or_none()
         tpl_title = tpl
 
+    teacher_id = None
+    if group.created_by:
+        tp = (await db.execute(
+            select(TeacherProfile.id).where(
+                or_(TeacherProfile.user_id == group.created_by, TeacherProfile.id == group.created_by)
+            )
+        )).scalar_one_or_none()
+        teacher_id = tp or group.created_by
+
     return GroupOut(
         id=group.id,
         name=group.name,
@@ -163,12 +194,16 @@ async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:
         curriculum_template_id=group.curriculum_template_id,
         curriculum_template_title=tpl_title,
         created_at=group.created_at,
+        created_by=group.created_by,
+        teacher_id=teacher_id,
     )
 
 
 @router.get("", response_model=list[GroupOut])
 async def list_groups(
     include_archived: bool = False,
+    teacher_id: str | None = None,
+    created_by: str | None = None,
     current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
 ):
@@ -176,10 +211,41 @@ async def list_groups(
     Returns all groups for the teacher panel belonging to this teacher.
     Uses batched active deduplicated student counting across all groups.
     """
-    # Authenticated teachers see their own cohorts as well as legacy cohorts with unassigned owner; admins see all
     query = select(Group).order_by(Group.name)
+
+    # Optional teacher isolation filter if requested explicitly
+    filter_user_id: uuid.UUID | None = None
+    filter_tp_id: uuid.UUID | None = None
+    target_param = teacher_id or created_by
+    if target_param and str(target_param).strip():
+        try:
+            parsed_id = uuid.UUID(str(target_param).strip())
+            tp_record = (await db.execute(
+                select(TeacherProfile).where(
+                    or_(TeacherProfile.id == parsed_id, TeacherProfile.user_id == parsed_id)
+                )
+            )).scalar_one_or_none()
+            if tp_record:
+                filter_user_id = tp_record.user_id
+                filter_tp_id = tp_record.id
+            else:
+                filter_user_id = parsed_id
+        except Exception:
+            pass
+
     if not _is_admin(current_user):
-        query = query.where(or_(Group.created_by == current_user.id, Group.created_by.is_(None)))
+        tp_res = (await db.execute(select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id))).scalar_one_or_none()
+        teacher_clauses = [Group.created_by == current_user.id, Group.created_by.is_(None)]
+        if tp_res:
+            teacher_clauses.append(Group.created_by == tp_res)
+        query = query.where(or_(*teacher_clauses))
+
+    if filter_user_id:
+        filter_clauses = [Group.created_by == filter_user_id]
+        if filter_tp_id:
+            filter_clauses.append(Group.created_by == filter_tp_id)
+        query = query.where(or_(*filter_clauses))
+
     if not include_archived:
         query = query.where(Group.is_active.is_(True))
     groups = (await db.execute(query)).scalars().all()
@@ -190,7 +256,11 @@ async def list_groups(
     group_ids = [g.id for g in groups]
     counts_map = await get_active_student_counts(db, group_ids)
 
-    # Map template titles for groups in one query
+    # Map teachers and template titles for groups in one query
+    all_teachers = (await db.execute(select(TeacherProfile))).scalars().all()
+    t_by_user = {t.user_id: t.id for t in all_teachers}
+    t_by_id = {t.id: t.id for t in all_teachers}
+
     tpl_ids = [g.curriculum_template_id for g in groups if getattr(g, "curriculum_template_id", None)]
     tpl_map = {}
     if tpl_ids:
@@ -212,6 +282,8 @@ async def list_groups(
             curriculum_template_id=g.curriculum_template_id,
             curriculum_template_title=tpl_map.get(g.curriculum_template_id),
             created_at=g.created_at,
+            created_by=g.created_by,
+            teacher_id=t_by_user.get(g.created_by) or t_by_id.get(g.created_by) or g.created_by,
         )
         for g in groups
     ]
@@ -249,7 +321,7 @@ async def get_group(
     group = await _resolve_group(db, group_id)
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
-    if not _is_group_owner(group, current_user):
+    if not await _check_group_owner(db, group, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to view this group")
     return await _to_group_out(db, group)
 
@@ -265,7 +337,7 @@ async def update_group(
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
     # Permission check
-    if not _is_group_owner(group, current_user):
+    if not await _check_group_owner(db, group, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
     # Apply updates
     if body.name is not None:
@@ -301,14 +373,14 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
     )
     assignments = assignments_res.scalars().all()
 
-    # Fetch all approved, active students in this group with user details (preserving legacy records)
+    # Fetch all enrolled students in this group with user details (preserving legacy records)
     students_res = await db.execute(
         select(StudentProfile, User)
         .join(User, StudentProfile.user_id == User.id)
         .where(
             StudentProfile.group_id == group_id,
-            or_(User.approval_status == ApprovalStatus.APPROVED, User.approval_status.is_(None)),
-            User.is_active == True,
+            or_(User.approval_status != ApprovalStatus.REJECTED, User.approval_status.is_(None)),
+            or_(User.is_active.is_(True), User.is_active.is_(None)),
         )
         .order_by(StudentProfile.full_name.asc())
     )
@@ -514,6 +586,15 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
         tpl_res = await db.execute(select(CurriculumTemplate.title).where(CurriculumTemplate.id == group.curriculum_template_id))
         tpl_title = tpl_res.scalar_one_or_none()
 
+    teacher_id = None
+    if group.created_by:
+        tp = (await db.execute(
+            select(TeacherProfile.id).where(
+                or_(TeacherProfile.user_id == group.created_by, TeacherProfile.id == group.created_by)
+            )
+        )).scalar_one_or_none()
+        teacher_id = tp or group.created_by
+
     return GroupDetailOut(
         id=group.id,
         name=group.name,
@@ -529,6 +610,8 @@ async def _build_group_detail_out(db: AsyncSession, group: Group) -> GroupDetail
         curriculum_template_title=tpl_title,
         assignments=headers,
         students=final_students,
+        created_by=group.created_by,
+        teacher_id=teacher_id,
     )
 
 
@@ -573,7 +656,7 @@ async def get_group_detail(
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
-    if not _is_group_owner(group, current_user):
+    if not await _check_group_owner(db, group, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this group")
 
     try:
@@ -620,7 +703,7 @@ async def publish_group_cycle(
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
-    if not _is_group_owner(group, current_user):
+    if not await _check_group_owner(db, group, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
 
     now_dt = utcnow()
@@ -705,7 +788,7 @@ async def start_new_homework_cycle(
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
-    if not _is_group_owner(group, current_user):
+    if not await _check_group_owner(db, group, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to modify this group")
 
     # Delegate to clean cycle publishing to maintain consistent archiving

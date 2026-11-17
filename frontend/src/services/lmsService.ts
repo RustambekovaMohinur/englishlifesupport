@@ -124,8 +124,11 @@ export const toggleStudentAssignmentLock = (
   ).then((r) => r.data);
 
 // --- Groups ---
-export const listGroups = (include_archived: boolean = false) =>
-  cachedGet<Group[]>("/groups", { include_archived });
+export const listGroups = (
+  include_archived: boolean = false,
+  params?: { teacher_id?: string; created_by?: string }
+) =>
+  cachedGet<Group[]>("/groups", { include_archived, ...params });
 export const getGroupDetail = (group_id: string) =>
   cachedGet<GroupDetailOut>(`/groups/${group_id}/detail`);
 export const getMyCohortMatrix = () =>

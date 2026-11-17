@@ -67,6 +67,8 @@ class GroupPublicOut(BaseModel):
     schedule: str | None
     teacher_id: uuid.UUID | None = None
     teacher_name: str | None = None
+    created_by: uuid.UUID | None = None
+    student_count: int = 0
 
     model_config = {"from_attributes": True}
 

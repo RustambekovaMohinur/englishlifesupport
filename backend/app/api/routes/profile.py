@@ -185,6 +185,8 @@ async def get_my_profile(
         telegram_username=profile.phone,
         bio=profile.bio,
         avatar_url=profile.avatar_url,
+        teacher_id=profile.id,
+        teacher_name=profile.full_name,
         stats=stats,
         approval_status=current_user.approval_status.value if hasattr(current_user.approval_status, "value") else str(current_user.approval_status),
     )
@@ -394,6 +396,8 @@ async def update_my_profile(
         telegram_username=profile.phone,
         bio=profile.bio,
         avatar_url=profile.avatar_url,
+        teacher_id=profile.id,
+        teacher_name=profile.full_name,
         stats=stats,
         approval_status=current_user.approval_status.value if hasattr(current_user.approval_status, "value") else str(current_user.approval_status),
     )

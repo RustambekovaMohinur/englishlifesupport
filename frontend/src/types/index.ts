@@ -31,6 +31,8 @@ export interface Group {
   curriculum_template_id?: string | null;
   curriculum_template_title?: string | null;
   created_at: string;
+  created_by?: string | null;
+  teacher_id?: string | null;
 }
 
 export interface AssignmentImageOut {
@@ -162,6 +164,8 @@ export interface GroupDetailOut {
   curriculum_template_title?: string | null;
   assignments: GroupAssignmentHeader[];
   students: GroupStudentDetail[];
+  created_by?: string | null;
+  teacher_id?: string | null;
 }
 
 export interface StudentHistoryItem {

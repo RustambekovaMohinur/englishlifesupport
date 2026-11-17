@@ -16,7 +16,7 @@ from app.models.group import Group
 from app.models.student import StudentProfile
 from app.models.submission import Submission, SubmissionStatus
 from app.models.teacher import TeacherProfile
-from app.models.user import User, UserRole
+from app.models.user import ApprovalStatus, User, UserRole
 from app.schemas.dashboard import (
     RecentGradeItem,
     RecentSubmissionItem,
@@ -55,7 +55,11 @@ async def teacher_dashboard(
         # Teachers see their own cohorts as well as legacy unassigned cohorts; admin sees all
         teacher_groups_q = select(Group)
         if not _is_admin(current_user):
-            teacher_groups_q = teacher_groups_q.where(or_(Group.created_by == current_user.id, Group.created_by.is_(None)))
+            tp_id = (await db.execute(select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id))).scalar_one_or_none()
+            t_clauses = [Group.created_by == current_user.id, Group.created_by.is_(None)]
+            if tp_id:
+                t_clauses.append(Group.created_by == tp_id)
+            teacher_groups_q = teacher_groups_q.where(or_(*t_clauses))
         teacher_groups = (await db.execute(teacher_groups_q)).scalars().all()
 
         group_ids = [g.id for g in teacher_groups if g.is_active]
@@ -83,11 +87,14 @@ async def teacher_dashboard(
         stu_q = (
             select(StudentProfile, User.is_active)
             .join(User, StudentProfile.user_id == User.id)
-            .where(StudentProfile.group_id.in_(all_group_ids))
+            .where(
+                StudentProfile.group_id.in_(all_group_ids),
+                or_(User.approval_status != ApprovalStatus.REJECTED, User.approval_status.is_(None)),
+            )
         )
         stu_rows = (await db.execute(stu_q)).all()
         total_students = len(stu_rows)
-        active_students = sum(1 for _, is_act in stu_rows if is_act)
+        active_students = sum(1 for _, is_act in stu_rows if is_act is not False)
         inactive_students = total_students - active_students
 
         # Assignments in this teacher's groups or authored by teacher
