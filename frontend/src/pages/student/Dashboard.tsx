@@ -160,17 +160,17 @@ export default function StudentDashboardPage() {
   }
 
   const streakVal = gamify?.streak ?? data.streak ?? 0;
-  const xpVal = gamify?.total_xp ?? data.total_xp ?? 0;
+  const xpVal = gamify?.total_xp ?? data.totalXp ?? data.total_xp ?? 0;
   const levelVal = gamify?.level ?? data.level ?? 1;
-  const levelTitle = gamify?.level_title ?? data.level_title ?? "Learner";
+  const levelTitle = gamify?.level_title ?? data.levelTitle ?? data.level_title ?? "Learner";
   const nextXp = gamify?.next_level_xp ?? 100;
-  const hasFreePass = gamify?.free_pass ? !gamify.free_pass.is_used : (data.free_pass_available ?? true);
-  const displayLevel = formatEnglishLevel(data.english_level);
+  const hasFreePass = gamify?.free_pass ? !gamify.free_pass.is_used : (data.freePassAvailable ?? data.free_pass_available ?? true);
+  const displayLevel = formatEnglishLevel(data.englishLevel ?? data.english_level);
 
   // Safe zero-division math for task completion using actual student stats
-  const totalActiveTasks = stats?.total_assignments ?? data.total_assignments ?? 0;
+  const totalActiveTasks = stats?.total_assignments ?? data.totalAssignments ?? data.total_assignments ?? 0;
   const completedTasks = Math.min(
-    stats?.completed_assignments ?? data.completed_assignments ?? 0,
+    stats?.completed_assignments ?? data.completedAssignments ?? data.completed_assignments ?? 0,
     totalActiveTasks
   );
   const rate = stats?.progress_percent != null
@@ -193,7 +193,8 @@ export default function StudentDashboardPage() {
   });
 
   // Priority Today's Mission selection
-  const pendingMissions = (data.upcoming_deadlines || []).filter((d) => !d.submitted);
+  const upcomingList = data.upcomingDeadlines ?? data.upcoming_deadlines ?? [];
+  const pendingMissions = upcomingList.filter((d) => !d.submitted);
   const urgentMission = pendingMissions.sort(
     (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
   )[0];
@@ -358,11 +359,11 @@ export default function StudentDashboardPage() {
               </Link>
             </div>
             <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
-              Keep going, {data.full_name?.split(" ")[0] || "Student"}! 💪
+              Keep going, {(data.fullName ?? data.full_name)?.split(" ")[0] || "Student"}! 💪
             </h1>
             <p className="text-xs sm:text-sm text-zinc-600 dark:text-slate-300">
-              Every lesson brings you closer to your goals. {data.group_name ? `Cohort: ${data.group_name}` : ""}
-              {data.teacher_name ? ` · Examiner: ${data.teacher_name}` : ""}
+              Every lesson brings you closer to your goals. {(data.groupName ?? data.group_name) ? `Cohort: ${data.groupName ?? data.group_name}` : ""}
+              {(data.teacherName ?? data.teacher_name) ? ` · Examiner: ${data.teacherName ?? data.teacher_name}` : ""}
             </p>
           </div>
 
@@ -424,7 +425,7 @@ export default function StudentDashboardPage() {
         {/* Stars */}
         <div className="flex flex-col items-center justify-center p-2 sm:p-3.5 rounded-xl bg-white dark:bg-[#161B22] border border-zinc-200/60 dark:border-zinc-800/60 text-center shadow-xs active:scale-95 transition">
           <span className="text-sm sm:text-base mb-0.5">⭐</span>
-          <span className="font-mono text-sm sm:text-lg font-bold text-zinc-900 dark:text-white tabular-nums">{data.total_stars}</span>
+          <span className="font-mono text-sm sm:text-lg font-bold text-zinc-900 dark:text-white tabular-nums">{data.totalStars ?? data.total_stars ?? 0}</span>
           <span className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400 leading-tight">Stars</span>
         </div>
 
@@ -458,17 +459,17 @@ export default function StudentDashboardPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-zinc-900 dark:text-white flex items-center gap-2 tracking-tight">
                 <span>📝 Today&apos;s Assignments</span>
-                <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400 tabular-nums font-mono">{data.upcoming_deadlines.length} active</span>
+                <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400 tabular-nums font-mono">{upcomingList.length} active</span>
               </h2>
               <Link to="/student/assignments" className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">
                 View all →
               </Link>
             </div>
-            {data.upcoming_deadlines.length === 0 ? (
+            {upcomingList.length === 0 ? (
               <p className="text-sm text-neutral-500 dark:text-neutral-400">No upcoming deadlines. 🎉</p>
             ) : (
               <ul className="divide-y divide-neutral-100 dark:divide-zinc-800/60">
-                {data.upcoming_deadlines.map((a) => {
+                {upcomingList.map((a) => {
                   const skill = getSkillPill(a.title);
                   return (
                     <li
@@ -530,27 +531,32 @@ export default function StudentDashboardPage() {
           </div>
 
           {/* Recent Grades */}
-          <div className="card border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
-            <h2 className="mb-4 text-base font-semibold text-neutral-900 dark:text-white tracking-tight">Recent Grades & Feedback</h2>
-            {data.recent_grades.length === 0 ? (
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">No grades yet.</p>
-            ) : (
-              <ul className="divide-y divide-neutral-100 dark:divide-zinc-800/60">
-                {data.recent_grades.map((g, i) => (
-                  <li
-                    key={i}
-                    className="py-3 px-2 rounded-lg border-l-2 border-transparent hover:border-emerald-600 hover:bg-neutral-50/70 dark:hover:bg-zinc-800/40 transition-all active:scale-[0.99] flex items-center justify-between text-sm"
-                  >
-                    <span className="font-medium text-neutral-800 dark:text-neutral-200">{g.assignment_title}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-neutral-900 dark:text-white tabular-nums font-mono">{g.score}/10</span>
-                      <span className="text-amber-500 text-xs">{"⭐".repeat(Math.min(5, Math.max(1, g.stars)))}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          {(() => {
+            const recentGradeList = data.recentGrades ?? data.recent_grades ?? [];
+            return (
+              <div className="card border border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#111827] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.02)]">
+                <h2 className="mb-4 text-base font-semibold text-neutral-900 dark:text-white tracking-tight">Recent Grades & Feedback</h2>
+                {recentGradeList.length === 0 ? (
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">No grades yet.</p>
+                ) : (
+                  <ul className="divide-y divide-neutral-100 dark:divide-zinc-800/60">
+                    {recentGradeList.map((g, i) => (
+                      <li
+                        key={i}
+                        className="py-3 px-2 rounded-lg border-l-2 border-transparent hover:border-emerald-600 hover:bg-neutral-50/70 dark:hover:bg-zinc-800/40 transition-all active:scale-[0.99] flex items-center justify-between text-sm"
+                      >
+                        <span className="font-medium text-neutral-800 dark:text-neutral-200">{g.assignmentTitle ?? g.assignment_title}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-neutral-900 dark:text-white tabular-nums font-mono">{g.score}/10</span>
+                          <span className="text-amber-500 text-xs">{"⭐".repeat(Math.min(5, Math.max(1, g.stars)))}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Badges / Achievements Showcase */}
           {gamify && gamify.achievements.length > 0 && (

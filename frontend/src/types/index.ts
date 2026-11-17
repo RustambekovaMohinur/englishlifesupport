@@ -723,42 +723,82 @@ export interface DuplicateCompareOut {
 
 export interface TeacherDashboard {
   total_students: number;
+  totalStudents?: number;
   active_students: number;
+  activeStudents?: number;
   total_groups: number;
+  totalGroups?: number;
   total_assignments: number;
+  totalAssignments?: number;
   pending_submissions: number;
+  pendingSubmissions?: number;
   completion_rate?: number;
+  completionRate?: number;
   late_students?: number;
+  lateStudents?: number;
   locked_students?: number;
+  lockedStudents?: number;
   inactive_students?: number;
+  inactiveStudents?: number;
   total_wordlists?: number;
+  totalWordlists?: number;
   recent_submissions: {
     id: string;
     student_name: string;
+    studentName?: string;
     student_avatar?: string | null;
+    studentAvatar?: string | null;
     assignment_title: string;
+    assignmentTitle?: string;
     submitted_at: string;
+    submittedAt?: string;
+    status: string;
+  }[];
+  recentSubmissions?: {
+    id: string;
+    student_name: string;
+    studentName?: string;
+    student_avatar?: string | null;
+    studentAvatar?: string | null;
+    assignment_title: string;
+    assignmentTitle?: string;
+    submitted_at: string;
+    submittedAt?: string;
     status: string;
   }[];
 }
 
 export interface StudentDashboard {
   full_name: string;
+  fullName?: string;
   group_name: string | null;
+  groupName?: string | null;
   teacher_name: string | null;
+  teacherName?: string | null;
   english_level?: string | null;
+  englishLevel?: string | null;
   total_stars: number;
+  totalStars?: number;
   streak?: number;
   total_xp?: number;
+  totalXp?: number;
   level?: number;
   level_title?: string;
+  levelTitle?: string;
   free_pass_available?: boolean;
+  freePassAvailable?: boolean;
   average_score: number | null;
+  averageScore?: number | null;
   total_assignments: number;
+  totalAssignments?: number;
   completed_assignments: number;
-  upcoming_deadlines: { id: string; title: string; deadline: string; submitted: boolean; is_locked?: boolean; lock_reason?: string | null }[];
-  recent_grades: { assignment_title: string; score: number; stars: number; graded_at: string }[];
+  completedAssignments?: number;
+  upcoming_deadlines: { id: string; title: string; deadline: string; submitted: boolean; is_locked?: boolean; lock_reason?: string | null; isLocked?: boolean; lockReason?: string | null }[];
+  upcomingDeadlines?: { id: string; title: string; deadline: string; submitted: boolean; is_locked?: boolean; lock_reason?: string | null; isLocked?: boolean; lockReason?: string | null }[];
+  recent_grades: { assignment_title: string; assignmentTitle?: string; score: number; stars: number; graded_at: string; gradedAt?: string }[];
+  recentGrades?: { assignment_title: string; assignmentTitle?: string; score: number; stars: number; graded_at: string; gradedAt?: string }[];
   weekly_badge?: string | null;
+  weeklyBadge?: string | null;
 }
 
 export interface StarTransactionOut {

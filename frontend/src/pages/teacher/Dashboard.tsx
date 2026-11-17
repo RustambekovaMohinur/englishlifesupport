@@ -249,60 +249,73 @@ export default function TeacherDashboardPage() {
       ) : data ? (
         <>
           {/* Key LMS Metrics (Responsive 3-Tier Grid: 2-col on mobile, 4-col on tablet, 8-col on desktop) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
-            <StatCard
-              label="Total Students"
-              value={data.total_students}
-              icon={<Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />}
-              iconBg="bg-indigo-50 dark:bg-indigo-950/40"
-            />
-            <StatCard
-              label="Active Students"
-              value={data.active_students}
-              icon={<UserCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
-              iconBg="bg-emerald-50 dark:bg-emerald-950/40"
-            />
-            <StatCard
-              label="Active Groups"
-              value={data.total_groups}
-              icon={<GraduationCap className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
-              iconBg="bg-blue-50 dark:bg-blue-950/40"
-            />
-            <StatCard
-              label="Assignments"
-              value={data.total_assignments}
-              icon={<BookOpen className="w-4 h-4 text-violet-600 dark:text-violet-400" />}
-              iconBg="bg-violet-50 dark:bg-violet-950/40"
-            />
-            <Link to="/teacher/wordlists" className="block focus:outline-none group">
-              <StatCard
-                label="Wordlist Sets"
-                value={data.total_wordlists ?? 0}
-                hint="AI Importer →"
-                icon={<BookOpen className="w-4 h-4 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform" />}
-                iconBg="bg-purple-50 dark:bg-purple-950/40"
-              />
-            </Link>
-            <StatCard
-              label="Pending Review"
-              value={data.pending_submissions}
-              icon={<Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />}
-              iconBg="bg-amber-50 dark:bg-amber-950/40"
-            />
-            <StatCard
-              label="Completion"
-              value={`${data.completion_rate ?? 0}%`}
-              icon={<CheckCircle2 className="w-4 h-4 text-teal-600 dark:text-teal-400" />}
-              iconBg="bg-teal-50 dark:bg-teal-950/40"
-            />
-            <StatCard
-              label="Locked Students"
-              value={data.locked_students ?? 0}
-              hint="Prerequisite lock"
-              icon={<Lock className="w-4 h-4 text-rose-600 dark:text-rose-400" />}
-              iconBg="bg-rose-50 dark:bg-rose-950/40"
-            />
-          </div>
+          {(() => {
+            const totalStudents = data.totalStudents ?? data.total_students ?? 0;
+            const activeStudents = data.activeStudents ?? data.active_students ?? 0;
+            const totalGroups = data.totalGroups ?? data.total_groups ?? 0;
+            const totalAssignments = data.totalAssignments ?? data.total_assignments ?? 0;
+            const totalWordlists = data.totalWordlists ?? data.total_wordlists ?? 0;
+            const pendingSubmissions = data.pendingSubmissions ?? data.pending_submissions ?? 0;
+            const completionRate = data.completionRate ?? data.completion_rate ?? 0;
+            const lockedStudents = data.lockedStudents ?? data.locked_students ?? 0;
+
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
+                <StatCard
+                  label="Total Students"
+                  value={totalStudents}
+                  icon={<Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />}
+                  iconBg="bg-indigo-50 dark:bg-indigo-950/40"
+                />
+                <StatCard
+                  label="Active Students"
+                  value={activeStudents}
+                  icon={<UserCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
+                  iconBg="bg-emerald-50 dark:bg-emerald-950/40"
+                />
+                <StatCard
+                  label="Active Groups"
+                  value={totalGroups}
+                  icon={<GraduationCap className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
+                  iconBg="bg-blue-50 dark:bg-blue-950/40"
+                />
+                <StatCard
+                  label="Assignments"
+                  value={totalAssignments}
+                  icon={<BookOpen className="w-4 h-4 text-violet-600 dark:text-violet-400" />}
+                  iconBg="bg-violet-50 dark:bg-violet-950/40"
+                />
+                <Link to="/teacher/wordlists" className="block focus:outline-none group">
+                  <StatCard
+                    label="Wordlist Sets"
+                    value={totalWordlists}
+                    hint="AI Importer →"
+                    icon={<BookOpen className="w-4 h-4 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform" />}
+                    iconBg="bg-purple-50 dark:bg-purple-950/40"
+                  />
+                </Link>
+                <StatCard
+                  label="Pending Review"
+                  value={pendingSubmissions}
+                  icon={<Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />}
+                  iconBg="bg-amber-50 dark:bg-amber-950/40"
+                />
+                <StatCard
+                  label="Completion"
+                  value={`${completionRate}%`}
+                  icon={<CheckCircle2 className="w-4 h-4 text-teal-600 dark:text-teal-400" />}
+                  iconBg="bg-teal-50 dark:bg-teal-950/40"
+                />
+                <StatCard
+                  label="Locked Students"
+                  value={lockedStudents}
+                  hint="Prerequisite lock"
+                  icon={<Lock className="w-4 h-4 text-rose-600 dark:text-rose-400" />}
+                  iconBg="bg-rose-50 dark:bg-rose-950/40"
+                />
+              </div>
+            );
+          })()}
 
           {/* Weekly Group Report & Teacher Controls */}
           <div className="card space-y-5">
@@ -686,7 +699,8 @@ export default function TeacherDashboardPage() {
 
           {/* Streamlined Recent Submissions Card */}
           {(() => {
-            const recentFive = data.recent_submissions.slice(0, 5);
+            const recentList = data.recentSubmissions ?? data.recent_submissions ?? [];
+            const recentFive = recentList.slice(0, 5);
             return (
               <div className="card space-y-3">
                 <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
@@ -720,7 +734,12 @@ export default function TeacherDashboardPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
-                        {recentFive.map((s) => (
+                        {recentFive.map((s: any) => {
+                          const studentName = s.studentName ?? s.student_name ?? "Student";
+                          const studentAvatar = s.studentAvatar ?? s.student_avatar;
+                          const assignmentTitle = s.assignmentTitle ?? s.assignment_title ?? "Assignment";
+                          const submittedAt = s.submittedAt ?? s.submitted_at;
+                          return (
                           <tr
                             key={s.id}
                             className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors"
@@ -728,27 +747,28 @@ export default function TeacherDashboardPage() {
                             <td className="py-2.5 px-3">
                               <div className="flex items-center gap-2.5">
                                 <UserAvatar
-                                  src={s.student_avatar}
-                                  name={s.student_name}
+                                  src={studentAvatar}
+                                  name={studentName}
                                   size="sm"
                                   className="w-8 h-8 rounded-full object-cover aspect-square shrink-0"
                                 />
                                 <span className="font-semibold text-zinc-900 dark:text-white text-xs truncate max-w-[170px]">
-                                  {s.student_name}
+                                  {studentName}
                                 </span>
                               </div>
                             </td>
                             <td className="py-2.5 px-3 text-xs text-zinc-600 dark:text-zinc-300 font-medium truncate max-w-[220px]">
-                              {s.assignment_title}
+                              {assignmentTitle}
                             </td>
                             <td className="py-2.5 px-3 text-zinc-500 dark:text-zinc-400 font-mono text-xs whitespace-nowrap">
-                              {format(new Date(s.submitted_at), "MMM d, HH:mm")}
+                              {submittedAt ? format(new Date(submittedAt), "MMM d, HH:mm") : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-right">
                               <StatusBadge status={s.status} />
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
