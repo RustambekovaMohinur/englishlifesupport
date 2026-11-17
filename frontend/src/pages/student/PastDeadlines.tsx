@@ -250,8 +250,8 @@ export default function PastDeadlinesPage() {
                 key={a.id}
                 className={`rounded-2xl border transition-all p-5 flex flex-col justify-between ${
                   isMissing
-                    ? "bg-white dark:bg-[#161B22] border-rose-200 dark:border-rose-900/60 shadow-xs hover:border-rose-400"
-                    : "bg-white dark:bg-[#161B22] border-zinc-200 dark:border-zinc-800 shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700"
+                    ? "bg-white dark:bg-[#161B22] border-rose-200 dark:border-rose-900/60 dark:shadow-[0_0_0_1px_rgba(244,63,94,0.06),0_8px_32px_rgba(0,0,0,0.5)] shadow-xs hover:border-rose-400 dark:hover:border-rose-700/80"
+                    : "bg-white dark:bg-[#161B22] border-zinc-200 dark:border-[#1e2535] dark:shadow-[0_0_0_1px_rgba(99,102,241,0.06),0_8px_32px_rgba(0,0,0,0.5)] shadow-xs hover:border-zinc-300 dark:hover:border-indigo-800/60"
                 }`}
               >
                 <div>

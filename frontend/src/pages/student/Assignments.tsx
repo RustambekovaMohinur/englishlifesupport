@@ -211,7 +211,7 @@ export default function StudentAssignmentsPage() {
             ? "bg-zinc-50/70 dark:bg-zinc-900/40 border-zinc-200/50 dark:border-zinc-800/60 opacity-80 hover:opacity-100"
             : isTaskLocked
             ? "bg-slate-50/80 dark:bg-slate-900/60 backdrop-blur-xs border-dashed border-amber-300/70 dark:border-amber-500/40 opacity-90 hover:border-amber-400 dark:hover:border-amber-400/70 shadow-xs"
-            : "bg-white dark:bg-[#111827] border-indigo-500/30 ring-1 ring-indigo-500/10 shadow-xs hover:border-indigo-500/50 hover:shadow-md hover:-translate-y-0.5"
+            : "bg-white dark:bg-[#161B22] border-indigo-500/30 dark:border-indigo-800/50 dark:shadow-[0_0_0_1px_rgba(99,102,241,0.08),0_8px_24px_rgba(0,0,0,0.4)] ring-1 ring-indigo-500/10 shadow-xs hover:border-indigo-500/50 dark:hover:border-indigo-600/60 hover:shadow-md dark:hover:shadow-[0_0_0_1px_rgba(99,102,241,0.15),0_8px_32px_rgba(99,102,241,0.08)] hover:-translate-y-0.5"
         }`}
       >
         <div className="space-y-3">

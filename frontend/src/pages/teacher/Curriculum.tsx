@@ -237,7 +237,7 @@ export default function Curriculum() {
           <p className="text-sm text-zinc-500">Loading curriculum templates...</p>
         </div>
       ) : templates.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#111827] space-y-4">
+        <div className="p-12 text-center rounded-2xl border border-dashed border-zinc-200 dark:border-indigo-900/40 bg-white dark:bg-[#161B22] dark:shadow-[0_0_0_1px_rgba(99,102,241,0.06),0_8px_32px_rgba(0,0,0,0.5)] space-y-4">
           <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto text-2xl">
             <Layers className="w-7 h-7" />
           </div>
@@ -256,7 +256,7 @@ export default function Curriculum() {
           {templates.map((tpl) => (
             <div
               key={tpl.id}
-              className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-[#111827] p-5 shadow-xs flex flex-col justify-between space-y-4 hover:shadow-md transition"
+              className="card flex flex-col justify-between space-y-4 hover:border-indigo-300/60 dark:hover:border-indigo-700/60 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.12),0_8px_32px_rgba(99,102,241,0.08)] transition-all duration-200"
             >
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
