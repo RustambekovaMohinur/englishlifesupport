@@ -116,7 +116,7 @@ async def submit_platform_feedback(
     # 4. Return pure primitive dictionary (Zero ORM relationship traversal!)
     return {
         "status": "success",
-        "message": "Fikringiz uchun rahmat! Tizimni yanada yaxshilaymiz! 🌟",
+        "message": "Thank you for your feedback! We will keep improving. 🌟",
         "id": str(feedback_id),
         "user_id": str(user_id),
         "user_full_name": user_full_name,
@@ -129,6 +129,16 @@ async def submit_platform_feedback(
     }
 
 
+@router.get("/summary", response_model=PlatformFeedbackSummary)
+async def get_platform_feedback_summary(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    GET /feedback/summary
+    Returns aggregated platform feedback stats plus the calling user's own review.
+    Accessible to all authenticated users (students and teachers).
+    """
     try:
         stmt = (
             select(
@@ -164,7 +174,7 @@ async def submit_platform_feedback(
         counts = Counter(str(r.rating) for r in rows)
         distribution = {str(star): counts.get(str(star), 0) for star in range(1, 6)}
 
-        # Check for current user's review
+        # Check for current user's own review
         user_review = None
         for r in rows:
             if r.user_id == current_user.id:
@@ -193,8 +203,6 @@ async def submit_platform_feedback(
         )
     except Exception as e:
         logger.exception("Error in get_platform_feedback_summary")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -491,10 +499,10 @@ async def get_public_feedbacks(
     for rep in reply_rows:
         role_val = rep.role.value if hasattr(rep.role, "value") else str(rep.role or "student")
         if role_val == "teacher" or role_val in ["admin", "superadmin"]:
-            rep_author_name = rep.teacher_name or rep.username or "O'qituvchi"
+            rep_author_name = rep.teacher_name or rep.username or "Teacher"
             rep_author_avatar = rep.teacher_avatar or f"/api/profile/{rep.user_id}/avatar"
         else:
-            rep_author_name = rep.student_name or rep.username or "O'quvchi"
+            rep_author_name = rep.student_name or rep.username or "Student"
             rep_author_avatar = rep.student_avatar or f"/api/profile/{rep.user_id}/avatar"
 
         replies_map[rep.feedback_id].append({
@@ -512,7 +520,7 @@ async def get_public_feedbacks(
     # 4. Build final response
     output = []
     for r in rows:
-        author_name = r.student_name or r.username or "O'quvchi"
+        author_name = r.student_name or r.username or "Student"
         author_avatar = r.student_avatar or f"/api/profile/{r.user_id}/avatar"
 
         output.append({
