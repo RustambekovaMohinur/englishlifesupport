@@ -84,64 +84,17 @@ async def _resolve_group(db: AsyncSession, group_id: Any) -> Group | None:
 
 async def get_active_student_counts(db: AsyncSession, group_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
     """
-    Computes deduplicated active student counts across groups.
-    Matches the exact deduplication and active activity criteria used in GroupDetailOut.
+    Computes enrolled student counts for all groups directly from student_profiles.
     """
     if not group_ids:
         return {}
 
-    subquery = (
-        select(
-            StudentProfile.id,
-            StudentProfile.group_id,
-            StudentProfile.full_name,
-            User.username,
-            StudentProfile.total_stars,
-            select(func.count())
-            .select_from(Submission)
-            .where(
-                Submission.student_id == StudentProfile.id,
-                Submission.is_archived.is_(False),
-            )
-            .correlate(StudentProfile)
-            .scalar_subquery()
-            .label("sub_cnt"),
-        )
-        .join(User, StudentProfile.user_id == User.id)
-        .where(
-            StudentProfile.group_id.in_(group_ids),
-            or_(User.approval_status != ApprovalStatus.REJECTED, User.approval_status.is_(None)),
-            or_(User.is_active.is_(True), User.is_active.is_(None)),
-        )
+    res = await db.execute(
+        select(StudentProfile.group_id, func.count(StudentProfile.id))
+        .where(StudentProfile.group_id.in_(group_ids))
+        .group_by(StudentProfile.group_id)
     )
-    res = await db.execute(subquery)
-    rows = res.all()
-
-    by_group = defaultdict(list)
-    for r in rows:
-        by_group[r.group_id].append(r)
-
-    counts_map: dict[uuid.UUID, int] = {}
-    for gid in group_ids:
-        g_rows = by_group.get(gid, [])
-        dedup_map: dict[str, tuple] = {}
-        for r in g_rows:
-            sp_id, _, full_name, username, stars, sub_cnt = r
-            norm_name = " ".join((full_name or "").strip().lower().split())
-            norm_user = (username or "").strip().lower()
-            key = norm_name or norm_user or str(sp_id)
-            score = (stars or 0) * 10 + (sub_cnt or 0) * 5 + (20 if (sub_cnt or 0) > 0 else 0)
-
-            if key not in dedup_map:
-                dedup_map[key] = (r, score)
-            else:
-                _, existing_score = dedup_map[key]
-                if score > existing_score:
-                    dedup_map[key] = (r, score)
-
-        counts_map[gid] = len(dedup_map)
-
-    return counts_map
+    return {gid: count for gid, count in res.all()}
 
 
 async def _to_group_out(db: AsyncSession, group: Group) -> GroupOut:

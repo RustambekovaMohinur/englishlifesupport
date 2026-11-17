@@ -202,14 +202,14 @@ async def list_all_teachers(
         
         # Calculate cohorts count for this teacher
         g_count = (await db.execute(
-            select(func.count(Group.id)).where(Group.created_by == p.user_id, Group.is_active.is_(True))
+            select(func.count(Group.id)).where(or_(Group.created_by == p.user_id, Group.created_by == p.id), Group.is_active.is_(True))
         )).scalar() or 0
 
         # Calculate student count enrolled in this teacher's cohorts
         s_count = (await db.execute(
             select(func.count(StudentProfile.id))
             .join(Group, StudentProfile.group_id == Group.id)
-            .where(Group.created_by == p.user_id)
+            .where(or_(Group.created_by == p.user_id, Group.created_by == p.id))
         )).scalar() or 0
 
         results.append(
@@ -343,12 +343,12 @@ async def get_platform_stats(
     for tp in teacher_profiles:
         u = (await db.execute(select(User).where(User.id == tp.user_id))).scalar_one_or_none()
         g_cnt = (await db.execute(
-            select(func.count(Group.id)).where(Group.created_by == tp.user_id)
+            select(func.count(Group.id)).where(or_(Group.created_by == tp.user_id, Group.created_by == tp.id))
         )).scalar() or 0
         s_cnt = (await db.execute(
             select(func.count(StudentProfile.id))
             .join(Group, StudentProfile.group_id == Group.id)
-            .where(Group.created_by == tp.user_id)
+            .where(or_(Group.created_by == tp.user_id, Group.created_by == tp.id))
         )).scalar() or 0
 
         breakdown.append(
@@ -462,7 +462,7 @@ async def list_pending_approvals(
                         group_name = grp.name
                         # Find group's teacher
                         if grp.created_by:
-                            tp = (await db.execute(select(TeacherProfile).where(TeacherProfile.user_id == grp.created_by))).scalar_one_or_none()
+                            tp = (await db.execute(select(TeacherProfile).where(or_(TeacherProfile.user_id == grp.created_by, TeacherProfile.id == grp.created_by)))).scalar_one_or_none()
                             if tp:
                                 teacher_name = tp.full_name
         elif u.role == UserRole.TEACHER:
