@@ -1,7 +1,7 @@
 import re
 import uuid
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.group import EnglishLevel
 from app.models.user import UserRole
@@ -88,6 +88,15 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    token: str | None = None
+
+    model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def populate_token(self) -> "TokenResponse":
+        if self.token is None:
+            self.token = self.access_token
+        return self
 
 
 class RegisterResponse(BaseModel):
@@ -95,11 +104,29 @@ class RegisterResponse(BaseModel):
     message: str = "Your request has been sent to your teacher. Access will be granted once approved."
     access_token: str | None = None
     refresh_token: str | None = None
+    token: str | None = None
+
+    model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def populate_token(self) -> "RegisterResponse":
+        if self.token is None and self.access_token:
+            self.token = self.access_token
+        return self
 
 
 class AccessTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    token: str | None = None
+
+    model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def populate_token(self) -> "AccessTokenResponse":
+        if self.token is None:
+            self.token = self.access_token
+        return self
 
 
 class CurrentUser(BaseModel):

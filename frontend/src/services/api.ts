@@ -3,20 +3,60 @@ import { apiCache } from "./apiCache";
 
 export { apiCache };
 
-const ACCESS_TOKEN_KEY = "el_access_token";
-const REFRESH_TOKEN_KEY = "el_refresh_token";
+export const ACCESS_TOKEN_KEY = "access_token";
+export const REFRESH_TOKEN_KEY = "refresh_token";
+
+export const ACCESS_TOKEN_KEYS = ["access_token", "token", "el_access_token", "accessToken"];
+export const REFRESH_TOKEN_KEYS = ["refresh_token", "el_refresh_token", "refreshToken"];
 
 export const tokenStorage = {
-  getAccess: () => localStorage.getItem(ACCESS_TOKEN_KEY),
-  getRefresh: () => localStorage.getItem(REFRESH_TOKEN_KEY),
-  setTokens: (access: string, refresh: string) => {
-    localStorage.setItem(ACCESS_TOKEN_KEY, access);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+  getAccess: (): string | null => {
+    for (const key of ACCESS_TOKEN_KEYS) {
+      const val = localStorage.getItem(key);
+      if (val && typeof val === "string" && val.trim() && val !== "undefined" && val !== "null") {
+        return val.trim();
+      }
+    }
+    return null;
   },
-  setAccess: (access: string) => localStorage.setItem(ACCESS_TOKEN_KEY, access),
+  getRefresh: (): string | null => {
+    for (const key of REFRESH_TOKEN_KEYS) {
+      const val = localStorage.getItem(key);
+      if (val && typeof val === "string" && val.trim() && val !== "undefined" && val !== "null") {
+        return val.trim();
+      }
+    }
+    return null;
+  },
+  setTokens: (access: string, refresh?: string | null) => {
+    if (access) {
+      const clean = access.trim();
+      for (const key of ACCESS_TOKEN_KEYS) {
+        localStorage.setItem(key, clean);
+      }
+      api.defaults.headers.common["Authorization"] = `Bearer ${clean}`;
+    }
+    if (refresh) {
+      const cleanRef = refresh.trim();
+      for (const key of REFRESH_TOKEN_KEYS) {
+        localStorage.setItem(key, cleanRef);
+      }
+    }
+  },
+  setAccess: (access: string) => {
+    if (access) {
+      const clean = access.trim();
+      for (const key of ACCESS_TOKEN_KEYS) {
+        localStorage.setItem(key, clean);
+      }
+      api.defaults.headers.common["Authorization"] = `Bearer ${clean}`;
+    }
+  },
   clear: () => {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    for (const key of [...ACCESS_TOKEN_KEYS, ...REFRESH_TOKEN_KEYS, "el_admin_auth", "el_admin_token"]) {
+      localStorage.removeItem(key);
+    }
+    delete api.defaults.headers.common["Authorization"];
     apiCache.invalidate();
   },
 };
@@ -109,15 +149,23 @@ api.interceptors.request.use((config) => {
   }
 
   // Ensure token is attached for all non-public routes
-  const isPublicAuthRoute = config.url && (
-    config.url.endsWith("/auth/login") ||
-    config.url.endsWith("/auth/register") ||
-    config.url.endsWith("/auth/groups/public")
+  const rawUrl = config.url ? config.url.split("?")[0].replace(/\/+$/, "") : "";
+  const isPublicAuthRoute = (
+    rawUrl.endsWith("/auth/login") ||
+    rawUrl.endsWith("/login") ||
+    rawUrl.endsWith("/auth/register") ||
+    rawUrl.endsWith("/register") ||
+    rawUrl.endsWith("/auth/groups/public") ||
+    rawUrl.endsWith("/groups/public")
   );
   const token = !isPublicAuthRoute ? tokenStorage.getAccess() : null;
   if (token) {
     if (!config.headers) config.headers = {} as any;
+    if (typeof (config.headers as any).set === "function") {
+      (config.headers as any).set("Authorization", `Bearer ${token}`);
+    }
     config.headers.Authorization = `Bearer ${token}`;
+    config.headers["Authorization"] = `Bearer ${token}`;
   }
   // Normalize URL to prevent duplicate /api/v1 or /api prefixes with baseURL
   if (config.url) {
@@ -368,11 +416,16 @@ api.interceptors.response.use(
     isRefreshing = true;
     try {
       const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken });
-      tokenStorage.setAccess(data.access_token);
-      onRefreshed(data.access_token);
+      const newAccess = data.access_token || data.token;
+      tokenStorage.setAccess(newAccess);
+      onRefreshed(newAccess);
       isRefreshing = false;
       if (originalRequest.headers) {
-        originalRequest.headers.Authorization = `Bearer ${data.access_token}`;
+        if (typeof (originalRequest.headers as any).set === "function") {
+          (originalRequest.headers as any).set("Authorization", `Bearer ${newAccess}`);
+        }
+        originalRequest.headers.Authorization = `Bearer ${newAccess}`;
+        originalRequest.headers["Authorization"] = `Bearer ${newAccess}`;
       }
       return api(originalRequest);
     } catch (refreshError) {

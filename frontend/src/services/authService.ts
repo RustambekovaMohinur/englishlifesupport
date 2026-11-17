@@ -27,7 +27,11 @@ export async function fetchPublicTeachers(): Promise<TeacherPublic[]> {
 export async function login(username: string, password: string) {
   // Use relative path – axios baseURL is already /api/v1
   const { data } = await api.post("/auth/login", { username, password });
-  tokenStorage.setTokens(data.access_token, data.refresh_token);
+  const accessToken = data.access_token || data.token;
+  const refreshToken = data.refresh_token || data.refreshToken;
+  if (accessToken) {
+    tokenStorage.setTokens(accessToken, refreshToken);
+  }
   return data;
 }
 
@@ -62,8 +66,10 @@ export async function register(
 
   // Use relative path – axios baseURL is already /api/v1
   const { data } = await api.post("/auth/register", payload);
-  if (data.access_token) {
-    tokenStorage.setTokens(data.access_token, data.refresh_token);
+  const accessToken = data.access_token || data.token;
+  const refreshToken = data.refresh_token || data.refreshToken;
+  if (accessToken) {
+    tokenStorage.setTokens(accessToken, refreshToken);
   }
   return data;
 }
@@ -85,6 +91,8 @@ export async function logout() {
 
 export async function fetchCurrentUser(): Promise<CurrentUser> {
   // Use relative path – axios baseURL is already /api/v1
-  const { data } = await api.get("/auth/me");
+  const token = tokenStorage.getAccess();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const { data } = await api.get("/auth/me", { headers });
   return data;
 }

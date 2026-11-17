@@ -98,7 +98,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (username: string, password: string) => {
-    await authService.login(username, password);
+    const res = await authService.login(username, password);
+    const token = res?.access_token || res?.token || tokenStorage.getAccess();
+    if (token) {
+      tokenStorage.setTokens(token, res?.refresh_token || res?.refreshToken);
+    }
     const me = await authService.fetchCurrentUser();
     const enriched = await enrichUser(me);
     setUser(enriched);
@@ -113,7 +117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     groupId?: string
   ) => {
     const res = await authService.register(username, password, fullNameOrData, phone, groupId);
-    if (res.access_token) {
+    const token = res?.access_token || res?.token || tokenStorage.getAccess();
+    if (token) {
+      tokenStorage.setTokens(token, res?.refresh_token || res?.refreshToken);
       const me = await authService.fetchCurrentUser();
       const enriched = await enrichUser(me);
       setUser(enriched);
@@ -143,8 +149,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // ignore network errors on logout
     } finally {
       tokenStorage.clear();
-      localStorage.removeItem("el_access_token");
-      localStorage.removeItem("el_refresh_token");
       sessionStorage.clear();
       apiCache.invalidate();
       setUser(null);
