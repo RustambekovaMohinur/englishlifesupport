@@ -67,17 +67,12 @@ async def teacher_dashboard(
 
         # Teacher groups query:
         # If group_id is specified, filter to that exact group.
-        # If group_id is None, aggregate across all active cohorts without filtering them out!
+        # If group_id is None, aggregate across all active cohorts in the academy!
         teacher_groups_q = select(Group).where(Group.is_active.is_(True))
         if group_id:
             teacher_groups_q = teacher_groups_q.where(Group.id == group_id)
-        elif not _is_admin(current_user):
-            teacher_groups_q = teacher_groups_q.where(_teacher_group_filter(current_user))
 
         teacher_groups = (await db.execute(teacher_groups_q)).scalars().all()
-        if not teacher_groups and not group_id:
-            # Fallback to all active academy groups so teacher dashboard is never locked out
-            teacher_groups = (await db.execute(select(Group).where(Group.is_active.is_(True)))).scalars().all()
 
         group_ids = [g.id for g in teacher_groups if g.is_active]
         all_group_ids = [g.id for g in teacher_groups]

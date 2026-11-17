@@ -930,13 +930,6 @@ async def list_submissions(
 
         # Build filter criteria
         base_filters = []
-        if not _is_admin(current_user):
-            base_filters.append(
-                or_(
-                    Assignment.created_by == current_user.id,
-                    _teacher_group_filter(current_user),
-                )
-            )
         if group_id_val:
             base_filters.append(Assignment.group_id == group_id_val)
         if sid_val:

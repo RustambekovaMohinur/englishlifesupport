@@ -144,11 +144,7 @@ async def list_students(
     ).outerjoin(Group, StudentProfile.group_id == Group.id)
 
     if group_id_val:
-        if not _is_admin(current_user) and group_id_val not in teacher_group_ids:
-            return PaginatedStudents(items=[], total=0, page=page_num, page_size=page_sz)
         query = query.where(StudentProfile.group_id == group_id_val)
-    elif not _is_admin(current_user):
-        query = query.where(StudentProfile.group_id.in_(teacher_group_ids))
 
     if search_val:
         like = f"%{search_val.strip()}%"
@@ -170,14 +166,9 @@ async def list_students(
             query = query.where(User.approval_status == ApprovalStatus.REJECTED)
         else:
             query = query.where(User.approval_status == approval_status_val)
-    else:
-        # Default for normal student roster: only approved (or legacy NULL) students
-        query = query.where(or_(User.approval_status == ApprovalStatus.APPROVED, User.approval_status.is_(None)))
 
     if is_active_val is not None:
         query = query.where(User.is_active == is_active_val)
-    elif approval_status_val is None or (isinstance(approval_status_val, str) and approval_status_val.strip().lower() == "approved"):
-        query = query.where(User.is_active == True)
 
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar_one()

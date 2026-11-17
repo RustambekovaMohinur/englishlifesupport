@@ -258,19 +258,7 @@ async def list_assignments(
         )
 
         if valid_group_uuid:
-            if not _is_admin(current_user):
-                # Verify teacher owns this group
-                grp_owner = (await db.execute(select(Group.id).where(Group.id == valid_group_uuid, _teacher_group_filter(current_user)))).scalar_one_or_none()
-                if not grp_owner:
-                    return []
             query = query.where(Assignment.group_id == valid_group_uuid)
-        elif not _is_admin(current_user):
-            query = query.where(
-                or_(
-                    Assignment.created_by == current_user.id,
-                    _teacher_group_filter(current_user),
-                )
-            )
 
         query = query.order_by(Assignment.deadline.desc())
         rows = (await db.execute(query)).all()

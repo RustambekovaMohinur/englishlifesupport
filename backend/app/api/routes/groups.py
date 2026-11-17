@@ -235,17 +235,7 @@ async def list_groups(
         except Exception:
             pass
 
-    if not _is_admin(current_user):
-        tp_res = (await db.execute(select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id))).scalar_one_or_none()
-        teacher_clauses = [
-            Group.created_by == current_user.id,
-            Group.created_by == PRIMARY_TEACHER_PROFILE_ID,
-            Group.created_by.is_(None),
-        ]
-        if tp_res:
-            teacher_clauses.append(Group.created_by == tp_res)
-        query = query.where(or_(*teacher_clauses))
-
+    # Academy teachers see all cohorts by default unless explicitly filtering by a specific teacher ID
     if filter_user_id:
         filter_clauses = [Group.created_by == filter_user_id]
         if filter_tp_id:
