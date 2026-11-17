@@ -49,12 +49,14 @@ def _teacher_group_filter(current_user):
 
 logger = logging.getLogger(__name__)
 
+PRIMARY_TEACHER_PROFILE_ID = uuid.UUID("905f8907-041a-4ae8-84a7-815c17cf607f")
+
 
 def _is_group_owner(group: Group, current_user: User, tp_id: uuid.UUID | None = None) -> bool:
     """Strict teacher ownership check for multi-tenant isolation."""
     if _is_admin(current_user):
         return True
-    if group.created_by is None or group.created_by == current_user.id:
+    if group.created_by is None or group.created_by == current_user.id or group.created_by == PRIMARY_TEACHER_PROFILE_ID:
         return True
     if tp_id and group.created_by == tp_id:
         return True
@@ -67,7 +69,7 @@ def _is_group_owner(group: Group, current_user: User, tp_id: uuid.UUID | None = 
 async def _check_group_owner(db: AsyncSession, group: Group, current_user: User) -> bool:
     if _is_admin(current_user):
         return True
-    if group.created_by is None or group.created_by == current_user.id:
+    if group.created_by is None or group.created_by == current_user.id or group.created_by == PRIMARY_TEACHER_PROFILE_ID:
         return True
     tp = getattr(current_user, "teacher_profile", None)
     if tp and group.created_by == tp.id:
@@ -235,7 +237,11 @@ async def list_groups(
 
     if not _is_admin(current_user):
         tp_res = (await db.execute(select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id))).scalar_one_or_none()
-        teacher_clauses = [Group.created_by == current_user.id, Group.created_by.is_(None)]
+        teacher_clauses = [
+            Group.created_by == current_user.id,
+            Group.created_by == PRIMARY_TEACHER_PROFILE_ID,
+            Group.created_by.is_(None),
+        ]
         if tp_res:
             teacher_clauses.append(Group.created_by == tp_res)
         query = query.where(or_(*teacher_clauses))

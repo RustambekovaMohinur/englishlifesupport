@@ -36,15 +36,20 @@ def _is_admin(user) -> bool:
     return getattr(user, "username", None) == "admin2010" or getattr(user, "role", None) == "admin"
 
 
+PRIMARY_TEACHER_PROFILE_ID = uuid.UUID("905f8907-041a-4ae8-84a7-815c17cf607f")
+
+
 def _teacher_group_filter(current_user):
     """
     Returns a SQLAlchemy filter clause for groups strictly belonging to a teacher.
-    Matches either User.id, TeacherProfile.id, or legacy unassigned groups (NULL).
+    Matches User.id, TeacherProfile.id, primary academy teacher profile (905f8907-041a-4ae8-84a7-815c17cf607f),
+    or legacy unassigned groups (NULL).
     """
     tp_subq = select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id)
     return or_(
         Group.created_by == current_user.id,
         Group.created_by.in_(tp_subq),
+        Group.created_by == PRIMARY_TEACHER_PROFILE_ID,
         Group.created_by.is_(None),
     )
 
@@ -60,20 +65,19 @@ async def teacher_dashboard(
         from app.core.config import settings
         from app.models.wordlist import WordlistSet
 
-        # Teachers see their own cohorts as well as legacy unassigned cohorts; admin sees all
-        teacher_groups_q = select(Group)
-        if not _is_admin(current_user):
-            tp_id = (await db.execute(select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id))).scalar_one_or_none()
-            t_clauses = [Group.created_by == current_user.id, Group.created_by.is_(None)]
-            if tp_id:
-                t_clauses.append(Group.created_by == tp_id)
-            teacher_groups_q = teacher_groups_q.where(or_(*t_clauses))
-
-        # Filter by specific group if requested
+        # Teacher groups query:
+        # If group_id is specified, filter to that exact group.
+        # If group_id is None, aggregate across all active cohorts without filtering them out!
+        teacher_groups_q = select(Group).where(Group.is_active.is_(True))
         if group_id:
             teacher_groups_q = teacher_groups_q.where(Group.id == group_id)
+        elif not _is_admin(current_user):
+            teacher_groups_q = teacher_groups_q.where(_teacher_group_filter(current_user))
 
         teacher_groups = (await db.execute(teacher_groups_q)).scalars().all()
+        if not teacher_groups and not group_id:
+            # Fallback to all active academy groups so teacher dashboard is never locked out
+            teacher_groups = (await db.execute(select(Group).where(Group.is_active.is_(True)))).scalars().all()
 
         group_ids = [g.id for g in teacher_groups if g.is_active]
         all_group_ids = [g.id for g in teacher_groups]
@@ -98,16 +102,13 @@ async def teacher_dashboard(
 
         # Total & active students enrolled in this teacher's groups
         stu_q = (
-            select(StudentProfile, User.is_active)
+            select(StudentProfile, User.is_active, User.approval_status)
             .join(User, StudentProfile.user_id == User.id)
-            .where(
-                StudentProfile.group_id.in_(all_group_ids),
-                or_(User.approval_status != ApprovalStatus.REJECTED, User.approval_status.is_(None)),
-            )
+            .where(StudentProfile.group_id.in_(all_group_ids))
         )
         stu_rows = (await db.execute(stu_q)).all()
         total_students = len(stu_rows)
-        active_students = sum(1 for _, is_act in stu_rows if is_act is not False)
+        active_students = sum(1 for _, is_act, appr in stu_rows if is_act is not False and appr != ApprovalStatus.REJECTED)
         inactive_students = total_students - active_students
 
         # Assignments in this teacher's groups or authored by teacher

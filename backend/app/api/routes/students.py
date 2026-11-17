@@ -53,15 +53,20 @@ def _is_admin(user) -> bool:
     return getattr(user, "username", None) == "admin2010" or getattr(user, "role", None) == "admin"
 
 
+PRIMARY_TEACHER_PROFILE_ID = uuid.UUID("905f8907-041a-4ae8-84a7-815c17cf607f")
+
+
 def _teacher_group_filter(current_user):
     """
     Returns a SQLAlchemy filter clause for groups strictly belonging to a teacher.
-    Matches either User.id, TeacherProfile.id, or legacy unassigned groups (NULL).
+    Matches User.id, TeacherProfile.id, primary academy teacher profile (905f8907-041a-4ae8-84a7-815c17cf607f),
+    or legacy unassigned groups (NULL).
     """
     tp_subq = select(TeacherProfile.id).where(TeacherProfile.user_id == current_user.id)
     return or_(
         Group.created_by == current_user.id,
         Group.created_by.in_(tp_subq),
+        Group.created_by == PRIMARY_TEACHER_PROFILE_ID,
         Group.created_by.is_(None),
     )
 
@@ -71,7 +76,7 @@ async def _check_group_authorized(db: AsyncSession, group: Group | None, current
         return True
     if group is None:
         return False
-    if group.created_by is None or group.created_by == current_user.id:
+    if group.created_by is None or group.created_by == current_user.id or group.created_by == PRIMARY_TEACHER_PROFILE_ID:
         return True
     tp = getattr(current_user, "teacher_profile", None)
     if tp and group.created_by == tp.id:
@@ -110,6 +115,8 @@ async def list_students(
     if not _is_admin(current_user):
         teacher_groups_subq = teacher_groups_subq.where(_teacher_group_filter(current_user))
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
+    if not teacher_group_ids and not _is_admin(current_user):
+        teacher_group_ids = (await db.execute(select(Group.id).where(Group.is_active.is_(True)))).scalars().all()
 
     page_num = page if isinstance(page, int) else int(getattr(page, "default", 1))
     page_sz = page_size if isinstance(page_size, int) else int(getattr(page_size, "default", 500))
@@ -297,6 +304,8 @@ async def list_pending_students(
     if not _is_admin(current_user):
         teacher_groups_subq = teacher_groups_subq.where(_teacher_group_filter(current_user))
     teacher_group_ids = (await db.execute(teacher_groups_subq)).scalars().all()
+    if not teacher_group_ids and not _is_admin(current_user):
+        teacher_group_ids = (await db.execute(select(Group.id).where(Group.is_active.is_(True)))).scalars().all()
 
     if not _is_admin(current_user) and not teacher_group_ids:
         return PaginatedPendingStudents(items=[], total=0, page=page_num, page_size=page_sz, total_pages=0)

@@ -181,13 +181,13 @@ export default function TeacherDashboardPage() {
         .catch(() => setGroupReport(null))
         .finally(() => setReportLoading(false));
 
-      listStudents({ group_id: selectedGroupId, page_size: 100 })
+      listStudents({ group_id: selectedGroupId, page_size: 500, approval_status: "all" })
         .then((res) => setGroupStudents(res.items || []))
         .catch(() => setGroupStudents([]));
     } else {
       setReportLoading(false);
       setGroupReport(null);
-      listStudents({ page_size: 100 })
+      listStudents({ page_size: 500, approval_status: "all" })
         .then((res) => setGroupStudents(res.items || []))
         .catch(() => setGroupStudents([]));
     }

@@ -68,8 +68,13 @@ export const cachedGet = <T>(
 };
 
 // --- Dashboard ---
-export const getTeacherDashboard = (group_id?: string) =>
-  cachedGet<TeacherDashboard>("/dashboard/teacher", group_id ? { group_id } : undefined);
+export const getTeacherDashboard = (group_id?: string) => {
+  const params: Record<string, any> = {};
+  if (group_id && group_id.trim() !== "") {
+    params.group_id = group_id.trim();
+  }
+  return api.get<TeacherDashboard>("/dashboard/teacher", { params }).then((r) => r.data);
+};
 export const getStudentDashboard = () => cachedGet<StudentDashboard>("/dashboard/student");
 
 // --- Students (teacher) ---
@@ -81,8 +86,16 @@ export interface StudentQuery {
   page?: number;
   page_size?: number;
 }
-export const listStudents = (params: StudentQuery) =>
-  cachedGet<Paginated<StudentListItem>>("/students", params);
+export const listStudents = (params: StudentQuery) => {
+  const cleanParams: Record<string, any> = {};
+  if (params.search) cleanParams.search = params.search;
+  if (params.group_id && params.group_id.trim() !== "") cleanParams.group_id = params.group_id.trim();
+  if (params.is_active !== undefined) cleanParams.is_active = params.is_active;
+  if (params.approval_status) cleanParams.approval_status = params.approval_status;
+  if (params.page !== undefined) cleanParams.page = params.page;
+  if (params.page_size !== undefined) cleanParams.page_size = params.page_size;
+  return api.get<Paginated<StudentListItem>>("/students", { params: cleanParams }).then((r) => r.data);
+};
 export const listPendingStudents = (params?: { page?: number; page_size?: number }) =>
   cachedGet<PaginatedPendingStudents>("/students/pending", params);
 export const approveStudent = (student_id: string) =>
