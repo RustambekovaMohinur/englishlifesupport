@@ -301,60 +301,70 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
                     refresh_token, _ = create_refresh_token("admin2010", "admin")
                     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
-        # Candidate identifiers to match against username or email
-        identifiers = {login_input, clean_identifier, clean_username_only}
+        # Candidate search terms (case-insensitive and ilike matching across both username and email)
+        candidate_terms = {raw_input, login_input, clean_identifier, clean_username_only}
+        if "@" not in clean_username_only and clean_username_only:
+            candidate_terms.add(f"{clean_username_only}@englishlife.local")
+            candidate_terms.add(f"{clean_username_only}@englishlife.uz")
+
         # Common student typo fallback: e.g. fayowka <-> fayowkaa
         if clean_username_only == "fayowka":
-            identifiers.add("fayowkaa")
-            identifiers.add("fayowkaa@englishlife.local")
+            candidate_terms.add("fayowkaa")
+            candidate_terms.add("fayowkaa@englishlife.local")
         elif clean_username_only == "fayowkaa":
-            identifiers.add("fayowka")
-            identifiers.add("fayowka@englishlife.local")
+            candidate_terms.add("fayowka")
+            candidate_terms.add("fayowka@englishlife.local")
 
         conditions = []
-        for ident in identifiers:
-            conditions.append(func.lower(User.username) == ident)
-            conditions.append(func.lower(User.email) == ident)
+        for term in candidate_terms:
+            if not term:
+                continue
+            conditions.append(User.username.ilike(term))
+            conditions.append(User.email.ilike(term))
+            conditions.append(func.lower(func.trim(User.username)) == term.lower())
+            conditions.append(func.lower(func.trim(User.email)) == term.lower())
+            if "@" not in term:
+                conditions.append(User.email.ilike(f"{term}@%"))
 
         result = await db.execute(
             select(User).where(or_(*conditions)).order_by(User.is_active.desc(), User.created_at.asc())
         )
         users = result.scalars().all()
 
-        # Find the approved/active user first if multiple matches exist
+        if not users:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
+
+        # Check candidate users to find the matching user with valid credentials
         user = None
-        if users:
-            # Prioritize approved active user
-            for u in users:
-                if u.approval_status == ApprovalStatus.APPROVED and u.is_active:
-                    user = u
-                    break
-            if not user:
-                user = users[0]
+        for candidate in users:
+            is_valid = False
+            clean_pwd = (body.password or "").strip()
+            if candidate.username == "admin2010" and clean_pwd in ("admin17", "admin2010"):
+                is_valid = True
+            elif candidate.password_hash:
+                is_valid = await asyncio.to_thread(verify_password, body.password, candidate.password_hash)
+
+            if is_valid:
+                user = candidate
+                break
 
         if user is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
-        is_valid = await asyncio.to_thread(verify_password, body.password, user.password_hash)
-        if not is_valid:
-            if user.username == "admin2010" and body.password.strip() in ("admin17", "admin2010"):
-                is_valid = True
-            else:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
-
-        if user.approval_status != ApprovalStatus.APPROVED:
+        # Approval status check: Only block if user is explicitly pending or rejected
+        if user.role == UserRole.STUDENT or getattr(user, "approval_status", None) in (ApprovalStatus.PENDING, ApprovalStatus.REJECTED):
             if user.approval_status == ApprovalStatus.PENDING:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail={"code": "ACCOUNT_PENDING_APPROVAL", "message": "Your account is waiting for teacher approval."},
                 )
-            else:
+            elif user.approval_status == ApprovalStatus.REJECTED:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail={"code": "ACCOUNT_REJECTED", "message": "Your account has been rejected."},
                 )
 
-        if not user.is_active:
+        if user.is_active is False:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
 
         return await _issue_tokens(db, user, request.headers.get("user-agent"))

@@ -78,15 +78,15 @@ async def get_current_user(
 
     if user is None:
         raise CREDENTIALS_EXCEPTION
-    if not user.is_active:
+    if user.is_active is False:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
-    if hasattr(user, "approval_status") and user.approval_status != ApprovalStatus.APPROVED:
+    if hasattr(user, "approval_status") and (user.role == UserRole.STUDENT or user.approval_status in (ApprovalStatus.PENDING, ApprovalStatus.REJECTED)):
         if user.approval_status == ApprovalStatus.PENDING:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"code": "ACCOUNT_PENDING_APPROVAL", "message": "Your account is waiting for teacher approval."},
             )
-        else:
+        elif user.approval_status == ApprovalStatus.REJECTED:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"code": "ACCOUNT_REJECTED", "message": "Your account has been rejected."},
