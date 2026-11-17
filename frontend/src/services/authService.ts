@@ -89,10 +89,43 @@ export async function logout() {
   }
 }
 
+export function getActiveToken(): string | null {
+  // 1. Check tokenStorage.getTokens()
+  if (typeof (tokenStorage as any).getTokens === "function") {
+    const tokens = (tokenStorage as any).getTokens();
+    const t = tokens?.access_token || tokens?.token || tokens?.access;
+    if (t && typeof t === "string" && t.trim() && t !== "undefined" && t !== "null") {
+      return t.trim();
+    }
+  }
+  // 2. Check tokenStorage.getAccess()
+  if (typeof tokenStorage.getAccess === "function") {
+    const t = tokenStorage.getAccess();
+    if (t && typeof t === "string" && t.trim() && t !== "undefined" && t !== "null") {
+      return t.trim();
+    }
+  }
+  // 3. Check directly from localStorage keys
+  if (typeof window !== "undefined" && window.localStorage) {
+    const keys = ["access_token", "token", "el_access_token", "accessToken", "el_admin_token", "auth_token"];
+    for (const k of keys) {
+      const val = localStorage.getItem(k);
+      if (val && typeof val === "string" && val.trim() && val !== "undefined" && val !== "null") {
+        return val.trim();
+      }
+    }
+  }
+  return null;
+}
+
 export async function fetchCurrentUser(): Promise<CurrentUser> {
-  // Use relative path – axios baseURL is already /api/v1
-  const token = tokenStorage.getAccess();
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  // Explicitly grab token from tokenStorage.getTokens() or localStorage and attach directly
+  const token = getActiveToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  }
   const { data } = await api.get("/auth/me", { headers });
   return data;
 }

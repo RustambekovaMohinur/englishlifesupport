@@ -6,20 +6,24 @@ export { apiCache };
 export const ACCESS_TOKEN_KEY = "access_token";
 export const REFRESH_TOKEN_KEY = "refresh_token";
 
-export const ACCESS_TOKEN_KEYS = ["access_token", "token", "el_access_token", "accessToken"];
+export const ACCESS_TOKEN_KEYS = ["access_token", "token", "el_access_token", "accessToken", "el_admin_token", "auth_token"];
 export const REFRESH_TOKEN_KEYS = ["refresh_token", "el_refresh_token", "refreshToken"];
 
-export const tokenStorage = {
-  getAccess: (): string | null => {
-    for (const key of ACCESS_TOKEN_KEYS) {
-      const val = localStorage.getItem(key);
-      if (val && typeof val === "string" && val.trim() && val !== "undefined" && val !== "null") {
-        return val.trim();
-      }
+export function getExplicitToken(): string | null {
+  if (typeof window === "undefined" || !window.localStorage) return null;
+  for (const key of ACCESS_TOKEN_KEYS) {
+    const val = localStorage.getItem(key);
+    if (val && typeof val === "string" && val.trim() && val !== "undefined" && val !== "null") {
+      return val.trim();
     }
-    return null;
-  },
+  }
+  return null;
+}
+
+export const tokenStorage = {
+  getAccess: (): string | null => getExplicitToken(),
   getRefresh: (): string | null => {
+    if (typeof window === "undefined" || !window.localStorage) return null;
     for (const key of REFRESH_TOKEN_KEYS) {
       const val = localStorage.getItem(key);
       if (val && typeof val === "string" && val.trim() && val !== "undefined" && val !== "null") {
@@ -28,6 +32,12 @@ export const tokenStorage = {
     }
     return null;
   },
+  getTokens: () => ({
+    access_token: getExplicitToken(),
+    token: getExplicitToken(),
+    refresh_token: tokenStorage.getRefresh(),
+    refreshToken: tokenStorage.getRefresh(),
+  }),
   setTokens: (access: string, refresh?: string | null) => {
     if (access) {
       const clean = access.trim();
@@ -148,7 +158,7 @@ api.interceptors.request.use((config) => {
     }
   }
 
-  // Ensure token is attached for all non-public routes
+  // Ensure token is attached for all non-public routes (or explicitly for /auth/me)
   const rawUrl = config.url ? config.url.split("?")[0].replace(/\/+$/, "") : "";
   const isPublicAuthRoute = (
     rawUrl.endsWith("/auth/login") ||
@@ -158,14 +168,17 @@ api.interceptors.request.use((config) => {
     rawUrl.endsWith("/auth/groups/public") ||
     rawUrl.endsWith("/groups/public")
   );
-  const token = !isPublicAuthRoute ? tokenStorage.getAccess() : null;
+  const isMeEndpoint = rawUrl.endsWith("/auth/me") || rawUrl.endsWith("/me");
+  const token = (!isPublicAuthRoute || isMeEndpoint) ? getExplicitToken() : null;
   if (token) {
     if (!config.headers) config.headers = {} as any;
+    const bearer = `Bearer ${token}`;
     if (typeof (config.headers as any).set === "function") {
-      (config.headers as any).set("Authorization", `Bearer ${token}`);
+      (config.headers as any).set("Authorization", bearer);
     }
-    config.headers.Authorization = `Bearer ${token}`;
-    config.headers["Authorization"] = `Bearer ${token}`;
+    config.headers.Authorization = bearer;
+    config.headers["Authorization"] = bearer;
+    (config.headers as any)["authorization"] = bearer;
   }
   // Normalize URL to prevent duplicate /api/v1 or /api prefixes with baseURL
   if (config.url) {
