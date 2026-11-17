@@ -79,9 +79,11 @@ class AdminLoginRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str | None = Field(default=None)
-    email: str | None = Field(default=None)
-    password: str
+    username: str | None = Field(default=None, description="Username or email of the user")
+    email: str | None = Field(default=None, description="Email of the user (optional, can use username)")
+    password: str = Field(default="", description="User password")
+
+    model_config = {"extra": "ignore"}
 
 
 class TokenResponse(BaseModel):
