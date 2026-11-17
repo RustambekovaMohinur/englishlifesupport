@@ -144,16 +144,16 @@ export default function StudentDashboardPage() {
     return (
       <div className="card text-center p-8 space-y-4 max-w-lg mx-auto my-12 border border-zinc-200 dark:border-zinc-800">
         <div className="text-4xl">⚠️</div>
-        <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Boshqaruv panelini yuklab bo&apos;lmadi</h2>
+        <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Failed to load dashboard</h2>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          {error || "Tarmoq yoki hisobingiz holatida vaqtinchalik uzilish yuz berdi. Qayta urinib ko'ring."}
+          {error || "A temporary error occurred. Please check your connection and try again."}
         </p>
         <button
           type="button"
           onClick={loadDashboard}
           className="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm mx-auto"
         >
-          <span>Qayta urinish (Retry)</span>
+          <span>Retry</span>
         </button>
       </div>
     );
@@ -316,10 +316,10 @@ export default function StudentDashboardPage() {
             </div>
             <div className="min-w-0">
               <span className="text-sm font-bold text-zinc-900 dark:text-white block">
-                Ota-onangizni Telegram Botga ulang!
+                Connect your parent to the Telegram Bot!
               </span>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 truncate">
-                Dars natijalaringiz va yulduzlaringiz har bir deadline tugashi bilan ota-onangizga avtomatik yetkaziladi.
+                Your results and stars are automatically sent to your parent after each deadline.
               </p>
             </div>
           </div>

@@ -15,7 +15,7 @@ function LinkBadge({ linked }: { linked: boolean }) {
           : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
       }`}
     >
-      {linked ? "✅ Ulangan" : "⚠️ Ulanmagan"}
+      {linked ? "✅ Linked" : "⚠️ Not Linked"}
     </span>
   );
 }
@@ -27,7 +27,7 @@ export default function ParentPortalPage() {
   useEffect(() => {
     getMyParentReport()
       .then(setData)
-      .catch(() => toast.error("Ma'lumotlar yuklanmadi"))
+      .catch(() => toast.error("Failed to load parent report"))
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -63,10 +63,10 @@ export default function ParentPortalPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-          👨‍👩‍👦 Ota-ona Portali
+          👨‍👩‍👦 Parent Portal
         </h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          O'quvchining baholar, vazifalar va so'z boyligi haqida to'liq hisobot
+          Full report on grades, assignments, and vocabulary progress for your student.
         </p>
       </div>
 
@@ -74,7 +74,7 @@ export default function ParentPortalPage() {
       <div className="card space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-            📲 Telegram Ulanish
+            📲 Telegram Notification
           </h2>
           <LinkBadge linked={isParentLinked} />
         </div>
@@ -83,7 +83,7 @@ export default function ParentPortalPage() {
           <div className="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
             {parentName && (
               <p>
-                👤 <strong>Ota-ona:</strong> {parentName}
+                👤 <strong>Parent:</strong> {parentName}
               </p>
             )}
             {parentUsername && (
@@ -100,13 +100,13 @@ export default function ParentPortalPage() {
               </p>
             )}
             <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-              ✅ Ota-ona Telegram orqali baho va yangiliklar haqida xabardor bo'ladi.
+              ✅ Parent receives grade and progress updates via Telegram.
             </p>
           </div>
         ) : (
           <div className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
             <p>
-              Ota-ona hali botga ulanmagan. Quyidagi havola orqali ulashing:
+              Parent hasn't connected yet. Share this link with them:
             </p>
             <a
               href={portalDeepLink}
@@ -114,11 +114,10 @@ export default function ParentPortalPage() {
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 text-sm font-semibold transition-colors"
             >
-              Farzandim ko'rsatkichlari 🚀
+              View My Progress 🚀
             </a>
             <p className="text-xs text-zinc-400">
-              Bu havolani ota-onangizga yuboring — u saytni ochib, barcha
-              ko'rsatkichlarni ko'ra oladi.
+              Share this link with your parent — they can open it and view all progress reports.
             </p>
           </div>
         )}
@@ -127,22 +126,22 @@ export default function ParentPortalPage() {
       {/* Summary Stats */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
-          label="Jami Yulduzlar"
+          label="Total Stars"
           value={`⭐ ${data.total_stars ?? 0}`}
-          hint="Yig'ilgan"
+          hint="Earned"
         />
         <StatCard
-          label="Vazifa bajarish"
+          label="Task Completion"
           value={`${completionRate}%`}
           hint={`${data.completed_assignments ?? 0}/${data.total_assignments ?? 0} ta`}
         />
         <StatCard
-          label="So'z boyligi"
+          label="Vocabulary"
           value={`📚 ${masteredWords}/${totalWords}`}
-          hint="O'zlashtirgan/Jami"
+          hint="Mastered / Total"
         />
         <StatCard
-          label="Daraja"
+          label="Level"
           value={`Lvl ${data.level ?? 1}`}
           hint={data.level_title ?? "Beginner"}
         />
@@ -151,11 +150,11 @@ export default function ParentPortalPage() {
       {/* Recent Grades */}
       <div className="card space-y-3">
         <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-          📝 So'nggi baholar
+          📝 Recent Grades
         </h2>
         {recentGrades.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Hali baholangan vazifalar yo'q.
+            No graded assignments yet.
           </p>
         ) : (
           <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -224,18 +223,18 @@ export default function ParentPortalPage() {
       {(data.history ?? []).length > 0 && (
         <div className="card space-y-3">
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-            📋 Vazifalar holati
+            📋 Assignment Status
           </h2>
           <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {(data.history ?? []).slice(0, 10).map((asgn) => {
               const statusLabel =
                 asgn.submission_status === "graded"
-                  ? "✅ Baholandi"
+                  ? "✅ Graded"
                   : asgn.submission_status === "submitted"
-                  ? "⏳ Kutilmoqda"
+                  ? "⏳ Pending Review"
                   : asgn.submission_status === "missed"
-                  ? "❌ O'tkazib yuborildi"
-                  : "📌 Topshirilmadi";
+                  ? "❌ Missed"
+                  : "📌 Not Submitted";
               return (
                 <div
                   key={asgn.assignment_id}

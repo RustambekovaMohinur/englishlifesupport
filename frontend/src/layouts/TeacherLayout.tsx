@@ -11,7 +11,6 @@ import {
   LogOut,
   BookOpen,
   Calendar,
-  Shield,
 } from "lucide-react";
 import { Logo, ThemeToggle } from "@/components/ui";
 import { MarqueeTicker } from "@/components/MarqueeTicker";
@@ -31,11 +30,9 @@ const sidebarNavItems = [
 ];
 
 const bottomNavItems = [
-  { to: "/teacher", label: "Desk", icon: LayoutDashboard, end: true },
-  { to: "/teacher/groups", label: "Matrix", icon: Grid3X3 },
+  { to: "/teacher", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/teacher/groups", label: "Groups", icon: Grid3X3 },
   { to: "/teacher/assignments", label: "Tasks", icon: FileText },
-  { to: "/teacher/curriculum", label: "Curriculum", icon: Calendar },
-  { to: "/teacher/wordlists", label: "Words", icon: BookOpen },
   { to: "/teacher/submissions", label: "Review", icon: CheckSquare },
   { to: "/teacher/profile", label: "Profile", icon: User },
 ];
@@ -160,13 +157,16 @@ export default function TeacherLayout() {
             </>
           ) : (
             <>
-              <button
-                onClick={() => logout()}
-                className="rounded-xl px-3 py-2 text-left text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white transition active:scale-95 flex items-center gap-2"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Logout</span>
-              </button>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-600 px-1">English Life LMS</span>
+                <button
+                  onClick={() => logout()}
+                  className="rounded-xl px-3 py-2 text-left text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 transition active:scale-95 flex items-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
               <ThemeToggle />
             </>
           )}

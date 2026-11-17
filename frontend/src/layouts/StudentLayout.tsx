@@ -131,7 +131,7 @@ export default function StudentLayout() {
                 <p className="text-sm font-bold leading-tight text-zinc-900 dark:text-white tracking-tight truncate">
                   {user?.full_name || user?.username || "Student"}
                 </p>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">Candidate Portal</p>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">Student Portal</p>
               </div>
             </div>
           ) : (
@@ -256,9 +256,9 @@ export default function StudentLayout() {
               <Logo className="h-7 w-7 text-xs" />
               <div>
                 <span className="font-bold text-zinc-900 dark:text-white block leading-tight text-sm tracking-tight truncate max-w-[130px] sm:max-w-none">
-                  {user?.full_name || "Candidate Portal"}
+                  {user?.full_name || user?.username || "Student"}
                 </span>
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Candidate Portal</span>
+                <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Student Portal</span>
               </div>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -291,7 +291,7 @@ export default function StudentLayout() {
         <header className="hidden items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-[#111827]/80 backdrop-blur-md px-8 py-3.5 lg:flex shrink-0 sticky top-0 z-30">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Candidate Portal
+              Student Portal
             </span>
           </div>
           <div className="flex items-center gap-4">

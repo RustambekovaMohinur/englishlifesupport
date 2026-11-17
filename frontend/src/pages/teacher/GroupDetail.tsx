@@ -324,7 +324,7 @@ export default function GroupDetailPage() {
       </div>
 
       {/* Group Header Banner */}
-      <div className="rounded-2xl border border-[#EAE9E5] dark:border-[#30363D] bg-white dark:bg-[#161B22] p-6 shadow-sm">
+      <div className="rounded-2xl border border-[#EAE9E5] dark:border-indigo-900/40 bg-white dark:bg-[#161B22] p-6 shadow-sm dark:shadow-[0_0_0_1px_rgba(99,102,241,0.08),0_8px_32px_rgba(0,0,0,0.5)]">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
@@ -461,7 +461,7 @@ export default function GroupDetailPage() {
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Directory Table</span>
+            <span>Directory + Wordlist</span>
           </button>
           <button
             onClick={() => setActiveTab("cards")}
@@ -502,6 +502,7 @@ export default function GroupDetailPage() {
               <tr className="border-b border-zinc-200 dark:border-zinc-800 text-left text-zinc-500 dark:text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs">
                 <th className="py-3 px-4 font-semibold">Student</th>
                 <th className="py-3 px-4 font-semibold">Homework Progress</th>
+                <th className="py-3 px-4 font-semibold text-center">Wordlist</th>
                 <th className="py-3 px-4 font-semibold text-center">Stars & Lightning</th>
                 <th className="py-3 px-4 font-semibold text-right">Actions</th>
               </tr>
@@ -585,6 +586,43 @@ export default function GroupDetailPage() {
                           </div>
                         ) : null}
                       </div>
+                    </td>
+
+                    {/* Wordlist Status Column */}
+                    <td className="py-3.5 px-4 text-center">
+                      {(() => {
+                        const wlAssigns = Array.isArray(student.assignments)
+                          ? student.assignments.filter((a) => {
+                              const t = (a.title || "").toLowerCase();
+                              return t.includes("vocab") || t.includes("word") || t.includes("glossary") || t.includes("wordlist");
+                            })
+                          : [];
+                        const hasWl = wlAssigns.length > 0;
+                        const wlDone = hasWl && wlAssigns.every((a) => a.completion_percentage >= 100 || (a as any).has_submission);
+                        const wlPartial = hasWl && !wlDone && wlAssigns.some((a) => a.completion_percentage > 0);
+                        if (!hasWl) {
+                          return <span className="text-[11px] text-zinc-400 dark:text-zinc-600 font-mono">—</span>;
+                        }
+                        if (wlDone) {
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400 font-bold text-[11px]">
+                              ✓ Done
+                            </span>
+                          );
+                        }
+                        if (wlPartial) {
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-700 dark:text-amber-400 font-bold text-[11px]">
+                              ⟳ Partial
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 text-rose-600 dark:text-rose-400 font-bold text-[11px]">
+                            ✗ Pending
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     {/* Stars & Lightning Column */}

@@ -1302,7 +1302,7 @@ export default function AssignmentsPage() {
                   {Boolean(a.parent_notification_sent || (a.parent_notifications_sent_count ?? 0) > 0) && (
                     <span
                       className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-800 flex items-center gap-1 shadow-2xs"
-                      title={`Ota-onalarga xabarnomalar yuborilgan (${a.parent_notifications_sent_count ?? 1} ta)`}
+                      title={`Parent notifications sent (${a.parent_notifications_sent_count ?? 1})`}
                     >
                       📩 Parent Alerted ({a.parent_notifications_sent_count ?? 1})
                     </span>
@@ -1344,7 +1344,7 @@ export default function AssignmentsPage() {
                   disabled={alertingAssignmentId === a.id}
                   onClick={() => handleAlertParents(a)}
                   className="btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 border-blue-200 dark:border-blue-800 font-semibold"
-                  title="Missing / Incomplete homework haqida ota-onalarga Telegram va SMS orqali bildirishnoma yuborish"
+                  title="Notify parents via Telegram and SMS about missing or incomplete homework"
                 >
                   {alertingAssignmentId === a.id ? (
                     <>

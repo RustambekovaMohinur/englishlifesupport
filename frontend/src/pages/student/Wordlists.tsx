@@ -73,7 +73,7 @@ export default function StudentWordlistsPage() {
 
   const handleStartArena = () => {
     if (!arena || !arena.items || arena.items.length === 0) {
-      toast.error("Bu haftalik Weekend Arena savollari hali shakllanmadi.");
+      toast.error("This week's Weekend Arena questions haven't been generated yet.");
       return;
     }
     setSelectedSet({
@@ -200,16 +200,16 @@ export default function StudentWordlistsPage() {
                         Weekend Arena Quiz
                       </h2>
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                        {arena.is_weekend ? "🔥 Ochiq (Active Now)" : "🎯 Mashq / Preview"}
+                        {arena.is_weekend ? "🔥 Active Now" : "🎯 Practice / Preview"}
                       </span>
                       {arena.user_attempt && (
                         <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                          ✅ Siz topshirdingiz: {arena.user_attempt.score_percentage}%
+                          ✅ Completed: {arena.user_attempt.score_percentage}%
                         </span>
                       )}
                     </div>
                     <p className="text-xs text-zinc-600 dark:text-zinc-400 max-w-2xl">
-                      Ushbu haftaning lug&apos;atlaridan avtomatik shakllantirilgan 15 ta savolli arena quizi. Eng yuqori ball va eng tez ishlagan talabalarga 🥇 Oltin, 🥈 Kumush va 🥉 Bronza nishonlari beriladi!
+                      An auto-generated 15-question quiz from this week&apos;s vocabulary lists. Top scorers and fastest finishers earn 🥇 Gold, 🥈 Silver, and 🥉 Bronze badges!
                     </p>
                   </div>
 
@@ -218,7 +218,7 @@ export default function StudentWordlistsPage() {
                     onClick={handleStartArena}
                     className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-amber-500 to-indigo-600 text-white shadow-md hover:opacity-95 transition-all whitespace-nowrap active:scale-95 shrink-0"
                   >
-                    <span>🚀 Arenani Boshlash</span>
+                    <span>🚀 Start Arena</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -226,7 +226,7 @@ export default function StudentWordlistsPage() {
                 {/* Top 3 Podium preview */}
                 {arena.top_performers && arena.top_performers.length > 0 && (
                   <div className="pt-2 border-t border-amber-500/10 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="font-semibold text-zinc-500 dark:text-zinc-400">Bu haftalik liderlar:</span>
+                    <span className="font-semibold text-zinc-500 dark:text-zinc-400">This week's leaders:</span>
                     {arena.top_performers.map((p, i) => (
                       <span
                         key={p.student_id}
