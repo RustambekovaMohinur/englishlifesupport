@@ -106,8 +106,15 @@ export default function TeacherDashboardPage() {
   useEffect(() => {
     // 1. Load teacher dashboard metrics
     getTeacherDashboard()
-      .then(setData)
-      .catch(() => setError("Could not load dashboard data."))
+      .then((data: any) => {
+        console.log('Dashboard API response:', data);
+        const unpacked = data?.data?.stats ?? data?.data ?? data?.stats ?? data;
+        setData(unpacked);
+      })
+      .catch((err) => {
+        console.error("Dashboard API error:", err);
+        setError("Could not load dashboard data.");
+      })
       .finally(() => setIsLoading(false));
 
     // 2. Load groups independently so dropdown and group controls render without waiting for dashboard metrics
@@ -133,7 +140,12 @@ export default function TeacherDashboardPage() {
       await approveStudent(st.id);
       toast.success(`Approved ${st.first_name || st.username}!`);
       loadPendingList(pendingPage);
-      getTeacherDashboard().then(setData).catch(() => {});
+      getTeacherDashboard()
+        .then((data: any) => {
+          const unpacked = data?.data?.stats ?? data?.data ?? data?.stats ?? data;
+          setData(unpacked);
+        })
+        .catch(() => {});
     } catch (err: any) {
       toast.error(err?.response?.data?.detail?.message || "Failed to approve student");
     } finally {
@@ -250,14 +262,15 @@ export default function TeacherDashboardPage() {
         <>
           {/* Key LMS Metrics (Responsive 3-Tier Grid: 2-col on mobile, 4-col on tablet, 8-col on desktop) */}
           {(() => {
-            const totalStudents = data.totalStudents ?? data.total_students ?? 0;
-            const activeStudents = data.activeStudents ?? data.active_students ?? 0;
-            const totalGroups = data.totalGroups ?? data.total_groups ?? 0;
-            const totalAssignments = data.totalAssignments ?? data.total_assignments ?? 0;
-            const totalWordlists = data.totalWordlists ?? data.total_wordlists ?? 0;
-            const pendingSubmissions = data.pendingSubmissions ?? data.pending_submissions ?? 0;
-            const completionRate = data.completionRate ?? data.completion_rate ?? 0;
-            const lockedStudents = data.lockedStudents ?? data.locked_students ?? 0;
+            const raw: any = (data as any)?.data?.stats ?? (data as any)?.data ?? (data as any)?.stats ?? data;
+            const totalStudents = raw?.totalStudents ?? raw?.total_students ?? (data as any)?.totalStudents ?? data?.total_students ?? 0;
+            const activeStudents = raw?.activeStudents ?? raw?.active_students ?? (data as any)?.activeStudents ?? data?.active_students ?? 0;
+            const totalGroups = raw?.totalGroups ?? raw?.total_groups ?? (data as any)?.totalGroups ?? data?.total_groups ?? 0;
+            const totalAssignments = raw?.totalAssignments ?? raw?.total_assignments ?? (data as any)?.totalAssignments ?? data?.total_assignments ?? 0;
+            const totalWordlists = raw?.totalWordlists ?? raw?.total_wordlists ?? (data as any)?.totalWordlists ?? data?.total_wordlists ?? 0;
+            const pendingSubmissions = raw?.pendingSubmissions ?? raw?.pending_submissions ?? (data as any)?.pendingSubmissions ?? data?.pending_submissions ?? 0;
+            const completionRate = raw?.completionRate ?? raw?.completion_rate ?? (data as any)?.completionRate ?? data?.completion_rate ?? 0;
+            const lockedStudents = raw?.lockedStudents ?? raw?.locked_students ?? (data as any)?.lockedStudents ?? data?.locked_students ?? 0;
 
             return (
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
@@ -699,8 +712,9 @@ export default function TeacherDashboardPage() {
 
           {/* Streamlined Recent Submissions Card */}
           {(() => {
-            const recentList = data.recentSubmissions ?? data.recent_submissions ?? [];
-            const recentFive = recentList.slice(0, 5);
+            const raw: any = (data as any)?.data?.stats ?? (data as any)?.data ?? (data as any)?.stats ?? data;
+            const recentList = raw?.recentSubmissions ?? raw?.recent_submissions ?? data?.recentSubmissions ?? data?.recent_submissions ?? [];
+            const recentFive = Array.isArray(recentList) ? recentList.slice(0, 5) : [];
             return (
               <div className="card space-y-3">
                 <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
