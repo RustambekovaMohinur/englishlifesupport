@@ -1,9 +1,10 @@
 import logging
+import uuid
 from datetime import datetime, timezone
 from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
