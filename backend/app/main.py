@@ -85,8 +85,9 @@ logger = logging.getLogger("english_life")
 app = FastAPI(
     title="English Life LMS API",
     version="1.0.0",
-    docs_url="/api/docs" if settings.ENVIRONMENT != "production" else None,
-    redoc_url=None,
+    docs_url="/docs",
+    openapi_url="/openapi.json",
+    redoc_url="/redoc",
 )
 
 # CORS middleware configured at app initialization to allow all origins including Vercel
@@ -176,19 +177,18 @@ class PreflightOptionsMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-# Global catch-all OPTIONS router handler returning 200 OK
-@app.options("/{full_path:path}", include_in_schema=False)
-async def global_options_handler(request: Request, full_path: str):
-    """Immediate CORS preflight responder returning 200 OK to guarantee zero preflight hangs or 503s."""
-    origin = request.headers.get("origin") or "*"
-    headers = {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD",
-        "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "*"),
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "86400",
-    }
-    return Response(status_code=200, headers=headers)
+@app.get("/api/docs", include_in_schema=False)
+@app.get("/api/v1/docs", include_in_schema=False)
+async def api_docs_redirect():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/docs")
+
+
+@app.get("/api/openapi.json", include_in_schema=False)
+@app.get("/api/v1/openapi.json", include_in_schema=False)
+async def api_openapi_redirect():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/openapi.json")
 
 
 @app.exception_handler(RateLimitExceeded)
@@ -259,11 +259,14 @@ async def security_headers_middleware(request: Request, call_next):
 @app.middleware("http")
 async def api_v1_compatibility_middleware(request: Request, call_next):
     path = request.url.path
+    if path in ("/docs", "/redoc", "/openapi.json"):
+        return await call_next(request)
     if (
         path.startswith("/api/")
         and not path.startswith("/api/v1/")
         and not path.startswith("/api/docs")
         and not path.startswith("/api/health")
+        and not path.startswith("/api/openapi.json")
     ):
         request.scope["path"] = "/api/v1" + path[4:]
     return await call_next(request)
