@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -35,6 +36,8 @@ from app.schemas.auth import (
     TokenResponse,
 )
 from app.models.teacher import TeacherProfile
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -445,19 +448,18 @@ async def login(
         if user is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
-        # Approval status check: Only block if user is explicitly pending or rejected
+        # Approval status check: Only block if explicitly pending or rejected
         status_val = str(user.approval_status.value if hasattr(user.approval_status, "value") else user.approval_status or "").lower()
-        if user.role == UserRole.STUDENT or status_val in ("pending", "rejected"):
-            if status_val == "pending":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={"code": "ACCOUNT_PENDING_APPROVAL", "message": "Your account is waiting for teacher approval."},
-                )
-            elif status_val == "rejected":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={"code": "ACCOUNT_REJECTED", "message": "Your account has been rejected."},
-                )
+        if status_val == "pending":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "ACCOUNT_PENDING_APPROVAL", "message": "Your account is waiting for teacher approval."},
+            )
+        elif status_val == "rejected":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "ACCOUNT_REJECTED", "message": "Your account has been rejected."},
+            )
 
         if user.is_active is False:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
@@ -465,10 +467,11 @@ async def login(
         return await _issue_tokens(db, user, request.headers.get("user-agent"))
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
+        logger.exception("Unexpected error during login")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Login failed: {str(exc)}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An internal error occurred during login. Please try again.",
         )
 
 

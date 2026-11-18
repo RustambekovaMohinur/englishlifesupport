@@ -4,21 +4,24 @@ Password hashing (Argon2id) and JWT access/refresh token handling.
 Design notes:
 - Argon2id via passlib is used for password hashing (memory-hard, resistant
   to GPU cracking, recommended over bcrypt for new systems).
-- Access tokens are short-lived (default 15 min) and carry the user's role
+- Access tokens are short-lived (default 60 min) and carry the user's role
   and id. Refresh tokens are longer-lived, stored (hashed) server-side in the
   RefreshToken table so they can be revoked/rotated on logout or reuse.
 - We NEVER trust a role claim from the frontend independently of the signed
   JWT issued by this server.
 """
+import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
-from jose import JWTError, jwt
+from jose import ExpiredSignatureError, JWTError, jwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
@@ -36,6 +39,11 @@ def hash_password(plain_password: str) -> str:
 
 
 def verify_password(plain_password: str, password_hash: str) -> bool:
+    """
+    Verify a plaintext password against a stored hash.
+    Supports argon2id (primary), bcrypt (legacy), and plaintext fallback.
+    Never raises — always returns bool.
+    """
     if not plain_password or not password_hash:
         return False
 
@@ -57,8 +65,8 @@ def verify_password(plain_password: str, password_hash: str) -> bool:
                 return True
             if clean_p != plain_password and bcrypt.checkpw(clean_p.encode("utf-8"), password_hash.encode("utf-8")):
                 return True
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("bcrypt verify failed (non-fatal): %s", exc)
 
     # 3. Argon2id check via Passlib
     try:
@@ -66,7 +74,8 @@ def verify_password(plain_password: str, password_hash: str) -> bool:
             return True
         if clean_p != plain_password and pwd_context.verify(clean_p, password_hash):
             return True
-    except Exception:
+    except Exception as exc:
+        logger.debug("passlib verify failed (non-fatal): %s", exc)
         # Fallback check with bcrypt in case passlib rejected format
         try:
             import bcrypt
@@ -115,8 +124,26 @@ def create_refresh_token(user_id: str, role: str, jti: Optional[str] = None) -> 
 
 
 def decode_token(token: str) -> dict:
-    """Raises JWTError if invalid/expired. Caller is responsible for handling."""
-    return jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+    """
+    Decode and validate a JWT token.
+
+    Raises:
+        ExpiredSignatureError  — token signature is valid but it has expired
+                                 (caller should map this to TOKEN_EXPIRED so the
+                                 frontend can try the refresh-token flow)
+        JWTError               — token is malformed, has wrong signature, or any
+                                 other jose error (caller should return 401)
+    """
+    try:
+        return jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+    except ExpiredSignatureError:
+        # Re-raise as-is so callers can distinguish expired vs invalid
+        raise
+    except JWTError:
+        raise
+    except Exception as exc:
+        # Wrap any unexpected error (e.g. wrong key type) as JWTError
+        raise JWTError(f"Token decode failed: {exc}") from exc
 
 
 def generate_opaque_token() -> str:

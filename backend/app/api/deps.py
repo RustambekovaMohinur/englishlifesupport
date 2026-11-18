@@ -11,7 +11,7 @@ import uuid
 
 from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError
+from jose import ExpiredSignatureError, JWTError
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +29,12 @@ CREDENTIALS_EXCEPTION = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
+TOKEN_EXPIRED_EXCEPTION = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail={"code": "TOKEN_EXPIRED", "message": "Your session has expired. Please log in again."},
+    headers={"WWW-Authenticate": "Bearer"},
+)
+
 
 async def get_current_user(
     token: str | None = Depends(oauth2_scheme),
@@ -40,7 +46,9 @@ async def get_current_user(
         raise CREDENTIALS_EXCEPTION
     try:
         payload = decode_token(auth_token)
-    except JWTError:
+    except ExpiredSignatureError:
+        raise TOKEN_EXPIRED_EXCEPTION
+    except (JWTError, Exception):
         raise CREDENTIALS_EXCEPTION
 
     if payload.get("type") != "access":
@@ -80,7 +88,7 @@ async def get_current_user(
         raise CREDENTIALS_EXCEPTION
     if user.is_active is False:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
-    if hasattr(user, "approval_status") and (user.role == UserRole.STUDENT or user.approval_status in (ApprovalStatus.PENDING, ApprovalStatus.REJECTED)):
+    if hasattr(user, "approval_status"):
         if user.approval_status == ApprovalStatus.PENDING:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

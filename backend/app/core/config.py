@@ -141,10 +141,10 @@ class Settings(BaseSettings):
         return self
 
     # JWT
-    JWT_SECRET_KEY: str
+    JWT_SECRET_KEY: str = "english-life-lms-fallback-secret-key-change-in-production-2024"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 14
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60   # 60 min — reduces refresh churn; was 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30     # 30 days — was 14
 
     # CORS
     CORS_ORIGINS: str = (
