@@ -510,7 +510,7 @@ export default function AssignmentsPage() {
         <div className="flex items-center gap-2.5">
           <button
             type="button"
-            className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-gradient-to-r from-indigo-500/15 via-purple-500/20 to-pink-500/15 hover:from-indigo-500/25 hover:to-purple-500/30 dark:from-indigo-950/60 dark:via-purple-950/50 dark:to-pink-950/40 text-indigo-700 dark:text-indigo-300 border-2 border-indigo-400/60 dark:border-indigo-500/60 shadow-sm flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+            className="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold bg-purple-600 hover:bg-purple-700 active:scale-95 text-white shadow-md shadow-purple-600/30 border-2 border-purple-500 flex items-center gap-2 transition-all cursor-pointer"
             onClick={() => setSpinPromptsOpen(true)}
             title="Manage Speaking Questions & Writing Topics for student spin wheels"
           >
@@ -530,6 +530,34 @@ export default function AssignmentsPage() {
             {showBuilder ? "Close Builder" : "+ New Assignment"}
           </button>
         </div>
+      </div>
+
+      {/* Prominent Quick Tool Banner: Speaking & Writing Spin Prompts Manager */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-600/10 via-indigo-600/10 to-pink-600/10 border-2 border-purple-500/30 dark:border-purple-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-purple-600 text-white flex items-center justify-center text-2xl shrink-0 shadow-md shadow-purple-600/30">
+            🎡
+          </div>
+          <div>
+            <h3 className="text-sm sm:text-base font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+              <span>Speaking &amp; Writing Spin Prompts Manager</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300">
+                Active Feature
+              </span>
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Manage teacher-configured Speaking Questions and Writing Topics that students spin during homework submissions.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setSpinPromptsOpen(true)}
+          className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-purple-600 hover:bg-purple-700 active:scale-95 text-white shadow-md shadow-purple-600/25 flex items-center justify-center gap-2 transition cursor-pointer shrink-0"
+        >
+          <span className="text-base">🎡</span>
+          <span>Open Spin Prompts</span>
+        </button>
       </div>
 
       {/* Inline Assignment Builder */}

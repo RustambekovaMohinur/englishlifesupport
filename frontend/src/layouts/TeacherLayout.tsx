@@ -253,7 +253,7 @@ export default function TeacherLayout() {
             <button
               type="button"
               onClick={() => setSpinPromptsOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-500/10 via-purple-500/15 to-pink-500/10 hover:from-indigo-500/20 hover:to-purple-500/25 dark:from-indigo-950/50 dark:via-purple-950/40 dark:to-pink-950/30 border border-indigo-300 dark:border-indigo-700 px-3.5 py-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 transition shadow-2xs active:scale-95 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 active:scale-95 text-white border border-purple-500 px-3.5 py-1.5 text-xs font-bold transition shadow-xs cursor-pointer"
               title="Open Speaking & Writing Spin Prompts Manager"
             >
               <span>🎡</span>

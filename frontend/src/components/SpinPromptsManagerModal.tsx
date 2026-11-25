@@ -225,7 +225,7 @@ export const SpinPromptsManagerModal: React.FC<SpinPromptsManagerModalProps> = (
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="🎡 Speaking & Writing Spin Prompts Manager">
+    <Modal open={open} onClose={onClose} title="🎡 Speaking & Writing Spin Prompts Manager" maxWidth="sm:max-w-4xl">
       <div className="space-y-5 -mt-1 text-zinc-900 dark:text-zinc-100">
         {/* Cohort Scoping & Filter Bar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 bg-zinc-50 dark:bg-zinc-900/80 rounded-2xl border border-zinc-200 dark:border-zinc-800">
