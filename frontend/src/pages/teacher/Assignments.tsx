@@ -507,14 +507,14 @@ export default function AssignmentsPage() {
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Assignments</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">Create, manage, and assign homework</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
-            className="btn-secondary text-xs sm:text-sm py-2 px-3.5 rounded-xl font-semibold flex items-center gap-1.5 shadow-2xs hover:border-indigo-400 dark:hover:border-indigo-600 transition"
+            className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-gradient-to-r from-indigo-500/15 via-purple-500/20 to-pink-500/15 hover:from-indigo-500/25 hover:to-purple-500/30 dark:from-indigo-950/60 dark:via-purple-950/50 dark:to-pink-950/40 text-indigo-700 dark:text-indigo-300 border-2 border-indigo-400/60 dark:border-indigo-500/60 shadow-sm flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
             onClick={() => setSpinPromptsOpen(true)}
-            title="Manage teacher-configured Speaking Questions & Writing Topics for student spin wheels"
+            title="Manage Speaking Questions & Writing Topics for student spin wheels"
           >
-            <span>🎡</span>
+            <span className="text-base">🎡</span>
             <span>Spin Prompts</span>
           </button>
           <button

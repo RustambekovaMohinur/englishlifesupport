@@ -17,6 +17,7 @@ import { MarqueeTicker } from "@/components/MarqueeTicker";
 import { useAuth } from "@/hooks/useAuth";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { PlatformFeedbackFloatingTrigger } from "@/components/PlatformFeedbackModal";
+import { SpinPromptsManagerModal } from "@/components/SpinPromptsManagerModal";
 
 const sidebarNavItems = [
   { to: "/teacher", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -42,6 +43,7 @@ export default function TeacherLayout() {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     return localStorage.getItem("sidebar_collapsed") === "true";
   });
+  const [spinPromptsOpen, setSpinPromptsOpen] = useState(false);
 
   const toggleSidebar = () => {
     setIsCollapsed((prev) => {
@@ -132,6 +134,28 @@ export default function TeacherLayout() {
               </NavLink>
             );
           })}
+
+          {/* Dedicated Spin Prompts Launcher */}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setSpinPromptsOpen(true)}
+              className={`w-full group relative flex items-center rounded-xl py-2.5 text-sm font-semibold transition-all active:scale-[0.98] cursor-pointer ${
+                isCollapsed
+                  ? "justify-center px-0 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                  : "justify-start px-3 gap-3 text-indigo-700 dark:text-indigo-300 bg-indigo-50/80 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs"
+              }`}
+              title="Speaking & Writing Spin Prompts Manager"
+            >
+              <span className="text-base shrink-0">🎡</span>
+              {!isCollapsed && <span className="truncate">Spin Prompts</span>}
+              {isCollapsed && (
+                <span className="fixed ml-14 px-2.5 py-1 bg-slate-900 text-white text-xs font-medium rounded-md shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-50 whitespace-nowrap">
+                  Spin Prompts Manager
+                </span>
+              )}
+            </button>
+          </div>
         </nav>
 
         {/* Sidebar Footer */}
@@ -187,6 +211,15 @@ export default function TeacherLayout() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSpinPromptsOpen(true)}
+              className="p-1.5 rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition active:scale-95 cursor-pointer"
+              title="Spin Prompts Manager"
+              aria-label="Spin Prompts Manager"
+            >
+              <span className="text-lg">🎡</span>
+            </button>
             <ThemeToggle />
             <NavLink
               to="/teacher/profile"
@@ -213,10 +246,19 @@ export default function TeacherLayout() {
 
         {/* Desktop Header (lg:flex) */}
         <header className="hidden items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] bg-white/80 dark:bg-[#111827]/80 backdrop-blur-md px-8 py-3.5 lg:flex shrink-0 sticky top-0 z-30">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               Examiner Desk / Teacher Portal
             </span>
+            <button
+              type="button"
+              onClick={() => setSpinPromptsOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-500/10 via-purple-500/15 to-pink-500/10 hover:from-indigo-500/20 hover:to-purple-500/25 dark:from-indigo-950/50 dark:via-purple-950/40 dark:to-pink-950/30 border border-indigo-300 dark:border-indigo-700 px-3.5 py-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 transition shadow-2xs active:scale-95 cursor-pointer"
+              title="Open Speaking & Writing Spin Prompts Manager"
+            >
+              <span>🎡</span>
+              <span>Spin Prompts</span>
+            </button>
           </div>
           <div className="flex items-center gap-4">
             <NavLink
@@ -306,6 +348,12 @@ export default function TeacherLayout() {
 
       {/* Platform Feedback Floating Trigger */}
       <PlatformFeedbackFloatingTrigger />
+
+      {/* Global Teacher Spin Prompts Manager Modal */}
+      <SpinPromptsManagerModal
+        open={spinPromptsOpen}
+        onClose={() => setSpinPromptsOpen(false)}
+      />
     </div>
   );
 }
