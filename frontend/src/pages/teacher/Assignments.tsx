@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { EmptyState, LoadingRows, useConfirm, FileDownloadButton, Spinner } from "@/components/ui";
 import { AssignmentDiscussionDrawer } from "@/components/AssignmentDiscussionDrawer";
+import { SpinPromptsManagerModal } from "@/components/SpinPromptsManagerModal";
 import { createAssignment, deleteAssignment, listAssignments, listGroups, updateAssignmentInPlace, notifyParentsMissingHomework } from "@/services/lmsService";
 import { AssignmentOut, Group } from "@/types";
 import { compressImage } from "@/utils/imageCompressor";
@@ -109,6 +110,7 @@ export default function AssignmentsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isCompressingImages, setIsCompressingImages] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<"published" | "draft">("published");
+  const [spinPromptsOpen, setSpinPromptsOpen] = useState(false);
 
   useEffect(() => {
     listGroups(false).then((data) => {
@@ -505,18 +507,29 @@ export default function AssignmentsPage() {
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Assignments</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">Create, manage, and assign homework</p>
         </div>
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={() => {
-            if (!showBuilder && groups.length > 0 && !groupId) {
-              setGroupId(groups[0].id);
-            }
-            setShowBuilder(!showBuilder);
-          }}
-        >
-          {showBuilder ? "Close Builder" : "+ New Assignment"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="btn-secondary text-xs sm:text-sm py-2 px-3.5 rounded-xl font-semibold flex items-center gap-1.5 shadow-2xs hover:border-indigo-400 dark:hover:border-indigo-600 transition"
+            onClick={() => setSpinPromptsOpen(true)}
+            title="Manage teacher-configured Speaking Questions & Writing Topics for student spin wheels"
+          >
+            <span>🎡</span>
+            <span>Spin Prompts</span>
+          </button>
+          <button
+            type="button"
+            className="btn-primary text-xs sm:text-sm py-2 px-4 rounded-xl font-bold shadow-xs"
+            onClick={() => {
+              if (!showBuilder && groups.length > 0 && !groupId) {
+                setGroupId(groups[0].id);
+              }
+              setShowBuilder(!showBuilder);
+            }}
+          >
+            {showBuilder ? "Close Builder" : "+ New Assignment"}
+          </button>
+        </div>
       </div>
 
       {/* Inline Assignment Builder */}
@@ -1408,6 +1421,13 @@ export default function AssignmentsPage() {
           }}
         />
       )}
+
+      {/* Teacher Spin Prompts Manager */}
+      <SpinPromptsManagerModal
+        open={spinPromptsOpen}
+        onClose={() => setSpinPromptsOpen(false)}
+        defaultGroupId={groupId}
+      />
 
       <ConfirmDialog />
     </div>

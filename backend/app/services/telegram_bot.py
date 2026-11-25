@@ -196,15 +196,18 @@ async def send_telegram_message_detailed(
                 err_desc = data.get("description", resp.text)
                 err_code = data.get("error_code", resp.status_code)
                 err_msg = f"Telegram API error ({err_code}): {err_desc}"
-                logger.warning(
-                    "Telegram error sending to chat_id=%s: %s",
-                    cleaned_chat_id,
-                    err_msg,
-                )
+                if resp.status_code == 403 or "blocked" in str(err_desc).lower():
+                    logger.info("Telegram chat_id=%s has blocked the bot or is deactivated (403 Forbidden): %s", cleaned_chat_id, err_desc)
+                else:
+                    logger.warning(
+                        "Telegram error sending to chat_id=%s: %s",
+                        cleaned_chat_id,
+                        err_msg,
+                    )
                 return False, err_msg
     except Exception as ex:
         err_msg = f"Telegram dispatch exception: {ex}"
-        logger.exception("Failed to send Telegram message to chat_id=%s: %s", cleaned_chat_id, ex)
+        logger.warning("Failed to send Telegram message to chat_id=%s: %s", cleaned_chat_id, ex)
         return False, err_msg
 
 

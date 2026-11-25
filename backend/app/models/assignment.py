@@ -113,3 +113,25 @@ class AssignmentComment(UUIDPKMixin, TimestampMixin, Base):
 
     assignment: Mapped["Assignment"] = relationship(back_populates="comments")
     user: Mapped["User"] = relationship(lazy="joined")
+
+
+class SpinPrompt(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "spin_prompts"
+
+    prompt_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)  # "speaking" | "writing"
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    group_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("groups.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    assignment_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    created_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa.text("true"), nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, default=0, server_default=sa.text("0"), nullable=False)
+
+    group: Mapped["Group | None"] = relationship(lazy="selectin")
+    assignment: Mapped["Assignment | None"] = relationship(lazy="selectin")

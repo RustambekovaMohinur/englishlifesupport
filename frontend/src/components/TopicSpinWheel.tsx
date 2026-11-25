@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Sparkles, RotateCcw, Check, Copy, Mic, PenTool, Shuffle, ChevronDown, ChevronUp } from "lucide-react";
 import toast from "react-hot-toast";
+import { listSpinPrompts } from "@/services/lmsService";
 
 interface TopicSpinWheelProps {
   description?: string;
   assignmentTitle?: string;
   assignmentType?: string; // e.g. "speaking", "writing", or general
+  groupId?: string;
+  assignmentId?: string;
   onSelectPrompt: (prompt: string, mode: "speaking" | "writing") => void;
   selectedPrompt?: string | null;
 }
@@ -48,6 +51,8 @@ export const TopicSpinWheel: React.FC<TopicSpinWheelProps> = ({
   description,
   assignmentTitle = "",
   assignmentType = "general",
+  groupId,
+  assignmentId,
   onSelectPrompt,
   selectedPrompt: initialPrompt,
 }) => {
@@ -56,6 +61,7 @@ export const TopicSpinWheel: React.FC<TopicSpinWheelProps> = ({
   const [chosenPrompt, setChosenPrompt] = useState<string | null>(initialPrompt || null);
   const [copied, setCopied] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
+  const [dbPrompts, setDbPrompts] = useState<string[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -65,11 +71,34 @@ export const TopicSpinWheel: React.FC<TopicSpinWheelProps> = ({
     return t.includes("speak") || t.includes("voice") || t.includes("oral") || t.includes("pronun");
   }, [assignmentTitle, assignmentType]);
 
-  // Extract prompt candidates from description or fallback to curated prompts
+  // Load teacher-managed prompts from database with automatic fallback
+  useEffect(() => {
+    const pType: "speaking" | "writing" = isSpeaking ? "speaking" : "writing";
+    listSpinPrompts({
+      prompt_type: pType,
+      group_id: groupId || undefined,
+      assignment_id: assignmentId || undefined,
+      active_only: true,
+      fallback: true,
+    })
+      .then((items) => {
+        if (Array.isArray(items) && items.length > 0) {
+          setDbPrompts(items.map((i) => i.text));
+        }
+      })
+      .catch(() => {});
+  }, [isSpeaking, groupId, assignmentId]);
+
+  // Extract prompt candidates from teacher DB first, then description, or fallback to curated prompts
   const prompts = useMemo(() => {
+    // 1. Highest priority: Teacher configured prompts from PostgreSQL
+    if (dbPrompts.length > 0) {
+      return dbPrompts.slice(0, 12);
+    }
+
+    // 2. Next: Extracted from assignment description
     const extracted: string[] = [];
     if (description) {
-      // Check if description is JSON blocks
       try {
         const blocks = JSON.parse(description);
         if (Array.isArray(blocks)) {
@@ -86,7 +115,6 @@ export const TopicSpinWheel: React.FC<TopicSpinWheelProps> = ({
           });
         }
       } catch (e) {
-        // Plain text parsing
         const lines = description.split("\n");
         lines.forEach((l) => {
           const clean = l.replace(/^\s*(\d+[\.\)]|[•\-\*]|q\d+:?)\s*/i, "").trim();
@@ -101,9 +129,9 @@ export const TopicSpinWheel: React.FC<TopicSpinWheelProps> = ({
       return extracted.slice(0, 10);
     }
 
-    // Default to curated list based on assignment type
+    // 3. Fallback to standard curated IELTS bank
     return isSpeaking ? DEFAULT_SPEAKING_PROMPTS : DEFAULT_WRITING_PROMPTS;
-  }, [description, isSpeaking]);
+  }, [dbPrompts, description, isSpeaking]);
 
   const numSegments = prompts.length;
   const segmentAngle = 360 / numSegments;

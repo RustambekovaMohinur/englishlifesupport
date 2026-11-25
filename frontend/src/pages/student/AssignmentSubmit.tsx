@@ -1187,6 +1187,8 @@ export default function StudentAssignmentSubmitPage() {
             description={assignment.description}
             assignmentTitle={assignment.title}
             assignmentType={skillBadge.label}
+            groupId={assignment.group_id}
+            assignmentId={assignment.id}
             selectedPrompt={selectedSpunPrompt}
             onSelectPrompt={(prompt, mode) => {
               setSelectedSpunPrompt(prompt);

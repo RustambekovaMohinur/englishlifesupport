@@ -26,7 +26,7 @@ from app.models.group import Group, EnglishLevel  # noqa: F401
 from app.models.student import StudentProfile  # noqa: F401
 from app.models.notification import ParentHomeworkNotification  # noqa: F401
 from app.models.curriculum import CurriculumTemplate, CurriculumItem  # noqa: F401
-from app.models.assignment import Assignment, AssignmentComment, AssignmentImage  # noqa: F401
+from app.models.assignment import Assignment, AssignmentComment, AssignmentImage, SpinPrompt  # noqa: F401
 from app.models.feedback import FeedbackLike, FeedbackReply, PlatformFeedback  # noqa: F401
 from app.models.submission import (  # noqa: F401
     Submission,

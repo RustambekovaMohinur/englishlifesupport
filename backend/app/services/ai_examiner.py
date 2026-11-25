@@ -1156,13 +1156,13 @@ async def ai_parse_wordlist_multiformat(
             },
         }
 
-        # Generous 30.0s timeout to allow Gemini AI to thoroughly process input content
+        # Strict 12.0s timeout to allow fast response and instantaneous local fallback if rate-limited
         resp, last_error_detail = await execute_gemini_generate_content(
             payload=payload,
             api_key=api_key,
-            timeout=30.0,
-            max_backoff_retries=1,
-            backoff_delays=(1.0,),
+            timeout=12.0,
+            max_backoff_retries=0,
+            backoff_delays=(0.5,),
         )
 
         if not resp or resp.status_code != 200:

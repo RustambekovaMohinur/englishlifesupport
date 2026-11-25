@@ -1276,3 +1276,44 @@ export interface PaymentTransactionOut {
   created_at: string;
   completed_at?: string | null;
 }
+
+export interface SpinPrompt {
+  id: string;
+  prompt_type: "speaking" | "writing";
+  text: string;
+  category?: string | null;
+  group_id?: string | null;
+  assignment_id?: string | null;
+  created_by: string;
+  order_index: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export interface SpinPromptCreate {
+  prompt_type: "speaking" | "writing";
+  text: string;
+  category?: string | null;
+  group_id?: string | null;
+  assignment_id?: string | null;
+  order_index?: number;
+  is_active?: boolean;
+}
+
+export interface SpinPromptBulkCreate {
+  prompt_type: "speaking" | "writing";
+  lines: string;
+  category?: string | null;
+  group_id?: string | null;
+  assignment_id?: string | null;
+}
+
+export interface SpinPromptUpdate {
+  text?: string;
+  category?: string | null;
+  group_id?: string | null;
+  assignment_id?: string | null;
+  order_index?: number;
+  is_active?: boolean;
+}

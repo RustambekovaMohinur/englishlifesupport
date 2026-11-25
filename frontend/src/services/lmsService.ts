@@ -28,6 +28,10 @@ import {
   SubmissionOut,
   TeacherDashboard,
   TeacherGroupReport,
+  SpinPrompt,
+  SpinPromptCreate,
+  SpinPromptBulkCreate,
+  SpinPromptUpdate,
   TeacherProfileOut,
   UserProfileOut,
   UserProfileUpdate,
@@ -885,3 +889,28 @@ export const resetTeacherPassword = (teacherId: string, newPassword: string): Pr
 
 export const toggleTeacherStatus = (teacherId: string, isActive: boolean): Promise<{ message: string }> =>
   api.patch(`/teachers/${teacherId}/status`, { is_active: isActive }).then((r) => r.data);
+
+// --- Spin Prompts API ---
+export const listSpinPrompts = (params?: {
+  prompt_type?: "speaking" | "writing";
+  group_id?: string;
+  assignment_id?: string;
+  active_only?: boolean;
+  fallback?: boolean;
+}): Promise<SpinPrompt[]> =>
+  api.get<SpinPrompt[]>("/spin-prompts", { params }).then((r) => r.data);
+
+export const createSpinPrompt = (body: SpinPromptCreate): Promise<SpinPrompt> =>
+  api.post<SpinPrompt>("/spin-prompts", body).then((r) => r.data);
+
+export const bulkCreateSpinPrompts = (body: SpinPromptBulkCreate): Promise<SpinPrompt[]> =>
+  api.post<SpinPrompt[]>("/spin-prompts/bulk", body).then((r) => r.data);
+
+export const updateSpinPrompt = (id: string, body: SpinPromptUpdate): Promise<SpinPrompt> =>
+  api.patch<SpinPrompt>(`/spin-prompts/${id}`, body).then((r) => r.data);
+
+export const deleteSpinPrompt = (id: string): Promise<void> =>
+  api.delete(`/spin-prompts/${id}`).then((r) => r.data);
+
+export const seedDefaultSpinPrompts = (params?: { group_id?: string }): Promise<{ success: boolean; message: string }> =>
+  api.post<{ success: boolean; message: string }>("/spin-prompts/seed-defaults", null, { params }).then((r) => r.data);

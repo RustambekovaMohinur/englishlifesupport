@@ -172,3 +172,82 @@ class AssignmentForStudent(BaseModel):
     flag_reason: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class SpinPromptCreate(BaseModel):
+    prompt_type: str = Field(pattern="^(speaking|writing)$")
+    text: str = Field(min_length=3, max_length=2000)
+    category: str | None = None
+    group_id: uuid.UUID | None = None
+    assignment_id: uuid.UUID | None = None
+    order_index: int = 0
+    is_active: bool = True
+
+    @field_validator("group_id", "assignment_id", mode="before")
+    @classmethod
+    def parse_optional_uuids(cls, v: Any) -> uuid.UUID | None:
+        if v is None or v == "" or str(v).strip() in ("", "null", "none"):
+            return None
+        if isinstance(v, uuid.UUID):
+            return v
+        try:
+            return uuid.UUID(str(v).strip())
+        except Exception:
+            raise ValueError("Invalid UUID format")
+
+
+class SpinPromptBulkCreate(BaseModel):
+    prompt_type: str = Field(pattern="^(speaking|writing)$")
+    lines: str = Field(min_length=3, description="Multiple prompt lines separated by newlines")
+    category: str | None = None
+    group_id: uuid.UUID | None = None
+    assignment_id: uuid.UUID | None = None
+
+    @field_validator("group_id", "assignment_id", mode="before")
+    @classmethod
+    def parse_optional_uuids(cls, v: Any) -> uuid.UUID | None:
+        if v is None or v == "" or str(v).strip() in ("", "null", "none"):
+            return None
+        if isinstance(v, uuid.UUID):
+            return v
+        try:
+            return uuid.UUID(str(v).strip())
+        except Exception:
+            raise ValueError("Invalid UUID format")
+
+
+class SpinPromptUpdate(BaseModel):
+    text: str | None = Field(default=None, min_length=3, max_length=2000)
+    category: str | None = None
+    group_id: uuid.UUID | None = None
+    assignment_id: uuid.UUID | None = None
+    order_index: int | None = None
+    is_active: bool | None = None
+
+    @field_validator("group_id", "assignment_id", mode="before")
+    @classmethod
+    def parse_optional_uuids(cls, v: Any) -> uuid.UUID | None:
+        if v is None or v == "" or str(v).strip() in ("", "null", "none"):
+            return None
+        if isinstance(v, uuid.UUID):
+            return v
+        try:
+            return uuid.UUID(str(v).strip())
+        except Exception:
+            raise ValueError("Invalid UUID format")
+
+
+class SpinPromptOut(BaseModel):
+    id: uuid.UUID
+    prompt_type: str
+    text: str
+    category: str | None = None
+    group_id: uuid.UUID | None = None
+    assignment_id: uuid.UUID | None = None
+    created_by: uuid.UUID
+    order_index: int = 0
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime | None = None
+
+    model_config = {"from_attributes": True}

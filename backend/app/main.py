@@ -51,6 +51,7 @@ from app.models import (  # noqa: F401
     StudentProfile,
     StudentStreak,
     StudentXP,
+    SpinPrompt,
     StudyGroup,
     StudyGroupMember,
     Submission,
@@ -72,7 +73,7 @@ from app.models import (  # noqa: F401
     XPTransaction,
 )
 
-from app.api.routes import payments, chat, assignments, auth, curriculum, dashboard, feedback, gamification, groups, premium, profile, social, storage, students, submissions, teachers, telegram, wordlists
+from app.api.routes import payments, chat, assignments, auth, curriculum, dashboard, feedback, gamification, groups, premium, profile, social, spin_prompts, storage, students, submissions, teachers, telegram, wordlists
 from app.api.routes.vocab_recovery import router as vocab_recovery_router
 from app.core.config import settings
 from app.core.rate_limit import limiter
@@ -387,6 +388,7 @@ app.include_router(premium.router, prefix="/api/v1")
 app.include_router(social.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(payments.router, prefix="/api/v1")
+app.include_router(spin_prompts.router, prefix="/api/v1")
 
 
 @app.get("/")
