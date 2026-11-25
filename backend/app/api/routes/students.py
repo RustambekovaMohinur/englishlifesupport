@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_student_profile, get_current_user, require_teacher
 from app.core.config import settings
 from app.db.session import get_db
-from app.utils.datetimes import as_utc, utcnow
+from app.utils.datetimes import as_utc, ensure_utc, utcnow
 from app.models.assignment import Assignment, AssignmentStatus
 from app.models.group import Group
 from app.models.student import StudentProfile

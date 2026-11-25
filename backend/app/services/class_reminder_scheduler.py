@@ -143,6 +143,22 @@ async def check_and_send_class_reminders(db: AsyncSession) -> int:
         ]
         published_ids = [a.id for a in published_assignments]
 
+        # Pre-fetch all submissions for enrolled students in a single batched query
+        # to eliminate N+1 DB roundtrips, reduce Neon connection pressure, and prevent deadlocks
+        subs_by_student_id: dict[uuid.UUID, set[uuid.UUID]] = {}
+        if published_ids:
+            student_profile_ids = [s.id for s in group.students]
+            sub_res = await db.execute(
+                select(Submission.student_id, Submission.assignment_id)
+                .where(
+                    Submission.assignment_id.in_(published_ids),
+                    Submission.student_id.in_(student_profile_ids),
+                    Submission.is_archived == False,  # noqa: E712
+                )
+            )
+            for sub_st_id, sub_asgn_id in sub_res.all():
+                subs_by_student_id.setdefault(sub_st_id, set()).add(sub_asgn_id)
+
         for student in group.students:
             # Only alert students with verified linked parents
             if not student.parent_telegram_chat_id:
@@ -152,31 +168,12 @@ async def check_and_send_class_reminders(db: AsyncSession) -> int:
             if student.user and (not student.user.is_active or student.user.approval_status != ApprovalStatus.APPROVED):
                 continue
 
-            # Calculate homework status for this student
-            completed_count = 0
-            pending_titles: list[str] = []
-
-            if published_ids:
-                sub_res = await db.execute(
-                    select(Submission)
-                    .where(
-                        Submission.assignment_id.in_(published_ids),
-                        sa.or_(
-                            Submission.student_id == student.id,
-                            Submission.student_id.in_(
-                                select(StudentProfile.id).where(StudentProfile.user_id == student.user_id)
-                            ),
-                        ),
-                        Submission.is_archived == False,  # noqa: E712
-                    )
-                )
-                student_subs = sub_res.scalars().all()
-                submitted_assign_ids = {s.assignment_id for s in student_subs}
-                completed_count = len(submitted_assign_ids)
-
-                for asgn in published_assignments:
-                    if asgn.id not in submitted_assign_ids:
-                        pending_titles.append(asgn.title)
+            # Calculate homework status for this student from pre-fetched map
+            submitted_assign_ids = subs_by_student_id.get(student.id, set())
+            completed_count = len(submitted_assign_ids)
+            pending_titles = [
+                asgn.title for asgn in published_assignments if asgn.id not in submitted_assign_ids
+            ]
 
             parent_name = student.parent_name or "Hurmatli ota-ona"
             student_name = student.full_name or "Farzandingiz"

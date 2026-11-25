@@ -14,6 +14,7 @@ import {
   Users,
   LayoutGrid,
   BarChart3,
+  Image as ImageIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import StudentDetailModal from "@/components/StudentDetailModal";
@@ -1071,10 +1072,32 @@ function GradingSlideOver({
     }
   }
 
-  const galleryImages = (submission?.images || []).map((img) => ({
-    url: `/api/submissions/${submission!.id}/images/${img.id}`,
-    name: img.original_name,
-  }));
+  const isPrimaryImage = Boolean(
+    submission?.file_url &&
+      (/\.(jpe?g|png|webp|gif|svg|bmp|heic|heif)(\?.*)?$/i.test(submission.file_original_name || submission.file_url) ||
+        (submission.file_content_type && submission.file_content_type.startsWith("image/")))
+  );
+
+  const isPrimaryAudio = Boolean(
+    submission?.file_url &&
+      (/\.(mp3|wav|ogg|webm|m4a|aac)(\?.*)?$/i.test(submission.file_original_name || submission.file_url) ||
+        (submission.file_content_type && submission.file_content_type.startsWith("audio/")))
+  );
+
+  const galleryImages = [
+    ...(isPrimaryImage && submission?.file_url
+      ? [
+          {
+            url: submission.file_url,
+            name: submission.file_original_name || "Submitted Homework Image",
+          },
+        ]
+      : []),
+    ...(submission?.images || []).map((img) => ({
+      url: `/api/submissions/${submission!.id}/images/${img.id}`,
+      name: img.original_name,
+    })),
+  ];
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
@@ -1160,8 +1183,8 @@ function GradingSlideOver({
                 </div>
               )}
 
-              {/* Document attachment */}
-              {submission.file_url && (
+              {/* Document attachment (non-image, non-audio) */}
+              {submission.file_url && !isPrimaryImage && !isPrimaryAudio && (
                 <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 rounded-xl text-xs text-blue-900 dark:text-blue-300">
                   <div className="flex items-center gap-2 truncate">
                     <FileText className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
@@ -1178,36 +1201,41 @@ function GradingSlideOver({
               )}
 
               {/* Audio playback */}
-              {submission.file_url && submission.file_original_name && /\.(mp3|wav|ogg|webm)$/i.test(submission.file_original_name) && (
+              {submission.file_url && (isPrimaryAudio || (submission.file_original_name && /\.(mp3|wav|ogg|webm)$/i.test(submission.file_original_name))) && (
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase text-zinc-500 dark:text-zinc-400">Audio Recording</label>
                   <AuthenticatedAudio url={submission.file_url} className="w-full h-8" />
                 </div>
               )}
 
-              {/* Image Attachments */}
+              {/* Image Attachments & Visual Preview */}
               {galleryImages.length > 0 && (
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase text-zinc-500 dark:text-zinc-400">
-                    Uploaded Work Images ({galleryImages.length})
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {submission.images?.map((img, idx) => (
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+                      <ImageIcon className="w-3.5 h-3.5 text-purple-500" />
+                      <span>Uploaded Work Images ({galleryImages.length})</span>
+                    </label>
+                    <span className="text-[11px] text-zinc-400">Click to enlarge</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {galleryImages.map((img, idx) => (
                       <div
-                        key={img.id}
+                        key={idx}
                         onClick={() => {
                           setLightboxIndex(idx);
                           setLightboxOpen(true);
                         }}
-                        className="cursor-pointer group relative rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden aspect-square bg-zinc-50 dark:bg-zinc-900"
+                        className="cursor-pointer group relative rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden aspect-video sm:aspect-square bg-zinc-900 shadow-xs hover:border-purple-400 dark:hover:border-purple-600 transition"
                       >
                         <AuthenticatedImage
-                          url={`/api/submissions/${submission.id}/images/${img.id}`}
-                          alt={img.original_name}
+                          url={img.url}
+                          alt={img.name}
                           className="h-full w-full object-cover group-hover:scale-105 transition-transform"
                         />
-                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] text-white font-bold">
-                          View
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-1 text-center">
+                          <span className="text-[11px] font-bold">🔍 View Image</span>
+                          <span className="text-[10px] text-zinc-300 truncate max-w-full px-1">{img.name}</span>
                         </div>
                       </div>
                     ))}

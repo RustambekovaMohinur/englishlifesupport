@@ -114,155 +114,161 @@ async def check_and_send_missing_homework_alerts(
     checked_count = len(assignments_to_check)
 
     for assignment in assignments_to_check:
-        if not assignment.group_id:
-            continue
-
-        group_name = assignment.group.name if assignment.group else "Guruh"
-        deadline_utc = ensure_utc(assignment.deadline)
-        formatted_deadline = deadline_utc.strftime("%d.%m.%Y %H:%M")
-
-        # Fetch enrolled active and approved students in this group
-        st_query = (
-            select(StudentProfile)
-            .join(User, StudentProfile.user_id == User.id)
-            .where(
-                StudentProfile.group_id == assignment.group_id,
-                User.is_active == True,
-                User.approval_status == ApprovalStatus.APPROVED,
-            )
-        )
-        st_res = await db.execute(st_query)
-        students = list(st_res.scalars().all())
-        if not students:
-            continue
-
-        student_ids = [s.id for s in students]
-
-        # Fetch existing submissions for this assignment
-        sub_query = select(Submission).where(
-            Submission.assignment_id == assignment.id,
-            Submission.student_id.in_(student_ids),
-            Submission.is_archived == False,
-        )
-        sub_res = await db.execute(sub_query)
-        submissions = list(sub_res.scalars().all())
-        submissions_by_student: dict[uuid.UUID, Submission] = {
-            s.student_id: s for s in submissions
-        }
-
-        # Fetch existing notifications sent for this assignment to guarantee deduplication
-        notif_query = select(ParentHomeworkNotification).where(
-            ParentHomeworkNotification.assignment_id == assignment.id,
-            ParentHomeworkNotification.student_id.in_(student_ids),
-        )
-        notif_res = await db.execute(notif_query)
-        existing_notifs = list(notif_res.scalars().all())
-        # Set of (student_id, channel)
-        already_notified = {
-            (n.student_id, n.notification_channel) for n in existing_notifs
-        }
-
-        for student in students:
-            sub = submissions_by_student.get(student.id)
-
-            # Check if student completed homework (100% accurate status matching)
-            sub_status_str = (sub.status.value if hasattr(sub.status, "value") else str(sub.status or "")).lower() if sub else ""
-            if sub and (
-                sub.status in (
-                    SubmissionStatus.SUBMITTED,
-                    SubmissionStatus.GRADED,
-                    SubmissionStatus.LATE,
-                )
-                or sub_status_str in ("submitted", "graded", "late")
-            ):
-                # Homework submitted successfully, no alert needed
+        try:
+            if not assignment.group_id:
                 continue
 
-            # Determine missing or incomplete status
-            if sub is None:
-                status_desc = "Topshirilmagan (Missing)"
-                status_phrase = "topshirilmagan"
-            else:
-                status_desc = "Chala / Qayta ko'rib chiqish talab etiladi (Incomplete)"
-                status_phrase = "chala topshirilgan"
+            group_name = assignment.group.name if assignment.group else "Guruh"
+            deadline_utc = ensure_utc(assignment.deadline)
+            formatted_deadline = deadline_utc.strftime("%d.%m.%Y %H:%M")
 
-            parent_name = student.parent_name or "Hurmatli ota-ona"
-            alerted_this_student = False
+            # Fetch enrolled active and approved students in this group
+            st_query = (
+                select(StudentProfile)
+                .join(User, StudentProfile.user_id == User.id)
+                .where(
+                    StudentProfile.group_id == assignment.group_id,
+                    User.is_active == True,
+                    User.approval_status == ApprovalStatus.APPROVED,
+                )
+            )
+            st_res = await db.execute(st_query)
+            students = list(st_res.scalars().all())
+            if not students:
+                continue
 
-            # 1. Telegram Alert via @EnglishLife_edu_bot
-            tg_recipient = student.parent_telegram_chat_id
-            if tg_recipient and (student.id, "telegram") not in already_notified:
-                # Do not send parent templates to group chat IDs (IDs starting with -)
-                if not str(tg_recipient).startswith("-"):
-                    tg_message = (
-                        f"⚠️ <b>Diqqat! English Life LMS xabarnomasi</b>\n\n"
-                        f"Hurmatli <b>{parent_name}</b>!\n"
-                        f"Farzandingiz <b>{student.full_name}</b>ning uy vazifasi {status_phrase}:\n\n"
-                        f"📚 <b>Guruh:</b> {group_name}\n"
-                        f"📝 <b>Topshiriq:</b> {assignment.title}\n"
-                        f"⏳ <b>Topshirish muddati:</b> {formatted_deadline}\n"
-                        f"📊 <b>Holati:</b> ❌ {status_desc}\n\n"
-                        f"Iltimos, farzandingiz darsga o'z vaqtida va to'liq tayyorlanishini nazorat qiling! 🚀\n"
-                        f"👉 Platforma: https://englishlife.uz"
+            # Sort students by id deterministically to prevent PostgreSQL row lock deadlocks
+            students.sort(key=lambda s: str(s.id))
+            student_ids = [s.id for s in students]
+
+            # Fetch existing submissions for this assignment
+            sub_query = select(Submission).where(
+                Submission.assignment_id == assignment.id,
+                Submission.student_id.in_(student_ids),
+                Submission.is_archived == False,
+            )
+            sub_res = await db.execute(sub_query)
+            submissions = list(sub_res.scalars().all())
+            submissions_by_student: dict[uuid.UUID, Submission] = {
+                s.student_id: s for s in submissions
+            }
+
+            # Fetch existing notifications sent for this assignment to guarantee deduplication
+            notif_query = select(ParentHomeworkNotification).where(
+                ParentHomeworkNotification.assignment_id == assignment.id,
+                ParentHomeworkNotification.student_id.in_(student_ids),
+            )
+            notif_res = await db.execute(notif_query)
+            existing_notifs = list(notif_res.scalars().all())
+            # Set of (student_id, channel)
+            already_notified = {
+                (n.student_id, n.notification_channel) for n in existing_notifs
+            }
+
+            for student in students:
+                sub = submissions_by_student.get(student.id)
+
+                # Check if student completed homework (100% accurate status matching)
+                sub_status_str = (sub.status.value if hasattr(sub.status, "value") else str(sub.status or "")).lower() if sub else ""
+                if sub and (
+                    sub.status in (
+                        SubmissionStatus.SUBMITTED,
+                        SubmissionStatus.GRADED,
+                        SubmissionStatus.LATE,
                     )
+                    or sub_status_str in ("submitted", "graded", "late")
+                ):
+                    # Homework submitted successfully, no alert needed
+                    continue
 
-                    try:
-                        sent = await send_telegram_message(
-                            chat_id=tg_recipient,
-                            text=tg_message,
+                # Determine missing or incomplete status
+                if sub is None:
+                    status_desc = "Topshirilmagan (Missing)"
+                    status_phrase = "topshirilmagan"
+                else:
+                    status_desc = "Chala / Qayta ko'rib chiqish talab etiladi (Incomplete)"
+                    status_phrase = "chala topshirilgan"
+
+                parent_name = student.parent_name or "Hurmatli ota-ona"
+                alerted_this_student = False
+
+                # 1. Telegram Alert via @EnglishLife_edu_bot
+                tg_recipient = student.parent_telegram_chat_id
+                if tg_recipient and (student.id, "telegram") not in already_notified:
+                    # Do not send parent templates to group chat IDs (IDs starting with -)
+                    if not str(tg_recipient).startswith("-"):
+                        tg_message = (
+                            f"⚠️ <b>Diqqat! English Life LMS xabarnomasi</b>\n\n"
+                            f"Hurmatli <b>{parent_name}</b>!\n"
+                            f"Farzandingiz <b>{student.full_name}</b>ning uy vazifasi {status_phrase}:\n\n"
+                            f"📚 <b>Guruh:</b> {group_name}\n"
+                            f"📝 <b>Topshiriq:</b> {assignment.title}\n"
+                            f"⏳ <b>Topshirish muddati:</b> {formatted_deadline}\n"
+                            f"📊 <b>Holati:</b> ❌ {status_desc}\n\n"
+                            f"Iltimos, farzandingiz darsga o'z vaqtida va to'liq tayyorlanishini nazorat qiling! 🚀\n"
+                            f"👉 Platforma: https://englishlife.uz"
                         )
+
+                        try:
+                            sent = await send_telegram_message(
+                                chat_id=tg_recipient,
+                                text=tg_message,
+                            )
+                            if sent:
+                                notif_row = ParentHomeworkNotification(
+                                    id=uuid.uuid4(),
+                                    student_id=student.id,
+                                    assignment_id=assignment.id,
+                                    notification_channel="telegram",
+                                    recipient=str(tg_recipient),
+                                    status="sent",
+                                    sent_at=now,
+                                )
+                                db.add(notif_row)
+                                already_notified.add((student.id, "telegram"))
+                                total_telegram_sent += 1
+                                alerted_this_student = True
+                        except Exception as err:
+                            logger.error(
+                                "Failed to dispatch Telegram parent alert to %s: %s",
+                                tg_recipient,
+                                err,
+                            )
+
+                # 2. SMS Alert via parent_phone
+                sms_phone = getattr(student, "parent_phone", None)
+                if sms_phone and (student.id, "sms") not in already_notified:
+                    sms_text = (
+                        f"English Life: Hurmatli ota-ona, {student.full_name}ning "
+                        f"\"{assignment.title}\" vazifasi topshirilmadi. Muddat: {formatted_deadline}. "
+                        f"Iltimos, nazorat qiling."
+                    )
+                    try:
+                        sent = await send_parent_sms(phone=sms_phone, text=sms_text)
                         if sent:
                             notif_row = ParentHomeworkNotification(
                                 id=uuid.uuid4(),
                                 student_id=student.id,
                                 assignment_id=assignment.id,
-                                notification_channel="telegram",
-                                recipient=str(tg_recipient),
+                                notification_channel="sms",
+                                recipient=str(sms_phone),
                                 status="sent",
                                 sent_at=now,
                             )
                             db.add(notif_row)
-                            already_notified.add((student.id, "telegram"))
-                            total_telegram_sent += 1
+                            already_notified.add((student.id, "sms"))
+                            total_sms_sent += 1
                             alerted_this_student = True
                     except Exception as err:
-                        logger.error(
-                            "Failed to dispatch Telegram parent alert to %s: %s",
-                            tg_recipient,
-                            err,
-                        )
+                        logger.error("Failed to dispatch SMS parent alert to %s: %s", sms_phone, err)
 
-            # 2. SMS Alert via parent_phone
-            sms_phone = getattr(student, "parent_phone", None)
-            if sms_phone and (student.id, "sms") not in already_notified:
-                sms_text = (
-                    f"English Life: Hurmatli ota-ona, {student.full_name}ning "
-                    f"\"{assignment.title}\" vazifasi topshirilmadi. Muddat: {formatted_deadline}. "
-                    f"Iltimos, nazorat qiling."
-                )
-                try:
-                    sent = await send_parent_sms(phone=sms_phone, text=sms_text)
-                    if sent:
-                        notif_row = ParentHomeworkNotification(
-                            id=uuid.uuid4(),
-                            student_id=student.id,
-                            assignment_id=assignment.id,
-                            notification_channel="sms",
-                            recipient=str(sms_phone),
-                            status="sent",
-                            sent_at=now,
-                        )
-                        db.add(notif_row)
-                        already_notified.add((student.id, "sms"))
-                        total_sms_sent += 1
-                        alerted_this_student = True
-                except Exception as err:
-                    logger.error("Failed to dispatch SMS parent alert to %s: %s", sms_phone, err)
+                if alerted_this_student:
+                    total_students_alerted += 1
 
-            if alerted_this_student:
-                total_students_alerted += 1
-
-        await db.commit()
+            await db.commit()
+        except Exception as asgn_err:
+            await db.rollback()
+            logger.warning("Error processing missing homework alerts for assignment %s (rolled back): %s", assignment.id, asgn_err)
 
     return {
         "success": True,

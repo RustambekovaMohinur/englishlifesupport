@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
 import { ChevronDown, History, BookOpen, Layers, Trophy, Clock, CheckCircle2, Lock, Unlock, Zap } from "lucide-react";
-import { FileDownloadButton, LoadingRows, Modal, Spinner, TelegramLink } from "@/components/ui";
+import { FileDownloadButton, LoadingRows, Modal, Spinner, TelegramLink, AuthenticatedAudio, AuthenticatedImage, ImageLightbox } from "@/components/ui";
 import { getStudent, getStudentHistory, listGroups, listSubmissions, resetStudentPassword, updateStudentPlacement, unlockStudentUpToDate, toggleStudentAssignmentLock, sendParentDigest } from "@/services/lmsService";
 import { Group, StudentHistoryOut, StudentOut, SubmissionOut, StudentWordlistProgressItem } from "@/types";
 import { UserAvatar } from "@/components/common/UserAvatar";
@@ -40,6 +40,8 @@ export default function StudentDetailModal({
   const [togglingAssignmentId, setTogglingAssignmentId] = useState<string | null>(null);
   const [inspectingDuplicateSubmissionId, setInspectingDuplicateSubmissionId] = useState<string | null>(null);
   const [isSendingParentDigest, setIsSendingParentDigest] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<Array<{ url: string; name?: string }>>([]);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const isModalOpen = (isOpen ?? open) !== undefined ? Boolean(isOpen ?? open) : Boolean(studentId);
 
@@ -406,21 +408,89 @@ export default function StudentDetailModal({
           </div>
         )}
 
-        {/* Attached homework file download */}
-        {subDetail?.file_url && (
-          <div className="flex items-center gap-2 pt-1">
-            <FileDownloadButton
-              url={subDetail.file_url}
-              filename={subDetail.file_original_name || `${h.title || "homework"}_file`}
-              className="btn-secondary text-xs py-1 px-2.5 flex items-center gap-1.5"
-            >
-              <span>📎 Download Homework Attachment</span>
-            </FileDownloadButton>
-            <span className="text-zinc-400 dark:text-zinc-500 text-xs truncate max-w-[200px]">
-              {subDetail.file_original_name}
-            </span>
-          </div>
-        )}
+        {/* Attached Homework Work & Previews */}
+        {(() => {
+          if (!subDetail) return null;
+          const isImg = Boolean(
+            subDetail.file_url &&
+            (/\.(jpe?g|png|webp|gif|svg|bmp|heic|heif)(\?.*)?$/i.test(subDetail.file_original_name || subDetail.file_url) ||
+             (subDetail.file_content_type && subDetail.file_content_type.startsWith("image/")))
+          );
+          const isAud = Boolean(
+            subDetail.file_url &&
+            (/\.(mp3|wav|ogg|webm|m4a|aac)(\?.*)?$/i.test(subDetail.file_original_name || subDetail.file_url) ||
+             (subDetail.file_content_type && subDetail.file_content_type.startsWith("audio/")))
+          );
+
+          const imgList: Array<{ url: string; name?: string }> = [];
+          if (isImg && subDetail.file_url) {
+            imgList.push({ url: subDetail.file_url, name: subDetail.file_original_name || "Homework Image" });
+          }
+          if (Array.isArray(subDetail.images) && subDetail.images.length > 0) {
+            subDetail.images.forEach((im: any) => {
+              imgList.push({
+                url: im.url || im.file_url || `/api/submissions/${subDetail.id}/images/${im.id}`,
+                name: im.original_name || "Notebook Page",
+              });
+            });
+          }
+
+          return (
+            <div className="space-y-2 pt-1">
+              {/* Visual Image Grid if images are present */}
+              {imgList.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                    <span className="font-semibold text-purple-600 dark:text-purple-400">🖼️ Homework Images ({imgList.length})</span>
+                    <span className="text-[11px]">Click to view full size</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {imgList.map((im, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => {
+                          setLightboxImages(imgList);
+                          setLightboxIndex(idx);
+                        }}
+                        className="cursor-pointer group relative rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden aspect-square bg-zinc-900 shadow-2xs hover:border-purple-400 transition"
+                      >
+                        <AuthenticatedImage
+                          url={im.url}
+                          alt={im.name || "Homework preview"}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] text-white font-bold">
+                          View
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Audio Player if audio recording */}
+              {isAud && subDetail.file_url && (
+                <div className="space-y-1 p-2 bg-purple-50/50 dark:bg-purple-950/20 rounded-lg border border-purple-200/60 dark:border-purple-900/40">
+                  <span className="text-[11px] font-bold uppercase text-purple-800 dark:text-purple-300">🎙️ Student Audio Recording</span>
+                  <AuthenticatedAudio url={subDetail.file_url} className="w-full h-8" />
+                </div>
+              )}
+
+              {/* Clean Download Button for non-image, non-audio files (PDF, DOCX, etc.) */}
+              {subDetail.file_url && !isImg && !isAud && (
+                <div className="flex items-center gap-2 pt-1">
+                  <FileDownloadButton
+                    url={subDetail.file_url}
+                    filename={subDetail.file_original_name || `${h.title || "homework"}_file`}
+                    className="btn-secondary text-xs py-1 px-2.5 flex items-center gap-1.5"
+                  >
+                    <span>📎 Download Homework ({subDetail.file_original_name || "Document"})</span>
+                  </FileDownloadButton>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Teacher Feedback */}
         {h.feedback && (
@@ -947,6 +1017,16 @@ export default function StudentDetailModal({
           if (onStudentUpdated) onStudentUpdated();
         }}
       />
+
+      {/* Lightbox for full-size inspection of homework photos */}
+      {lightboxIndex !== null && (
+        <ImageLightbox
+          isOpen={lightboxIndex !== null}
+          images={lightboxImages}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
     </Modal>
   );
 }

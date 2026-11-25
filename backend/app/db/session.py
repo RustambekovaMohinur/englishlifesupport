@@ -161,6 +161,13 @@ if _IS_NEON:
         connect_args=_connect_args,
     )
     logger.info("Neon DB detected: using NullPool (host: %s)", _clean_url.host)
+elif _clean_url.get_backend_name() == "sqlite":
+    engine = create_async_engine(
+        _clean_url,
+        echo=False,
+        connect_args=_connect_args,
+    )
+    logger.info("SQLite DB detected: initialized without postgres pool parameters")
 else:
     engine = create_async_engine(
         _clean_url,

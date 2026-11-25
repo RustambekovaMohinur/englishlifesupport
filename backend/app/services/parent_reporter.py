@@ -167,64 +167,75 @@ async def dispatch_due_assignment_digests(db: AsyncSession) -> int:
     total_dispatched = 0
 
     for assignment in due_assignments:
-        group = assignment.group
-        if not group or not group.students:
-            assignment.parent_digest_sent = True
-            await db.commit()
-            continue
-
-        vocab_assign = assignment.vocabulary_assignment
-
-        for student in group.students:
-            # Skip students without linked parent
-            if not student.parent_telegram_chat_id:
+        try:
+            group = assignment.group
+            if not group or not group.students:
+                assignment.parent_digest_sent = True
+                await db.commit()
                 continue
 
-            # Load student submission for this assignment
-            sub_res = await db.execute(
-                select(Submission)
-                .options(selectinload(Submission.grade))
-                .where(
-                    Submission.assignment_id == assignment.id,
-                    Submission.student_id == student.id,
-                )
-            )
-            submission = sub_res.scalar_one_or_none()
+            vocab_assign = assignment.vocabulary_assignment
 
-            # Load vocabulary attempt if vocabulary assignment exists
-            vocab_attempt = None
-            if vocab_assign:
-                va_res = await db.execute(
-                    select(VocabularyAttempt)
+            # Sort students by id deterministically to prevent PostgreSQL row lock deadlocks
+            sorted_students = sorted(group.students, key=lambda s: str(s.id))
+
+            for student in sorted_students:
+                # Skip students without linked parent
+                if not student.parent_telegram_chat_id:
+                    continue
+
+                # Load student submission for this assignment
+                sub_res = await db.execute(
+                    select(Submission)
+                    .options(selectinload(Submission.grade))
                     .where(
-                        VocabularyAttempt.vocabulary_assignment_id == vocab_assign.id,
-                        VocabularyAttempt.student_id == student.id,
+                        Submission.assignment_id == assignment.id,
+                        Submission.student_id == student.id,
                     )
-                    .order_by(VocabularyAttempt.score.desc())
                 )
-                vocab_attempt = va_res.scalar_one_or_none()
+                submission = sub_res.scalar_one_or_none()
 
-            # Build message
-            message_text, _tier = format_parent_digest(
-                student=student,
-                assignment=assignment,
-                submission=submission,
-                vocab_assign=vocab_assign,
-                vocab_attempt=vocab_attempt,
+                # Load vocabulary attempt if vocabulary assignment exists
+                vocab_attempt = None
+                if vocab_assign:
+                    va_res = await db.execute(
+                        select(VocabularyAttempt)
+                        .where(
+                            VocabularyAttempt.vocabulary_assignment_id == vocab_assign.id,
+                            VocabularyAttempt.student_id == student.id,
+                        )
+                        .order_by(VocabularyAttempt.score.desc())
+                    )
+                    vocab_attempt = va_res.scalar_one_or_none()
+
+                # Build message
+                message_text, _tier = format_parent_digest(
+                    student=student,
+                    assignment=assignment,
+                    submission=submission,
+                    vocab_assign=vocab_assign,
+                    vocab_attempt=vocab_attempt,
+                )
+
+                # Send Telegram message
+                sent = await send_telegram_message(
+                    chat_id=student.parent_telegram_chat_id,
+                    text=message_text,
+                )
+                if sent:
+                    student.last_parent_digest_sent_at = now
+                    total_dispatched += 1
+
+            # Mark assignment as digest sent
+            assignment.parent_digest_sent = True
+            await db.commit()
+        except Exception as asgn_err:
+            await db.rollback()
+            logger.warning(
+                "Error dispatching parent digest for assignment %s (rolled back): %s",
+                assignment.id,
+                asgn_err,
             )
-
-            # Send Telegram message
-            sent = await send_telegram_message(
-                chat_id=student.parent_telegram_chat_id,
-                text=message_text,
-            )
-            if sent:
-                student.last_parent_digest_sent_at = now
-                total_dispatched += 1
-
-        # Mark assignment as digest sent
-        assignment.parent_digest_sent = True
-        await db.commit()
 
     return total_dispatched
 

@@ -58,6 +58,7 @@ import {
 } from "@/services/lmsService";
 import { AssignmentForStudent, SubmissionOut } from "@/types";
 import { AIFeedbackCard } from "@/components/AIFeedbackCard";
+import { TopicSpinWheel } from "@/components/TopicSpinWheel";
 import { safeCompressImage, compressImage, compressImages, fileToBase64, base64ToFile } from "@/utils/imageCompressor";
 import toast from "react-hot-toast";
 
@@ -237,6 +238,7 @@ export default function StudentAssignmentSubmitPage() {
   const [externalLink, setExternalLink] = useState("");
   const [textAnswer, setTextAnswer] = useState("");
   const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
+  const [selectedSpunPrompt, setSelectedSpunPrompt] = useState<string | null>(null);
 
   // Tab-switch tracker for submission integrity shield
   useEffect(() => {
@@ -606,8 +608,12 @@ export default function StudentAssignmentSubmitPage() {
         }
       }
 
-      // Cleanly bundle externalLink into text_answer if present
+      // Cleanly bundle selected prompt and externalLink into text_answer if present
       let combinedText = textAnswer.trim();
+      if (selectedSpunPrompt && !combinedText.includes(selectedSpunPrompt)) {
+        const promptHeader = `🎯 Chosen Topic / Question: ${selectedSpunPrompt}`;
+        combinedText = combinedText ? `${promptHeader}\n\n${combinedText}` : promptHeader;
+      }
       if (externalLink.trim()) {
         const linkBlock = `🔗 Attached Link: ${externalLink.trim()}`;
         combinedText = combinedText ? `${linkBlock}\n\n${combinedText}` : linkBlock;
@@ -1175,6 +1181,29 @@ export default function StudentAssignmentSubmitPage() {
           </button>
         </div>
 
+        {/* Speaking Questions & Writing Prompts Spin Wheel */}
+        {!isTaskLocked && !isGraded && (
+          <TopicSpinWheel
+            description={assignment.description}
+            assignmentTitle={assignment.title}
+            assignmentType={skillBadge.label}
+            selectedPrompt={selectedSpunPrompt}
+            onSelectPrompt={(prompt, mode) => {
+              setSelectedSpunPrompt(prompt);
+              if (mode === "writing") {
+                setActiveTab("text");
+                setTextAnswer((prev) => {
+                  const header = `[Topic: ${prompt}]\n\n`;
+                  if (prev.includes(prompt)) return prev;
+                  return header + prev;
+                });
+              } else {
+                setActiveTab("voice");
+              }
+            }}
+          />
+        )}
+
         {/* Section B: Universal 4-Way Submission Suite */}
         {!isTaskLocked && !isGraded && (
           <section className="card bg-white dark:bg-[#161B22] border border-zinc-200/80 dark:border-zinc-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-xs">
@@ -1415,6 +1444,27 @@ export default function StudentAssignmentSubmitPage() {
                       Record your speaking submission directly or upload a pre-recorded audio file
                     </p>
                   </div>
+
+                  {/* Pinned Spun Speaking Question */}
+                  {selectedSpunPrompt && (
+                    <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 dark:from-emerald-950/30 dark:via-zinc-900 dark:to-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800 text-xs space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold flex items-center gap-1.5 uppercase tracking-wide text-[11px] text-emerald-800 dark:text-emerald-300 font-mono">
+                          <span>🎙️</span> Selected Speaking Prompt:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSpunPrompt(null)}
+                          className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 underline"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <p className="font-semibold text-zinc-900 dark:text-white leading-relaxed">
+                        "{selectedSpunPrompt}"
+                      </p>
+                    </div>
+                  )}
 
                   {/* Resilient Audio Recorder Component with Stream Cleanup & Toast Deduplication */}
                   <AudioRecorderWidget
