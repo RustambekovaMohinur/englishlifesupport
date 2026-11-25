@@ -291,6 +291,18 @@ export default function StudentAssignmentsPage() {
             <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md font-medium border border-amber-200 dark:border-amber-800/50">
               ⭐ +10 Stars
             </span>
+            {(() => {
+              const t = `${a.title} ${a.description || ""}`.toLowerCase();
+              const hasSpin = t.includes("speak") || t.includes("voice") || t.includes("oral") || t.includes("writ") || t.includes("essay") || t.includes("topic");
+              if (hasSpin) {
+                return (
+                  <span className="inline-flex items-center gap-1 text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-md font-semibold border border-indigo-200 dark:border-indigo-800/50">
+                    🎡 Spin Wheel
+                  </span>
+                );
+              }
+              return null;
+            })()}
           </div>
 
           {/* Prominent Lock Banner when task is locked */}

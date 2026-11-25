@@ -21,8 +21,8 @@ export const PremiumBadge: FC<Props> = ({ plan, custom_badge, className = "" }) 
   return (
     <span
       className={`inline-block leading-none select-none ${className}`}
-      title={plan === "pro_vip" ? "Pro VIP" : plan === "standard" ? "Standard Premium" : "Premium"}
-      aria-label="premium badge"
+      title="Profile Badge"
+      aria-label="profile badge"
     >
       {badge}
     </span>

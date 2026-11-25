@@ -75,13 +75,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return (localStorage.getItem(LS_THEME_KEY) as ThemeId) ?? "default";
   });
   const [plan, setPlanState] = useState<string>(() => {
-    return localStorage.getItem(LS_PLAN_KEY) ?? "free";
+    return localStorage.getItem(LS_PLAN_KEY) ?? "pro_vip";
   });
 
-  const availableThemes: ThemeId[] =
-    plan === "free"
-      ? (FREE_THEMES as ThemeId[])
-      : ([...FREE_THEMES, ...PREMIUM_THEMES] as ThemeId[]);
+  // All 7 modern themes are 100% unlocked for everyone
+  const availableThemes: ThemeId[] = [...FREE_THEMES, ...PREMIUM_THEMES] as ThemeId[];
 
   // Apply theme class on mount and change
   useEffect(() => {
@@ -89,20 +87,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme]);
 
   const setTheme = useCallback((id: ThemeId) => {
-    const allowed = plan === "free" ? FREE_THEMES : [...FREE_THEMES, ...PREMIUM_THEMES];
+    const allowed = [...FREE_THEMES, ...PREMIUM_THEMES];
     const safe = allowed.includes(id) ? id : "default";
     localStorage.setItem(LS_THEME_KEY, safe);
     setThemeState(safe as ThemeId);
-  }, [plan]);
+  }, []);
 
   const setPlan = useCallback((p: string) => {
     localStorage.setItem(LS_PLAN_KEY, p);
     setPlanState(p);
-    // If current theme is premium and plan downgraded to free, reset
-    if (p === "free" && PREMIUM_THEMES.includes(theme)) {
-      setTheme("default");
-    }
-  }, [theme, setTheme]);
+  }, []);
 
   const themeLabel = (id: string) => LABELS[id] ?? id;
 

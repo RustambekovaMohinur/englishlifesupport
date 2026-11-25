@@ -212,8 +212,8 @@ export default function SocialHubPage() {
     }
   };
 
-  const canWriteNotes = Boolean(premiumStatus?.can_write_notes);
-  const canCreateGroups = Boolean(premiumStatus?.can_create_groups);
+  const canWriteNotes = true;
+  const canCreateGroups = true;
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto p-4 sm:p-6">
@@ -277,20 +277,13 @@ export default function SocialHubPage() {
               ))}
             </div>
 
-            {canWriteNotes ? (
-              <button
-                onClick={() => setIsNoteModalOpen(true)}
-                className="btn-primary text-xs py-2 self-start sm:self-auto cursor-pointer"
-              >
-                <Plus size={14} />
-                <span>Write Study Note</span>
-              </button>
-            ) : (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs">
-                <Lock size={12} />
-                <span>Posting notes requires Standard (⭐ 19k) plan</span>
-              </div>
-            )}
+            <button
+              onClick={() => setIsNoteModalOpen(true)}
+              className="btn-primary text-xs py-2 self-start sm:self-auto cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Write Study Note</span>
+            </button>
           </div>
 
           {/* Notes List */}
@@ -299,7 +292,7 @@ export default function SocialHubPage() {
           ) : notes.length === 0 ? (
             <EmptyState
               title="No public notes yet"
-              description="Be the first premium student to share revision notes with the community!"
+              description="Be the first student to share revision notes with the community!"
             />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -409,20 +402,13 @@ export default function SocialHubPage() {
               </button>
             </div>
 
-            {canCreateGroups ? (
-              <button
-                onClick={() => setIsGroupModalOpen(true)}
-                className="btn-primary text-xs py-2 self-start sm:self-auto cursor-pointer"
-              >
-                <Plus size={14} />
-                <span>Create Study Group</span>
-              </button>
-            ) : (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-700 dark:text-purple-400 text-xs">
-                <Sparkles size={13} />
-                <span>Creating study groups requires Pro VIP (👑 29k) plan</span>
-              </div>
-            )}
+            <button
+              onClick={() => setIsGroupModalOpen(true)}
+              className="btn-primary text-xs py-2 self-start sm:self-auto cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Create Study Group</span>
+            </button>
           </div>
 
           {/* Groups Grid */}
@@ -431,7 +417,7 @@ export default function SocialHubPage() {
           ) : groups.length === 0 ? (
             <EmptyState
               title="No active study groups"
-              description="Pro VIP students can create custom study groups for collaborative learning!"
+              description="Create a custom study group to collaborate and practice with fellow students!"
             />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

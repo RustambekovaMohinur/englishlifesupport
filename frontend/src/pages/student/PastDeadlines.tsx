@@ -337,6 +337,19 @@ export default function PastDeadlinesPage() {
                         <span>Teacher Attached File</span>
                       </FileDownloadButton>
                     )}
+                    {(() => {
+                      const t = `${a.title} ${a.description || ""}`.toLowerCase();
+                      const hasSpin = t.includes("speak") || t.includes("voice") || t.includes("oral") || t.includes("writ") || t.includes("essay") || t.includes("topic");
+                      if (hasSpin) {
+                        return (
+                          <span className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-800 inline-flex items-center gap-1">
+                            <span>🎡</span>
+                            <span>Spin Prompts</span>
+                          </span>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
 
                   {/* Anti-cheat Duplicate Flag Alert */}

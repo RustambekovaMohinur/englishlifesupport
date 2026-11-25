@@ -27,23 +27,29 @@ router = APIRouter(prefix="/premium", tags=["premium"])
 
 # ---------- Schemas ----------
 
-VALID_PLANS = {"free", "standard"}
+VALID_PLANS = {"free", "standard", "pro_vip"}
 VALID_BADGES = {None, "", "👑", "⭐", "🕊️", "🔥", "💎"}
 VALID_THEMES = {"default", "light", "dark", "cyber_purple", "neon_pink", "emerald_green", "golden_sunset"}
 
+ALL_THEMES = ["default", "light", "dark", "cyber_purple", "neon_pink", "emerald_green", "golden_sunset"]
+ALL_BADGES = ["⭐", "👑", "🔥", "💎", "🕊️"]
+
 PLAN_PERMISSIONS = {
-    "free":     {"can_write_notes": False, "can_private_chat": False, "can_create_groups": False},
-    "standard": {"can_write_notes": True,  "can_private_chat": True,  "can_create_groups": False},
+    "free":     {"can_write_notes": True, "can_private_chat": True, "can_create_groups": True},
+    "standard": {"can_write_notes": True, "can_private_chat": True, "can_create_groups": True},
+    "pro_vip":  {"can_write_notes": True, "can_private_chat": True, "can_create_groups": True},
 }
 
 PLAN_THEMES = {
-    "free":     ["default", "light", "dark"],
-    "standard": ["default", "light", "dark", "cyber_purple", "neon_pink", "emerald_green", "golden_sunset"],
+    "free":     ALL_THEMES,
+    "standard": ALL_THEMES,
+    "pro_vip":  ALL_THEMES,
 }
 
 PLAN_BADGES = {
-    "free":     [],
-    "standard": ["⭐"],
+    "free":     ALL_BADGES,
+    "standard": ALL_BADGES,
+    "pro_vip":  ALL_BADGES,
 }
 
 
@@ -99,16 +105,16 @@ def _profile_to_out(profile: StudentProfile, user: User) -> PremiumStatusOut:
         student_id=profile.id,
         username=user.username,
         full_name=profile.full_name,
-        is_premium=bool(getattr(profile, "is_premium", False)),
+        is_premium=True,
         premium_plan=plan,
         premium_expires_at=getattr(profile, "premium_expires_at", None),
         custom_badge=getattr(profile, "custom_badge", None),
         profile_bg_theme=getattr(profile, "profile_bg_theme", "default") or "default",
-        can_write_notes=bool(getattr(profile, "can_write_notes", False)),
-        can_private_chat=bool(getattr(profile, "can_private_chat", False)),
-        can_create_groups=bool(getattr(profile, "can_create_groups", False)),
-        available_themes=PLAN_THEMES.get(plan, PLAN_THEMES["free"]),
-        available_badges=PLAN_BADGES.get(plan, []),
+        can_write_notes=True,
+        can_private_chat=True,
+        can_create_groups=True,
+        available_themes=ALL_THEMES,
+        available_badges=ALL_BADGES,
     )
 
 
@@ -138,7 +144,7 @@ async def update_my_preferences(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Lets premium students switch themes and set their badge."""
+    """Lets students switch themes and set their badge (100% unlocked)."""
     profile = (
         await db.execute(
             select(StudentProfile).where(StudentProfile.user_id == current_user.id)
@@ -147,32 +153,27 @@ async def update_my_preferences(
     if not profile:
         raise HTTPException(status_code=404, detail="Student profile not found")
 
-    plan = getattr(profile, "premium_plan", "free") or "free"
-    allowed_themes = PLAN_THEMES.get(plan, PLAN_THEMES["free"])
-
     if body.profile_bg_theme is not None:
-        if body.profile_bg_theme not in allowed_themes:
+        if body.profile_bg_theme not in VALID_THEMES:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Theme '{body.profile_bg_theme}' requires a higher plan. Available: {allowed_themes}",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid theme '{body.profile_bg_theme}'. Choose from: {VALID_THEMES}",
             )
         profile.profile_bg_theme = body.profile_bg_theme
         current_user.profile_bg_theme = body.profile_bg_theme
 
     if body.custom_badge is not None:
         badge = body.custom_badge.strip() if body.custom_badge else None
-        if badge:
-            allowed_badges = PLAN_BADGES.get(plan, [])
-            if badge not in allowed_badges:
-                tier_msg = "Pro VIP (29k UZS)" if badge in ["👑", "🔥", "💎"] else "Standard (19k UZS) or higher"
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Badge '{badge}' requires {tier_msg} plan. Available for your plan: {allowed_badges}",
-                )
+        if badge and badge not in VALID_BADGES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid badge '{badge}'. Choose from: {VALID_BADGES}",
+            )
         profile.custom_badge = badge
         current_user.custom_badge = badge
 
     await db.commit()
+    return _profile_to_out(profile, current_user)
     return _profile_to_out(profile, current_user)
 
 
@@ -232,17 +233,16 @@ async def list_available_themes(
         {"id": "default",        "label": "Default",        "premium": False,  "css_class": "theme-default"},
         {"id": "light",          "label": "Light",          "premium": False,  "css_class": "theme-light"},
         {"id": "dark",           "label": "Dark",           "premium": False,  "css_class": "theme-dark"},
-        {"id": "cyber_purple",   "label": "Cyber Purple",   "premium": True,   "css_class": "theme-cyber-purple",   "min_plan": "standard"},
-        {"id": "neon_pink",      "label": "Neon Pink",      "premium": True,   "css_class": "theme-neon-pink",      "min_plan": "standard"},
-        {"id": "emerald_green",  "label": "Emerald Green",  "premium": True,   "css_class": "theme-emerald-green",  "min_plan": "standard"},
-        {"id": "golden_sunset",  "label": "Golden Sunset",  "premium": True,   "css_class": "theme-golden-sunset",  "min_plan": "standard"},
+        {"id": "cyber_purple",   "label": "Cyber Purple",   "premium": False,  "css_class": "theme-cyber-purple"},
+        {"id": "neon_pink",      "label": "Neon Pink",      "premium": False,  "css_class": "theme-neon-pink"},
+        {"id": "emerald_green",  "label": "Emerald Green",  "premium": False,  "css_class": "theme-emerald-green"},
+        {"id": "golden_sunset",  "label": "Golden Sunset",  "premium": False,  "css_class": "theme-golden-sunset"},
     ]
-    allowed = PLAN_THEMES.get(plan, PLAN_THEMES["free"])
     for t in themes:
-        t["unlocked"] = t["id"] in allowed
+        t["unlocked"] = True
 
     return {
         "current_plan": plan,
         "themes": themes,
-        "available_theme_ids": allowed,
+        "available_theme_ids": ALL_THEMES,
     }

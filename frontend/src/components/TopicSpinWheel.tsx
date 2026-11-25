@@ -65,17 +65,19 @@ export const TopicSpinWheel: React.FC<TopicSpinWheelProps> = ({
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Determine mode: speaking vs writing
-  const isSpeaking = useMemo(() => {
+  // Default mode: speaking vs writing based on assignment title or type
+  const defaultMode: "speaking" | "writing" = useMemo(() => {
     const t = (assignmentTitle + " " + assignmentType).toLowerCase();
-    return t.includes("speak") || t.includes("voice") || t.includes("oral") || t.includes("pronun");
+    return (t.includes("speak") || t.includes("voice") || t.includes("oral") || t.includes("pronun")) ? "speaking" : "writing";
   }, [assignmentTitle, assignmentType]);
+
+  const [activeMode, setActiveMode] = useState<"speaking" | "writing">(defaultMode);
+  const isSpeaking = activeMode === "speaking";
 
   // Load teacher-managed prompts from database with automatic fallback
   useEffect(() => {
-    const pType: "speaking" | "writing" = isSpeaking ? "speaking" : "writing";
     listSpinPrompts({
-      prompt_type: pType,
+      prompt_type: activeMode,
       group_id: groupId || undefined,
       assignment_id: assignmentId || undefined,
       active_only: true,
@@ -84,10 +86,14 @@ export const TopicSpinWheel: React.FC<TopicSpinWheelProps> = ({
       .then((items) => {
         if (Array.isArray(items) && items.length > 0) {
           setDbPrompts(items.map((i) => i.text));
+        } else {
+          setDbPrompts([]);
         }
       })
-      .catch(() => {});
-  }, [isSpeaking, groupId, assignmentId]);
+      .catch(() => {
+        setDbPrompts([]);
+      });
+  }, [activeMode, groupId, assignmentId]);
 
   // Extract prompt candidates from teacher DB first, then description, or fallback to curated prompts
   const prompts = useMemo(() => {
@@ -265,20 +271,20 @@ export const TopicSpinWheel: React.FC<TopicSpinWheelProps> = ({
   };
 
   return (
-    <div className="rounded-2xl border border-indigo-200/80 dark:border-indigo-900/60 bg-gradient-to-br from-indigo-50/50 via-white to-purple-50/40 dark:from-indigo-950/20 dark:via-zinc-900 dark:to-purple-950/20 shadow-sm overflow-hidden transition-all">
+    <div id="topic-spin-wheel" className="rounded-2xl border border-indigo-200/80 dark:border-indigo-900/60 bg-gradient-to-br from-indigo-50/50 via-white to-purple-50/40 dark:from-indigo-950/20 dark:via-zinc-900 dark:to-purple-950/20 shadow-sm overflow-hidden transition-all scroll-mt-20">
       {/* Header Bar */}
       <div
         onClick={() => setIsOpen(!isOpen)}
-        className="cursor-pointer px-4 sm:px-5 py-3.5 flex items-center justify-between border-b border-indigo-100 dark:border-indigo-900/40 bg-white/60 dark:bg-zinc-900/60"
+        className="cursor-pointer px-4 sm:px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between border-b border-indigo-100 dark:border-indigo-900/40 bg-white/60 dark:bg-zinc-900/60 gap-3"
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-sm">
+          <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-sm shrink-0">
             🎡
           </div>
           <div>
-            <h3 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
+            <h3 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-1.5 flex-wrap">
               <span>{isSpeaking ? "Speaking Question" : "Writing Topic"} Spin Wheel</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-mono">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-mono font-semibold">
                 {prompts.length} Prompts
               </span>
             </h3>
@@ -288,13 +294,50 @@ export const TopicSpinWheel: React.FC<TopicSpinWheelProps> = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition"
-          aria-label="Toggle spin wheel"
-        >
-          {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
+        <div className="flex items-center gap-2 self-end sm:self-auto" onClick={(e) => e.stopPropagation()}>
+          {/* Mode Switcher: Speaking vs Writing */}
+          <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveMode("speaking");
+                setChosenPrompt(null);
+              }}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                activeMode === "speaking"
+                  ? "bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+              }`}
+            >
+              <Mic className="w-3 h-3" />
+              <span>Speaking</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveMode("writing");
+                setChosenPrompt(null);
+              }}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                activeMode === "writing"
+                  ? "bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 shadow-xs"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+              }`}
+            >
+              <PenTool className="w-3 h-3" />
+              <span>Writing</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition cursor-pointer"
+            aria-label="Toggle spin wheel"
+          >
+            {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
 
       {isOpen && (

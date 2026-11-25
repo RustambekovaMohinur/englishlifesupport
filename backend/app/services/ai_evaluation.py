@@ -322,14 +322,8 @@ async def evaluate_submission_background(submission_id: uuid.UUID) -> None:
                 logger.warning("Assignment not associated with submission %s.", submission_id)
                 return
 
-            # Check if student is on Standard plan (19,000 UZS)
-            student_prof = submission.student
-            is_standard = False
-            if student_prof:
-                is_standard = bool(
-                    student_prof.is_premium
-                    or getattr(student_prof, "premium_plan", "free") == "standard"
-                )
+            # All students receive full comprehensive AI evaluations (vocabulary upgrades, phonetics, syntax analysis) 100% free
+            is_standard = True
 
             # Ensure SubmissionAIFeedback row exists
             feedback_record = submission.ai_feedback

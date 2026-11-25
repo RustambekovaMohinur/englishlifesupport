@@ -123,14 +123,9 @@ async def create_public_note(
     if not profile and current_user.role != UserRole.TEACHER:
         raise HTTPException(status_code=403, detail="Student profile required.")
 
-    # Permissions check
-    is_teacher = current_user.role == UserRole.TEACHER
-    can_write = is_teacher or bool(getattr(profile, "can_write_notes", False)) or bool(getattr(profile, "is_premium", False))
-    if not can_write:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Public notes require Standard (19k) or Pro VIP (29k) plan.",
-        )
+    # All registered students and teachers can publish study notes for free
+    if not profile and current_user.role != UserRole.TEACHER:
+        raise HTTPException(status_code=403, detail="Student profile required.")
 
     note = PublicNote(
         id=uuid.uuid4(),
@@ -402,13 +397,9 @@ async def create_study_group(
     if not profile and current_user.role != UserRole.TEACHER:
         raise HTTPException(status_code=403, detail="Student profile required.")
 
-    is_teacher = current_user.role == UserRole.TEACHER
-    can_create = is_teacher or bool(getattr(profile, "can_create_groups", False))
-    if not can_create:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Creating study groups requires Pro VIP (29k) plan.",
-        )
+    # All registered students and teachers can create study groups for free
+    if not profile and current_user.role != UserRole.TEACHER:
+        raise HTTPException(status_code=403, detail="Student profile required.")
 
     invite_code = secrets.token_hex(4).upper()
 

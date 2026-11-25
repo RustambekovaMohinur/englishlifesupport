@@ -417,27 +417,16 @@ export default function StudentProfilePage() {
           <ThemeSwitcher />
         </div>
 
-        {/* Tier-Based Badge & Sticker Selector */}
+        {/* Badge & Sticker Selector (All Free) */}
         <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
           <BadgeSelector
             currentBadge={premiumStatus?.custom_badge || null}
-            currentPlan={premiumStatus?.premium_plan || "free"}
             onBadgeUpdated={(newBadge) => {
               if (premiumStatus) {
                 setPremiumStatus({ ...premiumStatus, custom_badge: newBadge });
               }
             }}
           />
-          {premiumStatus && premiumStatus.premium_plan !== "free" && (
-            <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-              <span>Current plan:</span>
-              <span className="font-bold text-purple-600 dark:text-purple-400 capitalize">{premiumStatus.premium_plan.replace("_", " ")}</span>
-              <PremiumBadge plan={premiumStatus.premium_plan} custom_badge={premiumStatus.custom_badge} />
-              {premiumStatus.premium_expires_at && (
-                <span className="text-zinc-400">expires {new Date(premiumStatus.premium_expires_at).toLocaleDateString()}</span>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Parent Telegram Notifications Card */}

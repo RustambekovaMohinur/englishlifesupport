@@ -1219,9 +1219,22 @@ export default function StudentAssignmentSubmitPage() {
                 </p>
               </div>
 
-              <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 rounded-lg self-start sm:self-auto">
-                Recommended: {skillBadge.label}
-              </span>
+              <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    document.getElementById("topic-spin-wheel")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 px-3 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 transition active:scale-95 cursor-pointer shadow-2xs"
+                  title="Open Speaking & Writing topic spin wheel"
+                >
+                  <span>🎡</span>
+                  <span>Spin Wheel Prompts</span>
+                </button>
+                <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 rounded-lg">
+                  Recommended: {skillBadge.label}
+                </span>
+              </div>
             </div>
 
             {/* 4-Way Segmented Tab Bar (Mobile 2x2 Grid / Desktop Segmented Row) */}
@@ -1448,7 +1461,7 @@ export default function StudentAssignmentSubmitPage() {
                   </div>
 
                   {/* Pinned Spun Speaking Question */}
-                  {selectedSpunPrompt && (
+                  {selectedSpunPrompt ? (
                     <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 dark:from-emerald-950/30 dark:via-zinc-900 dark:to-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800 text-xs space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="font-bold flex items-center gap-1.5 uppercase tracking-wide text-[11px] text-emerald-800 dark:text-emerald-300 font-mono">
@@ -1457,7 +1470,7 @@ export default function StudentAssignmentSubmitPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedSpunPrompt(null)}
-                          className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 underline"
+                          className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 underline cursor-pointer"
                         >
                           Clear
                         </button>
@@ -1465,6 +1478,26 @@ export default function StudentAssignmentSubmitPage() {
                       <p className="font-semibold text-zinc-900 dark:text-white leading-relaxed">
                         "{selectedSpunPrompt}"
                       </p>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-gradient-to-r from-indigo-50/80 via-purple-50/60 to-white dark:from-indigo-950/40 dark:via-purple-950/20 dark:to-zinc-900 rounded-xl border border-indigo-200/80 dark:border-indigo-800/60 flex items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-xl shrink-0">🎙️</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-zinc-900 dark:text-white">Need an IELTS Speaking question or cue card?</p>
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">Spin the prompt wheel to get a practice question configured by your teacher.</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          document.getElementById("topic-spin-wheel")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }}
+                        className="btn-primary text-xs py-1.5 px-3 rounded-lg flex items-center gap-1.5 shrink-0 font-semibold cursor-pointer"
+                      >
+                        <span>🎡</span>
+                        <span>Spin Question</span>
+                      </button>
                     </div>
                   )}
 
@@ -1653,6 +1686,47 @@ export default function StudentAssignmentSubmitPage() {
                       </span>
                     )}
                   </div>
+
+                  {/* Pinned Writing Topic or Quick-Spin Prompt Invitation */}
+                  {selectedSpunPrompt ? (
+                    <div className="p-3 bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 dark:from-purple-950/30 dark:via-zinc-900 dark:to-purple-950/30 rounded-xl border border-purple-200 dark:border-purple-800 text-xs space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold flex items-center gap-1.5 uppercase tracking-wide text-[11px] text-purple-800 dark:text-purple-300 font-mono">
+                          <span>✍️</span> Selected Writing Topic:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSpunPrompt(null)}
+                          className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 underline cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <p className="font-semibold text-zinc-900 dark:text-white leading-relaxed">
+                        "{selectedSpunPrompt}"
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-gradient-to-r from-purple-50/80 via-indigo-50/60 to-white dark:from-purple-950/40 dark:via-indigo-950/20 dark:to-zinc-900 rounded-xl border border-purple-200/80 dark:border-purple-800/60 flex items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-xl shrink-0">✍️</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-zinc-900 dark:text-white">Looking for an IELTS essay prompt or writing topic?</p>
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">Spin the topic wheel to auto-insert a teacher-configured essay topic.</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          document.getElementById("topic-spin-wheel")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }}
+                        className="btn-primary text-xs py-1.5 px-3 rounded-lg flex items-center gap-1.5 shrink-0 font-semibold cursor-pointer"
+                      >
+                        <span>🎡</span>
+                        <span>Spin Topic</span>
+                      </button>
+                    </div>
+                  )}
 
                   <textarea
                     rows={10}

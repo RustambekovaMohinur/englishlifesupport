@@ -132,10 +132,10 @@ export const AIFeedbackCard: React.FC<AIFeedbackCardProps> = ({
   const corrections = feedback.detailed_corrections || [];
 
   const anyCrit = (criteria as any) || {};
-  const isStandard = Boolean(anyCrit.is_standard_tier);
   const premiumVocab = (anyCrit.premium_vocabulary_upgrades as Array<{ word: string; advanced: string; context: string }>) || [];
   const premiumSyntax = anyCrit.premium_syntax_analysis as string | undefined;
   const premiumPhonetics = (anyCrit.premium_phonetics as string[]) || [];
+  const isStandard = Boolean(anyCrit.is_standard_tier || premiumVocab.length > 0 || premiumSyntax || premiumPhonetics.length > 0);
 
   return (
     <section
@@ -237,16 +237,16 @@ export const AIFeedbackCard: React.FC<AIFeedbackCardProps> = ({
           </div>
         )}
 
-        {/* Standard Tier Deep Analysis or Free Plan Upgrade Callout */}
-        {isStandard ? (
+        {/* Comprehensive In-Depth AI Analysis */}
+        {isStandard && (
           <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-purple-500/10 to-indigo-500/10 dark:from-amber-950/40 dark:via-purple-950/30 dark:to-indigo-950/20 border-2 border-amber-400/60 dark:border-amber-600/50 space-y-3.5 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-xl">⭐</span>
                 <div>
                   <h5 className="text-xs font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>Standard In-Depth AI Analysis</span>
-                    <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-200 dark:bg-amber-900/80 text-amber-900 dark:text-amber-100 font-bold">19k Tier</span>
+                    <span>Comprehensive In-Depth AI Analysis</span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-200 font-bold">100% Free ✨</span>
                   </h5>
                   <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">Advanced CEFR C1/C2 Vocabulary &amp; Stylistic Mastery</p>
                 </div>
@@ -294,20 +294,6 @@ export const AIFeedbackCard: React.FC<AIFeedbackCardProps> = ({
                 </ul>
               </div>
             )}
-          </div>
-        ) : (
-          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-purple-50/80 dark:from-blue-950/30 dark:via-indigo-950/20 dark:to-purple-950/30 border border-blue-200/60 dark:border-blue-900/40 flex items-center justify-between gap-3 text-xs shadow-2xs">
-            <div className="flex items-center gap-2.5">
-              <span className="text-xl">✨</span>
-              <div className="space-y-0.5">
-                <p className="font-semibold text-zinc-900 dark:text-white">
-                  Basic AI evaluation is 100% Free for all students!
-                </p>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                  Upgrade to the <b>Standard Plan (19,000 UZS)</b> for C1/C2 advanced vocabulary upgrades, phonetic syllable stress, and priority review queue.
-                </p>
-              </div>
-            </div>
           </div>
         )}
 

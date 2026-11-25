@@ -97,7 +97,7 @@ export default function App() {
               <Route path="results" element={<StudentResultsPage />} />
               <Route path="leaderboard" element={<StudentDashboardPage />} />
               <Route path="progress" element={<StudentProgressPage />} />
-              <Route path="billing" element={<BillingPage />} />
+              <Route path="billing" element={<Navigate to="/student/profile" replace />} />
             <Route path="chat" element={<ChatHubPage />} />
             <Route path="social" element={<SocialHubPage />} />
             <Route path="profile" element={<StudentProfilePage />} />
