@@ -1,5 +1,6 @@
 import logging
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -8,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_teacher
 from app.db.session import get_db
-from app.models.assignment import SpinPrompt
+from app.models.assignment import Assignment, SpinPrompt
+from app.models.group import Group
 from app.models.user import User
 from app.schemas.assignment import (
     SpinPromptBulkCreate,
@@ -115,8 +117,10 @@ async def list_spin_prompts(
 
     # Fallback auto-seed in-memory if DB is completely empty and fallback=True
     if not items and fallback and prompt_type:
+        now = datetime.now(timezone.utc)
         default_pairs = DEFAULT_SPEAKING_PROMPTS if prompt_type == "speaking" else DEFAULT_WRITING_PROMPTS
         mock_items = []
+        user_id = getattr(current_user, "id", None) or uuid.uuid4()
         for idx, (txt, cat) in enumerate(default_pairs):
             mock_items.append(
                 SpinPrompt(
@@ -124,9 +128,11 @@ async def list_spin_prompts(
                     prompt_type=prompt_type,
                     text=txt,
                     category=cat,
-                    created_by=current_user.id,
+                    created_by=user_id,
                     is_active=True,
                     order_index=idx,
+                    created_at=now,
+                    updated_at=now,
                 )
             )
         return mock_items
@@ -141,15 +147,32 @@ async def create_spin_prompt(
     current_user: User = Depends(require_teacher),
 ):
     """Teacher creates an individual speaking question or writing topic."""
+    # Verify group_id if provided
+    resolved_group_id = body.group_id
+    if resolved_group_id:
+        grp = await db.get(Group, resolved_group_id)
+        if not grp:
+            resolved_group_id = None
+
+    # Verify assignment_id if provided
+    resolved_assignment_id = body.assignment_id
+    if resolved_assignment_id:
+        asgn = await db.get(Assignment, resolved_assignment_id)
+        if not asgn:
+            resolved_assignment_id = None
+
+    now = datetime.now(timezone.utc)
     prompt = SpinPrompt(
         prompt_type=body.prompt_type,
         text=body.text.strip(),
         category=body.category.strip() if body.category else None,
-        group_id=body.group_id,
-        assignment_id=body.assignment_id,
+        group_id=resolved_group_id,
+        assignment_id=resolved_assignment_id,
         created_by=current_user.id,
         is_active=body.is_active,
         order_index=body.order_index,
+        created_at=now,
+        updated_at=now,
     )
     db.add(prompt)
     await db.commit()
@@ -167,24 +190,40 @@ async def bulk_create_spin_prompts(
     Teacher bulk pastes multiple lines of questions or topics.
     Parses each line, strips leading numbering (e.g. '1. ', '• ', 'Q: '), and saves.
     """
+    # Verify group_id if provided
+    resolved_group_id = body.group_id
+    if resolved_group_id:
+        grp = await db.get(Group, resolved_group_id)
+        if not grp:
+            resolved_group_id = None
+
+    resolved_assignment_id = body.assignment_id
+    if resolved_assignment_id:
+        asgn = await db.get(Assignment, resolved_assignment_id)
+        if not asgn:
+            resolved_assignment_id = None
+
     raw_lines = body.lines.split("\n")
     created_items: list[SpinPrompt] = []
+    now = datetime.now(timezone.utc)
 
     for idx, line in enumerate(raw_lines):
         clean_line = line.strip()
         # Strip leading numbers or bullets (e.g., '1.', '2)', '•', '-')
         import re
         clean_text = re.sub(r"^(\d+[\.\)]|[•\-\*]|q\d+:?)\s*", "", clean_line, flags=re.IGNORECASE).strip()
-        if len(clean_text) >= 5:
+        if len(clean_text) >= 3:
             p = SpinPrompt(
                 prompt_type=body.prompt_type,
                 text=clean_text,
                 category=body.category.strip() if body.category else None,
-                group_id=body.group_id,
-                assignment_id=body.assignment_id,
+                group_id=resolved_group_id,
+                assignment_id=resolved_assignment_id,
                 created_by=current_user.id,
                 is_active=True,
                 order_index=idx,
+                created_at=now,
+                updated_at=now,
             )
             db.add(p)
             created_items.append(p)

@@ -244,10 +244,10 @@ class SpinPromptOut(BaseModel):
     category: str | None = None
     group_id: uuid.UUID | None = None
     assignment_id: uuid.UUID | None = None
-    created_by: uuid.UUID
+    created_by: uuid.UUID | None = None
     order_index: int = 0
     is_active: bool = True
-    created_at: datetime
+    created_at: datetime | None = None
     updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}

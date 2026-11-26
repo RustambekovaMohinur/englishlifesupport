@@ -8,6 +8,7 @@ import { UserAvatar } from "@/components/common/UserAvatar";
 import { PeerProfileModal } from "@/components/PeerProfileModal";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import { PlatformFeedbackModal, PublicCommunityReviewsWall } from "@/components/PlatformFeedbackModal";
+import { StudentSpinPracticeModal } from "@/components/StudentSpinPracticeModal";
 import {
   getStudentDashboard,
   getMyStudentStats,
@@ -90,6 +91,7 @@ export default function StudentDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [feedbackSummary, setFeedbackSummary] = useState<PlatformFeedbackSummary | null>(null);
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
+  const [spinPracticeOpen, setSpinPracticeOpen] = useState(false);
   const [publicFeedbacks, setPublicFeedbacks] = useState<PublicFeedbackItem[]>([]);
   const [isLoadingPublicFeedbacks, setIsLoadingPublicFeedbacks] = useState(true);
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null);
@@ -332,6 +334,37 @@ export default function StudentDashboardPage() {
           </button>
         </div>
       )}
+
+      {/* Speaking & Writing Spin Practice Quick Action Card */}
+      <div className="rounded-2xl bg-gradient-to-r from-purple-600/15 via-indigo-600/10 to-pink-600/10 dark:from-purple-950/40 dark:via-indigo-950/30 dark:to-zinc-900/40 border-2 border-purple-500/30 dark:border-purple-500/40 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-12 h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center text-2xl shrink-0 shadow-md shadow-purple-600/30">
+            🎡
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm sm:text-base font-extrabold text-zinc-900 dark:text-white">
+                Speaking &amp; Writing Spin Practice
+              </h3>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300">
+                IELTS Randomizer
+              </span>
+            </div>
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+              Spin the wheel for random IELTS Speaking questions and Writing topics from your examiner to practice anytime.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setSpinPracticeOpen(true)}
+          className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold bg-purple-600 hover:bg-purple-700 active:scale-95 text-white shadow-md shadow-purple-600/25 flex items-center justify-center gap-2 transition cursor-pointer shrink-0 min-h-[42px]"
+        >
+          <span className="text-base">🎡</span>
+          <span>Spin Practice Now</span>
+        </button>
+      </div>
 
       {/* Hero Banner & Gamification Streak Grid (Desktop: 12-col span-8/span-4, Tablet: 2-col, Mobile: 1-col) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-stretch">
@@ -734,6 +767,12 @@ export default function StudentDashboardPage() {
           setIsPeerModalOpen(false);
           setSelectedPeerId(null);
         }}
+      />
+
+      {/* Student Speaking & Writing Spin Practice Modal */}
+      <StudentSpinPracticeModal
+        open={spinPracticeOpen}
+        onClose={() => setSpinPracticeOpen(false)}
       />
     </div>
   );

@@ -25,6 +25,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { getMyPremiumStatus } from "@/services/lmsService";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { PlatformFeedbackFloatingTrigger, PlatformFeedbackModal } from "@/components/PlatformFeedbackModal";
+import { StudentSpinPracticeModal } from "@/components/StudentSpinPracticeModal";
 import { listPastDeadlineAssignments } from "@/services/lmsService";
 import { PageLoadingFallback } from "@/components/common/PageLoadingFallback";
 
@@ -56,6 +57,7 @@ export default function StudentLayout() {
   const [premiumPlan, setPremiumPlan] = useState<string>("free");
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [isSpinPracticeOpen, setIsSpinPracticeOpen] = useState(false);
   const location = useLocation();
 
   const isSubmitPage = location.pathname.includes("/submit");
@@ -147,6 +149,33 @@ export default function StudentLayout() {
             <ChevronLeft
               className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? "rotate-180" : ""}`}
             />
+          </button>
+        </div>
+
+        {/* Quick Spin Practice Launcher */}
+        <div className="mb-3">
+          <button
+            type="button"
+            onClick={() => setIsSpinPracticeOpen(true)}
+            className={`group relative w-full flex items-center rounded-xl py-2.5 text-sm font-bold transition-all active:scale-[0.98] cursor-pointer ${
+              isCollapsed ? "justify-center px-0" : "justify-start px-3 gap-3"
+            } bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/30 border border-purple-500`}
+            title="Open Speaking & Writing Spin Practice"
+          >
+            <span className="text-base shrink-0">🎡</span>
+            {!isCollapsed && (
+              <div className="flex items-center justify-between flex-1 min-w-0">
+                <span className="truncate">Spin Practice</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/20 text-white">
+                  IELTS
+                </span>
+              </div>
+            )}
+            {isCollapsed && (
+              <span className="fixed ml-14 px-2.5 py-1 bg-slate-900 text-white text-xs font-medium rounded-md shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-50 whitespace-nowrap">
+                🎡 Spin Practice
+              </span>
+            )}
           </button>
         </div>
 
@@ -260,6 +289,15 @@ export default function StudentLayout() {
               </div>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSpinPracticeOpen(true)}
+                className="px-2.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-bold text-xs shadow-xs transition flex items-center gap-1 cursor-pointer"
+                title="Open Spin Practice"
+              >
+                <span>🎡</span>
+                <span className="hidden xs:inline">Spin</span>
+              </button>
               <ThemeToggle />
               <NavLink
                 to="/student/profile"
@@ -312,6 +350,15 @@ export default function StudentLayout() {
                 </p>
               </div>
             </NavLink>
+            <button
+              type="button"
+              onClick={() => setIsSpinPracticeOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 active:scale-95 text-white border border-purple-500 px-3.5 py-1.5 text-xs font-bold transition shadow-xs cursor-pointer"
+              title="Open Speaking & Writing Spin Practice Wheel"
+            >
+              <span>🎡</span>
+              <span>Spin Practice</span>
+            </button>
             <ThemeToggle />
             <button
               onClick={() => logout()}
@@ -456,6 +503,22 @@ export default function StudentLayout() {
 
             {/* Drawer Nav Items */}
             <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+              {/* Spin Practice Highlight in Drawer */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileDrawerOpen(false);
+                  setIsSpinPracticeOpen(true);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold bg-purple-600 text-white shadow-md shadow-purple-600/20 hover:bg-purple-700 transition active:scale-[0.98] cursor-pointer mb-2"
+              >
+                <span className="text-base shrink-0">🎡</span>
+                <span className="flex-1 text-left truncate">Spin Practice (Speaking &amp; Writing)</span>
+                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-white/20 text-white">
+                  IELTS
+                </span>
+              </button>
+
               {sidebarNavItems.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -523,6 +586,12 @@ export default function StudentLayout() {
       <PlatformFeedbackModal
         isOpen={isFeedbackModalOpen}
         onClose={() => setIsFeedbackModalOpen(false)}
+      />
+
+      {/* Student Speaking & Writing Spin Practice Modal */}
+      <StudentSpinPracticeModal
+        open={isSpinPracticeOpen}
+        onClose={() => setIsSpinPracticeOpen(false)}
       />
     </div>
   );

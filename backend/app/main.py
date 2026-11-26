@@ -564,6 +564,26 @@ async def _run_startup_tasks():
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS verification_code_matched BOOLEAN"))
                         await conn.execute(sa.text("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS tampering_detected BOOLEAN NOT NULL DEFAULT FALSE"))
                         await conn.execute(sa.text("ALTER TABLE groups ADD COLUMN IF NOT EXISTS telegram_group_chat_id VARCHAR(64)"))
+                        # Ensure spin_prompts table exists
+                        await conn.execute(sa.text("""
+                            CREATE TABLE IF NOT EXISTS spin_prompts (
+                                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                                prompt_type VARCHAR(20) NOT NULL,
+                                text TEXT NOT NULL,
+                                category VARCHAR(100),
+                                group_id UUID REFERENCES groups(id) ON DELETE CASCADE,
+                                assignment_id UUID REFERENCES assignments(id) ON DELETE CASCADE,
+                                created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                                order_index INTEGER NOT NULL DEFAULT 0,
+                                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                                updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                            )
+                        """))
+                        await conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_spin_prompts_prompt_type ON spin_prompts(prompt_type)"))
+                        await conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_spin_prompts_group_id ON spin_prompts(group_id)"))
+                        await conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_spin_prompts_assignment_id ON spin_prompts(assignment_id)"))
+                        await conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_spin_prompts_is_active ON spin_prompts(is_active)"))
                         # Ensure PostgreSQL english_level enum has CEFR and IELTS values
                         for val in [
                             "a1", "a2", "b1", "b2", "c1", "c2",
