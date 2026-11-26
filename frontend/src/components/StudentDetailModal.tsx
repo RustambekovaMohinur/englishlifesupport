@@ -429,7 +429,7 @@ export default function StudentDetailModal({
           if (Array.isArray(subDetail.images) && subDetail.images.length > 0) {
             subDetail.images.forEach((im: any) => {
               imgList.push({
-                url: im.url || im.file_url || `/api/submissions/${subDetail.id}/images/${im.id}`,
+                url: im.url || im.file_url || `/api/v1/submissions/${subDetail.id}/images/${im.id}`,
                 name: im.original_name || "Notebook Page",
               });
             });

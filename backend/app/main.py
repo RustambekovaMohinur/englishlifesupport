@@ -390,6 +390,11 @@ app.include_router(chat.router, prefix="/api/v1")
 app.include_router(payments.router, prefix="/api/v1")
 app.include_router(spin_prompts.router, prefix="/api/v1")
 
+# Dual-mount media, submissions, assignments, and spin_prompts on both /api/v1 and /api for seamless frontend compatibility
+app.include_router(submissions.router, prefix="/api")
+app.include_router(assignments.router, prefix="/api")
+app.include_router(spin_prompts.router, prefix="/api")
+
 
 @app.get("/")
 @app.get("/health")

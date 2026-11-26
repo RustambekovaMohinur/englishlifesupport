@@ -400,55 +400,106 @@ async def resolve_submission_file_async(
 ) -> Path:
     """
     Resolves relative_path to an absolute file.
-    If missing from local disk (e.g. after Render restarts container), restores from file_blobs.
-    If not in file_blobs either, creates a clean placeholder note so the user download does not fail with 404.
+    If missing from local disk (e.g. after Render restarts container), restores from B2 or file_blobs.
+    If not in B2 either, returns a safe fallback for image or raises 404 for audio.
     """
     root = get_upload_root()
-    norm_path = relative_path.replace("\\", "/")
+    norm_path = relative_path.replace("\\", "/").lstrip("/")
     candidate = (root / norm_path).resolve()
     if root not in candidate.parents and candidate != root:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file reference")
 
-    # Check local ephemeral disk cache first
-    if candidate.is_file() and candidate.stat().st_size > 0:
-        return candidate
-
-    # Restore from StorageService (B2) or legacy FileBlob if available
-    if db is not None:
-        try:
-            blob = (
-                await db.execute(select(FileBlob).where(FileBlob.file_path == norm_path))
-            ).scalar_one_or_none()
-            if blob:
-                # Download from Backblaze B2 / Object Storage
-                storage_service = get_storage_service()
-                key = blob.storage_key or norm_path
-                data, _ = await storage_service.download_file(key)
-                candidate.parent.mkdir(parents=True, exist_ok=True)
-                candidate.write_bytes(data)
-                return candidate
-        except Exception:
-            pass
-
-    # Graceful fallback: return a valid file instead of 404 error
-    candidate.parent.mkdir(parents=True, exist_ok=True)
     clean_name = fallback_name or Path(relative_path).name
     is_img = any(
         (clean_name or relative_path).lower().endswith(ext)
-        for ext in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"]
+        for ext in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".heic"]
     )
+    is_aud = any(
+        (clean_name or relative_path).lower().endswith(ext)
+        for ext in [".mp3", ".wav", ".m4a", ".webm", ".ogg", ".aac", ".opus"]
+    )
+
+    # If file exists on disk, verify it's not a dummy placeholder from an earlier failed run
+    if candidate.is_file() and candidate.stat().st_size > 0:
+        if candidate.stat().st_size < 500:
+            try:
+                head = candidate.read_bytes()[:60]
+                if b"English Life LMS Attachment" in head:
+                    candidate.unlink(missing_ok=True)
+            except Exception:
+                pass
+        if candidate.is_file() and candidate.stat().st_size > 0:
+            return candidate
+
+    # 1. Attempt download from Backblaze B2 via StorageService
+    clean_key = norm_path.lstrip("/")
+    try:
+        storage_service = get_storage_service()
+        if getattr(storage_service, "is_configured", False):
+            for try_key in [
+                clean_key,
+                clean_key.replace("uploads/", "", 1) if clean_key.startswith("uploads/") else f"uploads/{clean_key}",
+            ]:
+                try:
+                    data, _ = await storage_service.download_file(try_key)
+                    if data and len(data) > 0:
+                        candidate.parent.mkdir(parents=True, exist_ok=True)
+                        candidate.write_bytes(data)
+                        return candidate
+                except Exception:
+                    continue
+    except Exception as e:
+        logger.warning("B2 download attempt error for key '%s': %s", clean_key, e)
+
+    # 2. Restore from legacy FileBlob if available
+    if db is not None:
+        try:
+            blob = (
+                await db.execute(
+                    select(FileBlob).where(
+                        or_(
+                            FileBlob.file_path == norm_path,
+                            FileBlob.file_path == f"/{norm_path}",
+                            FileBlob.storage_key == clean_key,
+                        )
+                    )
+                )
+            ).scalar_one_or_none()
+            if blob:
+                storage_service = get_storage_service()
+                key = blob.storage_key or norm_path
+                data, _ = await storage_service.download_file(key)
+                if data and len(data) > 0:
+                    candidate.parent.mkdir(parents=True, exist_ok=True)
+                    candidate.write_bytes(data)
+                    return candidate
+        except Exception:
+            pass
+
+    # 3. Fallback handling
     if is_img:
         # Write valid 1x1 transparent PNG bytes so browser image decoders never fail
+        candidate.parent.mkdir(parents=True, exist_ok=True)
         TINY_PNG = (
             b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4"
             b"\x00\x00\x00\rIDATx\x9cc`\x00\x00\x00\x02\x00\x01H\xaf\xa4q\x00\x00\x00\x00IEND\xaeB`\x82"
         )
         candidate.write_bytes(TINY_PNG)
-    else:
-        candidate.write_text(
-            f"English Life LMS Attachment\nFile: {clean_name}\nRetrieved from English Life cloud storage.\n",
-            encoding="utf-8",
+        return candidate
+
+    if is_aud:
+        # Raise 404 for audio files if not found, DO NOT write dummy text
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Audio recording file not found in storage",
         )
+
+    # For general non-audio documents:
+    candidate.parent.mkdir(parents=True, exist_ok=True)
+    candidate.write_text(
+        f"English Life LMS Attachment\nFile: {clean_name}\n",
+        encoding="utf-8",
+    )
     return candidate
 
 

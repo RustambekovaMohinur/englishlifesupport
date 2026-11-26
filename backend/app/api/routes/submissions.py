@@ -228,7 +228,7 @@ def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = 
             except Exception:
                 img_resolved_url = None
 
-        fallback_endpoint = f"/api/submissions/{sub.id}/images/{img.id}"
+        fallback_endpoint = f"/api/v1/submissions/{sub.id}/images/{img.id}"
         final_url = img_resolved_url or fallback_endpoint
 
         images_out.append(
@@ -278,7 +278,7 @@ def _submission_to_out(sub: Submission, vocab_attempt: VocabAttemptOut | None = 
             except Exception:
                 primary_file_url = None
         if not primary_file_url:
-            primary_file_url = f"/api/submissions/{sub.id}/file"
+            primary_file_url = f"/api/v1/submissions/{sub.id}/file"
 
     return SubmissionOut(
         id=sub.id,
@@ -1649,7 +1649,7 @@ async def compare_duplicate_submission(
                     img_resolved_url = storage_svc._sync_generate_presigned_url(im.file_path, expires_in=7200)
                 except Exception:
                     img_resolved_url = None
-            img_urls.append(img_resolved_url or f"/api/submissions/{s.id}/images/{im.id}")
+            img_urls.append(img_resolved_url or f"/api/v1/submissions/{s.id}/images/{im.id}")
 
         file_url = None
         if s.file_path:
@@ -1660,7 +1660,7 @@ async def compare_duplicate_submission(
                     file_url = storage_svc._sync_generate_presigned_url(s.file_path, expires_in=7200)
                 except Exception:
                     file_url = None
-            file_url = file_url or f"/api/submissions/{s.id}/file"
+            file_url = file_url or f"/api/v1/submissions/{s.id}/file"
 
         # If image_urls is empty but file is an image, include in image_urls as well
         if not img_urls and s.file_path:

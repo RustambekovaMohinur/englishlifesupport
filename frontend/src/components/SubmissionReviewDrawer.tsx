@@ -310,7 +310,7 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                         onClick={() => setLightboxIndex(-1)}
                       >
                         <AuthenticatedImage
-                          url={submission.file_url || `/api/submissions/${submission.id}/file`}
+                          url={submission.file_url || `/api/v1/submissions/${submission.id}/file`}
                           alt={submission.file_original_name || "Submitted image"}
                           className="w-full h-full object-contain max-h-64"
                         />
@@ -384,7 +384,7 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
                             className="aspect-square rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:opacity-90 hover:scale-[1.02] transition shadow-2xs group relative bg-black/5"
                           >
                             <AuthenticatedImage
-                              url={img.url || img.file_url || `/api/submissions/${submission.id}/files/${img.id}`}
+                              url={img.url || img.file_url || `/api/v1/submissions/${submission.id}/files/${img.id}`}
                               alt={img.original_name || `Notebook scan ${idx + 1}`}
                               className="w-full h-full object-cover"
                             />
@@ -550,9 +550,9 @@ export const SubmissionReviewDrawer: React.FC<SubmissionReviewDrawerProps> = ({
               isOpen={lightboxIndex !== null}
               images={
                 lightboxIndex === -1 && submission.file_url && isImageFile
-                  ? [{ url: submission.file_url || `/api/submissions/${submission.id}/file`, name: submission.file_original_name || "Image" }]
+                  ? [{ url: submission.file_url || `/api/v1/submissions/${submission.id}/file`, name: submission.file_original_name || "Image" }]
                   : (submission.images && submission.images.length > 0 ? submission.images : submission.attachments || []).map((img, idx) => ({
-                      url: img.url || img.file_url || `/api/submissions/${submission.id}/images/${img.id}`,
+                      url: img.url || img.file_url || `/api/v1/submissions/${submission.id}/images/${img.id}`,
                       name: img.original_name || `Scan ${idx + 1}`,
                     }))
               }

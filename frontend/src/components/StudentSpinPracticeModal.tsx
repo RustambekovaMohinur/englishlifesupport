@@ -20,6 +20,7 @@ import { Modal, Spinner } from "@/components/ui";
 import { listSpinPrompts } from "@/services/lmsService";
 import { SpinPrompt } from "@/types";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 interface StudentSpinPracticeModalProps {
   open: boolean;
@@ -70,6 +71,8 @@ export const StudentSpinPracticeModal: React.FC<StudentSpinPracticeModalProps> =
   defaultMode = "speaking",
 }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const studentGroupId = (user as any)?.group_id || (user as any)?.student_profile?.group_id || undefined;
   const [mode, setMode] = useState<"speaking" | "writing">(defaultMode);
   const [prompts, setPrompts] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -103,6 +106,7 @@ export const StudentSpinPracticeModal: React.FC<StudentSpinPracticeModalProps> =
     setIsLoading(true);
     listSpinPrompts({
       prompt_type: mode,
+      group_id: studentGroupId,
       active_only: true,
       fallback: true,
     })
@@ -122,7 +126,7 @@ export const StudentSpinPracticeModal: React.FC<StudentSpinPracticeModalProps> =
       .finally(() => {
         setIsLoading(false);
       });
-  }, [open, mode]);
+  }, [open, mode, studentGroupId]);
 
   // Timer logic
   useEffect(() => {
@@ -243,11 +247,15 @@ export const StudentSpinPracticeModal: React.FC<StudentSpinPracticeModalProps> =
     const randomIndex = Math.floor(Math.random() * activePromptList.length);
     const chosen = activePromptList[randomIndex];
 
-    // Calculate rotation: 5 full turns + target angle
+    // Calculate rotation: 5 full turns + target angle to land directly on top needle (270 deg)
     const extraSpins = 5 + Math.floor(Math.random() * 3);
-    const targetAngle = 360 * extraSpins + (360 - (randomIndex * segmentAngle + segmentAngle / 2));
+    const targetSegmentCenter = randomIndex * segmentAngle + segmentAngle / 2;
+    // 270 deg is top pointer (North needle)
+    const normalizedTarget = ((270 - targetSegmentCenter) % 360 + 360) % 360;
     const startAngle = rotationAngle % 360;
-    const totalDistance = targetAngle;
+    let delta = normalizedTarget - startAngle;
+    if (delta < 0) delta += 360;
+    const totalDistance = 360 * extraSpins + delta;
     const duration = 2800;
     const startTime = performance.now();
 
@@ -268,9 +276,9 @@ export const StudentSpinPracticeModal: React.FC<StudentSpinPracticeModalProps> =
       } else {
         setIsSpinning(false);
         setChosenPrompt(chosen);
-        setChosenCategory(mode === "speaking" ? "IELTS Speaking Prompt" : "IELTS Writing Topic");
+        setChosenCategory(`Prompt #${randomIndex + 1} • ${mode === "speaking" ? "Speaking Question" : "Writing Topic"}`);
         playSoundEffect(587, 0.2);
-        toast.success(`🎡 Spun: ${chosen.slice(0, 40)}...`, { icon: "🎯" });
+        toast.success(`🎡 Prompt #${randomIndex + 1}: ${chosen.slice(0, 35)}...`, { icon: "🎯" });
       }
     };
 

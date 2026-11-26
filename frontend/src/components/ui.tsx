@@ -178,8 +178,10 @@ export function AuthenticatedAudio({ url, className }: { url: string; className?
   const [src, setSrc] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
+    setHasError(false);
     if (!url) return;
     if (url.startsWith("blob:") || url.startsWith("data:")) {
       setSrc(url);
@@ -240,6 +242,24 @@ export function AuthenticatedAudio({ url, className }: { url: string; className?
     }
   }
 
+  if (hasError) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-900/50">
+        <span>Audio recording unavailable</span>
+        <button
+          type="button"
+          onClick={() => {
+            setHasError(false);
+            setSrc(getAuthenticatedImageUrl(url));
+          }}
+          className="underline text-[11px] font-medium hover:text-amber-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   if (!src) return <p className="text-xs text-neutral-400">Loading audio...</p>;
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
@@ -250,6 +270,7 @@ export function AuthenticatedAudio({ url, className }: { url: string; className?
         onLoadedMetadata={handleLoadedMetadata}
         onDurationChange={handleLoadedMetadata}
         onCanPlay={handleLoadedMetadata}
+        onError={() => setHasError(true)}
         src={src}
         className={className}
       />

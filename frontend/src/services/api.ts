@@ -209,15 +209,18 @@ export function getFileUrl(path: string | null | undefined): string {
   if (path.startsWith("blob:") || path.startsWith("data:")) return path;
 
   let cleanPath = path;
-  if (cleanPath.startsWith("/submissions/") || cleanPath.startsWith("/assignments/") || cleanPath.startsWith("/users/")) {
-    cleanPath = `/api${cleanPath}`;
+  if (cleanPath.startsWith("/api/v1/")) {
+    // Already prefixed with /api/v1
+  } else if (cleanPath.startsWith("/api/")) {
+    cleanPath = `/api/v1${cleanPath.slice(4)}`;
+  } else if (cleanPath.startsWith("/submissions/") || cleanPath.startsWith("/assignments/") || cleanPath.startsWith("/users/")) {
+    cleanPath = `/api/v1${cleanPath}`;
   } else if (
-    !cleanPath.startsWith("/api/") &&
     !cleanPath.startsWith("/media/") &&
     !cleanPath.startsWith("/static/") &&
     !cleanPath.startsWith("/uploads/")
   ) {
-    cleanPath = cleanPath.startsWith("/") ? `/api${cleanPath}` : `/api/${cleanPath}`;
+    cleanPath = cleanPath.startsWith("/") ? `/api/v1${cleanPath}` : `/api/v1/${cleanPath}`;
   }
 
   if (RAW_API_URL && RAW_API_URL.startsWith("http")) {
@@ -265,6 +268,7 @@ function toApiPath(fileUrl: string): string {
       fileUrl = parsed.pathname;
     }
   } catch {}
+  if (fileUrl.startsWith("/api/v1/")) return fileUrl.slice(7);
   if (fileUrl.startsWith("/api/")) return fileUrl.slice(4);
   if (fileUrl.startsWith("/")) return fileUrl;
   return `/${fileUrl}`;
@@ -333,6 +337,15 @@ export async function fetchAuthenticatedBlobUrl(fileUrl: string): Promise<string
   const finalPath = needsNoRedirect ? `${path}${sep}redirect=false` : path;
 
   const { data, headers } = await api.get<Blob>(finalPath, { responseType: "blob" });
+  if (data instanceof Blob && data.type?.includes("application/json")) {
+    const text = await data.text();
+    try {
+      const err = JSON.parse(text);
+      throw new Error(err?.detail || err?.message || "Failed to load media file");
+    } catch (e: any) {
+      throw new Error(e?.message || "Failed to load media file");
+    }
+  }
   let blob = data;
   const rawContentType = headers?.["content-type"] || headers?.["Content-Type"] || blob.type;
   const contentType = typeof rawContentType === "string" ? rawContentType : "";

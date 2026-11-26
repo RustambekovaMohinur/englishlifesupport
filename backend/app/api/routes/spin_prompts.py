@@ -62,11 +62,21 @@ async def list_spin_prompts(
 ):
     """
     List spin prompts with automatic hierarchical scoping and fallback:
-    1. Specifically scoped to assignment_id if provided.
-    2. Specifically scoped to group_id if provided.
-    3. Global/shared prompts (group_id is NULL and assignment_id is NULL).
-    4. Built-in defaults if database has zero prompts for the type.
+    1. Auto-resolves student's group_id if querying as a student.
+    2. Specifically scoped to assignment_id if provided.
+    3. Specifically scoped to group_id if provided or auto-resolved.
+    4. Global/shared prompts (group_id is NULL and assignment_id is NULL).
+    5. Built-in defaults if database has zero prompts for the type.
     """
+    # Auto-resolve student's group_id if not explicitly provided
+    if group_id is None:
+        role_str = str(getattr(current_user, "role", "")).lower()
+        if "student" in role_str:
+            from app.models.student import StudentProfile
+            sp = (await db.execute(select(StudentProfile).where(StudentProfile.user_id == current_user.id))).scalar_one_or_none()
+            if sp and sp.group_id:
+                group_id = sp.group_id
+
     conditions = []
     if prompt_type:
         conditions.append(SpinPrompt.prompt_type == prompt_type)
@@ -85,7 +95,7 @@ async def list_spin_prompts(
         if items or not fallback:
             return items
 
-    # Next check group-level prompts
+    # Next check group-level prompts (by UUID or matching cohort name)
     if group_id:
         stmt = (
             select(SpinPrompt)
@@ -98,6 +108,31 @@ async def list_spin_prompts(
         )
         res = await db.execute(stmt)
         items = list(res.scalars().all())
+        if items or not fallback:
+            return items
+
+        # Fallback: check if the student's group name matches any group with prompts (e.g. 'pre')
+        try:
+            curr_group = await db.get(Group, group_id)
+            if curr_group and curr_group.name:
+                g_prefix = curr_group.name.strip().split()[0].lower()
+                related_groups_stmt = select(Group.id).where(Group.name.ilike(f"%{g_prefix}%"))
+                related_gids = (await db.execute(related_groups_stmt)).scalars().all()
+                if related_gids:
+                    rel_stmt = (
+                        select(SpinPrompt)
+                        .where(
+                            *conditions,
+                            SpinPrompt.group_id.in_(related_gids),
+                            SpinPrompt.assignment_id == None,  # noqa: E711
+                        )
+                        .order_by(asc(SpinPrompt.order_index), desc(SpinPrompt.created_at))
+                    )
+                    rel_items = list((await db.execute(rel_stmt)).scalars().all())
+                    if rel_items:
+                        return rel_items
+        except Exception:
+            pass
         if items or not fallback:
             return items
 

@@ -1094,7 +1094,7 @@ function GradingSlideOver({
         ]
       : []),
     ...(submission?.images || []).map((img) => ({
-      url: `/api/submissions/${submission!.id}/images/${img.id}`,
+      url: img.url || `/api/v1/submissions/${submission!.id}/images/${img.id}`,
       name: img.original_name,
     })),
   ];
