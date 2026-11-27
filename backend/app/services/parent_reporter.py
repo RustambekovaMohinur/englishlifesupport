@@ -7,7 +7,7 @@ and dispatches them automatically to parents via Telegram Bot.
 import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import and_, select
@@ -337,22 +337,40 @@ async def send_manual_parent_digest(student_id: uuid.UUID, db: AsyncSession) -> 
     }
 
 
+def is_active_daytime_hours(start_hour: int = 8, end_hour: int = 22) -> bool:
+    """Return True if current time in Asia/Tashkent (UTC+5) is within active daytime hours."""
+    now_utc = datetime.now(timezone.utc)
+    tashkent_hour = (now_utc.hour + 5) % 24
+    return start_hour <= tashkent_hour < end_hour
+
+
 async def start_parent_reporter_loop():
     """
-    Background worker that runs every 60 seconds and dispatches
-    digests for newly expired assignments.
+    Background worker that runs during active daytime hours (08:00–22:00 Asia/Tashkent UTC+5)
+    every 60 minutes and dispatches digests for newly expired assignments.
+    During night hours, pauses without querying DB so Neon scales to zero compute.
     """
-    logger.info("Parent Notification Reporter background loop initialized.")
+    logger.info("Parent Notification Reporter background loop initialized (daytime 60m sweep, idle night).")
+    await asyncio.sleep(20.0)  # Initial startup grace period
+    consecutive_errors = 0
     while True:
         try:
+            if not is_active_daytime_hours(8, 22):
+                logger.debug("Parent Notification Reporter: outside active hours (08:00-22:00 Tashkent); sleeping 30m.")
+                await asyncio.sleep(1800)
+                continue
+
             async with AsyncSessionLocal() as db:
                 dispatched = await dispatch_due_assignment_digests(db)
                 if dispatched > 0:
                     logger.info("Dispatched %d automated parent Telegram digests.", dispatched)
+            consecutive_errors = 0
+            await asyncio.sleep(3600)  # Check every 60 minutes during active daytime
         except asyncio.CancelledError:
             logger.info("Parent Notification Reporter loop cancelled.")
             break
         except Exception as exc:
-            logger.warning("Error in parent notification background loop: %s", exc)
-
-        await asyncio.sleep(60)
+            consecutive_errors += 1
+            backoff_delay = min(300 * (2 ** min(consecutive_errors - 1, 4)), 3600)
+            logger.warning("Error in parent notification background loop (backoff %ds): %s", backoff_delay, exc)
+            await asyncio.sleep(backoff_delay)

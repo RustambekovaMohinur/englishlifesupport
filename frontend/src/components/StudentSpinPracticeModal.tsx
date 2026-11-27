@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { Modal, Spinner } from "@/components/ui";
-import { listSpinPrompts } from "@/services/lmsService";
+import { getMyUnifiedProfile, listSpinPrompts } from "@/services/lmsService";
 import { SpinPrompt } from "@/types";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -72,7 +72,9 @@ export const StudentSpinPracticeModal: React.FC<StudentSpinPracticeModalProps> =
 }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const studentGroupId = (user as any)?.group_id || (user as any)?.student_profile?.group_id || undefined;
+  const [activeGroupId, setActiveGroupId] = useState<string | undefined>(
+    (user as any)?.group_id || (user as any)?.student_profile?.group_id || undefined
+  );
   const [mode, setMode] = useState<"speaking" | "writing">(defaultMode);
   const [prompts, setPrompts] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -100,13 +102,26 @@ export const StudentSpinPracticeModal: React.FC<StudentSpinPracticeModalProps> =
     }
   }, [open, defaultMode]);
 
+  // Resolve group_id if not present in initial user state
+  useEffect(() => {
+    if (open && !activeGroupId) {
+      getMyUnifiedProfile()
+        .then((profile) => {
+          if (profile?.group_id) {
+            setActiveGroupId(profile.group_id);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [open, activeGroupId]);
+
   // Load prompts for current mode
   useEffect(() => {
     if (!open) return;
     setIsLoading(true);
     listSpinPrompts({
       prompt_type: mode,
-      group_id: studentGroupId,
+      group_id: activeGroupId,
       active_only: true,
       fallback: true,
     })
@@ -126,7 +141,7 @@ export const StudentSpinPracticeModal: React.FC<StudentSpinPracticeModalProps> =
       .finally(() => {
         setIsLoading(false);
       });
-  }, [open, mode, studentGroupId]);
+  }, [open, mode, activeGroupId]);
 
   // Timer logic
   useEffect(() => {

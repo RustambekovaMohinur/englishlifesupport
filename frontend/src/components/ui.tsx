@@ -177,37 +177,89 @@ export function FileDownloadButton({
 export function AuthenticatedAudio({ url, className }: { url: string; className?: string }) {
   const [src, setSrc] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
   const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Helper to format MM:SS
+  const formatTime = (secs: number) => {
+    if (!Number.isFinite(secs) || isNaN(secs) || secs <= 0) return "0:00";
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
 
   useEffect(() => {
     setHasError(false);
-    if (!url) return;
-    if (url.startsWith("blob:") || url.startsWith("data:")) {
-      setSrc(url);
-      return;
-    }
-    // If it's a direct presigned cloud URL or external CDN, use directly
-    if ((url.startsWith("http://") || url.startsWith("https://")) && !url.includes("/api/")) {
-      setSrc(url);
+    setIsLoading(true);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    if (!url) {
+      setIsLoading(false);
       return;
     }
 
     let objectUrl: string | null = null;
     let cancelled = false;
 
-    // Use authenticated blob fetching to stream bytes with correct mime-type & CORS
+    const setupAudioSrc = async (resolvedUrl: string, rawBlob?: Blob) => {
+      if (cancelled) return;
+      setSrc(resolvedUrl);
+      setIsLoading(false);
+
+      // Attempt decoding WebM / audio duration via Web Audio API to fix missing EBML header duration
+      try {
+        let arrayBuffer: ArrayBuffer | null = null;
+        if (rawBlob) {
+          arrayBuffer = await rawBlob.arrayBuffer();
+        } else {
+          const resp = await fetch(resolvedUrl);
+          arrayBuffer = await resp.arrayBuffer();
+        }
+        if (arrayBuffer && !cancelled) {
+          const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioCtx) {
+            const ctx = new AudioCtx();
+            const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
+            ctx.close();
+            if (decoded && Number.isFinite(decoded.duration) && decoded.duration > 0 && !cancelled) {
+              setDuration(decoded.duration);
+            }
+          }
+        }
+      } catch {
+        // Fallback to audio element metadata events
+      }
+    };
+
+    if (url.startsWith("blob:") || url.startsWith("data:")) {
+      setupAudioSrc(url);
+      return;
+    }
+
+    if ((url.startsWith("http://") || url.startsWith("https://")) && !url.includes("/api/")) {
+      setupAudioSrc(url);
+      return;
+    }
+
+    // Authenticated blob fetching
     fetchAuthenticatedBlobUrl(url)
-      .then((blobUrl) => {
+      .then(async (blobUrl) => {
+        if (cancelled) {
+          URL.revokeObjectURL(blobUrl);
+          return;
+        }
         objectUrl = blobUrl;
-        if (!cancelled) setSrc(blobUrl);
-        else URL.revokeObjectURL(blobUrl);
+        setupAudioSrc(blobUrl);
       })
       .catch(() => {
-        // Fallback to tokenized direct URL if blob fetching failed
         if (!cancelled) {
           const fallbackDirect = getAuthenticatedImageUrl(url);
-          setSrc(fallbackDirect);
+          setupAudioSrc(fallbackDirect);
         }
       });
 
@@ -220,27 +272,36 @@ export function AuthenticatedAudio({ url, className }: { url: string; className?
   const handleLoadedMetadata = () => {
     const el = audioRef.current;
     if (!el) return;
-    // Fix for WebM audio duration bug in browsers (Infinity or NaN)
-    if (el.duration === Infinity || isNaN(el.duration)) {
-      const onTimeUpdate = () => {
-        el.removeEventListener("timeupdate", onTimeUpdate);
-        el.currentTime = 0;
-      };
-      el.addEventListener("timeupdate", onTimeUpdate);
-      try {
-        el.currentTime = 1e101;
-      } catch {
-        el.removeEventListener("timeupdate", onTimeUpdate);
-      }
+    if (Number.isFinite(el.duration) && el.duration > 0 && duration <= 0) {
+      setDuration(el.duration);
     }
   };
 
-  function changeRate(rate: number) {
+  const togglePlay = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (isPlaying) {
+      el.pause();
+      setIsPlaying(false);
+    } else {
+      el.play().then(() => setIsPlaying(true)).catch(() => setHasError(true));
+    }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const targetTime = parseFloat(e.target.value);
+    setCurrentTime(targetTime);
+    if (audioRef.current) {
+      audioRef.current.currentTime = targetTime;
+    }
+  };
+
+  const changeRate = (rate: number) => {
     setPlaybackRate(rate);
     if (audioRef.current) {
       audioRef.current.playbackRate = rate;
     }
-  }
+  };
 
   if (hasError) {
     return (
@@ -252,7 +313,7 @@ export function AuthenticatedAudio({ url, className }: { url: string; className?
             setHasError(false);
             setSrc(getAuthenticatedImageUrl(url));
           }}
-          className="underline text-[11px] font-medium hover:text-amber-700"
+          className="underline text-[11px] font-medium hover:text-amber-700 cursor-pointer"
         >
           Retry
         </button>
@@ -260,27 +321,84 @@ export function AuthenticatedAudio({ url, className }: { url: string; className?
     );
   }
 
-  if (!src) return <p className="text-xs text-neutral-400">Loading audio...</p>;
+  if (isLoading || !src) {
+    return (
+      <div className="flex items-center gap-2 p-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800">
+        <span className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs text-zinc-500">Loading audio...</span>
+      </div>
+    );
+  }
+
+  const effectiveDuration = duration > 0 ? duration : 0;
+
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+    <div className={`p-2.5 sm:p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 ${className || ""}`}>
       <audio
         ref={audioRef}
-        controls
         preload="auto"
         onLoadedMetadata={handleLoadedMetadata}
         onDurationChange={handleLoadedMetadata}
         onCanPlay={handleLoadedMetadata}
+        onTimeUpdate={() => {
+          if (audioRef.current) {
+            setCurrentTime(audioRef.current.currentTime);
+            if (Number.isFinite(audioRef.current.duration) && audioRef.current.duration > 0 && duration <= 0) {
+              setDuration(audioRef.current.duration);
+            }
+          }
+        }}
+        onEnded={() => {
+          setIsPlaying(false);
+          setCurrentTime(0);
+        }}
         onError={() => setHasError(true)}
         src={src}
-        className={className}
+        className="hidden"
       />
-      <div className="flex items-center gap-1 shrink-0">
+
+      {/* Play/Pause Button */}
+      <button
+        type="button"
+        onClick={togglePlay}
+        aria-label={isPlaying ? "Pause audio" : "Play audio"}
+        className="w-9 h-9 rounded-full bg-brand-600 hover:bg-brand-700 text-white flex items-center justify-center shrink-0 shadow-sm transition active:scale-95 cursor-pointer"
+      >
+        {isPlaying ? (
+          <span className="text-xs font-bold">❚❚</span>
+        ) : (
+          <span className="text-xs font-bold ml-0.5">▶</span>
+        )}
+      </button>
+
+      {/* Scrub Bar & Timestamps */}
+      <div className="flex-1 flex flex-col gap-1 min-w-[140px]">
+        <div className="relative flex items-center">
+          <input
+            type="range"
+            min={0}
+            max={effectiveDuration > 0 ? effectiveDuration : 100}
+            step={0.1}
+            value={currentTime}
+            onChange={handleSeek}
+            disabled={effectiveDuration <= 0}
+            className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-brand-600 dark:accent-brand-500"
+          />
+        </div>
+        <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
+          <span>{formatTime(currentTime)}</span>
+          <span>{effectiveDuration > 0 ? formatTime(effectiveDuration) : "—"}</span>
+        </div>
+      </div>
+
+      {/* Speed multiplier selector */}
+      <div className="flex items-center gap-1 shrink-0 self-end sm:self-center">
         {[1.0, 1.25, 1.5, 2.0].map((rate) => (
           <button
             key={rate}
             type="button"
             onClick={() => changeRate(rate)}
-            className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded transition ${
+            className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded transition cursor-pointer ${
               playbackRate === rate
                 ? "bg-brand-600 text-white shadow-xs"
                 : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"

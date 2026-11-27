@@ -120,8 +120,8 @@ async def check_and_send_class_reminders(db: AsyncSession) -> int:
         diff_seconds = (class_time_today - now_tashkent).total_seconds()
         diff_minutes = diff_seconds / 60.0
 
-        # Check if class starts in approximately 30 minutes (20 to 35 minute window)
-        if not (20.0 <= diff_minutes <= 35.0):
+        # Check if class starts in approximately 30 minutes (15 to 40 minute window)
+        if not (15.0 <= diff_minutes <= 40.0):
             continue
 
         class_time_str = f"{h:02d}:{m:02d}"
@@ -219,22 +219,37 @@ async def check_and_send_class_reminders(db: AsyncSession) -> int:
     return total_sent
 
 
+def is_active_class_hours() -> bool:
+    """Return True if current Tashkent time is between 07:30 and 21:00."""
+    now_tashkent = datetime.now(TASHKENT_TZ)
+    hour_float = now_tashkent.hour + now_tashkent.minute / 60.0
+    return 7.5 <= hour_float <= 21.0
+
+
 async def start_class_reminder_loop() -> None:
     """
-    Background worker loop that checks upcoming class schedules every 60 seconds.
-    Runs persistently inside FastAPI's event loop.
+    Background worker loop that checks upcoming class schedules every 10 minutes during daytime (07:30–21:00 Tashkent).
+    Pauses without database activity during night hours so Neon serverless auto-suspends.
     """
-    logger.info("Starting 30-minute pre-class reminder scheduler loop...")
-    await asyncio.sleep(10.0)  # Initial grace delay after startup
+    logger.info("Starting 30-minute pre-class reminder scheduler loop (10m daytime sweep, idle night)...")
+    await asyncio.sleep(15.0)  # Initial grace delay after startup
+    consecutive_errors = 0
     while True:
         try:
+            if not is_active_class_hours():
+                logger.debug("Class reminder loop: outside class schedule hours; sleeping 30m.")
+                await asyncio.sleep(1800)
+                continue
+
             async with AsyncSessionLocal() as db:
                 await check_and_send_class_reminders(db)
+            consecutive_errors = 0
+            await asyncio.sleep(600.0)  # 10 minutes between sweeps during active class hours
         except asyncio.CancelledError:
             logger.info("Class reminder scheduler loop stopped.")
             break
         except Exception as exc:
-            logger.exception("Error in class reminder loop iteration: %s", exc)
-
-        # Check every 60 seconds
-        await asyncio.sleep(60.0)
+            consecutive_errors += 1
+            backoff_delay = min(120 * (2 ** min(consecutive_errors - 1, 4)), 1800)
+            logger.warning("Error in class reminder loop iteration (backoff %ds): %s", backoff_delay, exc)
+            await asyncio.sleep(backoff_delay)

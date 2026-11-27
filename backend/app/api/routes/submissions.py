@@ -120,7 +120,7 @@ from app.schemas.submission import (
 
 
 def _detect_audio_mime_type(filename: str = "", default_mime: str = "") -> str:
-    fn = (filename or "").lower()
+    fn = (filename or "").lower().split("?")[0].split("#")[0]
     dm = (default_mime or "").lower()
     if fn.endswith(".m4a") or "m4a" in dm or fn.endswith(".mp4"):
         return "audio/mp4"
@@ -146,7 +146,7 @@ def _detect_audio_mime_type(filename: str = "", default_mime: str = "") -> str:
 
 
 def _detect_file_mime_type(filename: str = "", default_mime: str = "") -> str:
-    fn = (filename or "").lower()
+    fn = (filename or "").lower().split("?")[0].split("#")[0]
     dm = (default_mime or "").lower()
     if fn.endswith(".jpg") or fn.endswith(".jpeg") or "jpeg" in dm or "jpg" in dm:
         return "image/jpeg"
@@ -156,6 +156,8 @@ def _detect_file_mime_type(filename: str = "", default_mime: str = "") -> str:
         return "image/webp"
     if fn.endswith(".gif") or "gif" in dm:
         return "image/gif"
+    if fn.endswith(".heic") or fn.endswith(".heif") or "heic" in dm or "heif" in dm:
+        return "image/heic"
     if fn.endswith(".svg") or "svg" in dm:
         return "image/svg+xml"
     if fn.endswith(".bmp") or "bmp" in dm:
@@ -1540,7 +1542,7 @@ async def delete_submission_image(
 @router.get("/{submission_id}/files/{image_id}")
 async def get_submission_image(
     submission_id: uuid.UUID,
-    image_id: uuid.UUID,
+    image_id: str,
     redirect: bool = Query(True, description="Whether to redirect to cloud storage or stream directly"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1550,14 +1552,48 @@ async def get_submission_image(
     submission = await _get_submission_or_404(submission_id, db)
     await _authorize_submission_access(submission, current_user, db)
 
-    img = (
-        await db.execute(
-            select(SubmissionImage).where(
-                SubmissionImage.id == image_id,
-                SubmissionImage.submission_id == submission_id,
+    parsed_uuid: uuid.UUID | None = None
+    try:
+        parsed_uuid = uuid.UUID(str(image_id))
+    except (ValueError, TypeError, AttributeError):
+        parsed_uuid = None
+
+    img = None
+    if parsed_uuid:
+        img = (
+            await db.execute(
+                select(SubmissionImage).where(
+                    SubmissionImage.id == parsed_uuid,
+                    SubmissionImage.submission_id == submission_id,
+                )
             )
-        )
-    ).scalars().first()
+        ).scalars().first()
+
+    if not img:
+        # Match by filename or partial path
+        img = (
+            await db.execute(
+                select(SubmissionImage).where(
+                    SubmissionImage.submission_id == submission_id,
+                    or_(
+                        SubmissionImage.file_original_name == image_id,
+                        SubmissionImage.file_path.ilike(f"%{image_id}%"),
+                    ),
+                )
+            )
+        ).scalars().first()
+
+    if not img and str(image_id).isdigit():
+        idx = int(image_id)
+        all_imgs = (
+            await db.execute(
+                select(SubmissionImage)
+                .where(SubmissionImage.submission_id == submission_id)
+                .order_by(SubmissionImage.created_at.asc())
+            )
+        ).scalars().all()
+        if 0 <= idx < len(all_imgs):
+            img = all_imgs[idx]
 
     target_path = img.file_path if img else submission.file_path
     orig_name = img.file_original_name if img else submission.file_original_name

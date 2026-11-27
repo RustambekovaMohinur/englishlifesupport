@@ -40,6 +40,9 @@ DB_QUOTA_ERROR_PHRASES: tuple[str, ...] = (
     "could not connect",
     "ssl connection has been closed",
     "server closed the connection",
+    "exceeded the quota",
+    "insufficientresourceserror",
+    "insufficient_resources",
 )
 
 
@@ -145,10 +148,10 @@ _clean_url, _connect_args = _build_async_engine_url(_raw_url)
 # ---------------------------------------------------------------------------
 # Engine configuration
 #
-# Neon free-tier → NullPool: every request gets one PgBouncer slot for the
-#   duration of the async-with block, then releases it immediately.
-#   Raw-connection usage equals the number of *concurrent* in-flight requests
-#   rather than a standing pool, staying well within the 10-connection ceiling.
+# Neon serverless: bounded connection pool (pool_size=3, max_overflow=5, pool_recycle=300,
+#   pool_pre_ping=True, pool_timeout=20). Reuses warm connections during active daytime
+#   requests without exhausting connection limits, and recycles idle connections cleanly
+#   so Neon can auto-suspend promptly during quiet periods.
 #
 # Non-Neon (local / dedicated Postgres) → small bounded pool that still
 #   recycles connections to avoid long-idle staleness.
@@ -156,11 +159,15 @@ _clean_url, _connect_args = _build_async_engine_url(_raw_url)
 if _IS_NEON:
     engine = create_async_engine(
         _clean_url,
-        poolclass=NullPool,   # No persistent pool — Neon pooler handles multiplexing
+        pool_size=3,
+        max_overflow=5,
+        pool_recycle=300,
+        pool_pre_ping=True,
+        pool_timeout=20,
         echo=False,
         connect_args=_connect_args,
     )
-    logger.info("Neon DB detected: using NullPool (host: %s)", _clean_url.host)
+    logger.info("Neon DB detected: using tuned serverless pool (pool_size=3, max_overflow=5, pool_recycle=300, host: %s)", _clean_url.host)
 elif _clean_url.get_backend_name() == "sqlite":
     engine = create_async_engine(
         _clean_url,

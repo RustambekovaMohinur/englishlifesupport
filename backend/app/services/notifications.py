@@ -7,7 +7,7 @@ Features:
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from typing import Any
 import uuid
@@ -280,14 +280,29 @@ async def check_and_send_missing_homework_alerts(
     }
 
 
+def is_active_daytime_hours(start_hour: int = 8, end_hour: int = 22) -> bool:
+    """Return True if current time in Asia/Tashkent (UTC+5) is within active daytime hours."""
+    now_utc = datetime.now(timezone.utc)
+    tashkent_hour = (now_utc.hour + 5) % 24
+    return start_hour <= tashkent_hour < end_hour
+
+
 async def start_missing_homework_notification_loop():
     """
-    Background worker loop that runs periodically (every 5 minutes)
-    to check upcoming active assignments and dispatch deduplicated alerts to parents.
+    Background worker loop that runs during active daytime hours (08:00–22:00 Asia/Tashkent UTC+5)
+    every 60 minutes to check upcoming active assignments and dispatch deduplicated alerts to parents.
+    During night hours, pauses without querying DB so Neon scales to zero compute.
     """
-    logger.info("Missing Homework Notification scheduler loop initialized.")
+    logger.info("Missing Homework Notification scheduler loop initialized (daytime 60m sweep, idle night).")
+    await asyncio.sleep(40.0)  # Initial grace delay after startup
+    consecutive_errors = 0
     while True:
         try:
+            if not is_active_daytime_hours(8, 22):
+                logger.debug("Missing Homework Notification: outside active hours (08:00-22:00 Tashkent); sleeping 30m.")
+                await asyncio.sleep(1800)
+                continue
+
             async with AsyncSessionLocal() as db:
                 result = await check_and_send_missing_homework_alerts(db)
                 if result.get("total_alerts_sent", 0) > 0:
@@ -297,11 +312,13 @@ async def start_missing_homework_notification_loop():
                         result["telegram_notifications_sent"],
                         result["sms_notifications_sent"],
                     )
+            consecutive_errors = 0
+            await asyncio.sleep(3600)  # Sweep every 60 minutes during daytime
         except asyncio.CancelledError:
             logger.info("Missing Homework Notification scheduler loop cancelled.")
             break
         except Exception as exc:
-            logger.warning("Error in missing homework notification scheduler loop: %s", exc)
-
-        # Wait 5 minutes between scheduled sweeps
-        await asyncio.sleep(300)
+            consecutive_errors += 1
+            backoff_delay = min(300 * (2 ** min(consecutive_errors - 1, 4)), 3600)
+            logger.warning("Error in missing homework notification scheduler loop (backoff %ds): %s", backoff_delay, exc)
+            await asyncio.sleep(backoff_delay)

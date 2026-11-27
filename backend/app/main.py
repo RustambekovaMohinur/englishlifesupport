@@ -201,18 +201,6 @@ async def _relink_groups_to_bootstrap_teacher() -> None:
         logger.error(f"[startup] Group re-link migration skipped: {e}", exc_info=True)
 
 
-@app.on_event("startup")
-async def create_tables() -> None:
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("[startup] Ensured all DB tables exist via Base.metadata.create_all")
-    except Exception as e:
-        logger.error(f"[startup] Base.metadata.create_all error: {e}")
-    await _recover_orphan_vocab()
-    await _relink_groups_to_bootstrap_teacher()
-
-
 # End of automated recovery hook
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -731,6 +719,16 @@ async def _run_startup_tasks():
         logger.info("Telegram webhook auto-registration result: %s", res)
     except Exception as exc:
         logger.warning("Telegram webhook auto-registration note: %s", exc)
+
+    # 5. Automated vocabulary recovery & teacher group re-linking (non-blocking)
+    try:
+        await asyncio.wait_for(_recover_orphan_vocab(), timeout=6.0)
+    except Exception as exc:
+        logger.warning("Startup vocab recovery note: %s", exc)
+    try:
+        await asyncio.wait_for(_relink_groups_to_bootstrap_teacher(), timeout=6.0)
+    except Exception as exc:
+        logger.warning("Startup group re-link note: %s", exc)
 
 
 @app.on_event("startup")
